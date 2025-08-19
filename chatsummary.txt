@@ -1,48 +1,38 @@
 Project summary (updated)
+
 Objective
 Grant non-owners edit access to specific Drive folders via Google Group membership, where group members are managed from a Google Sheet (no domain-wide delegation / impersonation).
+
 Current auth/setup
 GAM is configured with a Desktop OAuth client (oauth2.txt) and works for Directory/Admin ops.
 Service-account key upload is blocked by org policy → we are deliberately not using DWD/impersonation right now.
 This is compatible with our plan; impersonation is only needed if we must act as arbitrary users without sharing. (Apps Script advanced services + time-driven triggers cover our needs.) 
-Google for Developers
+
 Decisions
 Manage group membership via GAM and/or Apps Script.
-Share the target folder(s) directly to the Group (Editor role) via Drive UI. (Drive supports sharing folders to Google Groups.) 
-Google Help
+Folder sharing to the Group (Editor role) is now automated via Apps Script.
 Use Apps Script time-driven triggers to keep membership in sync on a schedule; no deployment required for triggers or custom menus. 
-Google for Developers
-+1
+
 What works now
 gam info domain and gam print users succeed (note: print users doesn’t take a limit flag).
 Group editors@dfront1.com exists; you can bulk-add with gam csv ... add member ~Email (per GAM docs). 
-GitHub
-Sheet script syncGroupMembers() is in place, with: pagination of members, add/remove diffs, logging, summary alert, and a custom Group Tools menu.
-Optional smoke test script verifies: Admin SDK reachable, Drive permissions listable, group is on the folder ACL, and the test user is in the group.
+The Apps Script (`access_control.js`) is fully implemented and working:
+- Syncs group members from a Google Sheet (pagination, add/remove diffs, logging, alerts).
+- Includes a custom "Group Sync Tools" menu in the Sheet.
+- Automatically shares the target Drive folder with the `editors@dfront1.com` group (Editor role) via the `shareFolderWithGroup` function.
+- The `showPermissions` function confirms the group is correctly on the folder's ACL.
+
 Open items / common blockers
 If an external user (e.g., @gmail.com) can’t open the folder even after joining the group, check:
-Folder actually shared to the Group (Editor). 
-Google Help
 External sharing policy allows sharing outside your domain. 
-Google Help
 Group settings permit external members. (Org & group-level settings.) 
-Google for Developers
 Wait for propagation and re-test in an incognito session under the correct account.
 GAM Drive ACL commands that look like gam user <owner> add/show drivefileacl … will fail without a service account (they require impersonation). Use Drive UI to add the Group, or use Apps Script with the owner’s session. 
-Google for Developers
-Next steps (recommended)
-In Drive, share each target folder with editors@dfront1.com as Editor. 
-Google Help
-Keep the improved syncGroupMembers() in the bound Sheet project; ensure Admin SDK is enabled as an Advanced Service. 
-Google for Developers
-Add/keep the custom menu (onOpen) and create a time-driven trigger (hourly/daily) via ScriptApp.newTrigger('syncGroupMembers')…. 
-Google for Developers
 
-Use the smoke test function to validate:
-Members.list works and returns full pagination (Admin SDK). 
-Google for Developers
-Drive.Permissions.list returns group ACL on the folder (Advanced Drive). 
-Google for Developers
-(Optional later) If you need cross-user Drive actions without pre-sharing, revisit service account + Domain-Wide Delegation.
-CLI workflows you can keep using
-Create/sync groups via GAM CSV imports (per GAM wiki examples). 
+Next steps (recommended)
+Ensure Admin SDK is enabled as an Advanced Service for the Apps Script project.
+Add/keep the custom menu (onOpen) and create a time-driven trigger (hourly/daily) via ScriptApp.newTrigger('syncGroupFromSheet').
+
+Development Workflow
+The Apps Script code is now managed locally using `clasp` (Google's Command-Line for Apps Script Projects).
+The project is set up for version control using Git and GitHub, with a `.gitignore` file configured to exclude sensitive files and build artifacts.
