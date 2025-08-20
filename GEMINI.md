@@ -4,6 +4,17 @@
 
 This `GEMINI.md` file serves as a living document to maintain project context across different CLI sessions and for future reference. It is crucial to keep this file updated with significant changes, resolved issues, and key decisions. This practice ensures that any future interactions with this project, especially through CLI agents, are well-informed and efficient.
 
+### Git Best Practices for CLI Agents
+
+When interacting with this repository via a CLI agent, please adhere to the following Git practices to ensure the repository remains consistent and up-to-date:
+
+*   **Commit Frequently:** Make small, atomic commits that address a single logical change.
+*   **Descriptive Commit Messages:** Use clear and concise commit messages that explain *what* was changed and *why*. Follow conventional commit guidelines (e.g., `feat:`, `fix:`, `docs:`).
+*   **Push Regularly:** Push changes to the remote repository frequently to avoid merge conflicts and keep the remote up-to-date.
+*   **Review `git status`:** Before making changes or committing, always review `git status` to understand the current state of the repository.
+*   **Add Necessary Files:** Ensure all new or modified files relevant to the project are added to Git.
+*   **Remove Obsolete Files:** Remove any files that are no longer needed from the repository.
+
 ## Objective
 Grant non-owners edit access to specific Drive folders via Google Group membership, where group members are managed from a Google Sheet (no domain-wide delegation / impersonation).
 
