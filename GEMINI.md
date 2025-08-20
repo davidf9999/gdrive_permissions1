@@ -1,5 +1,9 @@
 # Project Summary
 
+## Maintaining Project Context
+
+This `GEMINI.md` file serves as a living document to maintain project context across different CLI sessions and for future reference. It is crucial to keep this file updated with significant changes, resolved issues, and key decisions. This practice ensures that any future interactions with this project, especially through CLI agents, are well-informed and efficient.
+
 ## Objective
 Grant non-owners edit access to specific Drive folders via Google Group membership, where group members are managed from a Google Sheet (no domain-wide delegation / impersonation).
 
@@ -41,20 +45,13 @@ Grant non-owners edit access to specific Drive folders via Google Group membersh
 **Important Note for Multi-Session/Multi-User Development:**
 If working with this repository from multiple CLI sessions or with other collaborators on the same local directory, please be aware that file changes made by one session/user are immediately reflected on disk. To ensure this AI agent is working with the most current information, explicitly request to re-read relevant files (e.g., `read_file <path/to/file>`) if you suspect external modifications have occurred since the last time this agent accessed them.
 
-## Unresolved Issues
+## Resolved Issues
 
 ### `clasp push` Deployment Failure
 
-**Issue:** `clasp push` consistently fails with a `Syntax error: ParseError: Unexpected token *` pointing to a `.gs` file located within the Python virtual environment (`.venv/lib/python3.11/site-packages/litellm/proxy/_experimental/out/_next/static/chunks/498-ee02f9b58491d7a9.gs`).
+**Resolution:** This issue has been resolved. The problem was caused by `clasp` incorrectly scanning the Python virtual environment (`.venv`) during deployment attempts, despite `.claspignore` configurations.
 
-**Impact:** Prevents automated deployment of local Apps Script code changes to the live Google Apps Script project.
-
-**Troubleshooting Attempted:**
-*   Enabled Apps Script API.
-*   Created and verified `.claspignore` with `.venv/` exclusion.
-*   Performed full `clasp` project resets (delete config, re-clone).
-*   Isolated the `clasp` project in a separate directory (`apps_script_project`) outside the main project root (where `.venv` resides).
-
-**Current Status:** The issue persists. `clasp` appears to be scanning beyond its specified working directory and ignore rules, finding and attempting to parse irrelevant files within `.venv`.
-
-**Workaround:** Manual copy-pasting of `Code.js` content to the Apps Script editor is currently required for deployment.
+**Steps Taken:**
+1.  The `.venv` directory was removed from the project root.
+2.  The Apps Script project files (`Code.js`, `appsscript.json`, and `.clasp.json`) were consolidated into the `apps_script_project` directory. This ensures `clasp` operates within a dedicated and isolated project context.
+3.  `clasp push` now executes successfully from within the `apps_script_project` directory, confirming that local changes can be deployed to the Google Apps Script project.
