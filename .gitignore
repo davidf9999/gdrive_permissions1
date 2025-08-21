@@ -1,4 +1,3 @@
-
 # Node.js dependencies
 node_modules/
 
@@ -48,3 +47,9 @@ dist/
 .coverage
 .pytest_cache/
 htmlcov/
+
+# Terraform state files
+# ----------------------------------------------------------------
+.terraform/
+*.tfstate
+*.tfstate.backup
