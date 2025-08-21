@@ -1,16 +1,43 @@
-# Google Drive Permission Manager - Installer & Source
+# Google Drive Permission Manager
 
-This repository contains the full source code and an automated installer for the Google Drive Permission Manager.
+This repository contains a complete, automated solution for managing access to a large number of Google Drive folders for many users. It uses Google Groups, controlled by a central Google Sheet, to provide a scalable and auditable permissions system.
 
-The system allows you to manage access to a large number of Google Drive folders using Google Groups, all controlled from a single Google Sheet.
+It is designed to be set up from scratch by any user with a Google Workspace account, using a containerized setup wizard that provisions all necessary cloud infrastructure automatically.
 
-## Features
+---
 
-- **Automated Setup:** A command-line wizard to set up all necessary Google Cloud and Workspace resources.
-- **Infrastructure as Code:** Uses Terraform to provision and manage cloud infrastructure.
-- **Containerized Environment:** A Docker container ensures the setup process is reliable and repeatable.
-- **Scalable Permission Management:** The Apps Script at the core is designed to handle many folders and groups efficiently.
+## The Problem: Managing Drive Access at Scale
+
+Google Drive is a powerful collaboration tool, but managing permissions directly on folders becomes difficult and error-prone as your organization grows:
+
+*   **Direct Sharing Limits:** A single Google Drive file or folder can only be directly shared with a maximum of 100 users or groups who can have editor/viewer/commenter access. For larger teams or entire departments, this limit is quickly reached.
+*   **Lack of Centralization:** When permissions are managed on a folder-by-folder basis, there is no central place to see "who has access to what." This makes auditing and management difficult.
+*   **Manual Workload:** Manually adding and removing users from many different folders is time-consuming and prone to human error.
+
+## The Solution: Google Groups and Automation
+
+This project solves the scaling problem by using **Google Groups** as the access control mechanism. Instead of sharing a folder with 100 individual users, you share it with a single Google Group. You can then add hundreds (or thousands) of members to that group.
+
+This solution automates the entire lifecycle of this approach:
+
+1.  You define which folders to manage in a central Google Sheet.
+2.  The script automatically creates dedicated Google Groups for different roles (e.g., `project-x-editors@your-domain.com`).
+3.  You manage the membership of these groups simply by adding or removing emails from other sheets.
+4.  The script runs automatically to sync the group memberships, effectively granting or revoking access to the Drive folders.
+
+### Why is a Google Workspace Account Required?
+
+While Google Groups can be used with free `@gmail.com` accounts, the **automation** of group management is a feature exclusive to **Google Workspace**.
+
+*   **The Admin SDK API:** To create groups, add members, and remove members programmatically, this script needs to use the Google Admin SDK API.
+*   **Workspace-Only Access:** Access to the Admin SDK API is only granted to users who are part of a Google Workspace domain. It is not available for standard Gmail accounts.
+
+Therefore, a (paid) Google Workspace account is a fundamental requirement to enable the automation that makes this solution powerful.
+
+---
 
 ## Getting Started
 
-To get started, please follow the guide in `docs/ONBOARDING.md`.
+This project includes a complete, automated setup wizard that runs inside a Docker container. It will guide you through creating and configuring all the necessary Google Cloud and Apps Script resources.
+
+To begin, please follow the step-by-step guide here: **[docs/ONBOARDING.md](./docs/ONBOARDING.md)**

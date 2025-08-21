@@ -1,68 +1,36 @@
-# Project Summary
+# Project Summary: Google Drive Permission Manager
 
-## Maintaining Project Context
+This project has been evolved from a specific script into a general-purpose, distributable solution for managing Google Drive folder permissions at scale. It uses a combination of Google Apps Script, Google Cloud, and Infrastructure as Code principles to provide an automated setup and a robust management system.
 
-This `GEMINI.md` file serves as a living document to maintain project context across different CLI sessions and for future reference. It is crucial to keep this file updated with significant changes, resolved issues, and key decisions. This practice ensures that any future interactions with this project, especially through CLI agents, are well-informed and efficient.
+## Final Architecture
 
-### Git Best Practices for CLI Agents
+The project is now structured as a complete installation package with several key components:
 
-When interacting with this repository via a CLI agent, please adhere to the following Git practices to ensure the repository remains consistent and up-to-date:
+1.  **Docker Environment (`docker/Dockerfile`):**
+    *   A Docker container provides a consistent, reproducible environment with all necessary dependencies (`gcloud`, `terraform`, `clasp`, `gam`) pre-installed. This eliminates environment-related setup issues for new users.
 
-*   **Commit Frequently:** Make small, atomic commits that address a single logical change.
-*   **Descriptive Commit Messages:** Use clear and concise commit messages that explain *what* was changed and *why*. Follow conventional commit guidelines (e.g., `feat:`, `fix:`, `docs:`).
-*   **Push Regularly:** Push changes to the remote repository frequently to avoid merge conflicts and keep the remote up-to-date.
-*   **Review `git status`:** Before making changes or committing, always review `git status` to understand the current state of the repository.
-*   **Add Necessary Files:** Ensure all new or modified files relevant to the project are added to Git.
-*   **Remove Obsolete Files:** Remove any files that are no longer needed from the repository.
+2.  **Infrastructure as Code (`terraform/`):**
+    *   Terraform is used to programmatically provision and configure all required Google Cloud resources. This includes creating a new GCP project, linking it to a billing account, and enabling all necessary APIs.
 
-## Objective
-Grant non-owners edit access to specific Drive folders via Google Group membership, where group members are managed from a Google Sheet (no domain-wide delegation / impersonation).
+3.  **CLI Setup Wizard (`scripts/setup.sh`):**
+    *   This is an interactive command-line script that serves as the user-facing installer.
+    *   It guides the user through authentication, gathers necessary configuration details, and orchestrates the execution of Terraform and `clasp` commands to set up the entire stack.
 
-## Current Auth/Setup
-* **GAM** is configured with a Desktop OAuth client (oauth2.txt) and works for Directory/Admin ops.
-* **Service-account key upload** is blocked by org policy, so we are deliberately not using DWD/impersonation.
-* This setup is compatible with our plan; impersonation is only needed if we must act as arbitrary users without sharing. (Apps Script advanced services + time-driven triggers cover our needs.) 
+4.  **Apps Script Core Logic (`apps_script_project/`):**
+    *   This remains the heart of the solution. It is the Google Apps Script code that runs within the user's Google Sheet.
+    *   It reads the configuration from the `ManagedFolders` sheet and performs the ongoing synchronization of Google Group memberships to manage Drive folder permissions.
 
-## Decisions
-* Manage group membership via GAM and/or Apps Script.
-* Folder sharing to the Group (Editor role) is now automated via Apps Script.
-* Use Apps Script time-driven triggers to keep membership in sync on a schedule; no deployment required for triggers or custom menus.
+## User Workflow
 
-## What Works Now
-* `gam info domain` and `gam print users` succeed.
-* The `editors@dfront1.com` Group exists; you can bulk-add members with `gam csv ... add member ~Email`. 
-* The Apps Script (`Code.js`) is fully implemented and working, including:
-    * Syncing group members from a Google Sheet (with pagination, add/remove diffs, logging, summary alert, and a custom "Group Sync Tools" menu).
-    * Automatically sharing the target Drive folder with the `editors@dfront1.com` group (Editor role) via the `shareFolderWithGroup` function.
-    * The `showPermissions` function confirms the group is correctly on the folder's ACL.
+The end-to-end workflow for a new user is as follows:
 
-## Open Items / Common Blockers
-* If an external user can't open the folder after joining the group, check:
-    * External sharing policy allows sharing outside your domain. 
-    * Group settings permit external members.
-    * Wait for propagation and re-test in an incognito session.
-* **GAM Drive ACL commands** like `gam user <owner> add/show drivefileacl` will fail without a service account (they require impersonation). Use the Drive UI or Apps Script with the owner's session instead.
-
-## Next Steps (Recommended)
-* Ensure **Admin SDK** is enabled as an Advanced Service for the Apps Script project.
-* Add/keep the custom menu (`onOpen`) and create a time-driven trigger (hourly/daily) via `ScriptApp.newTrigger('syncGroupFromSheet').
-
-## Development Workflow
-* The Apps Script code is managed locally using `clasp`.
-* The project is version-controlled with Git and GitHub, using a configured `.gitignore` file to exclude sensitive files.
-
----
-
-**Important Note for Multi-Session/Multi-User Development:**
-If working with this repository from multiple CLI sessions or with other collaborators on the same local directory, please be aware that file changes made by one session/user are immediately reflected on disk. To ensure this AI agent is working with the most current information, explicitly request to re-read relevant files (e.g., `read_file <path/to/file>`) if you suspect external modifications have occurred since the last time this agent accessed them.
+1.  **Manual Onboarding:** The user follows the `docs/ONBOARDING.md` guide to perform the initial, one-time steps of setting up a Google Workspace account and a billing account.
+2.  **Automated Setup:** The user builds and runs the Docker container, which launches the `setup.sh` wizard.
+3.  **Wizard Execution:** The wizard guides the user through authenticating their Google account and providing configuration details. It then automatically provisions the GCP project and deploys the Apps Script.
+4.  **Ongoing Management:** Once the setup is complete, the user manages all folder permissions directly from the Google Sheet created by the wizard.
 
 ## Resolved Issues
 
-### `clasp push` Deployment Failure
-
-**Resolution:** This issue has been resolved. The problem was caused by `clasp` incorrectly scanning the Python virtual environment (`.venv`) during deployment attempts, despite `.claspignore` configurations.
-
-**Steps Taken:**
-1.  The `.venv` directory was removed from the project root.
-2.  The Apps Script project files (`Code.js`, `appsscript.json`, and `.clasp.json`) were consolidated into the `apps_script_project` directory. This ensures `clasp` operates within a dedicated and isolated project context.
-3.  `clasp push` now executes successfully from within the `apps_script_project` directory, confirming that local changes can be deployed to the Google Apps Script project.
+*   **Scalability:** The script has been refactored to be fully synchronous, relying on the 30-minute execution window for Google Workspace accounts. This is more user-friendly than the asynchronous model.
+*   **Error Handling:** Added more robust error handling and user feedback mechanisms (e.g., `toast` notifications).
+*   **Generalization:** The project is no longer tied to any specific domain or user. The setup process is now generic and automated.

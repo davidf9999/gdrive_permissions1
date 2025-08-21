@@ -15,6 +15,9 @@ RUN apt-get update && apt-get install -y \
     npm \
     && apt-get clean
 
+# Install gcloud alpha components
+RUN gcloud components install alpha -q
+
 # Install Terraform
 ENV TERRAFORM_VERSION=1.5.7
 RUN curl -LO https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip && \
