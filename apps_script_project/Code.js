@@ -44,6 +44,15 @@ function setupControlSheets_() {
     Logger.log('Created "ManagedFolders" sheet.');
   }
 
+  // Add data validation for the Role column
+  const roleRange = managedSheet.getRange('C2:C');
+  const existingRule = roleRange.getDataValidation();
+  if (!existingRule || existingRule.getCriteriaType() !== SpreadsheetApp.DataValidationCriteria.VALUE_IN_LIST) {
+      const rule = SpreadsheetApp.newDataValidation().requireValueInList(['Editor', 'Viewer', 'Commenter'], true).build();
+      roleRange.setDataValidation(rule);
+  }
+
+
   // Check for Admins sheet
   let adminSheet = ss.getSheetByName(ADMINS_SHEET_NAME);
   if (!adminSheet) {
@@ -70,29 +79,33 @@ function syncAll() {
   }
 
   let summaryMessage = 'Sync process complete.';
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
 
   try {
+    ss.toast('Starting full sync process...', 'Permissions Manager', -1);
     Logger.log('Starting full sync process...');
     
     // 1. Sync Admins first to ensure the sheet itself is secure
     syncAdmins();
 
     // 2. Process all the configured folders
-    processManagedFolders();
+    processManagedFolders_();
 
     // 3. Check for any orphan sheets
     const orphanSheets = checkForOrphanSheets_();
-    if (orphanSheets.length > 0) {
+    if (orphanSheets && orphanSheets.length > 0) {
       const orphanMessage = 'Warning: Found orphan sheets that are not in the configuration: ' + orphanSheets.join(', ');
-      summaryMessage += '\n' + orphanMessage;
+      summaryMessage += '\n\n' + orphanMessage;
       Logger.log(orphanMessage);
     }
 
+    ss.toast('Sync complete!', 'Permissions Manager', 5);
     Logger.log('Full sync process completed.');
-    SpreadsheetApp.getUi().alert(summaryMessage + '\nCheck the Status column in the ManagedFolders sheet for details.');
+    SpreadsheetApp.getUi().alert(summaryMessage + '\n\nCheck the \'Status\' column in the \'ManagedFolders\' sheet for details.');
 
   } catch (e) {
     Logger.log('FATAL ERROR in syncAll: ' + e.toString() + '\n' + e.stack);
+    ss.toast('Sync failed with a fatal error.', 'Permissions Manager', 5);
     SpreadsheetApp.getUi().alert('A fatal error occurred: ' + e.message);
   } finally {
     lock.releaseLock();
@@ -114,7 +127,7 @@ function syncAdmins() {
     // 1. Get the desired list of admins from the sheet
     const adminEmails = sheet.getRange('A2:A').getValues()
       .map(function(row) { return row[0].toString().trim().toLowerCase(); })
-      .filter(function(email) { return email.length > 0; });
+      .filter(function(email) { return email && email.length > 0; });
     const adminSet = new Set(adminEmails);
 
     // 2. Get the current editors of the spreadsheet file
@@ -124,19 +137,21 @@ function syncAdmins() {
     const editorSet = new Set(currentEditors);
 
     // 3. Determine who to add and who to remove
-    const owner = spreadsheet.getOwner().getEmail().toLowerCase();
-    adminSet.add(owner); // The owner should always be an editor
-
+    const owner = spreadsheet.getOwner();
+    if (owner) {
+        adminSet.add(owner.getEmail().toLowerCase()); // The owner should always be an editor
+    }
+    
     const emailsToAdd = adminEmails.filter(function(email) { return !editorSet.has(email); });
     const emailsToRemove = currentEditors.filter(function(email) { return !adminSet.has(email); });
 
     // 4. Perform the additions and removals
-    if (emailsToAdd.length > 0) {
+    if (emailsToAdd && emailsToAdd.length > 0) {
       Logger.log('Adding ' + emailsToAdd.length + ' admin(s): ' + emailsToAdd.join(', '));
       spreadsheet.addEditors(emailsToAdd);
     }
 
-    if (emailsToRemove.length > 0) {
+    if (emailsToRemove && emailsToRemove.length > 0) {
       Logger.log('Removing ' + emailsToRemove.length + ' editor(s): ' + emailsToRemove.join(', '));
       spreadsheet.removeEditors(emailsToRemove);
     }
@@ -145,7 +160,6 @@ function syncAdmins() {
 
   } catch (e) {
     Logger.log('ERROR in syncAdmins: ' + e.toString());
-    // We don't show a UI alert here to avoid interrupting the main sync flow
   }
 }
 
@@ -155,25 +169,30 @@ function syncAdmins() {
 /**
  * Reads the ManagedFolders sheet and processes each row.
  */
-function processManagedFolders() {
+function processManagedFolders_() {
   Logger.log('Starting processing of ManagedFolders sheet...');
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
   if (!sheet) {
     SpreadsheetApp.getUi().alert('CRITICAL: Configuration sheet named "' + MANAGED_FOLDERS_SHEET_NAME + '" not found. Aborting.');
     return;
   }
 
-  // Set UI styles first (e.g., grey background, protection)
-  setSheetUiStyles();
+  setSheetUiStyles_();
 
   const lastRow = sheet.getLastRow();
+  if (lastRow < 2) {
+      Logger.log('No data rows to process in ManagedFolders sheet.');
+      return;
+  }
+
   // Loop through each row (starting from row 2 to skip header)
   for (let i = 2; i <= lastRow; i++) {
+    ss.toast('Processing row ' + i + ' of ' + lastRow + '...', 'Sync Progress', 10);
     try {
-      processRow(i);
+      processRow_(i);
     } catch (e) {
       Logger.log('Error processing row ' + i + ': ' + e.toString());
-      // The error should be logged to the status column within processRow
     }
   }
   Logger.log('Finished processing all rows.');
@@ -183,7 +202,7 @@ function processManagedFolders() {
  * Processes a single row from the ManagedFolders sheet.
  * @param {number} rowIndex The index of the row to process.
  */
-function processRow(rowIndex) {
+function processRow_(rowIndex) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
   const statusCell = sheet.getRange(rowIndex, STATUS_COL);
   
@@ -194,7 +213,6 @@ function processRow(rowIndex) {
     let folderId = sheet.getRange(rowIndex, FOLDER_ID_COL).getValue();
     let role = sheet.getRange(rowIndex, ROLE_COL).getValue();
 
-    // Step 1: Validate initial inputs
     if (!folderName && !folderId) {
       throw new Error('Both FolderName and FolderID are blank.');
     }
@@ -202,47 +220,41 @@ function processRow(rowIndex) {
       throw new Error('Role is not specified.');
     }
 
-    // Step 2: Get or Create the folder
-    const folder = getOrCreateFolder(folderName, folderId);
-    // Update sheet with correct ID and Name
+    const folder = getOrCreateFolder_(folderName, folderId);
     sheet.getRange(rowIndex, FOLDER_ID_COL).setValue(folder.getId());
     sheet.getRange(rowIndex, FOLDER_NAME_COL).setValue(folder.getName());
 
-    // Step 3: Deduce and write names
     const userSheetName = folder.getName() + '_' + role;
-    const groupEmail = generateGroupEmail(userSheetName);
+    const groupEmail = generateGroupEmail_(userSheetName);
     sheet.getRange(rowIndex, USER_SHEET_NAME_COL).setValue(userSheetName);
     sheet.getRange(rowIndex, GROUP_EMAIL_COL).setValue(groupEmail);
 
-    // Step 4: Get or Create the supporting assets
-    getOrCreateUserSheet(userSheetName);
-    getOrCreateGroup(groupEmail, userSheetName); // Assuming group name is based on userSheetName
+    getOrCreateUserSheet_(userSheetName);
+    getOrCreateGroup_(groupEmail, userSheetName);
 
-    // Step 5: Set permissions and sync members
-    setFolderPermission(folder.getId(), groupEmail, role);
-    syncGroupMembership(groupEmail, userSheetName);
+    setFolderPermission_(folder.getId(), groupEmail, role);
+    syncGroupMembership_(groupEmail, userSheetName);
 
-    // Step 6: Finalize status
     sheet.getRange(rowIndex, LAST_SYNCED_COL).setValue(new Date());
     statusCell.setValue('OK');
 
   } catch (e) {
-    Logger.log('Failed to process row ' + rowIndex + '. Error: ' + e.message);
+    Logger.log('Failed to process row ' + rowIndex + '. Error: ' + e.message + ' Stack: ' + e.stack);
     statusCell.setValue('Error: ' + e.message);
   }
 }
 
 /**
  * Checks for sheets that are not part of the main configuration.
+ * @return {Array<string>} A list of orphan sheet names.
  */
-function checkForOrphanSheets() {
+function checkForOrphanSheets_() {
   try {
     Logger.log('Checking for orphan sheets...');
     const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
     const allSheets = spreadsheet.getSheets();
     const allSheetNames = allSheets.map(function(s) { return s.getName(); });
 
-    // 1. Build a set of all required sheet names
     const requiredSheetNames = new Set();
     requiredSheetNames.add(MANAGED_FOLDERS_SHEET_NAME);
     requiredSheetNames.add(ADMINS_SHEET_NAME);
@@ -250,72 +262,51 @@ function checkForOrphanSheets() {
     const managedSheet = spreadsheet.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
     if (managedSheet && managedSheet.getLastRow() > 1) {
       const userSheetNames = managedSheet.getRange(2, USER_SHEET_NAME_COL, managedSheet.getLastRow() - 1, 1).getValues();
-      userSheetNames.forEach(function(row) {
-        if (row[0]) requiredSheetNames.add(row[0]);
-      });
-    }
-
-    // 2. Find the difference
-    const orphanSheets = allSheetNames.filter(function(name) { return !requiredSheetNames.has(name); });
-
-    // 3. Report if any orphans are found
-    if (orphanSheets.length > 0) {
-      Logger.log('Found orphan sheets: ' + orphanSheets.join(', '));
-      const warningMessage = 'Warning: Found orphan sheets: ' + orphanSheets.join(', ');
-      
-      // Append the warning to the status of the first data row for visibility
-      if (managedSheet && managedSheet.getLastRow() > 1) {
-        const statusCell = managedSheet.getRange(2, STATUS_COL);
-        const currentStatus = statusCell.getValue();
-        statusCell.setValue(currentStatus + ' ' + warningMessage);
-        statusCell.setFontColor('#b8860b'); // Dark yellow
+      if (userSheetNames) {
+          userSheetNames.forEach(function(row) {
+            if (row[0]) requiredSheetNames.add(row[0]);
+          });
       }
     }
+
+    return allSheetNames.filter(function(name) { return !requiredSheetNames.has(name); });
+
   } catch (e) {
     Logger.log('Error during orphan sheet check: ' + e.message);
+    return [];
   }
 }
 
 
-/***** HELPER FUNCTIONS - TO BE IMPLEMENTED *****/
+/***** HELPER FUNCTIONS *****/
 
-// Placeholder functions for various tasks.
-// These will be implemented in subsequent steps.
-
-function getOrCreateFolder(folderName, folderId) {
-  // 1. If an ID is provided, try it first.
+function getOrCreateFolder_(folderName, folderId) {
   if (folderId) {
     try {
       const folder = DriveApp.getFolderById(folderId);
-      // Verify that the name matches, if a name was also provided.
       if (folderName && folder.getName() !== folderName) {
         throw new Error('Mismatch: Provided FolderID points to "' + folder.getName() + '"');
       }
       Logger.log('Successfully found folder "' + folder.getName() + '" by ID.');
       return folder;
     } catch (e) {
-      Logger.log('Could not retrieve folder by ID ' + folderId + '. It may be deleted or access is denied. Will try searching by name.');
+      Logger.log('Could not retrieve folder by ID ' + folderId + '. Will try searching by name.');
     }
   }
 
-  // 2. If no valid ID was provided, search by name.
   if (!folderName) {
     throw new Error('Cannot find or create folder without a name or a valid ID.');
   }
 
   const folders = DriveApp.getFoldersByName(folderName);
-  let foundFolder = null;
-
   if (folders.hasNext()) {
-    foundFolder = folders.next();
+    const foundFolder = folders.next();
     if (folders.hasNext()) {
-      // If there is more than one folder with the same name, it's ambiguous.
       throw new Error('Ambiguous: Multiple folders exist with the name "' + folderName + '". Please specify by ID.');
     }
     Logger.log('Successfully found folder "' + folderName + '" by name.');
     return foundFolder;
   } else {
-    // 3. If no folder was found, create it.
     Logger.log('No folder found with name "' + folderName + '". Creating it now...');
     const newFolder = DriveApp.createFolder(folderName);
     Logger.log('Successfully created folder "' + folderName + '".');
@@ -323,18 +314,15 @@ function getOrCreateFolder(folderName, folderId) {
   }
 }
 
-function getOrCreateGroup(groupEmail, groupName) {
+function getOrCreateGroup_(groupEmail, groupName) {
   try {
-    // 1. Check if the group already exists
     AdminDirectory.Groups.get(groupEmail);
     Logger.log('Found existing group: ' + groupEmail);
     return;
   } catch (e) {
-    // This error is expected if the group doesn't exist.
     Logger.log('Group "' + groupEmail + '" not found. Will attempt to create it.');
   }
 
-  // 2. If the group doesn't exist, create it.
   try {
     const newGroup = {
       email: groupEmail,
@@ -349,18 +337,16 @@ function getOrCreateGroup(groupEmail, groupName) {
   }
 }
 
-function getOrCreateUserSheet(sheetName) {
+function getOrCreateUserSheet_(sheetName) {
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = spreadsheet.getSheetByName(sheetName);
 
   if (sheet) {
-    Logger.log('Found existing user sheet: "' + sheetName + '"');
     return sheet;
   } else {
     Logger.log('User sheet "' + sheetName + '" not found. Creating it...');
     sheet = spreadsheet.insertSheet(sheetName);
     
-    // Set up the header
     const header = sheet.getRange('A1');
     header.setValue('User Email Address');
     header.setFontWeight('bold');
@@ -371,39 +357,36 @@ function getOrCreateUserSheet(sheetName) {
   }
 }
 
-function syncGroupMembership(groupEmail, userSheetName) {
+function syncGroupMembership_(groupEmail, userSheetName) {
   Logger.log('Starting membership sync for group "' + groupEmail + '" from sheet "' + userSheetName + '"');
   
   try {
-    // 1. Get emails from the specified user sheet
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(userSheetName);
     if (!sheet) {
       throw new Error('User sheet "' + userSheetName + '" not found.');
     }
     const sheetEmails = sheet.getRange('A2:A' + sheet.getLastRow()).getValues()
       .map(function(row) { return row[0].toString().trim().toLowerCase(); })
-      .filter(function(email) { return email.includes('@'); });
+      .filter(function(email) { return email && email.includes('@'); });
     const sheetSet = new Set(sheetEmails);
     Logger.log('Found ' + sheetSet.size + ' emails in sheet "' + userSheetName + '"');
 
-    // 2. Get current group members
     const groupMembers = fetchAllGroupMembers_(groupEmail);
     const groupEmails = groupMembers.map(function(m) { return m.email.toLowerCase(); });
     const groupSet = new Set(groupEmails);
     Logger.log('Found ' + groupSet.size + ' members in group "' + groupEmail + '"');
 
-    // 3. Determine who to add and remove
     const emailsToAdd = sheetEmails.filter(function(email) { return !groupSet.has(email); });
     const membersToRemove = groupMembers.filter(function(m) { 
       return !sheetSet.has(m.email.toLowerCase()) && m.role !== 'OWNER';
     });
     const emailsToRemove = membersToRemove.map(function(m) { return m.email; });
 
-    // 4. Execute additions
-    if (emailsToAdd.length > 0) {
-      Logger.log('Adding ' + emailsToAdd.length + ' member(s) to ' + groupEmail + ': ' + emailsToAdd.join(', '));
+    if (emailsToAdd && emailsToAdd.length > 0) {
+      Logger.log('Adding ' + emailsToAdd.length + ' member(s) to ' + groupEmail);
       emailsToAdd.forEach(function(email) {
         try {
+          Utilities.sleep(100); // Avoid hitting rate limits
           AdminDirectory.Members.insert({ email: email, role: 'MEMBER' }, groupEmail);
         } catch (e) {
           Logger.log('Failed to add member ' + email + ' to group ' + groupEmail + '. Error: ' + e.message);
@@ -411,11 +394,11 @@ function syncGroupMembership(groupEmail, userSheetName) {
       });
     }
 
-    // 5. Execute removals
-    if (emailsToRemove.length > 0) {
-      Logger.log('Removing ' + emailsToRemove.length + ' member(s) from ' + groupEmail + ': ' + emailsToRemove.join(', '));
+    if (emailsToRemove && emailsToRemove.length > 0) {
+      Logger.log('Removing ' + emailsToRemove.length + ' member(s) from ' + groupEmail);
       emailsToRemove.forEach(function(email) {
         try {
+          Utilities.sleep(100); // Avoid hitting rate limits
           AdminDirectory.Members.remove(groupEmail, email);
         } catch (e) {
           Logger.log('Failed to remove member ' + email + ' from group ' + groupEmail + '. Error: ' + e.message);
@@ -427,39 +410,39 @@ function syncGroupMembership(groupEmail, userSheetName) {
 
   } catch (e) {
     Logger.log('FATAL ERROR in syncGroupMembership for group ' + groupEmail + '. Error: ' + e.toString());
-    throw e; // Re-throw to be caught by processRow
+    throw e;
   }
 }
 
-/**
- * Helper to fetch all members of a group, handling pagination.
- * @param {string} groupEmail The email of the group.
- * @return {Array} An array of member objects.
- */
 function fetchAllGroupMembers_(groupEmail) {
   const members = [];
   let pageToken;
-  do {
-    const resp = AdminDirectory.Members.list(groupEmail, { 
-      maxResults: 200,
-      pageToken: pageToken 
-    });
-    if (resp.members) {
-      members.push.apply(members, resp.members);
-    }
-    pageToken = resp.nextPageToken;
-  } while (pageToken);
+  try {
+      do {
+        const resp = AdminDirectory.Members.list(groupEmail, { 
+          maxResults: 200,
+          pageToken: pageToken 
+        });
+        if (resp && resp.members) {
+          members.push.apply(members, resp.members);
+        }
+        pageToken = resp ? resp.nextPageToken : null;
+      } while (pageToken);
+  } catch(e) {
+      if (e.message.includes('Resource Not Found: groupKey')) {
+          Logger.log('Group ' + groupEmail + ' does not exist yet, returning no members.');
+          return [];
+      }
+      throw e;
+  }
   return members;
 }
 
-function setFolderPermission(folderId, groupEmail, role) {
+function setFolderPermission_(folderId, groupEmail, role) {
   try {
     const folder = DriveApp.getFolderById(folderId);
     const roleLower = role.toLowerCase();
 
-    // Grant the new permission. Drive handles upgrades (e.g., viewer to editor) gracefully.
-    // For downgrades, the old permission might need to be removed first, but for simplicity,
-    // we will ensure the target permission is set.
     switch (roleLower) {
       case 'editor':
         folder.addEditor(groupEmail);
@@ -481,23 +464,19 @@ function setFolderPermission(folderId, groupEmail, role) {
   }
 }
 
-function setSheetUiStyles() {
+function setSheetUiStyles_() {
   try {
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
-    if (!sheet || sheet.getLastRow() < 2) return; // No data to style
+    if (!sheet || sheet.getLastRow() < 2) return;
 
-    // Set column widths and formats
     sheet.setColumnWidth(LAST_SYNCED_COL, 150);
     sheet.getRange(2, LAST_SYNCED_COL, sheet.getLastRow() - 1, 1).setNumberFormat('yyyy-mm-dd hh:mm:ss');
     sheet.setColumnWidth(STATUS_COL, 400);
 
-    // Define the range for script-managed columns
     const range = sheet.getRange(2, USER_SHEET_NAME_COL, sheet.getLastRow() - 1, 4);
     
-    // Set background color
     range.setBackground('#f3f3f3');
 
-    // Set protection
     const protection = range.protect().setDescription('These columns are managed by the script.');
     protection.setWarningOnly(true);
     
@@ -506,18 +485,26 @@ function setSheetUiStyles() {
   }
 }
 
+function generateGroupEmail_(baseName) {
+  const domain = Session.getActiveUser().getEmail().split('@')[1];
+  if (!domain) {
+    throw new Error('Could not determine user domain.');
+  }
+  
+  const sanitizedName = baseName
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]/g, '');
 
-/***** HELPER FUNCTIONS - UTILITIES *****/
+  return sanitizedName + '@' + domain;
+}
+
 
 /***** DEVELOPER-ONLY TEST FUNCTIONS *****/
 
-/**
- * A guided, end-to-end test to manually verify the entire workflow.
- */
 function runManualAccessTest() {
   const ui = SpreadsheetApp.getUi();
   
-  // --- Step 1: Get test parameters ---
   const folderName = ui.prompt('Test - Step 1/4: Folder Name', 'Enter a name for a new test folder to be created.', ui.ButtonSet.OK_CANCEL);
   if (folderName.getSelectedButton() !== ui.Button.OK || !folderName.getResponseText()) return ui.alert('Test cancelled.');
   const testFolderName = folderName.getResponseText();
@@ -530,7 +517,6 @@ function runManualAccessTest() {
   if (email.getSelectedButton() !== ui.Button.OK || !email.getResponseText()) return ui.alert('Test cancelled.');
   const testEmail = email.getResponseText().trim().toLowerCase();
 
-  // --- Step 2: Add config and run sync ---
   ui.alert('Step 4/4: Initial Setup', 'The script will now add this configuration to the ManagedFolders sheet and run the sync to create the folder, group, and user sheet. Click OK to proceed.', ui.ButtonSet.OK);
   
   const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
@@ -538,18 +524,16 @@ function runManualAccessTest() {
   managedSheet.getRange(testRowIndex, FOLDER_NAME_COL).setValue(testFolderName);
   managedSheet.getRange(testRowIndex, ROLE_COL).setValue(testRole);
   
-  syncAll(); // First sync to create everything
+  syncAll();
 
-  // --- Step 3: Add user and grant access ---
   const userSheetName = managedSheet.getRange(testRowIndex, USER_SHEET_NAME_COL).getValue();
   const userSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(userSheetName);
   if (!userSheet) return ui.alert('Test failed: Could not find the created user sheet: ' + userSheetName);
   
   userSheet.getRange('A2').setValue(testEmail);
-  ui.alert('Granting Access', 'The test email has been added to the \'' + userSheetName + '\' sheet. The script will now sync again to grant folder access.', ui.ButtonSet.OK);
-  syncAll(); // Second sync to add the user
+  ui.alert('Granting Access', 'The test email has been added to the "' + userSheetName + '" sheet. The script will now sync again to grant folder access.', ui.ButtonSet.OK);
+  syncAll();
 
-  // --- Step 4: Manual Verification (Gained Access) ---
   const folderId = managedSheet.getRange(testRowIndex, FOLDER_ID_COL).getValue();
   const folderUrl = DriveApp.getFolderById(folderId).getUrl();
   const verification1 = ui.alert('Verify Access', 'Please open an Incognito Window, log in as ' + testEmail + ', and try to open this link:\n\n' + folderUrl + '\n\nDid you get access?', ui.ButtonSet.YES_NO);
@@ -559,13 +543,11 @@ function runManualAccessTest() {
     return;
   }
 
-  // --- Step 5: Remove user and revoke access ---
   userSheet.getRange('A2').clearContent();
   ui.alert('Revoking Access', 'The test email has been removed from the sheet. The script will now sync again to revoke folder access.', ui.ButtonSet.OK);
-  syncAll(); // Third sync to remove the user
+  syncAll();
 
-  // --- Step 6: Manual Verification (Revoked Access) ---
-  const verification2 = ui.alert('Verify Revoked Access', 'Please go back to your Incognito Window and refresh the folder page. You should see a \'permission denied\' error.\n\nWas access revoked?', ui.ButtonSet.YES_NO);
+  const verification2 = ui.alert('Verify Revoked Access', 'Please go back to your Incognito Window and refresh the folder page. You should see a \"permission denied\" error.\n\nWas access revoked?', ui.ButtonSet.YES_NO);
 
   if (verification2 === ui.Button.YES) {
     ui.alert('Test Complete: SUCCESS!', 'The user was successfully granted and revoked access.', ui.ButtonSet.OK);
@@ -573,35 +555,10 @@ function runManualAccessTest() {
     ui.alert('Test Complete: FAILURE!', 'Access was not revoked as expected. This may be due to Google Drive permission propagation delays. Please wait a few minutes and check again.', ui.ButtonSet.OK);
   }
 
-  // --- Step 7: Cleanup ---
   const cleanup = ui.alert('Cleanup', 'Do you want to remove the test row from ManagedFolders and delete the test user sheet (\'' + userSheetName + '\')?', ui.ButtonSet.YES_NO);
   if (cleanup === ui.Button.YES) {
     managedSheet.deleteRow(testRowIndex);
     SpreadsheetApp.getActiveSpreadsheet().deleteSheet(userSheet);
     ui.alert('Cleanup complete.');
   }
-}
-
-
-/**
- * Generates a standardized group email address from a base name.
-
-
-/**
- * Generates a standardized group email address from a base name.
- * @param {string} baseName The base name, like 'FolderName_Role'.
- * @return {string} The generated email address.
- */
-function generateGroupEmail(baseName) {
-  const domain = Session.getActiveUser().getEmail().split('@')[1];
-  if (!domain) {
-    throw new Error('Could not determine user domain.');
-  }
-  
-  const sanitizedName = baseName
-    .toLowerCase()
-    .replace(/\s+/g, '-')       // Replace spaces with hyphens
-    .replace(/[^a-z0-9-]/g, ''); // Remove invalid characters
-
-  return sanitizedName + '@' + domain;
 }
