@@ -10,13 +10,14 @@ It is designed to be set up from scratch by any user with a Google Workspace acc
 
 Google Drive is a powerful collaboration tool, but managing permissions directly on folders becomes difficult and error-prone as your organization grows:
 
-*   **Direct Sharing Limits:** A single Google Drive file or folder can only be directly shared with a maximum of 100 users or groups who can have editor/viewer/commenter access. For larger teams or entire departments, this limit is quickly reached.
+*   **Insecure Public Sharing:** The simplest way to share is with "anyone with the link." However, for sensitive or confidential data, this is not a secure option as the link can be forwarded or shared publicly, granting access to anyone.
+*   **Direct Sharing Limits:** For secure, direct sharing, a single Google Drive file or folder can only be shared with a maximum of 100 users or groups who can have editor/viewer/commenter access. For larger teams, this limit is quickly reached.
 *   **Lack of Centralization:** When permissions are managed on a folder-by-folder basis, there is no central place to see "who has access to what." This makes auditing and management difficult.
-*   **Manual Workload:** Manually adding and removing users from many different folders is time-consuming and prone to human error.
+*   **Manual Workload:** Manually adding and removing individual users from many different folders is time-consuming and prone to human error.
 
 ## The Solution: Google Groups and Automation
 
-This project solves the scaling problem by using **Google Groups** as the access control mechanism. Instead of sharing a folder with 100 individual users, you share it with a single Google Group. You can then add hundreds (or thousands) of members to that group.
+This project solves these problems by using **Google Groups** as the access control mechanism. Instead of sharing a folder with 100 individual users, you share it with a single Google Group. You can then add hundreds (or thousands) of members to that group.
 
 This solution automates the entire lifecycle of this approach:
 
@@ -33,6 +34,8 @@ While Google Groups can be used with free `@gmail.com` accounts, the **automatio
 *   **Workspace-Only Access:** Access to the Admin SDK API is only granted to users who are part of a Google Workspace domain. It is not available for standard Gmail accounts.
 
 Therefore, a (paid) Google Workspace account is a fundamental requirement to enable the automation that makes this solution powerful.
+
+**Important Clarification:** Only **one** Google Workspace account is needed—the account used by the administrator to run the setup wizard and own the project. The end-users who are granted access to the folders can have **any type of Google account**, including free, personal `@gmail.com` accounts.
 
 ---
 
