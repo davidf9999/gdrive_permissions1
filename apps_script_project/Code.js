@@ -75,15 +75,12 @@ function onOpen() {
     .addItem('Sync Sheet to Group', 'syncGroupFromSheet')
     .addItem('Show Group Members', 'showGroupMembers')
     .addSeparator()
-    .addItem('Run Automated Smoke Test', 'runAutomatedSmokeTest')
-    .addItem('Run Manual Access Test', 'runManualAccessTest')
-    .addSeparator()
     .addItem('Share Folder with Group (Run Once)', 'shareFolderWithGroup')
     .addItem('Show Folder Permissions', 'showPermissions')
     .addToUi();
 }
 
-/***** NEW PUBLIC FUNCTIONS *****/
+/***** PUBLIC FUNCTIONS *****/
 
 function showGroupMembers() {
   const ui = SpreadsheetApp.getUi();
@@ -108,82 +105,12 @@ function showGroupMembers() {
   }
 }
 
-function runAutomatedSmokeTest() {
-  const ui = SpreadsheetApp.getUi();
-  const testEmail = 'test-user-' + new Date().getTime() + '@example.com';
-  Logger.log('Starting automated smoke test with email: ' + testEmail);
+/***** DEVELOPER-ONLY TEST FUNCTIONS *****/
+// To run these, open the Apps Script editor and select the function from the dropdown menu.
 
-  // --- Part 1: Test Addition ---
-  const addPrompt = 'This test will verify the sync process.\n\nStep 1: Add the following temporary email to your sheet in column A:\n\n' + testEmail + '\n\nAfter adding it, press OK to continue.';
-  const addResponse = ui.alert('Automated Test - Step 1: Add User', addPrompt, ui.ButtonSet.OK_CANCEL);
-
-  if (addResponse !== ui.Button.OK) {
-    ui.alert('Smoke test cancelled.');
-    Logger.log('Smoke test cancelled by user at add step.');
-    return;
-  }
-  
-  SpreadsheetApp.flush(); // IMPORTANT: Force the sheet to save changes.
-  Logger.log('Sheet flushed. Running sync to add member.');
-
-  try {
-    syncGroupFromSheet({ showAlerts: false }); // Run sync without alerts
-  } catch (e) {
-    ui.alert('The sync process failed during the test. Please check the logs for details.\n\nError: ' + e.message);
-    return;
-  }
-
-  Utilities.sleep(3000); // Wait for group propagation
-
-  const membersAfterAdd = fetchGroupMembers_();
-  const wasAdded = membersAfterAdd.some(function(m) {return m.email.toLowerCase() === testEmail});
-
-  let addResult = 'Addition Test Result: ' + (wasAdded ? 'SUCCESS' : 'FAILURE') + '\n\n';
-  addResult += wasAdded
-    ? testEmail + ' was successfully added to the group.'
-    : testEmail + ' was NOT found in the group after sync. The sheet might not have saved in time or an error occurred. Check Logs.';
-  
-  ui.alert(addResult);
-  Logger.log('Addition test result: ' + (wasAdded ? 'SUCCESS' : 'FAILURE'));
-
-  if (!wasAdded) {
-    return; // Stop test if addition failed
-  }
-
-  // --- Part 2: Test Removal ---
-  const removePrompt = 'Step 2: Now, REMOVE the test email from the sheet:\n\n' + testEmail + '\n\nAfter removing it, press OK to continue the test.';
-  const removeResponse = ui.alert('Automated Test - Step 2: Remove User', removePrompt, ui.ButtonSet.OK_CANCEL);
-
-  if (removeResponse !== ui.Button.OK) {
-    ui.alert('Smoke test cancelled.');
-    Logger.log('Smoke test cancelled by user at remove step.');
-    return;
-  }
-  
-  SpreadsheetApp.flush(); // IMPORTANT: Force the sheet to save changes.
-  Logger.log('Sheet flushed. Running sync to remove member.');
-
-  try {
-    syncGroupFromSheet({ showAlerts: false }); // Run sync without alerts
-  } catch (e) {
-    ui.alert('The sync process failed during the test. Please check the logs for details.\n\nError: ' + e.message);
-    return;
-  }
-
-  Utilities.sleep(3000); // Wait for group propagation
-
-  const membersAfterRemove = fetchGroupMembers_();
-  const wasRemoved = !membersAfterRemove.some(function(m) {return m.email.toLowerCase() === testEmail});
-
-  let removeResult = 'Removal Test Result: ' + (wasRemoved ? 'SUCCESS' : 'FAILURE') + '\n\n';
-  removeResult += wasRemoved
-    ? testEmail + ' was successfully removed from the group.'
-    : testEmail + ' was NOT removed from the group after sync. Check logs for details.';
-
-  ui.alert(removeResult);
-  Logger.log('Removal test result: ' + (wasRemoved ? 'SUCCESS' : 'FAILURE'));
-}
-
+/**
+ * A guided test to manually verify a real user can gain and lose access.
+ */
 function runManualAccessTest() {
   const ui = SpreadsheetApp.getUi();
   

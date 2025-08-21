@@ -31,7 +31,7 @@ Grant non-owners edit access to specific Drive folders via Google Group membersh
 ## What Works Now
 * `gam info domain` and `gam print users` succeed.
 * The `editors@dfront1.com` Group exists; you can bulk-add members with `gam csv ... add member ~Email`. 
-* The Apps Script (`access_control.js`) is fully implemented and working, including:
+* The Apps Script (`Code.js`) is fully implemented and working, including:
     * Syncing group members from a Google Sheet (with pagination, add/remove diffs, logging, summary alert, and a custom "Group Sync Tools" menu).
     * Automatically sharing the target Drive folder with the `editors@dfront1.com` group (Editor role) via the `shareFolderWithGroup` function.
     * The `showPermissions` function confirms the group is correctly on the folder's ACL.
