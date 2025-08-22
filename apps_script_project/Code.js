@@ -24,8 +24,8 @@ const STATUS_COL = 7;
 function onOpen() {
   const ui = SpreadsheetApp.getUi(); // Declare ui here
   ui.createMenu('Permissions Manager')
-      .addItem('Sync All', 'syncAllCombined') // New item
-      .addItem('Sync All Folders', 'syncAll')
+      .addItem('Sync All', 'fullSync') // New item
+      .addItem('Sync All Folders', 'fullSync')
       .addItem('Sync User Groups', 'syncUserGroups')
       .addItem('Sync Admins', 'syncAdmins') // Add this line back
       .addSeparator()
@@ -41,17 +41,7 @@ function onOpen() {
   setupLogSheets_();
 }
 
-function syncAllCombined() {
-  try {
-    SpreadsheetApp.getActiveSpreadsheet().toast('Starting full synchronization...', 'Sync All', -1);
-    syncUserGroups(); // Sync user groups first
-    syncAll(); // Then sync managed folders (which calls syncManagedFolders)
-    SpreadsheetApp.getActiveSpreadsheet().toast('Full synchronization complete!', 'Sync All', 5);
-  } catch (e) {
-    SpreadsheetApp.getActiveSpreadsheet().toast('Error during full synchronization: ' + e.message, 'Sync All', 10);
-    Logger.log('Error during full synchronization: ' + e.message);
-  }
-}
+
 
 /**
  * Ensures the control sheets (ManagedFolders, Admins) exist.
@@ -131,53 +121,7 @@ function setupLogSheets_() {
 
 /***** MAIN SYNC FUNCTIONS *****/
 
-/**
- * Main function to sync all configured folders and groups.
- * This is the primary entry point to be called from the menu.
- */
-function syncAll() {
-  setupControlSheets_(); // Ensure control sheets exist
-  const lock = LockService.getScriptLock();
-  if (!lock.tryLock(15000)) { // Try to lock for 15 seconds
-    SpreadsheetApp.getUi().alert('Sync is already in progress. Please wait a few minutes and try again.');
-    return;
-  }
 
-  let summaryMessage = 'Sync process complete.';
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-
-  try {
-    ss.toast('Starting full sync process...', 'Permissions Manager', -1);
-    log_('Starting full sync process...');
-    
-    // 1. Sync Admins first to ensure the sheet itself is secure
-    syncAdmins();
-
-    // 2. Process all the configured folders
-    processManagedFolders_();
-
-    // 3. Check for any orphan sheets
-    const orphanSheets = checkForOrphanSheets_();
-    if (orphanSheets && orphanSheets.length > 0) {
-      const orphanMessage = 'Warning: Found orphan sheets that are not in the configuration: ' + orphanSheets.join(', ');
-      summaryMessage += '\n\n' + orphanMessage;
-      log_(orphanMessage);
-    }
-
-    ss.toast('Sync complete!', 'Permissions Manager', 5);
-    log_('Full sync process completed.');
-    SpreadsheetApp.getUi().alert(summaryMessage + '\n\nCheck the \'Status\' column in the \'ManagedFolders\' sheet for details.');
-
-  } catch (e) {
-    const errorMessage = 'FATAL ERROR in syncAll: ' + e.toString() + '\n' + e.stack;
-    log_(errorMessage);
-    ss.toast('Sync failed with a fatal error.', 'Permissions Manager', 5);
-    SpreadsheetApp.getUi().alert('A fatal error occurred: ' + e.message);
-    sendErrorNotification_(errorMessage);
-  } finally {
-    lock.releaseLock();
-  }
-}
 
 /**
  * Synchronizes the editors of the spreadsheet file with the list in the Admins sheet.
@@ -295,6 +239,53 @@ function syncUserGroups() {
     log_(errorMessage);
     SpreadsheetApp.getUi().alert('A fatal error occurred during user group sync: ' + e.message);
     sendErrorNotification_(errorMessage);
+  }
+}
+
+function fullSync() {
+  setupControlSheets_(); // Ensure control sheets exist
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) {
+    SpreadsheetApp.getUi().alert('Sync is already in progress. Please wait a few minutes and try again.');
+    return;
+  }
+
+  let summaryMessage = 'Sync process complete.';
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  try {
+    ss.toast('Starting full synchronization...', 'Full Sync', -1);
+    log_('Starting full synchronization...');
+
+    // 1. Sync Admins
+    syncAdmins();
+
+    // 2. Sync User Groups
+    syncUserGroups();
+
+    // 3. Process Managed Folders
+    processManagedFolders_();
+
+    // Check for any orphan sheets
+    const orphanSheets = checkForOrphanSheets_();
+    if (orphanSheets && orphanSheets.length > 0) {
+      const orphanMessage = 'Warning: Found orphan sheets that are not in the configuration: ' + orphanSheets.join(', ');
+      summaryMessage += '\n\n' + orphanMessage;
+      log_(orphanMessage);
+    }
+
+    ss.toast('Full synchronization complete!', 'Full Sync', 5);
+    log_('Full synchronization completed.');
+    SpreadsheetApp.getUi().alert(summaryMessage + '\n\nCheck the \'Status\' column in the \'ManagedFolders\' sheet for details.');
+
+  } catch (e) {
+    const errorMessage = 'FATAL ERROR in fullSync: ' + e.toString() + '\n' + e.stack;
+    log_(errorMessage);
+    ss.toast('Full sync failed with a fatal error.', 'Full Sync', 5);
+    SpreadsheetApp.getUi().alert('A fatal error occurred: ' + e.message);
+    sendErrorNotification_(errorMessage);
+  } finally {
+    lock.releaseLock();
   }
 }
 
@@ -674,7 +665,7 @@ function runManualAccessTest() {
   managedSheet.getRange(testRowIndex, FOLDER_NAME_COL).setValue(testFolderName);
   managedSheet.getRange(testRowIndex, ROLE_COL).setValue(testRole);
   
-  syncAll();
+  fullSync(); // Changed from syncAll()
 
   const userSheetName = managedSheet.getRange(testRowIndex, USER_SHEET_NAME_COL).getValue();
   const userSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(userSheetName);
@@ -682,7 +673,7 @@ function runManualAccessTest() {
   
   userSheet.getRange('A2').setValue(testEmail);
   ui.alert('Granting Access', 'The test email has been added to the ' + userSheetName + ' sheet. The script will now sync again to grant folder access.', ui.ButtonSet.OK);
-  syncAll();
+  fullSync(); // Changed from syncAll()
 
   const folderId = managedSheet.getRange(testRowIndex, FOLDER_ID_COL).getValue();
   const folderUrl = DriveApp.getFolderById(folderId).getUrl();
@@ -695,7 +686,7 @@ function runManualAccessTest() {
 
   userSheet.getRange('A2').clearContent();
   ui.alert('Revoking Access', 'The test email has been removed from the sheet. The script will now sync again to revoke folder access.', ui.ButtonSet.OK);
-  syncAll();
+  fullSync(); // Changed from syncAll()
 
   const verification2 = ui.alert('Verify Revoked Access', 'Please go back to your Incognito Window and refresh the folder page. You should see a \'permission denied\' error.\n\nWas access revoked?', ui.ButtonSet.YES_NO);
 
