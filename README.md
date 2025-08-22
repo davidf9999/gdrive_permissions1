@@ -44,3 +44,39 @@ Therefore, a (paid) Google Workspace account is a fundamental requirement to ena
 This project includes a complete, automated setup wizard that runs inside a Docker container. It will guide you through creating and configuring all the necessary Google Cloud and Apps Script resources.
 
 To begin, please follow the step-by-step guide here: **[docs/ONBOARDING.md](./docs/ONBOARDING.md)**
+
+---
+
+## Developer & Testing Features
+
+### Manual Access Test
+
+The "Permissions Manager" menu in the Google Sheet includes a "Run Manual Access Test" item. This provides a guided, step-by-step wizard to test the end-to-end process of granting and revoking access for a single user to a new test folder. This is useful for verifying that the core logic is working correctly after setup.
+
+### Stress Test
+
+The menu also includes a "Run Stress Test" item. This is a powerful tool for developers or administrators to test the performance and scalability of the script in their environment. It will:
+
+1.  Prompt for the number of folders and users per folder to create.
+2.  Generate a large volume of test data (folders, groups, user sheets, and user email entries).
+3.  Run the `syncAll` function and time its execution.
+4.  Provide an option to automatically clean up all the generated test data.
+
+This is useful for identifying potential bottlenecks and understanding how the script will perform under a heavy load.
+
+### Test Data Cleanup
+
+If a test is interrupted, it may leave behind test folders, groups, and sheets. The "Permissions Manager" -> "Testing" menu provides tools to clean up this data:
+
+*   **Cleanup Manual Test Data:** This option will prompt you for the name of the folder used in a manual access test. It will then find the corresponding entry in the `ManagedFolders` sheet and remove the associated folder, group, and user sheet.
+*   **Cleanup Stress Test Data:** This option will automatically find and delete all folders, groups, and sheets that were created by the stress test, by identifying them with the "StressTestFolder_" prefix.
+
+---
+
+## Logging
+
+The script now includes a comprehensive logging system to track its operations.
+
+*   **Log Sheet:** A new sheet named "Log" will be automatically created in your spreadsheet. It will contain a timestamped record of all the main operations performed by the script, such as syncing folders, creating groups, and updating permissions.
+*   **Test Log Sheet:** A separate sheet named "TestLog" will be created to store logs from the testing and cleanup functions. This keeps the main log clean and allows you to easily discard test-related logs.
+*   **Clear Logs:** You can clear all the logs in both the "Log" and "TestLog" sheets by using the "Permissions Manager" -> "Logging" -> "Clear All Logs" menu item.
