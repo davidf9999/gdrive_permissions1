@@ -86,7 +86,7 @@ function setupControlSheets_() {
   let userGroupsSheet = ss.getSheetByName(USER_GROUPS_SHEET_NAME);
   if (!userGroupsSheet) {
     userGroupsSheet = ss.insertSheet(USER_GROUPS_SHEET_NAME);
-    userGroupsSheet.getRange('A1:B1').setValues([['GroupName', 'GroupEmail']]).setFontWeight('bold');
+    userGroupsSheet.getRange('A1:D1').setValues([['GroupName', 'GroupEmail', 'Last Synced', 'Status']]).setFontWeight('bold');
     userGroupsSheet.setFrozenRows(1);
     log_('Created "UserGroups" sheet.');
   }
@@ -234,17 +234,57 @@ function syncUserGroups() {
       return;
     }
 
-    const data = userGroupsSheet.getDataRange().getValues();
-    for (let i = 1; i < data.length; i++) {
-      const groupName = data[i][0];
-      const groupEmail = data[i][1];
-      if (groupName && groupEmail) {
+    const lastRow = userGroupsSheet.getLastRow();
+    if (lastRow < 2) {
+        log_('No data rows to process in UserGroups sheet.');
+        return;
+    }
+    
+    const dataRange = userGroupsSheet.getRange(2, 1, lastRow - 1, 4); // Get range for all data rows
+    const data = dataRange.getValues();
+
+    for (let i = 0; i < data.length; i++) {
+      const rowIndex = i + 2; // Sheet row index (1-based, accounting for header)
+      const statusCell = userGroupsSheet.getRange(rowIndex, 4);
+      const lastSyncedCell = userGroupsSheet.getRange(rowIndex, 3);
+      const groupEmailCell = userGroupsSheet.getRange(rowIndex, 2);
+
+      try {
+        let groupName = data[i][0];
+        let groupEmail = data[i][1];
+
+        if (!groupName) {
+          // Skip empty rows
+          continue;
+        }
+        
+        statusCell.setValue('Processing...');
+        ss.toast('Processing user group: ' + groupName + '...', 'Sync Progress', 10);
+        log_('Processing user group: ' + groupName);
+
+        // Generate group email if it doesn't exist
+        if (!groupEmail) {
+          groupEmail = generateGroupEmail_(groupName);
+          groupEmailCell.setValue(groupEmail);
+          log_('Generated group email for ' + groupName + ': ' + groupEmail);
+        }
+
+        // Now proceed with creating resources and syncing
         getOrCreateUserSheet_(groupName);
         getOrCreateGroup_(groupEmail, groupName);
         syncGroupMembership_(groupEmail, groupName);
+
+        lastSyncedCell.setValue(new Date());
+        statusCell.setValue('OK');
+        log_('Successfully synced user group: ' + groupName);
+
+      } catch (e) {
+        const errorMessage = 'ERROR: ' + e.message;
+        log_('Failed to process user group row ' + rowIndex + '. Error: ' + e.message + ' Stack: ' + e.stack);
+        statusCell.setValue(errorMessage);
       }
     }
-    SpreadsheetApp.getUi().alert('User groups synced.');
+    SpreadsheetApp.getUi().alert('User groups sync complete.');
   } catch (e) {
     const errorMessage = 'FATAL ERROR in syncUserGroups: ' + e.toString() + '\n' + e.stack;
     log_(errorMessage);
@@ -580,9 +620,9 @@ function setSheetUiStyles_() {
 
     const userGroupsSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(USER_GROUPS_SHEET_NAME);
     if (userGroupsSheet && userGroupsSheet.getLastRow() >= 2) {
-      const range = userGroupsSheet.getRange(2, 2, userGroupsSheet.getLastRow() - 1, 1);
+      const range = userGroupsSheet.getRange(2, 2, userGroupsSheet.getLastRow() - 1, 3);
       range.setBackground('#f3f3f3');
-      const protection = range.protect().setDescription('This column is managed by the script.');
+      const protection = range.protect().setDescription('These columns are managed by the script.');
       protection.setWarningOnly(true);
     }
   } catch (e) {
@@ -636,7 +676,7 @@ function runManualAccessTest() {
   if (!userSheet) return ui.alert('Test failed: Could not find the created user sheet: ' + userSheetName);
   
   userSheet.getRange('A2').setValue(testEmail);
-  ui.alert('Granting Access', 'The test email has been added to the \'' + userSheetName + '\' sheet. The script will now sync again to grant folder access.', ui.ButtonSet.OK);
+  ui.alert('Granting Access', 'The test email has been added to the 	ront' + userSheetName + '\' sheet. The script will now sync again to grant folder access.', ui.ButtonSet.OK);
   syncAll();
 
   const folderId = managedSheet.getRange(testRowIndex, FOLDER_ID_COL).getValue();
