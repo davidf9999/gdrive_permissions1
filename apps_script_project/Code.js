@@ -3,6 +3,8 @@ const MANAGED_FOLDERS_SHEET_NAME = 'ManagedFolders';
 const ADMINS_SHEET_NAME = 'Admins';
 const LOG_SHEET_NAME = 'Log';
 const TEST_LOG_SHEET_NAME = 'TestLog';
+const USER_GROUPS_SHEET_NAME = 'UserGroups';
+const CONFIG_SHEET_NAME = 'Config';
 
 // Column mapping for the ManagedFolders sheet
 const FOLDER_NAME_COL = 1;
@@ -25,6 +27,7 @@ function onOpen() {
 
   menu.addItem('Sync All Folders Now', 'syncAll');
   menu.addItem('Sync Admins', 'syncAdmins');
+  menu.addItem('Sync User Groups', 'syncUserGroups');
   menu.addSeparator();
 
   const testMenu = ui.createMenu('Testing');
@@ -41,6 +44,7 @@ function onOpen() {
   menu.addSubMenu(logMenu);
   menu.addToUi();
   
+  setupControlSheets_();
   setupLogSheets_();
 }
 
@@ -76,6 +80,26 @@ function setupControlSheets_() {
     adminSheet.getRange('A1').setValue('Administrator Emails').setFontWeight('bold');
     adminSheet.setFrozenRows(1);
     log_('Created "Admins" sheet.');
+  }
+  
+    // Check for UserGroups sheet
+  let userGroupsSheet = ss.getSheetByName(USER_GROUPS_SHEET_NAME);
+  if (!userGroupsSheet) {
+    userGroupsSheet = ss.insertSheet(USER_GROUPS_SHEET_NAME);
+    userGroupsSheet.getRange('A1:B1').setValues([['GroupName', 'GroupEmail']]).setFontWeight('bold');
+    userGroupsSheet.setFrozenRows(1);
+    log_('Created "UserGroups" sheet.');
+  }
+  
+  // Check for Config sheet
+  let configSheet = ss.getSheetByName(CONFIG_SHEET_NAME);
+  if (!configSheet) {
+    configSheet = ss.insertSheet(CONFIG_SHEET_NAME);
+    configSheet.getRange('A1:B1').setValues([['Setting', 'Value']]).setFontWeight('bold');
+    configSheet.getRange('A2:B2').setValues([['EnableEmailNotifications', 'FALSE']]);
+    configSheet.getRange('A3:B3').setValues([['NotificationEmailAddress', '']]);
+    configSheet.setFrozenRows(1);
+    log_('Created "Config" sheet.');
   }
 }
 
@@ -140,9 +164,11 @@ function syncAll() {
     SpreadsheetApp.getUi().alert(summaryMessage + '\n\nCheck the \'Status\' column in the \'ManagedFolders\' sheet for details.');
 
   } catch (e) {
-    log_('FATAL ERROR in syncAll: ' + e.toString() + '\n' + e.stack);
+    const errorMessage = 'FATAL ERROR in syncAll: ' + e.toString() + '\n' + e.stack;
+    log_(errorMessage);
     ss.toast('Sync failed with a fatal error.', 'Permissions Manager', 5);
     SpreadsheetApp.getUi().alert('A fatal error occurred: ' + e.message);
+    sendErrorNotification_(errorMessage);
   } finally {
     lock.releaseLock();
   }
@@ -196,6 +222,34 @@ function syncAdmins() {
 
   } catch (e) {
     log_('ERROR in syncAdmins: ' + e.toString());
+  }
+}
+
+function syncUserGroups() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const userGroupsSheet = ss.getSheetByName(USER_GROUPS_SHEET_NAME);
+    if (!userGroupsSheet) {
+      SpreadsheetApp.getUi().alert('UserGroups sheet not found.');
+      return;
+    }
+
+    const data = userGroupsSheet.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      const groupName = data[i][0];
+      const groupEmail = data[i][1];
+      if (groupName && groupEmail) {
+        getOrCreateUserSheet_(groupName);
+        getOrCreateGroup_(groupEmail, groupName);
+        syncGroupMembership_(groupEmail, groupName);
+      }
+    }
+    SpreadsheetApp.getUi().alert('User groups synced.');
+  } catch (e) {
+    const errorMessage = 'FATAL ERROR in syncUserGroups: ' + e.toString() + '\n' + e.stack;
+    log_(errorMessage);
+    SpreadsheetApp.getUi().alert('A fatal error occurred during user group sync: ' + e.message);
+    sendErrorNotification_(errorMessage);
   }
 }
 
@@ -294,6 +348,10 @@ function checkForOrphanSheets_() {
     const requiredSheetNames = new Set();
     requiredSheetNames.add(MANAGED_FOLDERS_SHEET_NAME);
     requiredSheetNames.add(ADMINS_SHEET_NAME);
+    requiredSheetNames.add(USER_GROUPS_SHEET_NAME);
+    requiredSheetNames.add(CONFIG_SHEET_NAME);
+    requiredSheetNames.add(LOG_SHEET_NAME);
+    requiredSheetNames.add(TEST_LOG_SHEET_NAME);
 
     const managedSheet = spreadsheet.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
     if (managedSheet && managedSheet.getLastRow() > 1) {
@@ -303,6 +361,16 @@ function checkForOrphanSheets_() {
             if (row[0]) requiredSheetNames.add(row[0]);
           });
       }
+    }
+    
+    const userGroupsSheet = spreadsheet.getSheetByName(USER_GROUPS_SHEET_NAME);
+    if (userGroupsSheet && userGroupsSheet.getLastRow() > 1) {
+        const groupSheetNames = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 1).getValues();
+        if (groupSheetNames) {
+            groupSheetNames.forEach(function(row) {
+                if (row[0]) requiredSheetNames.add(row[0]);
+            });
+        }
     }
 
     return allSheetNames.filter(function(name) { return !requiredSheetNames.has(name); });
@@ -502,20 +570,21 @@ function setFolderPermission_(folderId, groupEmail, role) {
 
 function setSheetUiStyles_() {
   try {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
-    if (!sheet || sheet.getLastRow() < 2) return;
+    const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+    if (managedSheet && managedSheet.getLastRow() >= 2) {
+        const range = managedSheet.getRange(2, USER_SHEET_NAME_COL, managedSheet.getLastRow() - 1, 4);
+        range.setBackground('#f3f3f3');
+        const protection = range.protect().setDescription('These columns are managed by the script.');
+        protection.setWarningOnly(true);
+    }
 
-    sheet.setColumnWidth(LAST_SYNCED_COL, 150);
-    sheet.getRange(2, LAST_SYNCED_COL, sheet.getLastRow() - 1, 1).setNumberFormat('yyyy-mm-dd hh:mm:ss');
-    sheet.setColumnWidth(STATUS_COL, 400);
-
-    const range = sheet.getRange(2, USER_SHEET_NAME_COL, sheet.getLastRow() - 1, 4);
-    
-    range.setBackground('#f3f3f3');
-
-    const protection = range.protect().setDescription('These columns are managed by the script.');
-    protection.setWarningOnly(true);
-    
+    const userGroupsSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(USER_GROUPS_SHEET_NAME);
+    if (userGroupsSheet && userGroupsSheet.getLastRow() >= 2) {
+      const range = userGroupsSheet.getRange(2, 2, userGroupsSheet.getLastRow() - 1, 1);
+      range.setBackground('#f3f3f3');
+      const protection = range.protect().setDescription('This column is managed by the script.');
+      protection.setWarningOnly(true);
+    }
   } catch (e) {
     log_('Could not apply UI styles. Error: ' + e.message);
   }
@@ -688,7 +757,7 @@ function runStressTest() {
       try { AdminDirectory.Groups.remove(groupEmail); } catch (e) { logTest_('Could not remove group ' + groupEmail + ': ' + e.message); }
     });
 
-    folderIds.forEach(function(folderId) {
+    folderIds.forEach(function(folderId) { 
       try { DriveApp.getFolderById(folderId).setTrashed(true); } catch (e) { logTest_('Could not trash folder ' + folderId + ': ' + e.message); }
     });
 
@@ -851,4 +920,21 @@ function clearLogs() {
   }
 
   ui.alert('Logs cleared.');
+}
+
+function sendErrorNotification_(errorMessage) {
+  try {
+    const configSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG_SHEET_NAME);
+    if (!configSheet) return;
+
+    const settings = configSheet.getRange('A2:B3').getValues();
+    const enableEmailNotifications = settings[0][1];
+    const notificationEmailAddress = settings[1][1];
+
+    if (enableEmailNotifications === true && notificationEmailAddress) {
+      MailApp.sendEmail(notificationEmailAddress, 'Permissions Manager Script - Fatal Error', errorMessage);
+    }
+  } catch (e) {
+    log_('Failed to send error notification email: ' + e.toString());
+  }
 }

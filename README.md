@@ -80,3 +80,22 @@ The script now includes a comprehensive logging system to track its operations.
 *   **Log Sheet:** A new sheet named "Log" will be automatically created in your spreadsheet. It will contain a timestamped record of all the main operations performed by the script, such as syncing folders, creating groups, and updating permissions.
 *   **Test Log Sheet:** A separate sheet named "TestLog" will be created to store logs from the testing and cleanup functions. This keeps the main log clean and allows you to easily discard test-related logs.
 *   **Clear Logs:** You can clear all the logs in both the "Log" and "TestLog" sheets by using the "Permissions Manager" -> "Logging" -> "Clear All Logs" menu item.
+
+---
+
+## User Groups
+
+You can now define and manage your own user groups directly within the spreadsheet. This allows you to create logical groupings of users (e.g., "Marketing Team", "Developers") and then grant them access to folders as a single unit.
+
+*   **UserGroups Sheet:** A new sheet named "UserGroups" will be automatically created. This sheet has two columns: "GroupName" and "GroupEmail". You can define your user groups in this sheet.
+*   **User Group Sheets:** For each group you define in the "UserGroups" sheet, a corresponding sheet named after the "GroupName" will be automatically created by the "Sync User Groups" function if it doesn't already exist. In this sheet, you can list the email addresses of the members of that group.
+*   **Sync User Groups:** The "Permissions Manager" menu now includes a "Sync User Groups" option. This will create the Google Groups for your user groups and sync their memberships from the corresponding sheets.
+*   **Using User Groups:** Once you have synced your user groups, you can use the group's email address in any of the folder-role sheets to grant access to all the members of that group.
+
+---
+
+## Configuration
+
+A new "Config" sheet is now available for configuring advanced settings.
+
+*   **Email Error Notifications:** You can enable or disable email notifications for fatal errors by setting the "EnableEmailNotifications" value to TRUE or FALSE. You can also specify the email address to which the notifications will be sent in the "NotificationEmailAddress" field.
