@@ -22,30 +22,35 @@ const STATUS_COL = 7;
  * Adds a custom menu to the spreadsheet UI.
  */
 function onOpen() {
-  const ui = SpreadsheetApp.getUi();
-  const menu = ui.createMenu('Permissions Manager');
+  const ui = SpreadsheetApp.getUi(); // Declare ui here
+  ui.createMenu('Permissions Manager')
+      .addItem('Sync All', 'syncAllCombined') // New item
+      .addItem('Sync All Folders', 'syncAll')
+      .addItem('Sync User Groups', 'syncUserGroups')
+      .addItem('Sync Admins', 'syncAdmins') // Add this line back
+      .addSeparator()
+      .addSubMenu(ui.createMenu('Testing') // Use ui here
+          .addItem('Cleanup Manual Test Data', 'cleanupManualTestData')
+          .addItem('Cleanup Stress Test Data', 'cleanupStressTestData'))
+      .addSeparator()
+      .addSubMenu(ui.createMenu('Logging') // Use ui here
+          .addItem('Clear All Logs', 'clearAllLogs'))
+      .addToUi();
 
-  menu.addItem('Sync All Folders Now', 'syncAll');
-  menu.addItem('Sync Admins', 'syncAdmins');
-  menu.addItem('Sync User Groups', 'syncUserGroups');
-  menu.addSeparator();
-
-  const testMenu = ui.createMenu('Testing');
-  testMenu.addItem('Run Manual Access Test', 'runManualAccessTest');
-  testMenu.addItem('Run Stress Test', 'runStressTest');
-  testMenu.addSeparator();
-  testMenu.addItem('Cleanup Manual Test Data', 'cleanupManualTestData');
-  testMenu.addItem('Cleanup Stress Test Data', 'cleanupStressTestData');
-
-  const logMenu = ui.createMenu('Logging');
-  logMenu.addItem('Clear All Logs', 'clearLogs');
-
-  menu.addSubMenu(testMenu);
-  menu.addSubMenu(logMenu);
-  menu.addToUi();
-  
   setupControlSheets_();
   setupLogSheets_();
+}
+
+function syncAllCombined() {
+  try {
+    SpreadsheetApp.getActiveSpreadsheet().toast('Starting full synchronization...', 'Sync All', -1);
+    syncUserGroups(); // Sync user groups first
+    syncAll(); // Then sync managed folders (which calls syncManagedFolders)
+    SpreadsheetApp.getActiveSpreadsheet().toast('Full synchronization complete!', 'Sync All', 5);
+  } catch (e) {
+    SpreadsheetApp.getActiveSpreadsheet().toast('Error during full synchronization: ' + e.message, 'Sync All', 10);
+    Logger.log('Error during full synchronization: ' + e.message);
+  }
 }
 
 /**
@@ -453,7 +458,7 @@ function getOrCreateFolder_(folderName, folderId) {
   } else {
     log_('No folder found with name "' + folderName + '". Creating it now...');
     const newFolder = DriveApp.createFolder(folderName);
-    log_('Successfully created folder "' + folderName + '".');
+    log_('Successfully created folder "' + folderName + '"');
     return newFolder;
   }
 }
@@ -676,7 +681,7 @@ function runManualAccessTest() {
   if (!userSheet) return ui.alert('Test failed: Could not find the created user sheet: ' + userSheetName);
   
   userSheet.getRange('A2').setValue(testEmail);
-  ui.alert('Granting Access', 'The test email has been added to the 	ront' + userSheetName + '\' sheet. The script will now sync again to grant folder access.', ui.ButtonSet.OK);
+  ui.alert('Granting Access', 'The test email has been added to the ' + userSheetName + ' sheet. The script will now sync again to grant folder access.', ui.ButtonSet.OK);
   syncAll();
 
   const folderId = managedSheet.getRange(testRowIndex, FOLDER_ID_COL).getValue();
