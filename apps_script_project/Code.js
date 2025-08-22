@@ -24,10 +24,10 @@ const STATUS_COL = 7;
 function onOpen() {
   const ui = SpreadsheetApp.getUi(); // Declare ui here
   ui.createMenu('Permissions Manager')
-      .addItem('Sync All', 'fullSync') // New item
-      .addItem('Sync All Folders', 'fullSync')
+      .addItem('Sync Admins', 'syncAdmins')
       .addItem('Sync User Groups', 'syncUserGroups')
-      .addItem('Sync Admins', 'syncAdmins') // Add this line back
+      .addItem('Sync All Folders', 'fullSync')
+      .addItem('Sync All', 'fullSync')
       .addSeparator()
       .addSubMenu(ui.createMenu('Testing') // Use ui here
           .addItem('Cleanup Manual Test Data', 'cleanupManualTestData')
