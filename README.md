@@ -17,7 +17,7 @@ Google Drive is a powerful collaboration tool, but managing permissions directly
 
 ## The Solution: Google Groups and Automation
 
-This project solves these problems by using **Google Groups** as the access control mechanism. Instead of sharing a folder with 100 individual users, you share it with a single Google Group. You can then add hundreds (or thousands) of members to that group.
+This project solves these problems by using **Google Groups** as the access control mechanism. Instead of sharing a folder with many individual users (which can hit Google Drive's sharing limits), you share it with a single Google Group. This allows you to manage hundreds (or even thousands) of members by simply adding or removing them from that group.
 
 This solution automates the entire lifecycle of this approach:
 
@@ -25,6 +25,8 @@ This solution automates the entire lifecycle of this approach:
 2.  The script automatically creates dedicated Google Groups for different roles (e.g., `project-x-editors@your-domain.com`).
 3.  You manage the membership of these groups simply by adding or removing emails from other sheets.
 4.  The script runs automatically to sync the group memberships, effectively granting or revoking access to the Drive folders.
+
+## Key Concepts
 
 ### Why is a Google Workspace Account Required?
 
@@ -37,13 +39,49 @@ Therefore, a (paid) Google Workspace account is a fundamental requirement to ena
 
 **Important Clarification:** Only **one** Google Workspace account is needed—the account used by the administrator to run the setup wizard and own the project. The end-users who are granted access to the folders can have **any type of Google account**, including free, personal `@gmail.com` accounts.
 
+### The Central Google Sheet
+
+The core of this solution revolves around a central Google Sheet. This sheet acts as your control panel for managing all aspects of folder permissions and user groups. You define:
+
+*   Which Google Drive folders to manage.
+*   The roles (Editor, Viewer, Commenter) for access.
+*   The membership of your Google Groups, which are then synchronized with the Drive folders.
+
+This centralized approach provides a clear, auditable, and easy-to-manage system for large-scale permission management.
+
 ---
 
 ## Getting Started
 
 This project includes a complete, automated setup wizard that runs inside a Docker container. It will guide you through creating and configuring all the necessary Google Cloud and Apps Script resources.
 
-To begin, please follow the step-by-step guide here: **[docs/ONBOARDING.md](./docs/ONBOARDING.md)**
+**1. Complete the Onboarding Prerequisites**
+
+Before running the setup, you must complete the manual onboarding steps to prepare your Google account.
+
+Please follow the step-by-step guide here: **[docs/ONBOARDING.md](./docs/ONBOARDING.md)**
+
+**2. Run the Automated Setup**
+
+Once you have completed the onboarding steps, you can run the automated setup wizard using Docker.
+
+1.  **Build the Docker Image:**
+
+    Open your terminal in the root directory of this project and run the following command to build the Docker image. This will create a container with all the necessary tools and dependencies pre-installed.
+
+    ```bash
+    docker build -t gdrive-permission-manager .
+    ```
+
+2.  **Run the Setup Wizard:**
+
+    After the image is built, run the following command to start the interactive setup wizard:
+
+    ```bash
+    docker run -it gdrive-permission-manager
+    ```
+
+    The script will guide you through the rest of the process, including authenticating with your Google account and configuring your project.**
 
 ---
 

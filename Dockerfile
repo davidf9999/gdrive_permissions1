@@ -1,27 +1,35 @@
 # Dockerfile for the Permission Manager Setup Environment
 
-# Use the official Google Cloud SDK image as a base
-# This provides gcloud, gsutil, and a Debian-based environment.
-FROM google/cloud-sdk:latest
+# Use a Debian base image
+FROM debian:bookworm
 
 # Set environment variables for non-interactive setup
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install necessary packages: curl, unzip, nodejs, npm
+# Install necessary packages
 RUN apt-get update && apt-get install -y \
     curl \
     unzip \
     nodejs \
     npm \
+    python3 \
+    xz-utils \
+    wget \
     && apt-get clean
 
-# Install gcloud alpha components
+# Install Google Cloud SDK using the interactive installer
+RUN curl https://sdk.cloud.google.com | bash -s -- --disable-prompts
+
+# Add gcloud to the PATH
+ENV PATH="/root/google-cloud-sdk/bin:${PATH}"
+
+# Install alpha components
 RUN gcloud components install alpha -q
 
 # Install Terraform
 ENV TERRAFORM_VERSION=1.5.7
 RUN curl -LO https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip && \
-    unzip terraform_${TERRAFORM_VERSION}_linux_amd4.zip && \
+    unzip terraform_${TERRAFORM_VERSION}_linux_amd64.zip && \
     mv terraform /usr/local/bin/ && \
     rm terraform_${TERRAFORM_VERSION}_linux_amd64.zip
 
@@ -29,11 +37,9 @@ RUN curl -LO https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terra
 RUN npm install -g @google/clasp
 
 # Install GAM (Google Apps Manager)
-# This will install GAM into /root/bin/gamadv-xtd3/gam
-RUN bash <(curl -s -L https://gam-shortn.appspot.com/gam-install.sh) -l -d /root/bin
-
-# Add the GAM directory to the PATH
-ENV PATH="/root/bin/gamadv-xtd3:${PATH}"
+RUN wget https://github.com/GAM-team/GAM/releases/download/v7.19.02/gam-7.19.02-linux-x86_64-glibc2.39.tar.xz -O /tmp/gam.tar.xz
+RUN tar -xvf /tmp/gam.tar.xz -C /tmp
+RUN mv /tmp/gam7/gam /usr/local/bin/
 
 # Set up the working directory
 WORKDIR /app

@@ -49,4 +49,4 @@ Once you have:
 
 You are ready to proceed with the automated setup.
 
-Your next step will be to build and run the Docker container that houses our setup wizard. You will receive instructions for this in the main `README.md` file.
+Return to the main `README.md` file and follow the instructions in the "Getting Started" section to build and run the setup wizard.
