@@ -4,6 +4,9 @@
 # Exit immediately if a command exits with a non-zero status.
 set -e
 
+# --- Global Variables ---
+config_file="/app/setup.conf"
+
 # --- Helper Functions ---
 function print_header() {
   echo "================================================="
@@ -12,52 +15,83 @@ function print_header() {
   echo
 }
 
-function get_user_input() {
-  echo "--- Step 1: Gathering Configuration Details ---"
-  echo "Please provide the following information. You can find details on where to find these values in the docs/ONBOARDING.md guide."
-  echo
-
-  read -p "Enter your desired Google Cloud Project ID (e.g., my-gdrive-manager): " gcp_project_id
-  read -p "Enter your Google Cloud Billing Account ID (e.g., 012345-ABCDEF-GHIJKL): " billing_account_id
-  read -p "Enter your Google Workspace domain (e.g., your-company.com): " workspace_domain
-
-  # Basic validation
-  if [ -z "$gcp_project_id" ] || [ -z "$billing_account_id" ] || [ -z "$workspace_domain" ]; then
-    echo "Error: All fields are required. Please try again."
-    exit 1
-  fi
+function set_active_gcloud_account() {
+    echo "--- Step 0: Setting Active Google Cloud Account ---"
+    gcloud config set account "$gcp_account_email"
+    echo "Active account set to $gcp_account_email"
+    echo
 }
 
-function configure_oauth() {
-  echo
-  echo "--- Step 3: Configuring OAuth Consent Screen ---"
-  echo "Setting OAuth consent screen user type to internal and support email to $authed_user."
-  
-  # The command to create the brand is idempotent; it will use the existing one if it finds one.
-  # Note: This gcloud command is in alpha.
-  gcloud alpha iap oauth-brands create --application_title="Drive Permission Manager" --support_email=$authed_user --project=$gcp_project_id
+function load_config() {
+    echo "--- Step 1: Loading Configuration from $config_file ---"
+    if [ ! -f "$config_file" ]; then
+        echo "Error: Config file not found at '$config_file'"
+        echo "Please ensure you are mounting the setup.conf file correctly with the -v flag."
+        exit 1
+    fi
+    source "$config_file"
 
-  echo "OAuth consent screen configured."
+    # Basic validation
+    if [ -z "$gcp_project_id" ] || [ -z "$billing_account_id" ] || [ -z "$workspace_domain" ] || [ -z "$clasp_project_title" ] || [ -z "$gcp_account_email" ]; then
+        echo "Error: All required fields (gcp_project_id, billing_account_id, workspace_domain, clasp_project_title, gcp_account_email) must be set in the config file."
+        exit 1
+    fi
+}
+
+function configure_oauth_and_service_account() {
+  echo
+  echo "--- Step 3: Creating Service Account ---"
+  local service_account_email="drive-permission-manager-sa@$gcp_project_id.iam.gserviceaccount.com"
+
+  # Check if the service account already exists to make the script idempotent.
+  if ! gcloud iam service-accounts describe "$service_account_email" --project=$gcp_project_id > /dev/null 2>&1; then
+    echo "Creating new service account..."
+    gcloud iam service-accounts create drive-permission-manager-sa \
+      --display-name="Drive Permission Manager Service Account" \
+      --project=$gcp_project_id
+
+    # Grant the service account the necessary roles
+    gcloud projects add-iam-policy-binding $gcp_project_id \
+      --member="serviceAccount:$service_account_email" \
+      --role="roles/editor"
+    echo "Service account created and configured."
+  else
+    echo "Service account already exists."
+  fi
+
+  echo
+  echo "--- Step 4: Configuring OAuth Consent Screen ---"
+
+  # The brand (consent screen) can only be created once per project.
+  local brand_id=$(gcloud alpha iap oauth-brands list --project=$gcp_project_id --format='value(name)')
+
+  if [ -z "$brand_id" ]; then
+    echo "Creating new OAuth brand (consent screen)..."
+    gcloud alpha iap oauth-brands create --application_title="$clasp_project_title" --support_email=$gcp_account_email --project=$gcp_project_id
+    echo "OAuth consent screen created."
+  else
+    echo "OAuth brand (consent screen) already exists."
+  fi
+
+  echo
+  echo "--- Step 5: Creating OAuth Client ID ---"
+  # Create the OAuth client ID for the service account
+  gcloud alpha iap oauth-clients create "$service_account_email" \
+    --brand_id=$(gcloud alpha iap oauth-brands list --project=$gcp_project_id --format='value(name)') \
+    --project=$gcp_project_id
+
+  echo "OAuth client ID created for the service account."
 }
 
 function create_clasp_project() {
   echo
-  echo "--- Step 4: Creating Google Apps Script Project ---"
-  read -p "Enter a name for the new Apps Script project (e.g., DrivePermissionManager): " clasp_project_title
-
-  if [ -z "$clasp_project_title" ]; then
-    echo "Error: Apps Script project title is required."
-    exit 1
-  fi
-
-  # Read the project number from the terraform output
+  echo "--- Step 6: Creating Google Apps Script Project ---"
   project_number=$(terraform output -raw project_number)
 
-  echo "Creating new Apps Script project titled '$clasp_project_title'வுகளை..."
-  # Create the clasp project in the apps_script_project directory, linked to our GCP project
-  # We need to navigate back to the root directory first
-  cd ..
+  echo "Creating new Apps Script project titled '$clasp_project_title'"...
   
+  # The --rootDir flag makes the command run from the correct directory context,
+  # so we don't need to 'cd' into the parent directory first.
   clasp create \
     --type standalone \
     --title "$clasp_project_title" \
@@ -70,45 +104,25 @@ function create_clasp_project() {
 
 print_header
 
-# --- Step 0: Authentication ---
-echo "--- Step 0: Authenticating with Google Cloud ---"
-echo "A browser window will open for you to log in and grant permissions."
-read -p "Press [Enter] to continue..."
+load_config
 
-gcloud auth login
+set_active_gcloud_account
 
-# Get the logged-in user's email for confirmation
-authed_user=$(gcloud config get-value account)
-echo "Successfully authenticated as: $authed_user"
-echo
-
-get_user_input
+echo "--- Step 0: Verifying Credentials ---"
+echo "Verifying gcloud authentication..."
+gcloud auth list
 
 # --- Step 2: Provisioning Google Cloud Resources with Terraform ---
+
 echo
 echo "--- Step 2: Setting up Google Cloud Project and APIs ---"
-echo "The script will now use Terraform to create the following resources:"
-echo "  - A new Google Cloud Project with ID: $gcp_project_id"
-echo "  - Link the project to Billing Account: $billing_account_id"
-echo "  - Enable all necessary APIs (Drive, Admin SDK, etc.)"
-echo
 
-read -p "Do you want to proceed with provisioning these resources? (y/n) " -n 1 -r
-echo
-if [[ ! $REPLY =~ ^[Yy]$ ]]
-then
-    echo "Aborted by user."
-    exit 1
-fi
 
-# Navigate to the terraform directory
 cd terraform
 
-# Initialize Terraform
 echo "Initializing Terraform..."
 terraform init -upgrade
 
-# Apply the Terraform configuration
 echo "Applying Terraform configuration..."
 terraform apply -auto-approve \
   -var="gcp_project_id=$gcp_project_id" \
@@ -117,21 +131,27 @@ terraform apply -auto-approve \
 
 echo "Terraform provisioning complete!"
 
-# --- Step 3: Configure OAuth ---
-configure_oauth
+# --- Steps 3-5: Configure OAuth and Service Accounts ---
+configure_oauth_and_service_account
 
-# --- Step 4: Create Apps Script Project ---
+# --- Step 6: Create Apps Script Project ---
 create_clasp_project
 
-# --- Step 5: Push the code ---
+# --- Step 7: Push the code ---
+
 echo
-echo "--- Step 5: Deploying Apps Script Code ---"
-# The clasp project was created in the apps_script_project directory, so we need to be in the parent of that.
-# The create_clasp_project function already moved us to the root.
+echo "--- Step 7: Deploying Apps Script Code ---"
+
+echo "Verifying clasp authentication..."
+clasp status
+
 clasp push --force
 
 echo "Deployment complete!"
-echo
+echo 
+
+
+
 
 
 echo "================================================="

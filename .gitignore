@@ -53,3 +53,5 @@ htmlcov/
 .terraform/
 *.tfstate
 *.tfstate.backup
+
+setup.conf

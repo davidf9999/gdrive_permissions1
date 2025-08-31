@@ -61,9 +61,23 @@ Before running the setup, you must complete the manual onboarding steps to prepa
 
 Please follow the step-by-step guide here: **[docs/ONBOARDING.md](./docs/ONBOARDING.md)**
 
-**2. Run the Automated Setup**
+**2. Configure Your Setup**
 
-Once you have completed the onboarding steps, you can run the automated setup wizard using Docker.
+The setup script is non-interactive and requires a configuration file to run.
+
+1.  **Create a Configuration File:**
+    Copy the `setup.conf.example` file to a new file named `setup.conf`.
+
+    ```bash
+    cp setup.conf.example setup.conf
+    ```
+
+2.  **Populate the File:**
+    Edit the `setup.conf` file and fill in the required values for your project.
+
+**3. Run the Automated Setup**
+
+Once you have completed the onboarding and configuration steps, you can run the automated setup wizard using Docker.
 
 1.  **Build the Docker Image:**
 
@@ -75,13 +89,37 @@ Once you have completed the onboarding steps, you can run the automated setup wi
 
 2.  **Run the Setup Wizard:**
 
-    After the image is built, run the following command to start the interactive setup wizard:
+    After the image is built, execute the following command. This command mounts your local credentials and your `setup.conf` file into the container, allowing the script to run non-interactively.
 
     ```bash
-    docker run -it gdrive-permission-manager
+    docker run -i \
+      -v ~/.config/gcloud:/root/.config/gcloud \
+      -v ~/.clasprc.json:/root/.clasprc.json \
+      -v "$(pwd)/setup.conf:/app/setup.conf" \
+      gdrive-permission-manager
     ```
 
-    The script will guide you through the rest of the process, including authenticating with your Google account and configuring your project.**
+    The script will guide you through the rest of the process, including authenticating with your Google account and provisioning your project resources.**
+
+---
+
+## Post-Setup: Manual Billing Account Linking
+
+After the setup script successfully creates your new Google Cloud project, you must perform one final manual step.
+
+**You must manually link the new project to your Google Cloud Billing Account.**
+
+**Why is this necessary?**
+Automating the billing account link can be unreliable due to complex and often strict permission policies within Google Cloud organizations. To ensure the setup completes successfully, this step has been made manual.
+
+1.  **Navigate to the Google Cloud Console Billing Page:**
+    *   Go to: [https://console.cloud.google.com/billing](https://console.cloud.google.com/billing)
+
+2.  **Link the Project:**
+    *   You should see a notification that your new project (e.g., `gdrive-permissions-manager-xxxx`) is not linked to a billing account.
+    *   Follow the on-screen prompts to associate the project with the active billing account you prepared during the onboarding process.
+
+Once this is done, your setup is fully complete.
 
 ---
 

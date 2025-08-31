@@ -1,0 +1,34 @@
+# Example configuration for the Google Drive Permission Manager setup script.
+#
+# To use, save this file as 'setup.conf' and populate the values.
+# Then run the setup script with the --config flag:
+# ./scripts/setup.sh --config setup.conf
+
+# --- Google Cloud Configuration ---
+
+# The email address of the Google Workspace Super Admin account you are using
+# to run this setup. This account will be set as the active account for gcloud.
+gcp_account_email="your-super-admin@your-company.com"
+
+# The desired ID for your new Google Cloud Project.
+# This does NOT need to be created in advance; the script will create it for you.
+# IMPORTANT: GCP Project IDs must be globally unique. Choose something specific
+# that is unlikely to be taken by another user (e.g., "my-company-drive-manager-123").
+gcp_project_id="your-gcp-project-id"
+
+# The ID of your Google Cloud Billing Account.
+# This is REQUIRED. Google Cloud requires a project to be linked to a billing
+# account to enable the necessary APIs, even if your usage falls within the free tier.
+# You can find this ID in the Google Cloud Console under "Billing".
+# See docs/ONBOARDING.md for more details.
+billing_account_id="012345-ABCDEF-GHIJKL"
+
+# Your Google Workspace domain (e.g., "your-company.com").
+# This is required for the script to manage Google Groups via the Admin SDK.
+workspace_domain="your-company.com"
+
+# --- Apps Script Configuration ---
+
+# The desired name for the new Google Apps Script project that will be created.
+# You can choose any name you like for your own reference.
+clasp_project_title="My Drive Permission Manager"

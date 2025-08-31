@@ -21,17 +21,9 @@ resource "google_project" "project" {
   name       = var.gcp_project_id
 }
 
-# Link the new project to the provided billing account
-resource "google_project_billing_info" "billing" {
-  project       = google_project.project.project_id
-  billing_account = var.billing_account_id
-}
-
 # Enable the necessary APIs for the project
 resource "google_project_service" "apis" {
   project = google_project.project.project_id
-  # This depends on the billing account being successfully linked
-  depends_on = [google_project_billing_info.billing]
 
   # A list of all the APIs required by the solution
   for_each = toset([
@@ -41,7 +33,8 @@ resource "google_project_service" "apis" {
     "admin.googleapis.com",
     "script.googleapis.com",
     "sheets.googleapis.com",
-    "groupssettings.googleapis.com"
+    "groupssettings.googleapis.com",
+    "iap.googleapis.com"
   ])
 
   service = each.key
