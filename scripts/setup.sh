@@ -102,18 +102,28 @@ function configure_oauth_and_service_account() {
 
 function create_and_deploy_clasp_project() {
   echo
-  echo "--- Creating and Deploying Google Apps Script Project ---"
+  echo "--- Creating/Cloning and Deploying Google Apps Script Project ---"
   
   cd apps_script_project
 
-  # Clean up any old project file in this directory and the parent directory
-  rm -f .clasp.json
-  rm -f ../.clasp.json
+  echo "Checking for existing Apps Script project titled '$clasp_project_title' מס"
+  # Grep for the title, ensuring it's the full line, then get the first field (the ID).
+  existing_script_id=$(clasp list | grep -w "$clasp_project_title" | awk '{print $1}')
 
-  echo "Creating new Apps Script project..."
-  clasp create \
-    --type standalone \
-    --title "$clasp_project_title"
+  if [ -n "$existing_script_id" ]; then
+    echo "Project found. Cloning ID: $existing_script_id"
+    # Clean up any local files before cloning to ensure a fresh start.
+    rm -f .clasp.json appsscript.json Code.js
+    clasp clone "$existing_script_id"
+  else
+    echo "No existing project found. Creating a new one..."
+    # Clean up any old project file in this directory and the parent directory
+    rm -f .clasp.json
+    rm -f ../.clasp.json
+    clasp create \
+      --type standalone \
+      --title "$clasp_project_title"
+  fi
 
   echo "Deploying Apps Script Code..."
   clasp push --force

@@ -111,7 +111,8 @@ After the script finishes, there are two final, one-time manual steps.
 
 1.  **Link Your Billing Account:**
     *   Go to the [Google Cloud Console Billing page](https://console.cloud.google.com/billing).
-    *   You can find and select your new project using the project dropdown menu at the top of the page.
+    *   At 'Select an organization' dropdown menu, make sure to select your organization (your domain).
+    *   You can find and select your new project using the 'Your projects' menu at the top of the page.
     *   You should see a notification that your new project is not linked to a billing account. Follow the on-screen prompts to associate it with your active billing account.
 
 2.  **Link Your Apps Script Project:**
