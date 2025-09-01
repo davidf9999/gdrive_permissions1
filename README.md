@@ -121,6 +121,8 @@ Automating the billing account link can be unreliable due to complex and often s
 
 Once this is done, your setup is fully complete.
 
+**Note:** The Apps Script project will be created without being linked to the Google Cloud project. You must perform the final step of linking the new Apps Script project to the new Google Cloud project in the Apps Script editor settings.
+
 ---
 
 ## Developer & Testing Features
