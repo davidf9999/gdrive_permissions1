@@ -53,7 +53,7 @@ This centralized approach provides a clear, auditable, and easy-to-manage system
 
 ## Getting Started
 
-This project includes a complete, automated setup wizard that runs inside a Docker container. It will guide you through creating and configuring all the necessary Google Cloud and Apps Script resources.
+This project uses Docker and Docker Compose to provide a simple, one-command setup process.
 
 **1. Complete the Onboarding Prerequisites**
 
@@ -75,20 +75,12 @@ The setup script is non-interactive and requires a configuration file to run.
 2.  **Populate the File:**
     Edit the `setup.conf` file and fill in the required values for your project.
 
-**3. Build the Docker Image**
+**3. Run the Setup**
 
-Open your terminal in the root directory of this project and run the following command to build the Docker image. This will create a container with all the necessary tools and dependencies pre-installed. This step does not require you to be authenticated.
+The final step is to run the setup wizard. You will need Docker and Docker Compose installed on your local machine.
 
-```bash
-docker build -t gdrive-permission-manager .
-```
-
-**4. Authenticate and Run the Setup Wizard**
-
-Before running the container, you must have valid, fresh authentication credentials for `gcloud` and `clasp`. Your authentication tokens can expire, so it's good practice to run the login commands even if you have authenticated before.
-
-1.  **Log In:**
-    These commands will open a browser for you to log in and will save fresh credential files to your user's home directory. The `docker run` command will mount these files into the container.
+1.  **Authenticate Your Local Environment:**
+    Before running the setup, ensure your local environment is authenticated with Google. Your authentication tokens can expire, so it's good practice to run these commands even if you have authenticated before.
 
     ```bash
     # Authenticate with the Google Cloud SDK
@@ -98,18 +90,18 @@ Before running the container, you must have valid, fresh authentication credenti
     clasp login
     ```
 
-2.  **Run the Setup Wizard:**
-    After authenticating, execute the following command. This command mounts your local credentials and your `setup.conf` file into the container, allowing the script to run non-interactively.
+2.  **Run the Setup Wizard with Docker Compose:**
+    After authenticating, execute the following command from the root of the project directory.
 
     ```bash
-    docker run -i \
-      -v ~/.config/gcloud:/root/.config/gcloud \
-      -v ~/.clasprc.json:/root/.clasprc.json \
-      -v "$(pwd)/setup.conf:/app/setup.conf" \
-      gdrive-permission-manager
+    docker-compose up --build
     ```
 
-    The script will guide you through the rest of the process, including authenticating with your Google account and provisioning your project resources.**
+    This single command will:
+    *   Build the Docker image if it doesn't exist or if the `Dockerfile` has changed.
+    *   Run the setup container with all the necessary volumes (for credentials, config, and the project code) automatically mounted according to the `docker-compose.yml` file.
+
+    The script will guide you through the rest of the process.**
 
 ---
 
@@ -126,6 +118,7 @@ Automating the billing account link can be unreliable due to complex and often s
     *   Go to: [https://console.cloud.google.com/billing](https://console.cloud.google.com/billing)
 
 2.  **Link the Project:**
+    *   You can find and select your new project using the project dropdown menu at the top of the Google Cloud Console page.
     *   You should see a notification that your new project (e.g., `gdrive-permissions-manager-xxxx`) is not linked to a billing account.
     *   Follow the on-screen prompts to associate the project with the active billing account you prepared during the onboarding process.
 

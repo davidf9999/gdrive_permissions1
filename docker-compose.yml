@@ -1,0 +1,10 @@
+version: '3.8'
+services:
+  setup-wizard:
+    build: .
+    image: gdrive-permission-manager
+    volumes:
+      - ~/.config/gcloud:/root/.config/gcloud
+      - ~/.clasprc.json:/root/.clasprc.json
+      - ./setup.conf:/app/setup.conf
+      - ./apps_script_project:/app/apps_script_project
