@@ -20,6 +20,12 @@ Through a lengthy, iterative process, we diagnosed and resolved several core iss
 
 5.  **`clasp` API Issues:** The `clasp create --parentId` command was discovered to be unreliable in the user's environment, failing with a generic "Invalid argument" error. The solution was to remove this argument and have the user perform the linking manually.
 
+6.  **Advanced Script Debugging:** A subsequent, deep debugging session revealed several chained failures within the `setup.sh` script itself:
+    *   **Path-Dependence:** The script would `cd` into the `terraform` directory, causing all subsequent commands that relied on relative paths to fail or behave unexpectedly.
+    *   **`clasp` Tooling Issues:** The `clasp` command-line tool exhibited confusing behavior. It would get confused by stray `.clasp.json` files in parent directories and fail to create new project files in the correct location.
+    *   **API Race Conditions:** The script would fail because it was calling Google Cloud APIs to create a resource and then immediately use that resource before it had fully propagated on Google's backend.
+    *   **The Solution:** The `setup.sh` script was completely rewritten to be more robust. It now uses self-contained functions for each logical step and carefully manages its working directory (`cd`ing into a directory, performing a task, and `cd`ing back out). This eliminated all path-related issues. The `clasp` steps were also made more resilient by explicitly removing any potentially confusing stray files before creation. Finally, a `sleep` command was added to mitigate the API race condition.
+
 ## Final Architecture & Workflow
 
 The project is now in a robust, well-documented, and user-friendly state.

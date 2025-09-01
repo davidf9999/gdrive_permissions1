@@ -6,18 +6,19 @@ It is designed to be set up from scratch by any user with a Google Workspace acc
 
 ---
 
-## The Problem: Managing Drive Access at Scale
+## Table of Contents
 
-Google Drive is a powerful collaboration tool, but managing permissions directly on folders becomes difficult and error-prone as your organization grows:
+- [How it Works](#the-solution-google-groups-and-automation)
+- [Setup Guide](#setup-guide)
+- [Usage Guide](#usage-guide)
+- [Tearing Down the Project](#tearing-down-the-project)
+- [Advanced Features](#advanced-features)
 
-*   **Insecure Public Sharing:** The simplest way to share is with "anyone with the link." However, for sensitive or confidential data, this is not a secure option as the link can be forwarded or shared publicly, granting access to anyone.
-*   **Direct Sharing Limits:** For secure, direct sharing, a single Google Drive file or folder can only be shared with a maximum of 100 users or groups who can have editor/viewer/commenter access. For larger teams, this limit is quickly reached.
-*   **Lack of Centralization:** When permissions are managed on a folder-by-folder basis, there is no central place to see "who has access to what." This makes auditing and management difficult.
-*   **Manual Workload:** Manually adding and removing individual users from many different folders is time-consuming and prone to human error.
+---
 
 ## The Solution: Google Groups and Automation
 
-This project solves these problems by using **Google Groups** as the access control mechanism. Instead of sharing a folder with many individual users (which can hit Google Drive's sharing limits), you share it with a single Google Group. This allows you to manage hundreds (or even thousands) of members by simply adding or removing them from that group.
+This project solves the problem of managing Drive access at scale by using **Google Groups** as the access control mechanism. Instead of sharing a folder with many individual users (which can hit Google Drive's sharing limits), you share it with a single Google Group. This allows you to manage hundreds (or even thousands) of members by simply adding or removing them from that group.
 
 This solution automates the entire lifecycle of this approach:
 
@@ -26,44 +27,40 @@ This solution automates the entire lifecycle of this approach:
 3.  You manage the membership of these groups simply by adding or removing emails from other sheets.
 4.  The script runs automatically to sync the group memberships, effectively granting or revoking access to the Drive folders.
 
-## Key Concepts
-
-### Why is a Google Workspace Account Required?
-
-While Google Groups can be used with free `@gmail.com` accounts, the **automation** of group management is a feature exclusive to **Google Workspace**.
-
-*   **The Admin SDK API:** To create groups, add members, and remove members programmatically, this script needs to use the Google Admin SDK API.
-*   **Workspace-Only Access:** Access to the Admin SDK API is only granted to users who are part of a Google Workspace domain. It is not available for standard Gmail accounts.
-
-Therefore, a (paid) Google Workspace account is a fundamental requirement to enable the automation that makes this solution powerful.
-
-**Important Clarification:** Only **one** Google Workspace account is needed—the account used by the administrator to run the setup wizard and own the project. The end-users who are granted access to the folders can have **any type of Google account**, including free, personal `@gmail.com` accounts.
-
-### The Central Google Sheet
-
-The core of this solution revolves around a central Google Sheet. This sheet acts as your control panel for managing all aspects of folder permissions and user groups. You define:
-
-*   Which Google Drive folders to manage.
-*   The roles (Editor, Viewer, Commenter) for access.
-*   The membership of your Google Groups, which are then synchronized with the Drive folders.
-
-This centralized approach provides a clear, auditable, and easy-to-manage system for large-scale permission management.
-
 ---
 
-## Getting Started
+## Setup Guide
 
-This project uses Docker and Docker Compose to provide a simple, one-command setup process.
+This guide will walk you through the complete, one-time setup process.
 
-**1. Complete the Onboarding Prerequisites**
+### Step 1: Prerequisites
 
-Before running the setup, you must complete the manual onboarding steps to prepare your Google account.
+Before you begin, you must have the following command-line tools installed on your local machine.
 
-Please follow the step-by-step guide here: **[docs/ONBOARDING.md](./docs/ONBOARDING.md)**
+*   **Google Cloud SDK (`gcloud`):** This is used to authenticate with your Google account and manage cloud resources.
+    *   [Installation Guide](https://cloud.google.com/sdk/docs/install)
+*   **`clasp`:** This is the official command-line tool for Google Apps Script.
+    *   [Installation Guide](https://github.com/google/clasp#install)
+*   **Docker and Docker Compose:** This is used to build and run the setup container in a consistent environment.
+    *   [Installation Guide](https://docs.docker.com/get-docker/)
 
-**2. Configure Your Setup**
+### Step 2: Google Account & Billing Setup
 
-The setup script is non-interactive and requires a configuration file to run.
+This solution requires a Google Workspace account and an active Google Cloud Billing account.
+
+1.  **Set Up Google Workspace:**
+    *   You must have a **Google Workspace** account with your own domain name (e.g., `your-company.com`). A standard `@gmail.com` account is **not** sufficient.
+    *   The user account you use for this setup **must** be a **Super Admin** for your Google Workspace domain.
+
+2.  **Set Up Google Cloud Billing:**
+    *   Go to the [Google Cloud Console Billing page](https://console.cloud.google.com/billing).
+    *   Ensure you are logged in as the same Super Admin user.
+    *   Create a new billing account if you don't have one. This requires a valid credit card. New users are often eligible for a free trial.
+    *   Take note of your **Billing Account ID** (e.g., `012345-ABCDEF-GHIJKL`). You will need this for the next step.
+
+### Step 3: Project Configuration
+
+The setup wizard runs non-interactively using a configuration file.
 
 1.  **Create a Configuration File:**
     Copy the `setup.conf.example` file to a new file named `setup.conf`.
@@ -73,11 +70,11 @@ The setup script is non-interactive and requires a configuration file to run.
     ```
 
 2.  **Populate the File:**
-    Edit the `setup.conf` file and fill in the required values for your project.
+    Edit the `setup.conf` file and fill in the required values, including the Billing Account ID you noted in the previous step.
 
-**3. Run the Setup**
+### Step 4: Run the Automated Setup
 
-The final step is to run the setup wizard. You will need Docker and Docker Compose installed on your local machine.
+This is the final step to provision all your cloud resources.
 
 1.  **Authenticate Your Local Environment:**
     Before running the setup, ensure your local environment is authenticated with Google. Your authentication tokens can expire, so it's good practice to run these commands even if you have authenticated before.
@@ -91,154 +88,60 @@ The final step is to run the setup wizard. You will need Docker and Docker Compo
     ```
 
 2.  **Run the Setup Wizard with Docker Compose:**
-    After authenticating, execute the following command from the root of the project directory.
+    After authenticating, execute the following commands from the root of the project directory.
 
+    First, build the Docker image:
     ```bash
-    docker-compose up --build
+    # Note: Use "docker-compose" (with a hyphen) or "docker compose" (with a space)
+    # depending on which version is installed on your system.
+    docker-compose build
     ```
 
-    This single command will:
-    *   Build the Docker image if it doesn't exist or if the `Dockerfile` has changed.
-    *   Run the setup container with all the necessary volumes (for credentials, config, and the project code) automatically mounted according to the `docker-compose.yml` file.
+    Next, run the setup wizard:
+    ```bash
+    # Use the same command style (hyphen or space) as you did for the build command.
+    docker-compose up
+    ```
 
-    The script will guide you through the rest of the process.**
+    This will run the setup container with all the necessary volumes mounted and execute the setup script.
 
----
+### Step 5: Post-Setup Manual Steps
 
-## Post-Setup: Manual Billing Account Linking
+After the script finishes, there are two final, one-time manual steps.
 
-After the setup script successfully creates your new Google Cloud project, you must perform one final manual step.
+1.  **Link Your Billing Account:**
+    *   Go to the [Google Cloud Console Billing page](https://console.cloud.google.com/billing).
+    *   You can find and select your new project using the project dropdown menu at the top of the page.
+    *   You should see a notification that your new project is not linked to a billing account. Follow the on-screen prompts to associate it with your active billing account.
 
-**You must manually link the new project to your Google Cloud Billing Account.**
-
-**Why is this necessary?**
-Automating the billing account link can be unreliable due to complex and often strict permission policies within Google Cloud organizations. To ensure the setup completes successfully, this step has been made manual.
-
-1.  **Navigate to the Google Cloud Console Billing Page:**
-    *   Go to: [https://console.cloud.google.com/billing](https://console.cloud.google.com/billing)
-
-2.  **Link the Project:**
-    *   You can find and select your new project using the project dropdown menu at the top of the Google Cloud Console page.
-    *   You should see a notification that your new project (e.g., `gdrive-permissions-manager-xxxx`) is not linked to a billing account.
-    *   Follow the on-screen prompts to associate the project with the active billing account you prepared during the onboarding process.
-
-Once this is done, your setup is fully complete.
-
-**Note:** The Apps Script project will be created without being linked to the Google Cloud project. You must perform the final step of linking the new Apps Script project to the new Google Cloud project in the Apps Script editor settings.
+2.  **Link Your Apps Script Project:**
+    *   The setup script creates your Apps Script project but does not link it to the Google Cloud project.
+    *   Open your new Apps Script project by going to the [Apps Script Dashboard](https://script.google.com/home), finding your project by name, and clicking on it.
+    *   Click on the **Project Settings** (the gear icon ⚙️) on the left sidebar.
+    *   Scroll down to the **Google Cloud Platform (GCP) Project** section, click **Change Project**, and enter your new GCP Project Number (which is provided in the setup script's final output).
 
 ---
 
-## Usage
+## Usage Guide
 
-Now that the system is installed, you need to create and initialize the Google Sheet that will act as your central control panel.
-
-**1. Create Your Control Sheet**
-
-1.  Go to [sheets.new](https://sheets.new) in your browser to create a new, blank Google Sheet.
-2.  Give the spreadsheet a memorable name, such as "Drive Permissions Manager".
-
-**2. Initialize the Script**
-
-This is a one-time action to install the custom menu and create the necessary control sheets (`ManagedFolders`, `Log`, etc.) in your spreadsheet.
-
-1.  In another browser tab, open the Apps Script project using the URL provided at the end of the setup script.
-2.  From the function list at the top of the editor, select the `onOpen` function.
-3.  Click the **Run** button.
-4.  A dialog box will appear asking for authorization. You must grant the script permission to access your spreadsheets and other services.
-
-After you grant authorization, the script will run. Go back to your spreadsheet. You should now see a new menu named **"Permissions Manager"** in the spreadsheet's menu bar. The script will have also automatically created several sheets (`ManagedFolders`, `UserGroups`, `Config`, `Log`, etc.).
-
-**3. Start Managing Permissions**
-
-Your system is now ready to use.
-
-1.  **Define Folders:** In the `ManagedFolders` sheet, enter the names of the Google Drive folders you wish to manage and the role you want to create (e.g., `Editor`, `Viewer`).
-2.  **Define User Groups (Optional):** In the `UserGroups` sheet, you can define collections of users (e.g., "Marketing Team").
-3.  **Run a Sync:** Use the **Permissions Manager > Sync All** menu item. The script will:
-    *   Create the Google Groups and user sheets corresponding to your configuration.
-    *   You can then add user emails to the newly created user sheets.
-    *   Run **Sync All** again to sync those users into the Google Groups, granting them access to the folders.
-
-For more details on the advanced features like Stress Testing and User Group management, please see the `GEMINI.md` file.
+For a detailed tutorial on how to use the spreadsheet, what each sheet and column means, and common workflows, please see the dedicated **[User Guide](./docs/USER_GUIDE.md)**.
 
 ---
 
 ## Tearing Down the Project
 
-If you wish to remove all the resources created by this project, a `teardown.sh` script is provided to automate most of the process.
+If you wish to remove all the resources created by this project, a `teardown.sh` script is provided.
 
-The teardown is a two-step process:
+1.  **Manually Delete the Apps Script Project:**
+    *   Go to your [Apps Script Dashboard](https://script.google.com/home).
+    *   Find the project, click the three dots (⋮), and select **Remove**.
 
-**1. Manually Delete the Apps Script Project**
-
-The Apps Script project is not tied to the Google Cloud project, so it must be deleted separately.
-
-1.  Go to your Apps Script dashboard: [https://script.google.com/home](https://script.google.com/home)
-2.  Find the project (e.g., "DrivePermissionManager").
-3.  Click the three dots (⋮) next to the project name and select **Remove**.
-
-**2. Run the Automated Teardown Script**
-
-The `teardown.sh` script will delete your Google Cloud project and all local state files.
-
-1.  Make sure the `gcp_project_id` in your `setup.conf` file still points to the project you want to delete.
-2.  Run the script from your terminal:
-    ```bash
-    ./teardown.sh
-    ```
-3.  The script will ask for confirmation before deleting the Google Cloud project.
+2.  **Run the Automated Teardown Script:**
+    *   Make sure the `gcp_project_id` in your `setup.conf` file still points to the project you want to delete.
+    *   Run the script from your terminal: `./teardown.sh`
 
 ---
 
-## Developer & Testing Features
+## Advanced Features
 
-### Manual Access Test
-
-The "Permissions Manager" menu in the Google Sheet includes a "Run Manual Access Test" item. This provides a guided, step-by-step wizard to test the end-to-end process of granting and revoking access for a single user to a new test folder. This is useful for verifying that the core logic is working correctly after setup.
-
-### Stress Test
-
-The menu also includes a "Run Stress Test" item. This is a powerful tool for developers or administrators to test the performance and scalability of the script in their environment. It will:
-
-1.  Prompt for the number of folders and users per folder to create.
-2.  Generate a large volume of test data (folders, groups, user sheets, and user email entries).
-3.  Run the `syncAll` function and time its execution.
-4.  Provide an option to automatically clean up all the generated test data.
-
-This is useful for identifying potential bottlenecks and understanding how the script will perform under a heavy load.
-
-### Test Data Cleanup
-
-If a test is interrupted, it may leave behind test folders, groups, and sheets. The "Permissions Manager" -> "Testing" menu provides tools to clean up this data:
-
-*   **Cleanup Manual Test Data:** This option will prompt you for the name of the folder used in a manual access test. It will then find the corresponding entry in the `ManagedFolders` sheet and remove the associated folder, group, and user sheet.
-*   **Cleanup Stress Test Data:** This option will automatically find and delete all folders, groups, and sheets that were created by the stress test, by identifying them with the "StressTestFolder_" prefix.
-
----
-
-## Logging
-
-The script now includes a comprehensive logging system to track its operations.
-
-*   **Log Sheet:** A new sheet named "Log" will be automatically created in your spreadsheet. It will contain a timestamped record of all the main operations performed by the script, such as syncing folders, creating groups, and updating permissions.
-*   **Test Log Sheet:** A separate sheet named "TestLog" will be created to store logs from the testing and cleanup functions. This keeps the main log clean and allows you to easily discard test-related logs.
-*   **Clear Logs:** You can clear all the logs in both the "Log" and "TestLog" sheets by using the "Permissions Manager" -> "Logging" -> "Clear All Logs" menu item.
-
----
-
-## User Groups
-
-You can now define and manage your own user groups directly within the spreadsheet. This allows you to create logical groupings of users (e.g., "Marketing Team", "Developers") and then grant them access to folders as a single unit.
-
-*   **UserGroups Sheet:** A new sheet named "UserGroups" will be automatically created. This sheet has two columns: "GroupName" and "GroupEmail". You can define your user groups in this sheet.
-*   **User Group Sheets:** For each group you define in the "UserGroups" sheet, a corresponding sheet named after the "GroupName" will be automatically created by the "Sync User Groups" function if it doesn't already exist. In this sheet, you can list the email addresses of the members of that group.
-*   **Sync User Groups:** The "Permissions Manager" menu now includes a "Sync User Groups" option. This will create the Google Groups for your user groups and sync their memberships from the corresponding sheets.
-*   **Using User Groups:** Once you have synced your user groups, you can use the group's email address in any of the folder-role sheets to grant access to all the members of that group.
-
----
-
-## Configuration
-
-A new "Config" sheet is now available for configuring advanced settings.
-
-*   **Email Error Notifications:** You can enable or disable email notifications for fatal errors by setting the "EnableEmailNotifications" value to TRUE or FALSE. You can also specify the email address to which the notifications will be sent in the "NotificationEmailAddress" field.
+This project also includes features for testing and logging, which are explained in more detail in the [User Guide](./docs/USER_GUIDE.md).
