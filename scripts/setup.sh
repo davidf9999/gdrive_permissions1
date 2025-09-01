@@ -12,7 +12,7 @@ function print_header() {
   echo "================================================="
   echo " Google Drive Permission Manager Setup Wizard"
   echo "================================================="
-  echo
+  echo 
 }
 
 function load_config() {
@@ -29,11 +29,11 @@ function load_config() {
 }
 
 function pre_run_conflict_check() {
-  echo
+  echo 
   echo "--- Step 1: Checking for Conflicting Projects ---"
   
   # Check for conflicting Apps Script Project
-  echo "Checking for existing Apps Script project titled '$clasp_project_title' நான"
+  echo "Checking for existing Apps Script project titled '$clasp_project_title'..."
   # We use || true to prevent grep from exiting the script if no match is found
   existing_script_id=$(clasp list | grep -w "$clasp_project_title" | awk '{print $1}' || true)
   if [ -n "$existing_script_id" ]; then
@@ -46,11 +46,21 @@ function pre_run_conflict_check() {
 
   # Check for conflicting Google Sheet
   sheet_name="[Control Sheet] $clasp_project_title"
-  echo "Checking for existing Google Sheet titled '$sheet_name' நான"
+  echo "Checking for existing Google Sheet titled '$sheet_name'..."
   # Note: Drive API search can be slow to index. This is a best-effort check.
-  drive_api_output=$(curl -s -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+  drive_api_output=$(curl --fail -s -H "Authorization: Bearer $(gcloud auth print-access-token)" \
     "https://www.googleapis.com/drive/v3/files?q=name%3D%27${sheet_name}%27%20and%20mimeType%3D%27application%2Fvnd.google-apps.spreadsheet%27%20and%20trashed%3Dfalse&fields=files(id)")
   
+  curl_exit_code=$?
+
+  if [ $curl_exit_code -ne 0 ]; then
+    echo "ERROR: Failed to query the Google Drive API to check for conflicting sheets."
+    echo "This could be due to a problem with your gcloud authentication or network connectivity."
+    echo "Please try running 'gcloud auth login' again on your host machine and ensure you have internet access."
+    echo "If the problem persists, please check the Google Cloud console for any issues with your account."
+    exit 3
+  fi
+
   if [[ $(echo "$drive_api_output" | grep -o '"id"') ]]; then
     existing_sheet_id=$(echo "$drive_api_output" | grep -o '"id": "[^"]*"' | head -n 1 | sed 's/"id": "//;s/"//')
     echo "ERROR: A Google Sheet named '$sheet_name' already exists in your Drive with ID: $existing_sheet_id."
@@ -62,7 +72,7 @@ function pre_run_conflict_check() {
 }
 
 function run_terraform() {
-  echo
+  echo 
   echo "--- Step 2: Setting up Google Cloud Project and APIs ---"
   cd terraform
   echo "Initializing Terraform..."
@@ -82,7 +92,7 @@ function run_terraform() {
 
 function configure_oauth_and_service_account() {
   # This function is now simpler as it's only run on a clean setup
-  echo
+  echo 
   echo "--- Step 3: Creating Service Account and OAuth Client ---"
   gcloud iam service-accounts create drive-permission-manager-sa --display-name="Drive Permission Manager Service Account" --project=$gcp_project_id
   local service_account_email="drive-permission-manager-sa@$gcp_project_id.iam.gserviceaccount.com"
@@ -97,7 +107,7 @@ function configure_oauth_and_service_account() {
 }
 
 function setup_apps_script_and_sheet() {
-  echo
+  echo 
   echo "--- Step 4: Creating Apps Script, Sheet, and Cloud Config ---"
   
   cd apps_script_project
@@ -147,22 +157,19 @@ setup_apps_script_and_sheet
 # --- Final Instructions ---
 sheet_url="https://docs.google.com/spreadsheets/d/$SHEET_ID/edit"
 
-echo
+echo 
+
 echo "================================================="
 echo " ✅ Setup Complete!"
 echo "================================================="
-echo
+echo 
 echo "Your fully-automated Google Drive Permission Manager is ready."
-echo
+echo 
 echo "--- 👉 Your Control Sheet URL --- (Bookmark This)"
 echo "$sheet_url"
-echo
+echo 
 echo "All remaining setup steps, such as linking the GCP project to the Apps Script project,"
  echo "and instructions on how to use the sheet can be found in the README.md"
-echo
-
-exit 0
-EADME.md"
-echo
+echo 
 
 exit 0

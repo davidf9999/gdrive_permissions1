@@ -26,6 +26,8 @@ Through a lengthy, iterative process, we diagnosed and resolved several core iss
     *   **API Race Conditions:** The script would fail because it was calling Google Cloud APIs to create a resource and then immediately use that resource before it had fully propagated on Google's backend.
     *   **The Solution:** The `setup.sh` script was completely rewritten to be more robust. It now uses self-contained functions for each logical step and carefully manages its working directory (`cd`ing into a directory, performing a task, and `cd`ing back out). This eliminated all path-related issues. The `clasp` steps were also made more resilient by explicitly removing any potentially confusing stray files before creation. Finally, a `sleep` command was added to mitigate the API race condition.
 
+7.  **Pre-run Conflict Checks:** To prevent accidental duplication of Google Cloud projects and Google Sheets, the `setup.sh` script now includes a `pre_run_conflict_check` function. This function verifies if an Apps Script project or a Google Sheet with the same `clasp_project_title` already exists. If a conflict is detected, the script provides a clear error message and exits, guiding the user to resolve the conflict (e.g., choose a new title or manually delete the existing resource) before proceeding with the setup. This significantly improves the idempotency and user-friendliness of the setup process.
+
 ## Final Architecture & Workflow
 
 The project is now in a robust, well-documented, and user-friendly state.
