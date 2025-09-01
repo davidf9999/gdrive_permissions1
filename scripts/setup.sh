@@ -22,114 +22,112 @@ function load_config() {
         exit 1
     fi
     source "$config_file"
-    # Basic validation
     if [ -z "$gcp_project_id" ] || [ -z "$billing_account_id" ] || [ -z "$workspace_domain" ] || [ -z "$clasp_project_title" ] || [ -z "$gcp_account_email" ]; then
         echo "Error: All required fields must be set in the config file."
         exit 1
     fi
 }
 
+function pre_run_conflict_check() {
+  echo
+  echo "--- Step 1: Checking for Conflicting Projects ---"
+  
+  # Check for conflicting Apps Script Project
+  echo "Checking for existing Apps Script project titled '$clasp_project_title' நான"
+  # We use || true to prevent grep from exiting the script if no match is found
+  existing_script_id=$(clasp list | grep -w "$clasp_project_title" | awk '{print $1}' || true)
+  if [ -n "$existing_script_id" ]; then
+    echo "ERROR: An Apps Script project named '$clasp_project_title' already exists."
+    echo "To prevent conflicts, please choose a new, unique 'clasp_project_title' in your setup.conf,"
+    echo "or manually delete the existing Apps Script project if you are sure it is an orphan."
+    exit 1
+  fi
+  echo "No conflicting Apps Script project found."
+
+  # Check for conflicting Google Sheet
+  sheet_name="[Control Sheet] $clasp_project_title"
+  echo "Checking for existing Google Sheet titled '$sheet_name' நான"
+  # Note: Drive API search can be slow to index. This is a best-effort check.
+  drive_api_output=$(curl -s -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+    "https://www.googleapis.com/drive/v3/files?q=name%3D%27${sheet_name}%27%20and%20mimeType%3D%27application%2Fvnd.google-apps.spreadsheet%27%20and%20trashed%3Dfalse&fields=files(id)")
+  
+  if [[ $(echo "$drive_api_output" | grep -o '"id"') ]]; then
+    existing_sheet_id=$(echo "$drive_api_output" | grep -o '"id": "[^"]*"' | head -n 1 | sed 's/"id": "//;s/"//')
+    echo "ERROR: A Google Sheet named '$sheet_name' already exists in your Drive with ID: $existing_sheet_id."
+    echo "To prevent conflicts, please choose a new, unique 'clasp_project_title' in your setup.conf,"
+    echo "or manually delete the existing Google Sheet if you are sure it is an orphan."
+    exit 1
+  fi
+  echo "No conflicting Google Sheet found."
+}
+
 function run_terraform() {
   echo
-  echo "--- Setting up Google Cloud Project and APIs with Terraform ---"
-  
+  echo "--- Step 2: Setting up Google Cloud Project and APIs ---"
   cd terraform
-
   echo "Initializing Terraform..."
   terraform init -upgrade
-
   export TF_VAR_gcp_project_id="$gcp_project_id"
   export TF_VAR_billing_account_id="$billing_account_id"
   export TF_VAR_workspace_domain="$workspace_domain"
-
   if [[ -n $(gcloud projects list --filter="project_id=$gcp_project_id" --format="value(project_id)") ]]; then
     echo "Project '$gcp_project_id' already exists. Importing into Terraform state..."
     terraform import google_project.project "$gcp_project_id"
-    services=(
-      "iam.googleapis.com" "cloudresourcemanager.googleapis.com" "drive.googleapis.com"
-      "admin.googleapis.com" "script.googleapis.com" "sheets.googleapis.com"
-      "groupssettings.googleapis.com" "iap.googleapis.com"
-    )
-    for service in "${services[@]}"; do
-      terraform import "google_project_service.apis[\"$service\"]" "$gcp_project_id/$service" || echo "Could not import $service, will try to enable it."
-    done
-    echo "Import complete."
   fi
-
   echo "Applying Terraform configuration..."
   terraform apply -auto-approve
   echo "Terraform provisioning complete!"
-  
-  cd .. # Return to the /app directory
+  cd ..
 }
 
 function configure_oauth_and_service_account() {
+  # This function is now simpler as it's only run on a clean setup
   echo
-  echo "--- Creating Service Account ---"
+  echo "--- Step 3: Creating Service Account and OAuth Client ---"
+  gcloud iam service-accounts create drive-permission-manager-sa --display-name="Drive Permission Manager Service Account" --project=$gcp_project_id
   local service_account_email="drive-permission-manager-sa@$gcp_project_id.iam.gserviceaccount.com"
-
-  if ! gcloud iam service-accounts describe "$service_account_email" --project=$gcp_project_id > /dev/null 2>&1; then
-    echo "Creating new service account..."
-    gcloud iam service-accounts create drive-permission-manager-sa \
-      --display-name="Drive Permission Manager Service Account" \
-      --project=$gcp_project_id
-    gcloud projects add-iam-policy-binding $gcp_project_id \
-      --member="serviceAccount:$service_account_email" \
-      --role="roles/editor"
-    echo "Service account created and configured."
-  else
-    echo "Service account already exists."
-  fi
-
-  echo
-  echo "--- Configuring OAuth Consent Screen ---"
+  gcloud projects add-iam-policy-binding $gcp_project_id --member="serviceAccount:$service_account_email" --role="roles/editor"
+  
+  gcloud alpha iap oauth-brands create --application_title="$clasp_project_title" --support_email=$gcp_account_email --project=$gcp_project_id
+  echo "Waiting 10 seconds for the new consent screen to be ready..."
+  sleep 10
   local brand_id=$(gcloud alpha iap oauth-brands list --project=$gcp_project_id --format='value(name)')
-  if [ -z "$brand_id" ]; then
-    echo "Creating new OAuth brand (consent screen)..."
-    gcloud alpha iap oauth-brands create --application_title="$clasp_project_title" --support_email=$gcp_account_email --project=$gcp_project_id
-    echo "OAuth consent screen created. Waiting 10 seconds for it to be ready..."
-    sleep 10
-  else
-    echo "OAuth brand (consent screen) already exists."
-  fi
-
-  echo
-  echo "--- Creating OAuth Client ID ---"
-  brand_id=$(gcloud alpha iap oauth-brands list --project=$gcp_project_id --format='value(name)')
   gcloud alpha iap oauth-clients create "$brand_id" --display_name="$clasp_project_title" --project=$gcp_project_id
-  echo "OAuth client ID created."
+  echo "Service account and OAuth client created."
 }
 
-function create_and_deploy_clasp_project() {
+function setup_apps_script_and_sheet() {
   echo
-  echo "--- Creating/Cloning and Deploying Google Apps Script Project ---"
+  echo "--- Step 4: Creating Apps Script, Sheet, and Cloud Config ---"
   
   cd apps_script_project
 
-  echo "Checking for existing Apps Script project titled '$clasp_project_title' מס"
-  # Grep for the title, ensuring it's the full line, then get the first field (the ID).
-  existing_script_id=$(clasp list | grep -w "$clasp_project_title" | awk '{print $1}')
+  # Create the Apps Script project
+  echo "Creating new Apps Script project..."
+  clasp create --type standalone --title "$clasp_project_title"
 
-  if [ -n "$existing_script_id" ]; then
-    echo "Project found. Cloning ID: $existing_script_id"
-    # Clean up any local files before cloning to ensure a fresh start.
-    rm -f .clasp.json appsscript.json Code.js
-    clasp clone "$existing_script_id"
-  else
-    echo "No existing project found. Creating a new one..."
-    # Clean up any old project file in this directory and the parent directory
-    rm -f .clasp.json
-    rm -f ../.clasp.json
-    clasp create \
-      --type standalone \
-      --title "$clasp_project_title"
+  # Create the Google Sheet
+  sheet_name="[Control Sheet] $clasp_project_title"
+  echo "Creating new Google Sheet named '$sheet_name'..."
+  sheet_create_output=$(curl -s -X POST -H "Authorization: Bearer $(gcloud auth print-access-token)" -H "Content-Type: application/json" -d '{"properties":{"title":" Perkenalkan "}}' https://sheets.googleapis.com/v4/spreadsheets)
+  export SHEET_ID=$(echo "$sheet_create_output" | grep -o '"spreadsheetId":"[^" ]*"' | sed 's/"spreadsheetId":"//;s/"//')
+  if [ -z "$SHEET_ID" ]; then
+      echo "ERROR: Failed to create Google Sheet. API output:"
+      echo "$sheet_create_output"
+      exit 1
   fi
+  echo "Sheet created with ID: $SHEET_ID"
 
-  echo "Deploying Apps Script Code..."
+  # Create the cloud config file
+  echo "Creating cloud configuration file..."
+  echo "{\"gcpProjectId\": \"$gcp_project_id\", \"sheetId\": \"$SHEET_ID\"}" > config.json
+
+  # Deploy all files to the Apps Script project
+  echo "Deploying Apps Script project (Code.js, appsscript.json, config.json)..."
   clasp push --force
 
   echo "Deployment complete!"
-  cd .. # Return to the /app directory
+  cd ..
 }
 
 # --- Main Script ---
@@ -141,30 +139,30 @@ echo "--- Verifying Credentials ---"
 gcloud config set account "$gcp_account_email"
 gcloud auth list
 
+pre_run_conflict_check
 run_terraform
 configure_oauth_and_service_account
-create_and_deploy_clasp_project
+setup_apps_script_and_sheet
 
 # --- Final Instructions ---
-script_id=$(cat ./apps_script_project/.clasp.json | grep -o '"scriptId":"[^"]*"' | sed 's/"scriptId":"//;s/"//')
-script_url="https://script.google.com/d/$script_id/edit"
+sheet_url="https://docs.google.com/spreadsheets/d/$SHEET_ID/edit"
 
 echo
 echo "================================================="
 echo " ✅ Setup Complete!"
 echo "================================================="
 echo
-echo "Your Google Cloud resources and Apps Script project have been created and deployed."
+echo "Your fully-automated Google Drive Permission Manager is ready."
 echo
-echo "--- 👉 ONE FINAL MANUAL STEP IS REQUIRED ---"
+echo "--- 👉 Your Control Sheet URL --- (Bookmark This)"
+echo "$sheet_url"
 echo
-echo "You must now manually link your new Apps Script project to your Google Cloud project."
-echo "For detailed instructions, please see the 'Post-Setup Manual Steps' section in the README.md file."
+echo "All remaining setup steps, such as linking the GCP project to the Apps Script project,"
+ echo "and instructions on how to use the sheet can be found in the README.md"
 echo
-echo "--- Your New Apps Script Project ---"
-echo "URL: $script_url"
-echo
-echo "For instructions on how to use the spreadsheet and manage permissions, please consult the README.md file."
+
+exit 0
+EADME.md"
 echo
 
 exit 0
