@@ -159,7 +159,7 @@ echo
 echo "--- 👉 ONE FINAL MANUAL STEP IS REQUIRED ---"
 echo
 echo "You must now manually link your new Apps Script project to your Google Cloud project."
-echo "For detailed instructions, please see the 'Post-Setup' section in the README.md file."
+echo "For detailed instructions, please see the 'Post-Setup Manual Steps' section in the README.md file."
 echo
 echo "--- Your New Apps Script Project ---"
 echo "URL: $script_url"

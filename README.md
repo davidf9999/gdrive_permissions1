@@ -119,7 +119,7 @@ After the script finishes, there are two final, one-time manual steps.
     *   The setup script creates your Apps Script project but does not link it to the Google Cloud project.
     *   Open your new Apps Script project by going to the [Apps Script Dashboard](https://script.google.com/home), finding your project by name, and clicking on it.
     *   Click on the **Project Settings** (the gear icon ⚙️) on the left sidebar.
-    *   Scroll down to the **Google Cloud Platform (GCP) Project** section, click **Change Project**, and enter your new GCP Project Number (which is provided in the setup script's final output).
+    *   Scroll down to the **Google Cloud Platform (GCP) Project** section, click **Change Project**, and enter your new GCP Project Number, which is provided in the setup script's final output, like: project_number = "1234567890123".
 
 ---
 
