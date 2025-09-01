@@ -39,37 +39,13 @@ The setup wizard will create a new Google Cloud Platform (GCP) project for you. 
 
 ---
 
-## Part 3: Authenticate Your Local Environment
-
-Before running the Docker container, you must first authenticate your local machine with Google Cloud (`gcloud`) and the Apps Script CLI (`clasp`). This is a one-time setup that generates credential files. The Docker container will then use these local credentials to run the setup non-interactively.
-
-**Why is this necessary?**
-Running interactive browser-based login prompts from within a Docker container is complex and unreliable. By authenticating on your local machine first, we can securely pass those credentials into the container, allowing the automated script to run without interruption.
-
-1.  **Authenticate with gcloud:**
-    Run the following command in your terminal. This will open a browser window for you to log in and authorize Google Cloud SDK access.
-    ```bash
-    gcloud auth application-default login
-    ```
-    This command will create a credentials file in `~/.config/gcloud/application_default_credentials.json`.
-
-2.  **Authenticate with clasp:**
-    Run the following command. This will also open a browser window for you to log in and authorize `clasp` to manage your Google Apps Script projects.
-    ```bash
-    clasp login
-    ```
-    This command will create a credentials file at `~/.clasprc.json`.
-
----
-
-## Part 4: Next Steps
+## Part 3: Next Steps
 
 Once you have:
 
 1.  A Google Workspace account.
 2.  A user with **Super Admin** privileges.
 3.  An active Google Cloud **Billing Account**.
-4.  Authenticated with `gcloud` and `clasp` on your local machine.
 
 You are ready to proceed with the automated setup.
 

@@ -183,12 +183,23 @@ clasp push --force
 echo "Deployment complete!"
 echo 
 
-
-
-
+# --- Final Instructions ---
+script_id=$(grep -o '"scriptId":"[^"]*"' ./apps_script_project/.clasp.json | sed 's/"scriptId":"//;s/"//')
+script_url="https://script.google.com/d/$script_id/edit"
 
 echo "================================================="
-echo " Setup Complete!"
+echo " ✅ Setup Almost Complete!"
 echo "================================================="
-echo "You can now open the new Apps Script project in your browser and run the functions from the script editor."
-echo "A .clasp.json file has been created in the apps_script_project directory, containing the Script ID."
+echo
+echo "Your Google Cloud resources and Apps Script project have been created."
+echo
+echo "--- 👉 ONE FINAL MANUAL STEP IS REQUIRED ---"
+echo
+echo "You must now manually link your new Apps Script project to your Google Cloud project."
+echo "For detailed instructions, please see the 'Post-Setup' section in the README.md file."
+echo
+echo "--- Your New Apps Script Project ---"
+echo "URL: $script_url"
+echo
+echo "For instructions on how to use the spreadsheet and manage permissions, please consult the README.md file."
+echo

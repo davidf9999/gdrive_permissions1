@@ -75,21 +75,31 @@ The setup script is non-interactive and requires a configuration file to run.
 2.  **Populate the File:**
     Edit the `setup.conf` file and fill in the required values for your project.
 
-**3. Run the Automated Setup**
+**3. Build the Docker Image**
 
-Once you have completed the onboarding and configuration steps, you can run the automated setup wizard using Docker.
+Open your terminal in the root directory of this project and run the following command to build the Docker image. This will create a container with all the necessary tools and dependencies pre-installed. This step does not require you to be authenticated.
 
-1.  **Build the Docker Image:**
+```bash
+docker build -t gdrive-permission-manager .
+```
 
-    Open your terminal in the root directory of this project and run the following command to build the Docker image. This will create a container with all the necessary tools and dependencies pre-installed.
+**4. Authenticate and Run the Setup Wizard**
+
+Before running the container, you must have valid, fresh authentication credentials for `gcloud` and `clasp`. Your authentication tokens can expire, so it's good practice to run the login commands even if you have authenticated before.
+
+1.  **Log In:**
+    These commands will open a browser for you to log in and will save fresh credential files to your user's home directory. The `docker run` command will mount these files into the container.
 
     ```bash
-    docker build -t gdrive-permission-manager .
+    # Authenticate with the Google Cloud SDK
+    gcloud auth login
+
+    # Authenticate with clasp (the Apps Script command-line tool)
+    clasp login
     ```
 
 2.  **Run the Setup Wizard:**
-
-    After the image is built, execute the following command. This command mounts your local credentials and your `setup.conf` file into the container, allowing the script to run non-interactively.
+    After authenticating, execute the following command. This command mounts your local credentials and your `setup.conf` file into the container, allowing the script to run non-interactively.
 
     ```bash
     docker run -i \
@@ -122,6 +132,68 @@ Automating the billing account link can be unreliable due to complex and often s
 Once this is done, your setup is fully complete.
 
 **Note:** The Apps Script project will be created without being linked to the Google Cloud project. You must perform the final step of linking the new Apps Script project to the new Google Cloud project in the Apps Script editor settings.
+
+---
+
+## Usage
+
+Now that the system is installed, you need to create and initialize the Google Sheet that will act as your central control panel.
+
+**1. Create Your Control Sheet**
+
+1.  Go to [sheets.new](https://sheets.new) in your browser to create a new, blank Google Sheet.
+2.  Give the spreadsheet a memorable name, such as "Drive Permissions Manager".
+
+**2. Initialize the Script**
+
+This is a one-time action to install the custom menu and create the necessary control sheets (`ManagedFolders`, `Log`, etc.) in your spreadsheet.
+
+1.  In another browser tab, open the Apps Script project using the URL provided at the end of the setup script.
+2.  From the function list at the top of the editor, select the `onOpen` function.
+3.  Click the **Run** button.
+4.  A dialog box will appear asking for authorization. You must grant the script permission to access your spreadsheets and other services.
+
+After you grant authorization, the script will run. Go back to your spreadsheet. You should now see a new menu named **"Permissions Manager"** in the spreadsheet's menu bar. The script will have also automatically created several sheets (`ManagedFolders`, `UserGroups`, `Config`, `Log`, etc.).
+
+**3. Start Managing Permissions**
+
+Your system is now ready to use.
+
+1.  **Define Folders:** In the `ManagedFolders` sheet, enter the names of the Google Drive folders you wish to manage and the role you want to create (e.g., `Editor`, `Viewer`).
+2.  **Define User Groups (Optional):** In the `UserGroups` sheet, you can define collections of users (e.g., "Marketing Team").
+3.  **Run a Sync:** Use the **Permissions Manager > Sync All** menu item. The script will:
+    *   Create the Google Groups and user sheets corresponding to your configuration.
+    *   You can then add user emails to the newly created user sheets.
+    *   Run **Sync All** again to sync those users into the Google Groups, granting them access to the folders.
+
+For more details on the advanced features like Stress Testing and User Group management, please see the `GEMINI.md` file.
+
+---
+
+## Tearing Down the Project
+
+If you wish to remove all the resources created by this project, a `teardown.sh` script is provided to automate most of the process.
+
+The teardown is a two-step process:
+
+**1. Manually Delete the Apps Script Project**
+
+The Apps Script project is not tied to the Google Cloud project, so it must be deleted separately.
+
+1.  Go to your Apps Script dashboard: [https://script.google.com/home](https://script.google.com/home)
+2.  Find the project (e.g., "DrivePermissionManager").
+3.  Click the three dots (⋮) next to the project name and select **Remove**.
+
+**2. Run the Automated Teardown Script**
+
+The `teardown.sh` script will delete your Google Cloud project and all local state files.
+
+1.  Make sure the `gcp_project_id` in your `setup.conf` file still points to the project you want to delete.
+2.  Run the script from your terminal:
+    ```bash
+    ./teardown.sh
+    ```
+3.  The script will ask for confirmation before deleting the Google Cloud project.
 
 ---
 
