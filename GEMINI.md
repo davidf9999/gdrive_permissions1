@@ -1,86 +1,42 @@
-# Project Summary: Google Drive Permission Manager
+# Project Evolution Summary
 
-This project has been evolved from a specific script into a general-purpose, distributable solution for managing Google Drive folder permissions at scale. It uses a combination of Google Apps Script, Google Cloud, and Infrastructure as Code principles to provide an automated setup and a robust management system.
+This document summarizes the debugging process and final architecture of the Google Drive Permission Manager project.
 
-## Final Architecture
+## Initial Problem
 
-The project is now structured as a complete installation package with several key components:
+The initial `setup.sh` script, designed to be run within a Docker container, was not functional. It suffered from a series of issues related to authentication, idempotency, state management, and outdated command syntax.
 
-1.  **Docker Environment (`docker/Dockerfile`):**
-    *   A Docker container provides a consistent, reproducible environment with all necessary dependencies (`gcloud`, `terraform`, `clasp`, `gam`) pre-installed. This eliminates environment-related setup issues for new users.
+## Debugging Journey & Resolutions
 
-2.  **Infrastructure as Code (`terraform/`):**
-    *   Terraform is used to programmatically provision and configure all required Google Cloud resources. This includes creating a new GCP project, linking it to a billing account, and enabling all necessary APIs.
+Through a lengthy, iterative process, we diagnosed and resolved several core issues:
 
-3.  **CLI Setup Wizard (`scripts/setup.sh`):**
-    *   This is an interactive command-line script that serves as the user-facing installer.
-    *   It guides the user through authentication, gathers necessary configuration details, and orchestrates the execution of Terraform and `clasp` commands to set up the entire stack.
+1.  **Authentication Failures:** The script was failing because the `gcloud` auth tokens mounted into the container were expiring. The fix was to update the documentation to explicitly instruct the user to run `gcloud auth login` and `clasp login` on their local machine immediately before running the setup container.
 
-4.  **Apps Script Core Logic (`apps_script_project/`):**
-    *   This remains the heart of the solution. It is the Google Apps Script code that runs within the user's Google Sheet.
-    *   It reads the configuration from the `ManagedFolders` sheet and performs the ongoing synchronization of Google Group memberships to manage Drive folder permissions.
+2.  **Lack of Idempotency:** The script failed on re-runs because `terraform` would try to create a Google Cloud project that already existed. This was solved by making the script idempotent: it now checks if the project exists and, if so, uses `terraform import` to adopt the existing resources into its state before applying changes.
 
-## User Workflow
+3.  **State Persistence:** The `clasp` command was successfully creating an Apps Script project, but the vital `.clasp.json` file (which links the local code to the remote script) was being created inside the container and destroyed when the container exited. This was a critical oversight.
 
-The end-to-end workflow for a new user is as follows:
+4.  **User Experience:** The `docker run` command was long, complex, and error-prone.
 
-1.  **Manual Onboarding:** The user follows the `docs/ONBOARDING.md` guide to perform the initial, one-time steps of setting up a Google Workspace account and a billing account.
-2.  **Automated Setup:** The user builds and runs the Docker container, which launches the `setup.sh` wizard.
-3.  **Wizard Execution:** The wizard guides the user through authenticating their Google account and providing configuration details. It then automatically provisions the GCP project and deploys the Apps Script.
-4.  **Ongoing Management:** Once the setup is complete, the user manages all folder permissions directly from the Google Sheet created by the wizard.
+5.  **`clasp` API Issues:** The `clasp create --parentId` command was discovered to be unreliable in the user's environment, failing with a generic "Invalid argument" error. The solution was to remove this argument and have the user perform the linking manually.
 
-## Resolved Issues
+## Final Architecture & Workflow
 
-*   **Scalability:** The script has been refactored to be fully synchronous, relying on the 30-minute execution window for Google Workspace accounts. This is more user-friendly than the asynchronous model.
-*   **Error Handling:** Added more robust error handling and user feedback mechanisms (e.g., `toast` notifications).
-*   **Generalization:** The project is no longer tied to any specific domain or user. The setup process is now generic and automated.
+The project is now in a robust, well-documented, and user-friendly state.
 
-## Testing and Scalability
+1.  **`docker-compose.yml`:** The long `docker run` command has been replaced entirely by a `docker-compose.yml` file. This file declaratively defines the service, the image to build, and, most importantly, all the necessary volume mounts:
+    *   `~/.config/gcloud` (for gcloud credentials)
+    *   `~/.clasprc.json` (for clasp credentials)
+    *   `./setup.conf` (for project configuration)
+    *   `./apps_script_project` (to ensure the `.clasp.json` file is persisted to the user's local machine)
 
-To ensure the solution can handle a large number of folders and users, a "Stress Test" feature has been integrated into the "Permissions Manager" menu in the Google Sheet. This tool allows administrators to:
+2.  **Simplified Workflow:** The user workflow is now much simpler and more reliable:
+    1.  Complete the one-time onboarding in `docs/ONBOARDING.md`.
+    2.  Create and populate the `setup.conf` file.
+    3.  Run `gcloud auth login` and `clasp login`.
+    4.  Run a single command: `docker-compose up --build`. This builds the image and runs the container with all the correct parameters.
+    5.  Follow the clear post-setup instructions in the `README.md` for the few remaining manual steps (billing and project linking).
 
-*   Programmatically generate a large volume of test data, including folders, Google Groups, and user email lists.
-*   Execute the `syncAll` function against this large dataset and measure its execution time.
-*   Automatically clean up all generated test data after the test is complete.
+3.  **Improved Documentation:** The `README.md` has been significantly overhauled to reflect the new, simpler workflow. It now includes clear sections for `Usage` (how to initialize the sheet) and `Tearing Down the Project`, providing a complete lifecycle guide.
 
-This provides a robust way to validate the script's performance and identify potential bottlenecks in a given Google Workspace environment.
-
-Additionally, to handle cases where tests are interrupted, the "Testing" submenu in the "Permissions Manager" menu now includes cleanup utilities:
-
-*   **Cleanup Manual Test Data:** Prompts for a test folder name and removes the associated folder, group, and user sheet.
-*   **Cleanup Stress Test Data:** Automatically removes all folders, groups, and sheets created by the stress test.
-
-## Development Workflow
-
-The `apps_script_project/Code.js` file in this repository is the single source of truth for the Google Apps Script code. All development and changes should be made to this local file.
-
-To update the script in the remote Google Sheet, the following workflow must be followed:
-
-1.  **Authentication:** Before pushing any changes, you must be authenticated with Google. This can be done by running the `clasp login` command. This will open a browser window for you to log in and authorize `clasp`.
-
-2.  **Pushing Changes:** Once authenticated, you can push the local `Code.js` file to the remote Google Apps Script project by running the `clasp push --project apps_script_project --force` command from the root of the repository. This will overwrite the remote code with your local changes.
-
-This workflow ensures that the code in the Google Sheet is always in sync with the code in the repository.
-
-## Logging
-
-To provide better traceability and a debuggable history of operations, a logging system has been implemented:
-
-*   **Dual Log Sheets:** The system now maintains two separate log sheets:
-    *   `Log`: For all primary operational messages.
-    *   `TestLog`: For messages generated by the testing and cleanup functions.
-*   **Log Management:** A "Logging" submenu has been added to the "Permissions Manager" menu, which includes a "Clear All Logs" option to easily clear the logs when they are no longer needed.
-
-## User Group Management
-
-The system now supports the management of user groups directly from the spreadsheet, providing a centralized way to manage collections of users.
-
-*   **UserGroups Sheet:** A new `UserGroups` sheet allows for the definition of user groups by providing a `GroupName` and a `GroupEmail`.
-*   **Group Membership Sheets:** For each group defined in the `UserGroups` sheet, a corresponding sheet named after the `GroupName` is used to manage the membership of that group.
-*   **Synchronization:** A new "Sync User Groups" menu item in the "Permissions Manager" menu triggers the synchronization of the user groups and their memberships with Google Groups.
-
-## Configuration
-
-The system can be configured via the `Config` sheet:
-
-*   **Email Notifications:** Enable or disable email notifications for fatal errors and specify the recipient's email address.
+4.  **`teardown.sh`:** A helper script is provided to automate the deletion of the GCP project and local state files, making it easy to start fresh.
