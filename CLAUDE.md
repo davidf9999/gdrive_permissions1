@@ -4,37 +4,55 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Google Drive Permission Manager that provides an automated solution for managing access to large numbers of Google Drive folders using Google Groups and a central Google Sheet for control. It's designed as a complete installation package with Docker-based setup.
+This is a Google Drive Permission Manager that provides an automated solution for managing access to large numbers of Google Drive folders using Google Groups and a central Google Sheet for control. The project has evolved from complex automated setup to a simplified manual approach that is more reliable and easier to understand.
 
 ## Architecture
 
-The project consists of four main components:
+The project consists of three main components:
 
-1. **Docker Environment** (`Dockerfile`): Provides a consistent setup environment with all dependencies pre-installed (gcloud, terraform, clasp, gam)
+1. **Apps Script Core** (`apps_script_project/Code.js`): The main application logic that runs in Google Sheets and manages Google Groups and Drive folder permissions. This is the heart of the system.
 
-2. **Infrastructure as Code** (`terraform/`): Terraform configuration that programmatically provisions Google Cloud resources, creates GCP projects, links billing accounts, and enables necessary APIs
+2. **Configuration Template** (`apps_script_project/config.json.template`): Template for the configuration file that connects the Apps Script to the specific Google Sheet and GCP project.
 
-3. **Setup Wizard** (`scripts/setup.sh`): Interactive CLI installer that guides users through authentication, configuration, and orchestrates Terraform and clasp deployment
+3. **Optional Infrastructure Setup** (`terraform/` + `scripts/setup.sh`): Terraform and Docker-based setup for creating GCP resources. This is optional for basic functionality but recommended for production use.
 
-4. **Apps Script Core** (`apps_script_project/`): The main application logic that runs in Google Sheets and manages Google Groups and Drive folder permissions
+## Current Setup Approach (Simplified)
+
+The recommended setup approach is now **manual** for reliability:
+
+1. **Manual Sheet Creation**: Create Google Sheet with specific naming convention
+2. **Manual Script Copy**: Copy `Code.js` content into Apps Script editor via Extensions > Apps Script  
+3. **Manual Config**: Create `config.json` file in Apps Script with Sheet ID and Project ID
+4. **Immediate Functionality**: "Permissions Manager" menu appears automatically, full functionality available
+
+**Optional**: Run Docker-based infrastructure setup for production-grade GCP resources, higher API quotas, and advanced OAuth configuration.
 
 ## Development Commands
 
-### Setup and Installation
+### Manual Setup (Recommended)
+```bash
+# 1. Create Google Sheet manually with title: [Control Sheet] DrivePermissionManagerXX
+# 2. Go to Extensions > Apps Script in the sheet
+# 3. Copy content from apps_script_project/Code.js and paste it
+# 4. Create config.json file in Apps Script with your Sheet ID and Project ID
+# 5. Save and refresh - "Permissions Manager" menu appears
+```
+
+### Optional Infrastructure Setup
 ```bash
 # Build the Docker environment
-docker build -t gdrive-permission-manager .
+docker compose build
 
-# Run the setup wizard
-docker run -it gdrive-permission-manager
+# Run infrastructure setup (creates GCP project, APIs, service accounts)
+docker compose up
 ```
 
 ### Apps Script Development
-```bash
-# Authenticate with Google (required before pushing changes)
-clasp login
+**Note**: With manual approach, you edit directly in the Apps Script web editor. No clasp needed for deployment.
 
-# Push local code changes to the remote Google Apps Script project
+```bash
+# For development only - pushing changes from local files (optional)
+clasp login
 clasp push --project apps_script_project --force
 ```
 
@@ -81,11 +99,16 @@ The system uses multiple sheets for configuration:
 
 ## Development Workflow
 
-### Apps Script Changes
+### Apps Script Changes (Manual Approach)
+1. Edit directly in the Google Apps Script web editor
+2. Save changes automatically sync
+3. Test immediately in the connected Google Sheet
+4. **Optional**: Copy changes back to local `apps_script_project/Code.js` for version control
+
+### Apps Script Changes (Development Approach)
 1. Make changes to `apps_script_project/Code.js` locally
-2. Authenticate: `clasp login`
-3. Push changes: `clasp push --project apps_script_project --force`
-4. The single source of truth is the local `Code.js` file
+2. Use clasp to push to remote Apps Script project (if using automated setup)
+3. The local `Code.js` file serves as the authoritative version
 
 ### Testing Features
 The system includes comprehensive testing utilities accessible via the "Permissions Manager" menu:
@@ -98,59 +121,68 @@ The system includes comprehensive testing utilities accessible via the "Permissi
 - Run terraform plan/apply to update infrastructure
 - The setup wizard handles initial provisioning
 
-## Setup Issues and Resolutions
+## Setup Approaches and Trade-offs
 
-### Current Setup Status
-The setup script (`scripts/setup.sh`) has been extensively debugged and made robust to handle:
-- **Existing resource detection**: Script detects and reuses existing GCP resources (service accounts, OAuth clients)
-- **Apps Script project handling**: Handles existing projects by extracting script IDs from truncated `clasp list` output
-- **Google Sheets conflict checking**: Made optional when Drive API scopes aren't available
-- **Authentication scope issues**: Falls back to basic tokens when scoped tokens fail
+### Manual Setup (Current Recommended)
+**Advantages:**
+- Simple and reliable - no complex automation to fail
+- Works immediately with default Google Workspace APIs
+- No Docker, Terraform, or complex authentication required
+- Easy to understand and troubleshoot
 
-### Known Issues Being Debugged
-1. **Docker Volume Mounting**: The setup script runs in Docker but may have issues accessing gcloud credentials from host
-   - Host credentials: `~/.config/gcloud/application_default_credentials.json`
-   - Container mount: `/root/.config/gcloud/`
-   - May need debugging if `gcloud auth print-access-token` fails in container
+**Disadvantages:**
+- Requires manual steps (copy/paste code, create config)
+- Uses default API quotas (usually sufficient for most use cases)
+- No automated GCP resource provisioning
 
-2. **Authentication Requirements**: 
-   - User must run `gcloud auth login` and `gcloud auth application-default login` on host
-   - Container needs access to these credentials for API calls
-   - Script requires Drive API and Sheets API scopes for creating/managing resources
+### Automated Infrastructure Setup (Optional)
+**Advantages:**
+- Creates dedicated GCP project with higher API quotas
+- Automated service account and OAuth client setup
+- Terraform-managed infrastructure as code
+- Fully reproducible setup
 
-### Current Configuration
-- **GCP Project**: `permission-manager-23` 
-- **Apps Script Project**: `DrivePermissionManager23`
-- **Existing Script ID**: `1FEhi-Lf0xDXPPDAKFbFPQkr2Ika4CFTpgxpz64URMX6FTzRCy8X7b5aH`
+**Disadvantages:**
+- Complex Docker/Terraform setup can fail in various ways
+- Requires extensive Google Cloud authentication
+- May be overkill for basic usage
+- Debugging authentication issues can be challenging
 
-### Debugging Approach
-The setup script includes extensive debug output to track:
-- Directory contents and file movements
-- `clasp` command outputs and exit codes
-- Authentication token retrieval attempts
-- API response details
+### Current Configuration Pattern
+- **GCP Project**: `permission-manager-XX` (where XX increments for new setups)
+- **Apps Script Project**: `DrivePermissionManagerXX`
+- **Sheet Title**: `[Control Sheet] DrivePermissionManagerXX`
+
+### Hybrid Approach (Best of Both)
+1. Start with manual setup for immediate functionality
+2. Optionally run infrastructure setup later for production scaling
+3. The Apps Script code works the same way regardless of setup method
 
 ## Important Notes
 
-- Requires Google Workspace account (not standard Gmail) for Admin SDK API access
-- Uses Docker for consistent development environment across platforms
-- All Google Groups and permissions are managed programmatically
-- Logging system tracks all operations in dedicated sheets
-- Supports configurable error email notifications
-- Uses rate limiting (Utilities.sleep) to avoid API throttling
-- **Setup script is idempotent**: Can be run multiple times safely, will reuse existing resources
+- **Google Workspace Required**: Must have Google Workspace account (not standard Gmail) for Admin SDK API access to manage groups
+- **Manual Setup is Preferred**: The manual approach is now recommended over automated Docker setup for reliability
+- **All Google Groups and permissions are managed programmatically** via the Apps Script
+- **Comprehensive logging system** tracks all operations in dedicated sheets within the control spreadsheet
+- **Configurable error email notifications** available through the Config sheet
+- **Rate limiting** (Utilities.sleep) built into the code to avoid API throttling
+- **Flexible deployment**: Core functionality works with minimal setup, infrastructure can be added later for scaling
 
 ## Dependencies and APIs
 
-Required Google APIs (automatically enabled by Terraform):
-- Admin Directory API (group management)
-- Drive API (folder permissions)
-- Apps Script API
-- Sheets API
-- Groups Settings API
+### Required Google APIs (Auto-enabled or Available by Default)
+- **Admin Directory API** (group management) - Core functionality
+- **Drive API** (folder permissions) - Core functionality  
+- **Sheets API** (spreadsheet access) - Always available in Apps Script
+- **Groups Settings API** (group configuration) - For advanced group settings
 
-Container includes:
-- Google Cloud SDK (`gcloud`)
-- Terraform (infrastructure provisioning)
-- Google Apps Script CLI (`clasp`)
-- Google Apps Manager (`gam`)
+### Optional Infrastructure (Docker Container)
+When using the optional infrastructure setup, the container includes:
+- Google Cloud SDK (`gcloud`) - For authentication and GCP resource management
+- Terraform (infrastructure provisioning) - For reproducible cloud resource setup
+- Google Apps Script CLI (`clasp`) - For automated script deployment (not needed with manual approach)
+- Google Apps Manager (`gam`) - For advanced Google Workspace management
+
+### API Quotas and Limits
+- **Manual Setup**: Uses default Google Workspace API quotas (sufficient for most use cases)
+- **Infrastructure Setup**: Creates dedicated GCP project with higher quotas and better monitoring
