@@ -72,9 +72,9 @@ The setup wizard runs non-interactively using a configuration file.
 2.  **Populate the File:**
     Edit the `setup.conf` file and fill in the required values, including the Billing Account ID you noted in the previous step.
 
-### Step 4: Run the Automated Setup
+### Step 4: Run the Infrastructure Setup
 
-This is the final step to provision all your cloud resources.
+This step creates all the Google Cloud resources you need.
 
 1.  **Authenticate Your Local Environment:**
     Before running the setup, ensure your local environment is authenticated with Google. Your authentication tokens can expire, so it's good practice to run these commands even if you have authenticated before.
@@ -82,45 +82,74 @@ This is the final step to provision all your cloud resources.
     ```bash
     # Authenticate with the Google Cloud SDK
     gcloud auth login
+    
+    # Set up Application Default Credentials for API access
+    gcloud auth application-default login
 
-    # Authenticate with clasp (the Apps Script command-line tool)
+    # Authenticate with clasp (for Apps Script detection only)
     clasp login
     ```
+
+    **Note:** The `gcloud auth application-default login` command is required because the setup process needs to access Google Cloud APIs.
 
 2.  **Run the Setup Wizard with Docker Compose:**
     After authenticating, execute the following commands from the root of the project directory.
 
     First, build the Docker image:
     ```bash
-    # Note: Use "docker-compose" (with a hyphen) or "docker compose" (with a space)
-    # depending on which version is installed on your system.
-    docker-compose build
+    docker compose build
     ```
 
     Next, run the setup wizard:
     ```bash
-    # Use the same command style (hyphen or space) as you did for the build command.
-    docker-compose up
+    docker compose up
     ```
 
-    This will run the setup container with all the necessary volumes mounted and execute the setup script.
+    This will create all the Google Cloud infrastructure and prepare the Apps Script code.
 
-### Step 5: Post-Setup Manual Steps
+### Step 5: Manual Setup Completion
 
-After the script finishes, there are two final, one-time manual steps.
+After the infrastructure setup completes, you need to manually set up the Google Sheet and Apps Script:
+
+1.  **Create Google Sheet:**
+    *   Go to [Google Sheets](https://sheets.google.com)
+    *   Create a new sheet with the exact title shown in the setup output (e.g., `[Control Sheet] DrivePermissionManager25`)
+    *   Copy the Sheet ID from the URL (the long string between `/d/` and `/edit`)
+
+2.  **Set Up Apps Script:**
+    *   In your new Google Sheet, go to **Extensions** > **Apps Script**
+    *   Delete the default `function myFunction() {}` code
+    *   Copy all content from the file `apps_script_project/Code.js` in this repository
+    *   Paste it into the Apps Script editor
+
+3.  **Create Config File:**
+    *   In the Apps Script editor, click the **+** next to **Files**
+    *   Create a new **JSON** file named `config.json`
+    *   Paste this content, replacing `YOUR_SHEET_ID` with the Sheet ID you copied:
+    
+    ```json
+    {"gcpProjectId": "your-project-id", "sheetId": "YOUR_SHEET_ID"}
+    ```
+    
+    *   The correct project ID will be shown in the setup output
+
+4.  **Test the Setup:**
+    *   Save the Apps Script project
+    *   Refresh your Google Sheet
+    *   You should see a **Permissions Manager** menu appear
+    *   Click **Permissions Manager** > **Sync All** to run your first sync
+
+### Step 6: Optional Post-Setup Steps
 
 1.  **Link Your Billing Account:**
     *   Go to the [Google Cloud Console Billing page](https://console.cloud.google.com/billing).
-    *   At 'Select an organization' dropdown menu, make sure to select your organization (your domain).
-    *   You can find and select your new project using the 'Your projects' menu at the top of the page.
-    *   You should see a notification that your new project is not linked to a billing account. Follow the on-screen prompts to associate it with your active billing account.
+    *   Select your organization (your domain) from the dropdown
+    *   Find your new project and link it to your billing account if prompted
 
-2.  **Link Your Apps Script Project:**
-    *   The setup script creates your Apps Script project but does not link it to the Google Cloud project.
-    *   Open your new Apps Script project by going to the [Apps Script Dashboard](https://script.google.com/home), finding your project by name, and clicking on it.
-    *   Click on the **Project Settings** (the gear icon ⚙️) on the left sidebar.
-    *   To get your GCP Project Number, go to the [Google Cloud Console](https://console.cloud.google.com/cloud-resource-manager) and find the project that was just created. The Project Number will be listed on the dashboard.
-    *   Scroll down to the **Google Cloud Platform (GCP) Project** section, click **Change Project**, and enter your new GCP Project Number.
+2.  **Link Your Apps Script to GCP Project (Advanced):**
+    *   In Apps Script, go to **Project Settings** (gear icon ⚙️)
+    *   Under **Google Cloud Platform (GCP) Project**, click **Change Project**
+    *   Enter your GCP Project Number (shown in the setup output)
 
 ---
 

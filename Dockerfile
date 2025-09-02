@@ -50,5 +50,5 @@ COPY . .
 # Make the setup script executable
 RUN chmod +x /app/scripts/setup.sh
 
-# Set the entrypoint to the setup wizard script
+# Set the entrypoint to the setup script
 ENTRYPOINT ["/app/scripts/setup.sh"]

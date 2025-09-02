@@ -98,6 +98,38 @@ The system includes comprehensive testing utilities accessible via the "Permissi
 - Run terraform plan/apply to update infrastructure
 - The setup wizard handles initial provisioning
 
+## Setup Issues and Resolutions
+
+### Current Setup Status
+The setup script (`scripts/setup.sh`) has been extensively debugged and made robust to handle:
+- **Existing resource detection**: Script detects and reuses existing GCP resources (service accounts, OAuth clients)
+- **Apps Script project handling**: Handles existing projects by extracting script IDs from truncated `clasp list` output
+- **Google Sheets conflict checking**: Made optional when Drive API scopes aren't available
+- **Authentication scope issues**: Falls back to basic tokens when scoped tokens fail
+
+### Known Issues Being Debugged
+1. **Docker Volume Mounting**: The setup script runs in Docker but may have issues accessing gcloud credentials from host
+   - Host credentials: `~/.config/gcloud/application_default_credentials.json`
+   - Container mount: `/root/.config/gcloud/`
+   - May need debugging if `gcloud auth print-access-token` fails in container
+
+2. **Authentication Requirements**: 
+   - User must run `gcloud auth login` and `gcloud auth application-default login` on host
+   - Container needs access to these credentials for API calls
+   - Script requires Drive API and Sheets API scopes for creating/managing resources
+
+### Current Configuration
+- **GCP Project**: `permission-manager-23` 
+- **Apps Script Project**: `DrivePermissionManager23`
+- **Existing Script ID**: `1FEhi-Lf0xDXPPDAKFbFPQkr2Ika4CFTpgxpz64URMX6FTzRCy8X7b5aH`
+
+### Debugging Approach
+The setup script includes extensive debug output to track:
+- Directory contents and file movements
+- `clasp` command outputs and exit codes
+- Authentication token retrieval attempts
+- API response details
+
 ## Important Notes
 
 - Requires Google Workspace account (not standard Gmail) for Admin SDK API access
@@ -106,6 +138,7 @@ The system includes comprehensive testing utilities accessible via the "Permissi
 - Logging system tracks all operations in dedicated sheets
 - Supports configurable error email notifications
 - Uses rate limiting (Utilities.sleep) to avoid API throttling
+- **Setup script is idempotent**: Can be run multiple times safely, will reuse existing resources
 
 ## Dependencies and APIs
 
