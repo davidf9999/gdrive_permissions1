@@ -1,18 +1,18 @@
 # Google Drive Permission Manager
 
-This repository contains a complete, automated solution for managing access to a large number of Google Drive folders for many users. It uses Google Groups, controlled by a central Google Sheet, to provide a scalable and auditable permissions system.
+This repository contains a powerful solution for managing access to a large number of Google Drive folders using a central Google Sheet. It uses Google Groups to provide a scalable and auditable permissions system, all managed from a familiar spreadsheet interface.
 
-It is designed to be set up from scratch by any user with a Google Workspace account, using a containerized setup wizard that provisions all necessary cloud infrastructure automatically.
+The recommended setup is a simple, manual copy-and-paste of the core script, which can be done in minutes. An optional, more advanced setup is available for production environments that require higher API quotas.
 
 ---
 
 ## Table of Contents
 
-- [How it Works](#the-solution-google-groups-and-automation)
-- [Setup Guide](#setup-guide)
+- [How it Works](#how-it-works)
+- [Setup Guide (Recommended Manual Setup)](#setup-guide-recommended-manual-setup)
 - [Usage Guide](#usage-guide)
+- [Upgrading to a Production Environment](#upgrading-to-a-production-environment)
 - [Tearing Down the Project](#tearing-down-the-project)
-- [Advanced Features](#advanced-features)
 
 ---
 
@@ -29,127 +29,44 @@ This solution automates the entire lifecycle of this approach:
 
 ---
 
-## Setup Guide
+## Setup Guide (Recommended Manual Setup)
 
-This guide will walk you through the complete, one-time setup process.
+This guide will walk you through the simple, one-time setup process. This is the recommended approach and requires no special tools.
 
 ### Step 1: Prerequisites
 
-Before you begin, you must have the following command-line tools installed on your local machine.
+*   A **Google Workspace** account (a standard `@gmail.com` account is not sufficient).
+*   You must be a **Super Admin** for your Google Workspace domain to have the necessary permissions to create Google Groups.
 
-*   **Google Cloud SDK (`gcloud`):** This is used to authenticate with your Google account and manage cloud resources.
-    *   [Installation Guide](https://cloud.google.com/sdk/docs/install)
-*   **`clasp`:** This is the official command-line tool for Google Apps Script.
-    *   [Installation Guide](https://github.com/google/clasp#install)
-*   **Docker and Docker Compose:** This is used to build and run the setup container in a consistent environment.
-    *   [Installation Guide](https://docs.docker.com/get-docker/)
+### Step 2: Create the Google Sheet
 
-### Step 2: Google Account & Billing Setup
+1.  Go to [Google Sheets](https://sheets.google.com) and create a new, blank spreadsheet.
+2.  Give it a descriptive name, for example: `Drive Permissions Control`.
 
-This solution requires a Google Workspace account and an active Google Cloud Billing account.
+### Step 3: Install the Apps Script
 
-1.  **Set Up Google Workspace:**
-    *   You must have a **Google Workspace** account with your own domain name (e.g., `your-company.com`). A standard `@gmail.com` account is **not** sufficient.
-    *   The user account you use for this setup **must** be a **Super Admin** for your Google Workspace domain.
+1.  In your new Google Sheet, click on **Extensions > Apps Script**. A new browser tab will open with the script editor.
+2.  In the editor, click on `Code.gs` on the left, and delete the default `function myFunction() {}` code.
+3.  Open the `apps_script_project/Code.js` file from this repository.
+4.  Copy the entire contents of `Code.js` and paste it into the Apps Script editor.
 
-2.  **Set Up Google Cloud Billing:**
-    *   Go to the [Google Cloud Console Billing page](https://console.cloud.google.com/billing).
-    *   Ensure you are logged in as the same Super Admin user.
-    *   Create a new billing account if you don't have one. This requires a valid credit card. New users are often eligible for a free trial.
-    *   Take note of your **Billing Account ID** (e.g., `012345-ABCDEF-GHIJKL`). You will need this for the next step.
+### Step 4: Enable Advanced Services
 
-### Step 3: Project Configuration
+To create and manage Google Groups, the script needs access to an advanced Google service.
 
-The setup wizard runs non-interactively using a configuration file.
+1.  In the Apps Script editor, click the **+** icon next to the **Services** section in the left-hand menu.
+2.  From the list of available APIs, find **Admin SDK API** and select it.
+3.  Click the **Add** button. The `AdminDirectory` service will now appear in your list of services, and the error you encountered will be resolved.
 
-1.  **Create a Configuration File:**
-    Copy the `setup.conf.example` file to a new file named `setup.conf`.
+### Step 5: Run the Initial Sync
 
-    ```bash
-    cp setup.conf.example setup.conf
-    ```
+1.  Save the script project by clicking the **Save project** (disk icon 💾) at the top of the Apps Script editor.
+2.  Go back to your Google Sheet tab and **refresh the page**.
+3.  A new menu named **Permissions Manager** should appear in the Google Sheets menu bar.
+4.  Click **Permissions Manager > Sync All**.
+5.  The first time you run this, Google will ask you to authorize the script. Follow the on-screen prompts to grant the necessary permissions.
 
-2.  **Populate the File:**
-    Edit the `setup.conf` file and fill in the required values, including the Billing Account ID you noted in the previous step.
-
-### Step 4: Run the Infrastructure Setup
-
-This step creates all the Google Cloud resources you need.
-
-1.  **Authenticate Your Local Environment:**
-    Before running the setup, ensure your local environment is authenticated with Google. Your authentication tokens can expire, so it's good practice to run these commands even if you have authenticated before.
-
-    ```bash
-    # Authenticate with the Google Cloud SDK
-    gcloud auth login
-    
-    # Set up Application Default Credentials for API access
-    gcloud auth application-default login
-
-    # Authenticate with clasp (for Apps Script detection only)
-    clasp login
-    ```
-
-    **Note:** The `gcloud auth application-default login` command is required because the setup process needs to access Google Cloud APIs.
-
-2.  **Run the Setup Wizard with Docker Compose:**
-    After authenticating, execute the following commands from the root of the project directory.
-
-    First, build the Docker image:
-    ```bash
-    docker compose build
-    ```
-
-    Next, run the setup wizard:
-    ```bash
-    docker compose up
-    ```
-
-    This will create all the Google Cloud infrastructure and prepare the Apps Script code.
-
-### Step 5: Manual Setup Completion
-
-After the infrastructure setup completes, you need to manually set up the Google Sheet and Apps Script:
-
-1.  **Create Google Sheet:**
-    *   Go to [Google Sheets](https://sheets.google.com)
-    *   Create a new sheet with the exact title shown in the setup output (e.g., `[Control Sheet] DrivePermissionManager25`)
-    *   Copy the Sheet ID from the URL (the long string between `/d/` and `/edit`)
-
-2.  **Set Up Apps Script:**
-    *   In your new Google Sheet, go to **Extensions** > **Apps Script**
-    *   Delete the default `function myFunction() {}` code
-    *   Copy all content from the file `apps_script_project/Code.js` in this repository
-    *   Paste it into the Apps Script editor
-
-3.  **Create Config File:**
-    *   In the Apps Script editor, click the **+** next to **Files**
-    *   Create a new **JSON** file named `config.json`
-    *   Paste this content, replacing `YOUR_SHEET_ID` with the Sheet ID you copied:
-    
-    ```json
-    {"gcpProjectId": "your-project-id", "sheetId": "YOUR_SHEET_ID"}
-    ```
-    
-    *   The correct project ID will be shown in the setup output
-
-4.  **Test the Setup:**
-    *   Save the Apps Script project
-    *   Refresh your Google Sheet
-    *   You should see a **Permissions Manager** menu appear
-    *   Click **Permissions Manager** > **Sync All** to run your first sync
-
-### Step 6: Optional Post-Setup Steps
-
-1.  **Link Your Billing Account:**
-    *   Go to the [Google Cloud Console Billing page](https://console.cloud.google.com/billing).
-    *   Select your organization (your domain) from the dropdown
-    *   Find your new project and link it to your billing account if prompted
-
-2.  **Link Your Apps Script to GCP Project (Advanced):**
-    *   In Apps Script, go to **Project Settings** (gear icon ⚙️)
-    *   Under **Google Cloud Platform (GCP) Project**, click **Change Project**
-    *   Enter your GCP Project Number (shown in the setup output)
+Your setup is now complete! The script will have automatically created the necessary control sheets (`ManagedFolders`, `Admins`, etc.) for you.
 
 ---
 
@@ -159,17 +76,49 @@ For a detailed tutorial on how to use the spreadsheet, what each sheet and colum
 
 ---
 
+## Upgrading to a Production Environment
+
+If you find that your script is running into API quota limits or timing out, you can upgrade to a dedicated, billable Google Cloud project for higher performance.
+
+This hybrid approach allows you to start simple and scale up later without losing any of your work.
+
+### Step 1: Provision the GCP Infrastructure
+
+At any time, you can run the automated provisioning tool. This is an **advanced** procedure.
+
+1.  **Prerequisites:**
+    *   **Google Cloud SDK (`gcloud`):** [Installation Guide](https://cloud.google.com/sdk/docs/install)
+    *   **Docker and Docker Compose:** [Installation Guide](https://docs.docker.com/get-docker/)
+    *   An active **Google Cloud Billing Account**.
+2.  **Configure:** Copy `setup.conf.example` to `setup.conf` and fill in your details (GCP Billing ID, domain, etc.).
+3.  **Authenticate:** Run `gcloud auth login` and `gcloud auth application-default login` from your terminal.
+4.  **Run:** Execute `docker compose up --build` from the project root.
+
+This command will create a new, dedicated GCP project and output its **Project Number**. Copy this number.
+
+### Step 2: Link Your Script to the New Project
+
+1.  Open your existing Apps Script project.
+2.  Click the **Project Settings** (gear icon ⚙️) on the left.
+3.  Under the **Google Cloud Platform (GCP) Project** section, click **Change Project**.
+4.  Paste the **Project Number** you copied from the provisioning step and click **Set Project**.
+
+Your script is now linked to the high-performance GCP project. You don't need to change anything else.
+
+---
+
 ## Tearing Down the Project
 
-If you wish to remove all the resources created by this project, a `teardown.sh` script is provided.
+### Manual Setup
 
-1.  **Manually Delete the Apps Script Project:**
-    *   Go to your [Apps Script Dashboard](https://script.google.com/home).
-    *   Find the project, click the three dots (⋮), and select **Remove**.
+To remove the project, simply delete the Google Sheet you created. You may also want to manually delete the Google Groups that were created by the script from the [Google Workspace Admin Console](https://admin.google.com).
 
-2.  **Run the Automated Teardown Script:**
-    *   Make sure the `gcp_project_id` in your `setup.conf` file still points to the project you want to delete.
-    *   Run the script from your terminal: `./teardown.sh`
+### Production Environment
+
+If you used the automated provisioning tool, a `teardown.sh` script is provided to delete all the Google Cloud resources.
+
+1.  Make sure the `gcp_project_id` in your `setup.conf` file points to the project you want to delete.
+2.  Run the script from your terminal: `./teardown.sh`
 
 ---
 

@@ -30,6 +30,9 @@ function onOpen() {
       .addItem('Sync All', 'fullSync')
       .addSeparator()
       .addSubMenu(ui.createMenu('Testing') // Use ui here
+          .addItem('Run Manual Access Test', 'runManualAccessTest')
+          .addItem('Run Stress Test', 'runStressTest')
+          .addSeparator()
           .addItem('Cleanup Manual Test Data', 'cleanupManualTestData')
           .addItem('Cleanup Stress Test Data', 'cleanupStressTestData'))
       .addSeparator()
@@ -223,7 +226,7 @@ function syncUserGroups() {
         getOrCreateGroup_(groupEmail, groupName);
         syncGroupMembership_(groupEmail, groupName);
 
-        lastSyncedCell.setValue(new Date());
+        lastSyncedCell.setValue(Utilities.formatDate(new Date(), SpreadsheetApp.getActive().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss'));
         statusCell.setValue('OK');
         log_('Successfully synced user group: ' + groupName);
 
@@ -361,7 +364,7 @@ function processRow_(rowIndex) {
     setFolderPermission_(folder.getId(), groupEmail, role);
     syncGroupMembership_(groupEmail, userSheetName);
 
-    sheet.getRange(rowIndex, LAST_SYNCED_COL).setValue(new Date());
+    sheet.getRange(rowIndex, LAST_SYNCED_COL).setValue(Utilities.formatDate(new Date(), SpreadsheetApp.getActive().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss'));
     statusCell.setValue('OK');
 
   } catch (e) {
