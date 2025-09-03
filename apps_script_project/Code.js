@@ -39,26 +39,12 @@ function onOpen() {
       .addSubMenu(ui.createMenu('Logging') // Use ui here
           .addItem('Clear All Logs', 'clearAllLogs'));
 
-  const configSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG_SHEET_NAME);
-  if (configSheet) {
-    const settings = configSheet.getRange('A2:B').getValues();
-    let repoUrl = '';
-    for (let i = 0; i < settings.length; i++) {
-      if (settings[i][0] === 'GitHubRepoURL') {
-        repoUrl = settings[i][1];
-        break;
-      }
-    }
-
-    if (repoUrl) {
-        const helpMenu = ui.createMenu('Help');
-        helpMenu.addItem('User Guide', 'openUserGuide');
-        helpMenu.addItem('Testing Guide', 'openTestingGuide');
-        helpMenu.addItem('README', 'openReadme');
-        menu.addSeparator();
-        menu.addSubMenu(helpMenu);
-    }
-  }
+  const helpMenu = ui.createMenu('Help');
+  helpMenu.addItem('User Guide', 'openUserGuide');
+  helpMenu.addItem('Testing Guide', 'openTestingGuide');
+  helpMenu.addItem('README', 'openReadme');
+  menu.addSeparator();
+  menu.addSubMenu(helpMenu);
 
   menu.addToUi();
 
@@ -1058,7 +1044,8 @@ function openReadme() {
 }
 
 function openUrl(url) {
-    const html = '<script>window.open("' + url + '", "_blank");google.script.host.close();</script>';
-    const userInterface = HtmlService.createHtmlOutput(html).setHeight(10);
-    SpreadsheetApp.getUi().showModalDialog(userInterface, 'Opening...');
+  log_('Attempting to open URL: ' + url);
+  const html = '<html><body><a href="' + url + '" target="_blank">Click here to open the documentation</a><br/><br/><input type="button" value="Close" onclick="google.script.host.close()" /></body></html>';
+  const ui = HtmlService.createHtmlOutput(html).setTitle('Open Documentation').setWidth(300);
+  SpreadsheetApp.getUi().showSidebar(ui);
 }
