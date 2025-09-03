@@ -23,7 +23,7 @@ const STATUS_COL = 7;
  */
 function onOpen() {
   const ui = SpreadsheetApp.getUi(); // Declare ui here
-  ui.createMenu('Permissions Manager')
+  const menu = ui.createMenu('Permissions Manager')
       .addItem('Sync Admins', 'syncAdmins')
       .addItem('Sync User Groups', 'syncUserGroups')
       .addItem('Sync All Folders', 'fullSync')
@@ -37,8 +37,30 @@ function onOpen() {
           .addItem('Cleanup Stress Test Data', 'cleanupStressTestData'))
       .addSeparator()
       .addSubMenu(ui.createMenu('Logging') // Use ui here
-          .addItem('Clear All Logs', 'clearAllLogs'))
-      .addToUi();
+          .addItem('Clear All Logs', 'clearAllLogs'));
+
+  const configSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG_SHEET_NAME);
+  if (configSheet) {
+    const settings = configSheet.getRange('A2:B').getValues();
+    let repoUrl = '';
+    for (let i = 0; i < settings.length; i++) {
+      if (settings[i][0] === 'GitHubRepoURL') {
+        repoUrl = settings[i][1];
+        break;
+      }
+    }
+
+    if (repoUrl) {
+        const helpMenu = ui.createMenu('Help');
+        helpMenu.addItem('User Guide', 'openUserGuide');
+        helpMenu.addItem('Testing Guide', 'openTestingGuide');
+        helpMenu.addItem('README', 'openReadme');
+        menu.addSeparator();
+        menu.addSubMenu(helpMenu);
+    }
+  }
+
+  menu.addToUi();
 
   setupControlSheets_();
   setupLogSheets_();
@@ -96,6 +118,8 @@ function setupControlSheets_() {
     configSheet.getRange('A1:B1').setValues([['Setting', 'Value']]).setFontWeight('bold');
     configSheet.getRange('A2:B2').setValues([['EnableEmailNotifications', 'FALSE']]);
     configSheet.getRange('A3:B3').setValues([['NotificationEmailAddress', '']]);
+    configSheet.getRange('A4:B4').setValues([['EnableToasts', 'FALSE']]);
+    configSheet.getRange('A5:B5').setValues([['GitHubRepoURL', 'https://github.com/davidf9999/gdrive_permissions1']]);
     configSheet.setFrozenRows(1);
     log_('Created "Config" sheet.');
   }
@@ -211,7 +235,7 @@ function syncUserGroups() {
         }
         
         statusCell.setValue('Processing...');
-        ss.toast('Processing user group: ' + groupName + '...', 'Sync Progress', 10);
+        showToast_('Processing user group: ' + groupName + '...', 'Sync Progress', 10);
         log_('Processing user group: ' + groupName);
 
         // Generate group email if it doesn't exist
@@ -257,7 +281,7 @@ function fullSync() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
   try {
-    ss.toast('Starting full synchronization...', 'Full Sync', -1);
+    showToast_('Starting full synchronization...', 'Full Sync', -1);
     log_('Starting full synchronization...');
 
     // 1. Sync Admins
@@ -277,14 +301,14 @@ function fullSync() {
       log_(orphanMessage);
     }
 
-    ss.toast('Full synchronization complete!', 'Full Sync', 5);
+    showToast_('Full synchronization complete!', 'Full Sync', 5);
     log_('Full synchronization completed.');
     SpreadsheetApp.getUi().alert(summaryMessage + '\n\nCheck the \'Status\' column in the \'ManagedFolders\' sheet for details.');
 
   } catch (e) {
     const errorMessage = 'FATAL ERROR in fullSync: ' + e.toString() + '\n' + e.stack;
     log_(errorMessage);
-    ss.toast('Full sync failed with a fatal error.', 'Full Sync', 5);
+    showToast_('Full sync failed with a fatal error.', 'Full Sync', 5);
     SpreadsheetApp.getUi().alert('A fatal error occurred: ' + e.message);
     sendErrorNotification_(errorMessage);
   } finally {
@@ -317,7 +341,7 @@ function processManagedFolders_() {
 
   // Loop through each row (starting from row 2 to skip header)
   for (let i = 2; i <= lastRow; i++) {
-    ss.toast('Processing row ' + i + ' of ' + lastRow + '...', 'Sync Progress', 10);
+    showToast_('Processing row ' + i + ' of ' + lastRow + '...', 'Sync Progress', 10);
     try {
       processRow_(i);
     } catch (e) {
@@ -422,6 +446,27 @@ function checkForOrphanSheets_() {
 
 
 /***** HELPER FUNCTIONS *****/
+
+function showToast_(message, title, timeoutSeconds) {
+  const configSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG_SHEET_NAME);
+  if (!configSheet) {
+    // If config sheet doesn't exist, show the toast by default
+    SpreadsheetApp.getActiveSpreadsheet().toast(message, title, timeoutSeconds);
+    return;
+  }
+  const settings = configSheet.getRange('A2:B').getValues();
+  let enableToasts = false; // Default to false
+  for (let i = 0; i < settings.length; i++) {
+    if (settings[i][0] === 'EnableToasts') {
+      enableToasts = settings[i][1];
+      break;
+    }
+  }
+
+  if (enableToasts === true) {
+    SpreadsheetApp.getActiveSpreadsheet().toast(message, title, timeoutSeconds);
+  }
+}
 
 function getOrCreateFolder_(folderName, folderId) {
   if (folderId) {
@@ -976,4 +1021,44 @@ function sendErrorNotification_(errorMessage) {
   } catch (e) {
     log_('Failed to send error notification email: ' + e.toString());
   }
+}
+
+function getGitHubRepoUrl_() {
+    const configSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG_SHEET_NAME);
+    if (configSheet) {
+        const settings = configSheet.getRange('A2:B').getValues();
+        for (let i = 0; i < settings.length; i++) {
+            if (settings[i][0] === 'GitHubRepoURL') {
+                return settings[i][1];
+            }
+        }
+    }
+    return null;
+}
+
+function openUserGuide() {
+    const repoUrl = getGitHubRepoUrl_();
+    if (repoUrl) {
+        openUrl(repoUrl + '/blob/main/docs/USER_GUIDE.md');
+    }
+}
+
+function openTestingGuide() {
+    const repoUrl = getGitHubRepoUrl_();
+    if (repoUrl) {
+        openUrl(repoUrl + '/blob/main/TESTING.md');
+    }
+}
+
+function openReadme() {
+    const repoUrl = getGitHubRepoUrl_();
+    if (repoUrl) {
+        openUrl(repoUrl + '/blob/main/README.md');
+    }
+}
+
+function openUrl(url) {
+    const html = '<script>window.open("' + url + '", "_blank");google.script.host.close();</script>';
+    const userInterface = HtmlService.createHtmlOutput(html).setHeight(10);
+    SpreadsheetApp.getUi().showModalDialog(userInterface, 'Opening...');
 }

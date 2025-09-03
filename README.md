@@ -1,5 +1,9 @@
 # Google Drive Permission Manager
 
+> **Project Status: Beta**
+>
+> This project is currently in Beta. It is feature-complete and has been tested, but it is still under active development. Please use it with the understanding that there may be bugs or changes to the functionality. Feedback and contributions are welcome!
+
 This repository contains a powerful solution for managing access to a large number of Google Drive folders using a central Google Sheet. It uses Google Groups to provide a scalable and auditable permissions system, all managed from a familiar spreadsheet interface.
 
 The recommended setup is a simple, manual copy-and-paste of the core script, which can be done in minutes. An optional, more advanced setup is available for production environments that require higher API quotas.
