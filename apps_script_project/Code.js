@@ -785,7 +785,7 @@ function runStressTest() {
   
   // --- Step 3: Initial Sync to Create Infrastructure ---
   ui.alert('Setup Phase 1 Complete', 'Test folders have been added to the sheet. The script will now run a sync to create the necessary folders, groups, and user sheets.', ui.ButtonSet.OK);
-  syncAll();
+  fullSync();
 
   // --- Step 4: Populate User Sheets ---
   ui.alert('Setup Phase 2 Complete', 'The script will now populate all of the new user sheets with the test user emails.', ui.ButtonSet.OK);
@@ -802,7 +802,7 @@ function runStressTest() {
   // --- Step 5: Run the Main Stress Test Sync ---
   ui.alert('Setup Complete. Starting Stress Test', 'All test data is in place. The script will now run the main sync and time its execution.', ui.ButtonSet.OK);
   const startTime = new Date();
-  syncAll();
+  fullSync();
   const endTime = new Date();
   const durationSeconds = (endTime.getTime() - startTime.getTime()) / 1000;
 

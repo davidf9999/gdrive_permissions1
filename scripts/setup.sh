@@ -5,6 +5,13 @@
 
 set -e  # Exit on any error
 
+# Check if setup.conf exists
+if [ ! -f /app/setup.conf ]; then
+    echo "ERROR: Configuration file /app/setup.conf not found."
+    echo "Please copy setup.conf.example to setup.conf and fill in your details."
+    exit 1
+fi
+
 source /app/setup.conf
 
 echo "================================================="
