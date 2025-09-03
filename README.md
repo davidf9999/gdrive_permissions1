@@ -128,4 +128,4 @@ If you used the automated provisioning tool, a `teardown.sh` script is provided 
 
 ## Advanced Features
 
-This project also includes features for testing and logging, which are explained in more detail in the [User Guide](./docs/USER_GUIDE.md).
+This project also includes features for testing and logging, which are explained in more detail in [User Guide](./docs/USER_GUIDE.md) and [Testing](./docs/TESTING.md).

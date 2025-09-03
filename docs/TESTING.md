@@ -15,7 +15,7 @@ The testing functions are available in the **Permissions Manager > Testing** men
 *   **Process:**
     1.  The script will prompt you to enter a name for a new test folder.
     2.  It will then ask for a role to test (e.g., `Editor`).
-    3.  You will be asked to provide a real email address that you can access for testing (e.g., a personal Gmail account).
+    3.  You will be asked to provide a real email address you can access for testing (e.g., a personal Gmail account).
     4.  The script will then automatically:
         *   Add the test folder to the `ManagedFolders` sheet.
         *   Run a sync to create the folder, the corresponding Google Group, and the user sheet.
@@ -43,6 +43,49 @@ If you need to manually clean up test data, you can use the following functions 
 
 *   **Cleanup Manual Test Data:** This will prompt you for the name of a manual test folder and then delete the corresponding folder, group, and sheet.
 *   **Cleanup Stress Test Data:** This will automatically find and delete all folders, groups, and sheets that were created by the stress test (identified by the `StressTestFolder_` prefix).
+
+## Manual Testing with Existing Resources
+
+This test allows you to verify the permission system using your own existing folder structure and user groups. This is useful for confirming that the permissions managed by the sheet align with the actual access in Google Drive.
+
+### Prerequisites
+
+1.  **An Existing Managed Folder:** Choose a folder in Google Drive that is already listed in your `ManagedFolders` sheet.
+2.  **Defined User Groups:** This folder should have corresponding user sheets (e.g., `MyFolder_Editor`, `MyFolder_Viewer`).
+3.  **Test Users:** You will need access to several Google accounts to perform the verification:
+    *   An account whose email is listed in the `_Editor` sheet for the folder.
+    *   An account whose email is listed in the `_Viewer` sheet for the folder.
+    *   An account that is **not** listed in any sheet for the folder (and is not a member of any group that has access).
+
+### Test Scenarios
+
+#### 1. Verify Editor Access
+
+1.  **Log In:** Sign in to Google Drive with the account that should have **Editor** access.
+2.  **Navigate to Folder:** Locate and open the managed folder. You should be able to see its contents.
+3.  **Test Permissions:**
+    *   **Create:** Create a new Google Doc or Sheet inside the folder. This should succeed.
+    *   **Edit:** Open a file and make a change. This should succeed.
+    *   **Delete:** Delete the file you just created. This should succeed.
+4.  **Cleanup:** If you don't want to keep the test file, ensure it's deleted from the folder's trash.
+
+#### 2. Verify Viewer Access and Limitations
+
+1.  **Log In:** Sign in to Google Drive with the account that should have **Viewer** access.
+2.  **Navigate to Folder:** Locate and open the managed folder. You should be able to see its contents.
+3.  **Test Permissions:**
+    *   **View:** Open a file. You should be able to view its content but not edit it (the "Read-only" or "View only" mode should be active).
+    *   **Attempt to Edit:** Try to type in a document. You should be denied.
+    *   **Attempt to Create:** Try to create a new file in the folder. The option should be greyed out or you should receive a permissions error.
+    *   **Attempt to Share:** Open a file and try to share it with another person. This should be blocked if the folder's settings prevent viewers from sharing.
+
+#### 3. Verify No Access
+
+1.  **Log In:** Sign in to Google Drive with the account that should have **no access**.
+2.  **Attempt to Navigate:** Try to access the folder using a direct link.
+3.  **Test Permissions:** You should see a "You need permission" or "Access Denied" page. You should not be able to see the folder's name (unless you had prior access) or its contents.
+
+By running these manual tests, you can be confident that the permissions you have defined in the Google Sheet are being correctly applied and enforced by Google Drive.
 
 ## Enabling Progress Messages (Toasts)
 
