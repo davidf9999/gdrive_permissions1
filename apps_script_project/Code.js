@@ -252,7 +252,7 @@ function syncUserGroups() {
 
         // Generate group email if it doesn't exist
         if (!groupEmail) {
-          groupEmail = generateGroupEmail_(groupName);
+          groupEmail = generateGroupEmail(groupName);
           groupEmailCell.setValue(groupEmail);
           log_('Generated group email for ' + groupName + ': ' + groupEmail);
         }
@@ -390,7 +390,7 @@ function processRow_(rowIndex) {
     sheet.getRange(rowIndex, FOLDER_NAME_COL).setValue(folder.getName());
 
     const userSheetName = folder.getName() + '_' + role;
-    const groupEmail = generateGroupEmail_(userSheetName);
+    const groupEmail = generateGroupEmail(userSheetName);
     sheet.getRange(rowIndex, USER_SHEET_NAME_COL).setValue(userSheetName);
     sheet.getRange(rowIndex, GROUP_EMAIL_COL).setValue(groupEmail);
 
@@ -760,21 +760,6 @@ function setSheetUiStyles_() {
     log_('Could not apply UI styles. Error: ' + e.message, 'WARN');
   }
 }
-
-function generateGroupEmail_(baseName) {
-  const domain = Session.getActiveUser().getEmail().split('@')[1];
-  if (!domain) {
-    throw new Error('Could not determine user domain.');
-  }
-  
-  const sanitizedName = baseName
-    .toLowerCase()
-    .replace(/\s+/g, '-')
-    .replace(/[^a-z0-9-]/g, '');
-
-  return sanitizedName + '@' + domain;
-}
-
 
 /***** DEVELOPER-ONLY TEST FUNCTIONS *****/
 
@@ -1358,7 +1343,7 @@ function processRow_(rowIndex) {
     sheet.getRange(rowIndex, FOLDER_NAME_COL).setValue(folder.getName());
 
     const userSheetName = folder.getName() + '_' + role;
-    const groupEmail = generateGroupEmail_(userSheetName);
+    const groupEmail = generateGroupEmail(userSheetName);
     sheet.getRange(rowIndex, USER_SHEET_NAME_COL).setValue(userSheetName);
     sheet.getRange(rowIndex, GROUP_EMAIL_COL).setValue(groupEmail);
 
@@ -1728,21 +1713,6 @@ function setSheetUiStyles_() {
     log_('Could not apply UI styles. Error: ' + e.message);
   }
 }
-
-function generateGroupEmail_(baseName) {
-  const domain = Session.getActiveUser().getEmail().split('@')[1];
-  if (!domain) {
-    throw new Error('Could not determine user domain.');
-  }
-  
-  const sanitizedName = baseName
-    .toLowerCase()
-    .replace(/\s+/g, '-')
-    .replace(/[^a-z0-9-]/g, '');
-
-  return sanitizedName + '@' + domain;
-}
-
 
 /***** DEVELOPER-ONLY TEST FUNCTIONS *****/
 

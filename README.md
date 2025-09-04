@@ -124,6 +124,13 @@ If you used the automated provisioning tool, a `teardown.sh` script is provided 
 1.  Make sure the `gcp_project_id` in your `setup.conf` file points to the project you want to delete.
 2.  Run the script from your terminal: `./teardown.sh`
 
+## Development
+
+This repository now includes a minimal test and lint setup to aid development.
+
+- Run `npm run lint` to perform a syntax check on the Apps Script sources.
+- Run `npm test` to execute unit tests for utility functions.
+
 ---
 
 ## Advanced Features
