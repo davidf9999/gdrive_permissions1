@@ -2,6 +2,12 @@
 
 This document provides instructions for using the testing functions built into the Google Drive Permission Manager script.
 
+## Viewing Test Logs
+
+All test operations are logged to the **TestLog** sheet. If a test fails or does not behave as expected, this sheet is the first place to look for detailed error messages.
+
+If you have enabled the [Advanced Logging with Google Cloud](../../README.md#advanced-logging-with-google-cloud), the test logs will also be sent there, providing a more robust and searchable view of the test execution.
+
 ## Running Tests
 
 The testing functions are available in the **Permissions Manager > Testing** menu.

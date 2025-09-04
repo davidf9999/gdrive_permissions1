@@ -62,6 +62,17 @@ This sheet allows you to configure advanced settings, such as enabling email not
 
 These sheets contain detailed, timestamped logs of all the actions the script performs. They are very useful for troubleshooting if something goes wrong.
 
+### 7. Advanced Logging with Google Cloud
+
+For more robust logging, especially in production environments, you can enable integration with Google Cloud Logging. When enabled, the script sends detailed, structured logs to your own Google Cloud project.
+
+**To enable this:**
+
+1.  First, you must have linked the script to a Google Cloud project. See the instructions in the main [README.md file](../../README.md#upgrading-to-a-production-environment).
+2.  In the `Config` sheet, set the value of `EnableGCPLogging` to `TRUE`.
+
+Once enabled, you can view the logs in the [Google Cloud Logs Explorer](https://console.cloud.google.com/logs/viewer), which provides powerful searching and filtering capabilities.
+
 ---
 
 ## Common Workflows

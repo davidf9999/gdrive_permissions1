@@ -110,6 +110,7 @@ function setupControlSheets_() {
     configSheet.getRange('A4:B4').setValues([['EnableToasts', 'FALSE']]);
     configSheet.getRange('A5:B5').setValues([['GitHubRepoURL', 'https://github.com/davidf9999/gdrive_permissions1']]);
     configSheet.getRange('A6:B6').setValues([['MaxLogLength', DEFAULT_MAX_LOG_LENGTH]]);
+    configSheet.getRange('A7:B7').setValues([['EnableGCPLogging', 'FALSE']]);
     configSheet.setFrozenRows(1);
     log_('Created "Config" sheet.');
   }
@@ -120,6 +121,11 @@ function setupControlSheets_() {
       const lastRow = configSheet.getLastRow() + 1;
       configSheet.getRange(lastRow, 1, 1, 2).setValues([['MaxLogLength', DEFAULT_MAX_LOG_LENGTH]]);
       log_('Added "MaxLogLength" setting with default ' + DEFAULT_MAX_LOG_LENGTH + '.');
+    }
+    if (settings.indexOf('EnableGCPLogging') === -1) {
+      const lastRow = configSheet.getLastRow() + 1;
+      configSheet.getRange(lastRow, 1, 1, 2).setValues([['EnableGCPLogging', 'FALSE']]);
+      log_('Added "EnableGCPLogging" setting with default FALSE.');
     }
   }
 }
@@ -200,6 +206,13 @@ function syncAdmins() {
   }
 }
 
+    log_('Admin sync complete.', 'INFO');
+
+  } catch (e) {
+    log_('ERROR in syncAdmins: ' + e.toString(), 'ERROR');
+  }
+}
+
 function syncUserGroups() {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -255,18 +268,986 @@ function syncUserGroups() {
 
       } catch (e) {
         const errorMessage = 'ERROR: ' + e.message;
-        log_('Failed to process user group row ' + rowIndex + '. Error: ' + e.message + ' Stack: ' + e.stack);
+        log_('Failed to process user group row ' + rowIndex + '. Error: ' + e.message + ' Stack: ' + e.stack, 'ERROR');
         statusCell.setValue(errorMessage);
       }
     }
     SpreadsheetApp.getUi().alert('User groups sync complete.');
   } catch (e) {
     const errorMessage = 'FATAL ERROR in syncUserGroups: ' + e.toString() + '\n' + e.stack;
-    log_(errorMessage);
+    log_(errorMessage, 'ERROR');
     SpreadsheetApp.getUi().alert('A fatal error occurred during user group sync: ' + e.message);
     sendErrorNotification_(errorMessage);
   }
 }
+
+function fullSync() {
+  setupControlSheets_(); // Ensure control sheets exist
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) {
+    SpreadsheetApp.getUi().alert('Sync is already in progress. Please wait a few minutes and try again.');
+    return;
+  }
+
+  let summaryMessage = 'Sync process complete.';
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  try {
+    showToast_('Starting full synchronization...', 'Full Sync', -1);
+    log_('Starting full synchronization...');
+
+    // 1. Sync Admins
+    syncAdmins();
+
+    // 2. Sync User Groups
+    syncUserGroups();
+
+    // 3. Process Managed Folders
+    processManagedFolders_();
+
+    // Check for any orphan sheets
+    const orphanSheets = checkForOrphanSheets_();
+    if (orphanSheets && orphanSheets.length > 0) {
+      const orphanMessage = 'Warning: Found orphan sheets that are not in the configuration: ' + orphanSheets.join(', ');
+      summaryMessage += '\n\n' + orphanMessage;
+      log_(orphanMessage, 'WARN');
+    }
+
+    showToast_('Full synchronization complete!', 'Full Sync', 5);
+    log_('Full synchronization completed.');
+    SpreadsheetApp.getUi().alert(summaryMessage + '\n\nCheck the 'Status' column in the 'ManagedFolders' sheet for details.');
+
+  } catch (e) {
+    const errorMessage = 'FATAL ERROR in fullSync: ' + e.toString() + '\n' + e.stack;
+    log_(errorMessage, 'ERROR');
+    showToast_('Full sync failed with a fatal error.', 'Full Sync', 5);
+    SpreadsheetApp.getUi().alert('A fatal error occurred: ' + e.message);
+    sendErrorNotification_(errorMessage);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+
+/***** CORE LOGIC *****/
+
+/**
+ * Reads the ManagedFolders sheet and processes each row.
+ */
+function processManagedFolders_() {
+  log_('Starting processing of ManagedFolders sheet...');
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+  if (!sheet) {
+    SpreadsheetApp.getUi().alert('CRITICAL: Configuration sheet named "' + MANAGED_FOLDERS_SHEET_NAME + '" not found. Aborting.');
+    return;
+  }
+
+  setSheetUiStyles_();
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) {
+      log_('No data rows to process in ManagedFolders sheet.');
+      return;
+  }
+
+  // Loop through each row (starting from row 2 to skip header)
+  for (let i = 2; i <= lastRow; i++) {
+    showToast_('Processing row ' + i + ' of ' + lastRow + '...', 'Sync Progress', 10);
+    try {
+      processRow_(i);
+    } catch (e) {
+      log_('Error processing row ' + i + ': ' + e.toString(), 'ERROR');
+    }
+  }
+  log_('Finished processing all rows.');
+}
+
+/**
+ * Processes a single row from the ManagedFolders sheet.
+ * @param {number} rowIndex The index of the row to process.
+ */
+function processRow_(rowIndex) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+  const statusCell = sheet.getRange(rowIndex, STATUS_COL);
+  
+  try {
+    statusCell.setValue('Processing...');
+    
+    let folderName = sheet.getRange(rowIndex, FOLDER_NAME_COL).getValue();
+    let folderId = sheet.getRange(rowIndex, FOLDER_ID_COL).getValue();
+    let role = sheet.getRange(rowIndex, ROLE_COL).getValue();
+
+    if (!folderName && !folderId) {
+      throw new Error('Both FolderName and FolderID are blank.');
+    }
+    if (!role) {
+      throw new Error('Role is not specified.');
+    }
+
+    const folder = getOrCreateFolder_(folderName, folderId);
+    sheet.getRange(rowIndex, FOLDER_ID_COL).setValue(folder.getId());
+    sheet.getRange(rowIndex, FOLDER_NAME_COL).setValue(folder.getName());
+
+    const userSheetName = folder.getName() + '_' + role;
+    const groupEmail = generateGroupEmail_(userSheetName);
+    sheet.getRange(rowIndex, USER_SHEET_NAME_COL).setValue(userSheetName);
+    sheet.getRange(rowIndex, GROUP_EMAIL_COL).setValue(groupEmail);
+
+    getOrCreateUserSheet_(userSheetName);
+    getOrCreateGroup_(groupEmail, userSheetName);
+
+    setFolderPermission_(folder.getId(), groupEmail, role);
+    syncGroupMembership_(groupEmail, userSheetName);
+
+    sheet.getRange(rowIndex, LAST_SYNCED_COL).setValue(Utilities.formatDate(new Date(), SpreadsheetApp.getActive().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss'));
+    statusCell.setValue('OK');
+
+  } catch (e) {
+    log_('Failed to process row ' + rowIndex + '. Error: ' + e.message + ' Stack: ' + e.stack, 'ERROR');
+    statusCell.setValue('Error: ' + e.message);
+  }
+}
+
+/**
+ * Checks for sheets that are not part of the main configuration.
+ * @return {Array<string>} A list of orphan sheet names.
+ */
+function checkForOrphanSheets_() {
+  try {
+    log_('Checking for orphan sheets...');
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    const allSheets = spreadsheet.getSheets();
+    const allSheetNames = allSheets.map(function(s) { return s.getName(); });
+
+    const requiredSheetNames = new Set();
+    requiredSheetNames.add(MANAGED_FOLDERS_SHEET_NAME);
+    requiredSheetNames.add(ADMINS_SHEET_NAME);
+    requiredSheetNames.add(USER_GROUPS_SHEET_NAME);
+    requiredSheetNames.add(CONFIG_SHEET_NAME);
+    requiredSheetNames.add(LOG_SHEET_NAME);
+    requiredSheetNames.add(TEST_LOG_SHEET_NAME);
+
+    const managedSheet = spreadsheet.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+    if (managedSheet && managedSheet.getLastRow() > 1) {
+      const userSheetNames = managedSheet.getRange(2, USER_SHEET_NAME_COL, managedSheet.getLastRow() - 1, 1).getValues();
+      if (userSheetNames) {
+          userSheetNames.forEach(function(row) {
+            if (row[0]) requiredSheetNames.add(row[0]);
+          });
+      }
+    }
+    
+    const userGroupsSheet = spreadsheet.getSheetByName(USER_GROUPS_SHEET_NAME);
+    if (userGroupsSheet && userGroupsSheet.getLastRow() > 1) {
+        const groupSheetNames = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 1).getValues();
+        if (groupSheetNames) {
+            groupSheetNames.forEach(function(row) {
+                if (row[0]) requiredSheetNames.add(row[0]);
+            });
+        }
+    }
+
+    return allSheetNames.filter(function(name) { return !requiredSheetNames.has(name); });
+
+  } catch (e) {
+    log_('Error during orphan sheet check: ' + e.message, 'ERROR');
+    return [];
+  }
+}
+
+
+/***** HELPER FUNCTIONS *****/
+
+function showToast_(message, title, timeoutSeconds) {
+  const configSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG_SHEET_NAME);
+  if (!configSheet) {
+    // If config sheet doesn't exist, show the toast by default
+    SpreadsheetApp.getActiveSpreadsheet().toast(message, title, timeoutSeconds);
+    return;
+  }
+  const settings = configSheet.getRange('A2:B').getValues();
+  let enableToasts = false; // Default to false
+  for (let i = 0; i < settings.length; i++) {
+    if (settings[i][0] === 'EnableToasts') {
+      enableToasts = settings[i][1];
+      break;
+    }
+  }
+
+  if (enableToasts === true) {
+    SpreadsheetApp.getActiveSpreadsheet().toast(message, title, timeoutSeconds);
+  }
+}
+
+function getOrCreateFolder_(folderName, folderId) {
+  if (folderId) {
+    try {
+      const folder = DriveApp.getFolderById(folderId);
+      if (folderName && folder.getName() !== folderName) {
+        throw new Error('Mismatch: Provided FolderID points to "' + folder.getName() + '"');
+      }
+      log_('Successfully found folder "' + folder.getName() + '" by ID.');
+      return folder;
+    } catch (e) {
+      log_('Could not retrieve folder by ID ' + folderId + '. Will try searching by name.', 'WARN');
+    }
+  }
+
+  if (!folderName) {
+    throw new Error('Cannot find or create folder without a name or a valid ID.');
+  }
+
+  const folders = DriveApp.getFoldersByName(folderName);
+  if (folders.hasNext()) {
+    const foundFolder = folders.next();
+    if (folders.hasNext()) {
+      throw new Error('Ambiguous: Multiple folders exist with the name "' + folderName + '". Please specify by ID.');
+    }
+    log_('Successfully found folder "' + folderName + '" by name.');
+    return foundFolder;
+  } else {
+    log_('No folder found with name "' + folderName + '". Creating it now...');
+    const newFolder = DriveApp.createFolder(folderName);
+    log_('Successfully created folder "' + folderName + '"');
+    return newFolder;
+  }
+}
+
+function getOrCreateGroup_(groupEmail, groupName) {
+  try {
+    AdminDirectory.Groups.get(groupEmail);
+    log_('Found existing group: ' + groupEmail);
+    return;
+  } catch (e) {
+    log_('Group "' + groupEmail + '" not found. Will attempt to create it.');
+  }
+
+  try {
+    const newGroup = {
+      email: groupEmail,
+      name: groupName,
+      description: 'Managed by Google Sheets script. Folder: ' + groupName.split('_')[0]
+    };
+    AdminDirectory.Groups.insert(newGroup);
+    log_('Successfully created group: ' + groupEmail);
+  } catch (e) {
+    log_('Failed to create group ' + groupEmail + '. Error: ' + e.toString(), 'ERROR');
+    throw new Error('Could not create group: ' + e.message);
+  }
+}
+
+function getOrCreateUserSheet_(sheetName) {
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = spreadsheet.getSheetByName(sheetName);
+
+  if (sheet) {
+    return sheet;
+  } else {
+    log_('User sheet "' + sheetName + '" not found. Creating it...');
+    sheet = spreadsheet.insertSheet(sheetName, spreadsheet.getSheets().length);
+    
+    const header = sheet.getRange('A1');
+    header.setValue('User Email Address');
+    header.setFontWeight('bold');
+    sheet.setFrozenRows(1);
+    
+    log_('Successfully created user sheet: "' + sheetName + '"');
+    return sheet;
+  }
+}
+
+function syncGroupMembership_(groupEmail, userSheetName) {
+  log_('Starting membership sync for group "' + groupEmail + '" from sheet "' + userSheetName + '"');
+  
+  try {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(userSheetName);
+    if (!sheet) {
+      throw new Error('User sheet "' + userSheetName + '" not found.');
+    }
+    const sheetEmails = sheet.getRange('A2:A' + sheet.getLastRow()).getValues()
+      .map(function(row) { return row[0].toString().trim().toLowerCase(); })
+      .filter(function(email) { return email && email.includes('@'); });
+    const sheetSet = new Set(sheetEmails);
+    log_('Found ' + sheetSet.size + ' emails in sheet "' + userSheetName + '"');
+
+    const groupMembers = fetchAllGroupMembers_(groupEmail);
+    const groupEmails = groupMembers.map(function(m) { return m.email.toLowerCase(); });
+    const groupSet = new Set(groupEmails);
+    log_('Found ' + groupSet.size + ' members in group "' + groupEmail + '"');
+
+    const emailsToAdd = sheetEmails.filter(function(email) { return !groupSet.has(email); });
+    const membersToRemove = groupMembers.filter(function(m) {
+      return !sheetSet.has(m.email.toLowerCase()) && m.role !== 'OWNER';
+    });
+    const emailsToRemove = membersToRemove.map(function(m) { return m.email; });
+
+    if (emailsToAdd.length === 0 && emailsToRemove.length === 0) {
+      log_('No membership changes required for group "' + groupEmail + '". Sync complete.');
+      return;
+    }
+
+    const batchRequests = [];
+    const boundary = 'batch_' + new Date().getTime();
+
+    // Create requests for adding members
+    emailsToAdd.forEach(function(email) {
+      const payload = { email: email, role: 'MEMBER' };
+      batchRequests.push({
+        method: 'POST',
+        path: '/admin/directory/v1/groups/' + groupEmail + '/members',
+        payload: JSON.stringify(payload)
+      });
+    });
+
+    // Create requests for removing members
+    emailsToRemove.forEach(function(email) {
+      batchRequests.push({
+        method: 'DELETE',
+        path: '/admin/directory/v1/groups/' + groupEmail + '/members/' + email
+      });
+    });
+
+    // Build the multipart request body
+    let requestBody = '';
+    batchRequests.forEach(function(request, i) {
+      requestBody += '--' + boundary + '\n';
+      requestBody += 'Content-Type: application/http\n';
+      requestBody += 'Content-ID: item' + i + '\n\n';
+      requestBody += request.method + ' ' + request.path + '\n';
+      if (request.payload) {
+        requestBody += 'Content-Type: application/json\n\n';
+        requestBody += request.payload + '\n';
+      } else {
+        requestBody += '\n';
+      }
+    });
+    requestBody += '--' + boundary + '--';
+
+    const options = {
+      method: 'POST',
+      contentType: 'multipart/mixed; boundary=' + boundary,
+      payload: requestBody,
+      headers: {
+        Authorization: 'Bearer ' + ScriptApp.getOAuthToken()
+      },
+      muteHttpExceptions: true // Important to parse the response manually
+    };
+
+    log_('Sending batch request with ' + emailsToAdd.length + ' additions and ' + emailsToRemove.length + ' removals for ' + groupEmail);
+    const response = UrlFetchApp.fetch('https://www.googleapis.com/batch/admin/directory_v1', options);
+    const responseCode = response.getResponseCode();
+    const responseBody = response.getContentText();
+
+    if (responseCode >= 200 && responseCode < 300) {
+      log_('Batch request processed for group ' + groupEmail + '. Parsing individual responses...');
+      const contentTypeHeader = response.getHeaders()['Content-Type'];
+      if (!contentTypeHeader || !contentTypeHeader.includes('boundary=')) {
+          throw new Error('Invalid batch response: boundary not found in Content-Type header.');
+      }
+      const responseBoundary = '--' + contentTypeHeader.split('boundary=')[1];
+      const parts = responseBody.split(responseBoundary);
+      
+      let successCount = 0;
+      let failureCount = 0;
+
+      // Start from index 1, end before the last part which is the closing boundary
+      for (let i = 1; i < parts.length - 1; i++) {
+        const part = parts[i].trim();
+        if (!part) continue;
+
+                const statusMatch = part.match(/^HTTP\/[12]\.[01] (\d{3})/m);
+        if (statusMatch) {
+            const statusCode = parseInt(statusMatch[1], 10);
+            if (statusCode >= 200 && statusCode < 300) {
+                successCount++;
+            } else {
+                failureCount++;
+                log_('A batch operation failed for group ' + groupEmail + '. Status: ' + statusCode + '. Details: ' + part, 'ERROR');
+            }
+        } else {
+            failureCount++;
+            log_('Could not parse status for a batch operation part for group ' + groupEmail + '. Part: ' + part, 'ERROR');
+        }
+      }
+      log_('Batch processing summary for ' + groupEmail + ': ' + successCount + ' successful, ' + failureCount + ' failed.');
+      if(failureCount > 0) {
+        log_('WARNING: ' + failureCount + ' membership operations failed to sync for group ' + groupEmail + '. See logs for details.', 'WARN');
+      }
+
+    } else {
+      log_('ERROR: Batch request failed for group ' + groupEmail + ' with code ' + responseCode, 'ERROR');
+      log_('Response body: ' + responseBody, 'ERROR');
+      throw new Error('Batch membership update failed with response code ' + responseCode);
+    }
+
+    log_('Membership sync complete for group "' + groupEmail + '"');
+
+  } catch (e) {
+    log_('FATAL ERROR in syncGroupMembership for group ' + groupEmail + '. Error: ' + e.toString() + ' Stack: ' + e.stack, 'ERROR');
+    throw e;
+  }
+}
+
+function fetchAllGroupMembers_(groupEmail) {
+  const members = [];
+  let pageToken;
+  try {
+      do {
+        const resp = AdminDirectory.Members.list(groupEmail, { 
+          maxResults: 200,
+          pageToken: pageToken 
+        });
+        if (resp && resp.members) {
+          members.push.apply(members, resp.members);
+        }
+        pageToken = resp ? resp.nextPageToken : null;
+      } while (pageToken);
+  } catch(e) {
+      if (e.message.includes('Resource Not Found: groupKey')) {
+          log_('Group ' + groupEmail + ' does not exist yet, returning no members.', 'WARN');
+          return [];
+      }
+      throw e;
+  }
+  return members;
+}
+
+function setFolderPermission_(folderId, groupEmail, role) {
+  try {
+    const folder = DriveApp.getFolderById(folderId);
+    const roleLower = role.toLowerCase();
+
+    switch (roleLower) {
+      case 'editor':
+        folder.addEditor(groupEmail);
+        break;
+      case 'viewer':
+        folder.addViewer(groupEmail);
+        break;
+      case 'commenter':
+        folder.addCommenter(groupEmail);
+        break;
+      default:
+        throw new Error('Unsupported role: "' + role + '"');
+    }
+    log_('Successfully set role "' + role + '" for group "' + groupEmail + '" on folder "' + folder.getName() + '"');
+
+  } catch (e) {
+    log_('Failed to set permission for group ' + groupEmail + ' on folder ' + folderId + '. Error: ' + e.toString(), 'ERROR');
+    throw new Error('Could not set folder permission: ' + e.message);
+  }
+}
+
+function setSheetUiStyles_() {
+  try {
+    const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+    if (managedSheet && managedSheet.getLastRow() >= 2) {
+        const range = managedSheet.getRange(2, USER_SHEET_NAME_COL, managedSheet.getLastRow() - 1, 4);
+        range.setBackground('#f3f3f3');
+        const protection = range.protect().setDescription('These columns are managed by the script.');
+        protection.setWarningOnly(true);
+    }
+
+    const userGroupsSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(USER_GROUPS_SHEET_NAME);
+    if (userGroupsSheet && userGroupsSheet.getLastRow() >= 2) {
+      const range = userGroupsSheet.getRange(2, 2, userGroupsSheet.getLastRow() - 1, 3);
+      range.setBackground('#f3f3f3');
+      const protection = range.protect().setDescription('These columns are managed by the script.');
+      protection.setWarningOnly(true);
+    }
+  } catch (e) {
+    log_('Could not apply UI styles. Error: ' + e.message, 'WARN');
+  }
+}
+
+function generateGroupEmail_(baseName) {
+  const domain = Session.getActiveUser().getEmail().split('@')[1];
+  if (!domain) {
+    throw new Error('Could not determine user domain.');
+  }
+  
+  const sanitizedName = baseName
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]/g, '');
+
+  return sanitizedName + '@' + domain;
+}
+
+
+/***** DEVELOPER-ONLY TEST FUNCTIONS *****/
+
+function runManualAccessTest() {
+  SCRIPT_EXECUTION_MODE = 'TEST';
+  try {
+    const ui = SpreadsheetApp.getUi();
+    
+    const folderName = ui.prompt('Test - Step 1/4: Folder Name', 'Enter a name for a new test folder to be created.', ui.ButtonSet.OK_CANCEL);
+    if (folderName.getSelectedButton() !== ui.Button.OK || !folderName.getResponseText()) return ui.alert('Test cancelled.');
+    const testFolderName = folderName.getResponseText();
+
+    const role = ui.prompt('Test - Step 2/4: Role', 'Enter the role to test (e.g., Editor, Viewer).', ui.ButtonSet.OK_CANCEL);
+    if (role.getSelectedButton() !== ui.Button.OK || !role.getResponseText()) return ui.alert('Test cancelled.');
+    const testRole = role.getResponseText();
+
+    const email = ui.prompt('Test - Step 3/4: Test Email', 'Enter a REAL email address you can access for testing (e.g., a personal Gmail).', ui.ButtonSet.OK_CANCEL);
+    if (email.getSelectedButton() !== ui.Button.OK || !email.getResponseText()) return ui.alert('Test cancelled.');
+    const testEmail = email.getResponseText().trim().toLowerCase();
+
+    ui.alert('Step 4/4: Initial Setup', 'The script will now add this configuration to the ManagedFolders sheet and run the sync to create the folder, group, and user sheet. Click OK to proceed.', ui.ButtonSet.OK);
+    
+    const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+    const testRowIndex = managedSheet.getLastRow() + 1;
+    managedSheet.getRange(testRowIndex, FOLDER_NAME_COL).setValue(testFolderName);
+    managedSheet.getRange(testRowIndex, ROLE_COL).setValue(testRole);
+    
+    fullSync(); // Changed from syncAll()
+
+    const userSheetName = managedSheet.getRange(testRowIndex, USER_SHEET_NAME_COL).getValue();
+    const userSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(userSheetName);
+    if (!userSheet) return ui.alert('Test failed: Could not find the created user sheet: ' + userSheetName);
+    
+    userSheet.getRange('A2').setValue(testEmail);
+    ui.alert('Granting Access', 'The test email has been added to the ' + userSheetName + ' sheet. The script will now sync again to grant folder access.', ui.ButtonSet.OK);
+    fullSync(); // Changed from syncAll()
+
+    const folderId = managedSheet.getRange(testRowIndex, FOLDER_ID_COL).getValue();
+    const folderUrl = DriveApp.getFolderById(folderId).getUrl();
+    const verification1 = ui.alert('Verify Access', 'Please open an Incognito Window, log in as ' + testEmail + ', and try to open this link:
+
+' + folderUrl + '
+
+Did you get access?', ui.ButtonSet.YES_NO);
+
+    if (verification1 !== ui.Button.YES) {
+      ui.alert('Test aborted. Please review the logs and configuration.');
+      return;
+    }
+
+    userSheet.getRange('A2').clearContent();
+    ui.alert('Revoking Access', 'The test email has been removed from the sheet. The script will now sync again to revoke folder access.', ui.ButtonSet.OK);
+    fullSync(); // Changed from syncAll()
+
+    const verification2 = ui.alert('Verify Revoked Access', 'Please go back to your Incognito Window and refresh the folder page. You should see a 'permission denied' error.
+
+Was access revoked?', ui.ButtonSet.YES_NO);
+
+    if (verification2 === ui.Button.YES) {
+      ui.alert('Test Complete: SUCCESS!', 'The user was successfully granted and revoked access.', ui.ButtonSet.OK);
+    } else {
+      ui.alert('Test Complete: FAILURE!', 'Access was not revoked as expected. This may be due to Google Drive permission propagation delays. Please wait a few minutes and check again.', ui.ButtonSet.OK);
+    }
+
+    const cleanup = ui.alert('Cleanup', 'Do you want to remove the test row from ManagedFolders and delete the test user sheet (' + userSheetName + ')?', ui.ButtonSet.YES_NO);
+    if (cleanup === ui.Button.YES) {
+      managedSheet.deleteRow(testRowIndex);
+      SpreadsheetApp.getActiveSpreadsheet().deleteSheet(userSheet);
+      ui.alert('Cleanup complete.');
+    }
+  } finally {
+    SCRIPT_EXECUTION_MODE = 'DEFAULT';
+  }
+}
+
+/***** STRESS TEST FUNCTIONS *****/
+
+/**
+ * A function to test the script's performance with many folders and users.
+ */
+function runStressTest() {
+  SCRIPT_EXECUTION_MODE = 'TEST';
+  try {
+    const ui = SpreadsheetApp.getUi();
+
+    // --- Step 1: Get Test Parameters ---
+    const numFoldersStr = ui.prompt('Stress Test - Step 1/4', 'Enter the number of temporary folders to create (e.g., 10).', ui.ButtonSet.OK_CANCEL);
+    if (numFoldersStr.getSelectedButton() !== ui.Button.OK || !numFoldersStr.getResponseText()) return ui.alert('Test cancelled.');
+    const numFolders = parseInt(numFoldersStr.getResponseText(), 10);
+
+    const numUsersStr = ui.prompt('Stress Test - Step 2/4', 'Enter the number of test users to create PER FOLDER (e.g., 200).', ui.ButtonSet.OK_CANCEL);
+    if (numUsersStr.getSelectedButton() !== ui.Button.OK || !numUsersStr.getResponseText()) return ui.alert('Test cancelled.');
+    const numUsers = parseInt(numUsersStr.getResponseText(), 10);
+
+    const baseEmailStr = ui.prompt('Stress Test - Step 3/4', 'Enter a base email address to generate test users (e.g., your.name@gmail.com).', ui.ButtonSet.OK_CANCEL);
+    if (baseEmailStr.getSelectedButton() !== ui.Button.OK || !baseEmailStr.getResponseText()) return ui.alert('Test cancelled.');
+    const baseEmail = baseEmailStr.getResponseText().trim();
+    const emailParts = baseEmail.split('@');
+    if (emailParts.length !== 2) return ui.alert('Invalid email address.');
+
+    ui.alert('Stress Test - Step 4/4', 
+            'The script will now create ' + numFolders + ' test folders and prepare ' + numUsers + ' users for each.
+
+This will take several steps. Please be patient.', 
+            ui.ButtonSet.OK);
+
+    // --- Step 2: Setup Test Data ---
+    const testRunId = new Date().getTime(); // Unique ID for this test run
+    const folderNames = [];
+    for (let i = 1; i <= numFolders; i++) {
+      folderNames.push('StressTestFolder_' + testRunId + '_' + i);
+    }
+
+    const userEmails = [];
+    for (let i = 1; i <= numUsers; i++) {
+      userEmails.push(emailParts[0] + '+testuser' + testRunId + i + '@' + emailParts[1]);
+    }
+
+    const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+    const startRow = managedSheet.getLastRow() + 1;
+    const newConfig = folderNames.map(name => [name, '', 'Editor']);
+    managedSheet.getRange(startRow, 1, newConfig.length, 3).setValues(newConfig);
+    SpreadsheetApp.flush();
+    
+    // --- Step 3: Initial Sync to Create Infrastructure ---
+    ui.alert('Setup Phase 1 Complete', 'Test folders have been added to the sheet. The script will now run a sync to create the necessary folders, groups, and user sheets.', ui.ButtonSet.OK);
+    fullSync();
+
+    // --- Step 4: Populate User Sheets ---
+    ui.alert('Setup Phase 2 Complete', 'The script will now populate all of the new user sheets with the test user emails.', ui.ButtonSet.OK);
+    const userSheetNames = managedSheet.getRange(startRow, USER_SHEET_NAME_COL, numFolders, 1).getValues().flat();
+    const userEmailsForSheet = userEmails.map(e => [e]); // Format for setting range values
+
+    userSheetNames.forEach(function(sheetName) {
+      const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+      if (sheet) {
+        sheet.getRange(2, 1, userEmailsForSheet.length, 1).setValues(userEmailsForSheet);
+      }
+    });
+
+    // --- Step 5: Run the Main Stress Test Sync ---
+    ui.alert('Setup Complete. Starting Stress Test', 'All test data is in place. The script will now run the main sync and time its execution.', ui.ButtonSet.OK);
+    const startTime = new Date();
+    fullSync();
+    const endTime = new Date();
+    const durationSeconds = (endTime.getTime() - startTime.getTime()) / 1000;
+
+    ui.alert('Stress Test Complete!', 'The sync process finished in ' + durationSeconds + ' seconds.', ui.ButtonSet.OK);
+
+    // --- Step 6: Cleanup ---
+    const cleanup = ui.alert('Cleanup', 'Do you want to remove all test data (folders, groups, sheets, and configuration rows)?', ui.ButtonSet.YES_NO);
+    if (cleanup === ui.Button.YES) {
+      ui.alert('Cleanup in Progress', 'This may take a few moments. Please wait for the confirmation alert.', ui.ButtonSet.OK);
+      const groupEmails = managedSheet.getRange(startRow, GROUP_EMAIL_COL, numFolders, 1).getValues().flat();
+      const folderIds = managedSheet.getRange(startRow, FOLDER_ID_COL, numFolders, 1).getValues().flat();
+
+      // Delete rows from sheet first
+      managedSheet.deleteRows(startRow, numFolders);
+
+      userSheetNames.forEach(function(sheetName) {
+        const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+        if (sheet) SpreadsheetApp.getActiveSpreadsheet().deleteSheet(sheet);
+      });
+
+      groupEmails.forEach(function(groupEmail) { 
+        try { AdminDirectory.Groups.remove(groupEmail); } catch (e) { log_('Could not remove group ' + groupEmail + ': ' + e.message, 'WARN'); }
+      });
+
+      folderIds.forEach(function(folderId) { 
+        try { DriveApp.getFolderById(folderId).setTrashed(true); } catch (e) { log_('Could not trash folder ' + folderId + ': ' + e.message, 'WARN'); }
+      });
+
+      ui.alert('Cleanup Complete!');
+    }
+  } finally {
+    SCRIPT_EXECUTION_MODE = 'DEFAULT';
+  }
+}
+
+function cleanupStressTestData() {
+  SCRIPT_EXECUTION_MODE = 'TEST';
+  try {
+    const ui = SpreadsheetApp.getUi();
+    const response = ui.alert('Are you sure you want to delete all stress test data?', 'This will delete all folders, groups, and sheets with the "StressTestFolder_" prefix.', ui.ButtonSet.YES_NO);
+    if (response !== ui.Button.YES) {
+      return;
+    }
+
+    ui.alert('Cleanup in Progress', 'This may take a few moments. Please wait for the confirmation alert.', ui.ButtonSet.OK);
+
+    // Clean up sheets
+    const allSheets = SpreadsheetApp.getActiveSpreadsheet().getSheets();
+    allSheets.forEach(function(sheet) {
+      if (sheet.getName().startsWith('StressTestFolder_')) {
+        SpreadsheetApp.getActiveSpreadsheet().deleteSheet(sheet);
+      }
+    });
+
+    // Clean up groups
+    let pageToken;
+    let allGroups = [];
+    do {
+      const result = AdminDirectory.Groups.list({
+        customer: 'my_customer',
+        maxResults: 200,
+        pageToken: pageToken
+      });
+      allGroups = allGroups.concat(result.groups);
+      pageToken = result.nextPageToken;
+    } while (pageToken);
+
+    allGroups.forEach(function(group) {
+      if (group.name.startsWith('StressTestFolder_')) {
+        try {
+          AdminDirectory.Groups.remove(group.email);
+        } catch (e) {
+          log_('Could not remove group ' + group.email + ': ' + e.message, 'WARN');
+        }
+      }
+    });
+
+    // Clean up folders
+    const folders = DriveApp.getFolders();
+    while (folders.hasNext()) {
+      const folder = folders.next();
+      if (folder.getName().startsWith('StressTestFolder_')) {
+        try {
+          folder.setTrashed(true);
+        } catch (e) {
+          log_('Could not trash folder ' + folder.getId() + ': ' + e.message, 'WARN');
+        }
+      }
+    }
+
+    ui.alert('Cleanup Complete!');
+  } finally {
+    SCRIPT_EXECUTION_MODE = 'DEFAULT';
+  }
+}
+
+function cleanupManualTestData() {
+  SCRIPT_EXECUTION_MODE = 'TEST';
+  try {
+    const ui = SpreadsheetApp.getUi();
+    const folderNamePrompt = ui.prompt('Enter the name of the manual test folder to clean up:');
+    if (folderNamePrompt.getSelectedButton() !== ui.Button.OK || !folderNamePrompt.getResponseText()) {
+      return;
+    }
+    const folderName = folderNamePrompt.getResponseText();
+
+    const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+    const data = managedSheet.getDataRange().getValues();
+    let rowIndexToDelete = -1;
+    let folderId, groupEmail, userSheetName;
+
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][FOLDER_NAME_COL - 1] === folderName) {
+        rowIndexToDelete = i + 1;
+        folderId = data[i][FOLDER_ID_COL - 1];
+        groupEmail = data[i][GROUP_EMAIL_COL - 1];
+        userSheetName = data[i][USER_SHEET_NAME_COL - 1];
+        break;
+      }
+    }
+
+    if (rowIndexToDelete === -1) {
+      ui.alert('Folder not found in the ManagedFolders sheet.');
+      return;
+    }
+
+    const response = ui.alert('Are you sure you want to delete the test data for folder "' + folderName + '"?', 'This will delete the folder, group, and sheet.', ui.ButtonSet.YES_NO);
+    if (response !== ui.Button.YES) {
+      return;
+    }
+
+    ui.alert('Cleanup in Progress', 'This may take a few moments. Please wait for the confirmation alert.', ui.ButtonSet.OK);
+
+    // Delete folder
+    if (folderId) {
+      try {
+        DriveApp.getFolderById(folderId).setTrashed(true);
+      } catch (e) {
+        log_('Could not trash folder ' + folderId + ': ' + e.message, 'WARN');
+      }
+    }
+
+    // Delete group
+    if (groupEmail) {
+      try {
+        AdminDirectory.Groups.remove(groupEmail);
+      } catch (e) {
+        log_('Could not remove group ' + groupEmail + ': ' + e.message, 'WARN');
+      }
+    }
+
+    // Delete sheet
+    if (userSheetName) {
+      const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(userSheetName);
+      if (sheet) {
+        SpreadsheetApp.getActiveSpreadsheet().deleteSheet(sheet);
+      }
+    }
+
+    // Delete row
+    managedSheet.deleteRow(rowIndexToDelete);
+
+    ui.alert('Cleanup Complete!');
+  } finally {
+    SCRIPT_EXECUTION_MODE = 'DEFAULT';
+  }
+}
+
+function getConfiguration_() {
+  const cache = CacheService.getScriptCache();
+  const cachedConfig = cache.get('config');
+  if (cachedConfig) {
+    return JSON.parse(cachedConfig);
+  }
+
+  const configSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG_SHEET_NAME);
+  if (!configSheet) return {};
+
+  const lastRow = configSheet.getLastRow();
+  if (lastRow < 2) return {};
+
+  const data = configSheet.getRange(2, 1, lastRow - 1, 2).getValues();
+  const config = data.reduce((acc, row) => {
+    if (row[0]) {
+      acc[row[0]] = row[1];
+    }
+    return acc;
+  }, {});
+
+  cache.put('config', JSON.stringify(config), 300); // Cache for 5 minutes
+  return config;
+}
+
+
+function getMaxLogLength_() {
+  const config = getConfiguration_();
+  const maxLogLength = config['MaxLogLength'];
+  if (maxLogLength) {
+    const value = parseInt(maxLogLength, 10);
+    if (!isNaN(value) && value > 0) {
+      return value;
+    }
+  }
+  return DEFAULT_MAX_LOG_LENGTH;
+}
+
+function log_(message, severity = 'INFO') {
+  // 1. Write to the Google Sheet log
+  const sheetName = (SCRIPT_EXECUTION_MODE === 'TEST') ? TEST_LOG_SHEET_NAME : LOG_SHEET_NAME;
+  const logSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+  if (logSheet) {
+    const timestamp = Utilities.formatDate(new Date(), SpreadsheetApp.getActive().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+    logSheet.appendRow([timestamp, '[' + severity.toUpperCase() + '] ' + message]);
+    
+    // Trim the log sheet if it's too long
+    const maxLength = getMaxLogLength_();
+    const lastRow = logSheet.getLastRow();
+    const headerRows = 1;
+    const rowsToDelete = lastRow - headerRows - maxLength;
+    if (rowsToDelete > 0) {
+      logSheet.deleteRows(headerRows + 1, rowsToDelete);
+    }
+  }
+
+  // 2. Write to Google Cloud Logging if enabled
+  const config = getConfiguration_();
+  const gcpLoggingEnabled = config['EnableGCPLogging'];
+
+  if (gcpLoggingEnabled === true || gcpLoggingEnabled === 'TRUE') {
+    const severityUpper = severity.toUpperCase();
+    switch (severityUpper) {
+      case 'ERROR':
+        console.error(message);
+        break;
+      case 'WARN':
+        console.warn(message);
+        break;
+      case 'INFO':
+        console.info(message);
+        break;
+      default:
+        console.log(message);
+        break;
+    }
+  }
+}
+
+function clearAllLogs() {
+  const ui = SpreadsheetApp.getUi();
+  const response = ui.alert('Are you sure you want to clear all logs?', 'This will delete all data in the "Log" and "TestLog" sheets.', ui.ButtonSet.YES_NO);
+  if (response !== ui.Button.YES) {
+    return;
+  }
+
+  const logSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(LOG_SHEET_NAME);
+  if (logSheet) {
+    logSheet.getRange('A2:B').clearContent();
+  }
+
+  const testLogSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(TEST_LOG_SHEET_NAME);
+  if (testLogSheet) {
+    testLogSheet.getRange('A2:B').clearContent();
+  }
+
+  ui.alert('Logs cleared.');
+}
+
+function sendErrorNotification_(errorMessage) {
+  try {
+    const configSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG_SHEET_NAME);
+    if (!configSheet) return;
+
+    const settings = configSheet.getRange('A2:B3').getValues();
+    const enableEmailNotifications = settings[0][1];
+    const notificationEmailAddress = settings[1][1];
+
+    if (enableEmailNotifications === true && notificationEmailAddress) {
+      MailApp.sendEmail(notificationEmailAddress, 'Permissions Manager Script - Fatal Error', errorMessage);
+    }
+  } catch (e) {
+    log_('Failed to send error notification email: ' + e.toString(), 'ERROR');
+  }
+}
+
+function getGitHubRepoUrl_() {
+    const configSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG_SHEET_NAME);
+    if (configSheet) {
+        const settings = configSheet.getRange('A2:B').getValues();
+        for (let i = 0; i < settings.length; i++) {
+            if (settings[i][0] === 'GitHubRepoURL') {
+                return settings[i][1];
+            }
+        }
+    }
+    return null;
+}
+
+function openUserGuide() {
+    const repoUrl = getGitHubRepoUrl_();
+    if (repoUrl) {
+        openUrl(repoUrl + '/blob/main/docs/USER_GUIDE.md');
+    }
+}
+
+function openTestingGuide() {
+    const repoUrl = getGitHubRepoUrl_();
+    if (repoUrl) {
+        openUrl(repoUrl + '/blob/main/TESTING.md');
+    }
+}
+
+function openReadme() {
+    const repoUrl = getGitHubRepoUrl_();
+    if (repoUrl) {
+        openUrl(repoUrl + '/blob/main/README.md');
+    }
+}
+
+function openUrl(url) {
+  log_('Attempting to open URL: ' + url);
+  const html = '<html><body><a href="' + url + '" target="_blank">Click here to open the documentation</a><br/><br/><input type="button" value="Close" onclick="google.script.host.close()" /></body></html>';
+  const ui = HtmlService.createHtmlOutput(html).setTitle('Open Documentation').setWidth(300);
+  SpreadsheetApp.getUi().showSidebar(ui);
+}
+
+function onInstall() {
+    onOpen();
+}
+
 
 function fullSync() {
   setupControlSheets_(); // Ensure control sheets exist
@@ -1066,34 +2047,81 @@ function cleanupManualTestData() {
   }
 }
 
-function getMaxLogLength_() {
+function getConfiguration_() {
+  const cache = CacheService.getScriptCache();
+  const cachedConfig = cache.get('config');
+  if (cachedConfig) {
+    return JSON.parse(cachedConfig);
+  }
+
   const configSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG_SHEET_NAME);
-  if (configSheet) {
-    const settings = configSheet.getRange('A2:B' + configSheet.getLastRow()).getValues();
-    for (let i = 0; i < settings.length; i++) {
-      if (settings[i][0] === 'MaxLogLength') {
-        const value = parseInt(settings[i][1], 10);
-        if (!isNaN(value) && value > 0) {
-          return value;
-        }
-        break;
-      }
+  if (!configSheet) return {};
+
+  const lastRow = configSheet.getLastRow();
+  if (lastRow < 2) return {};
+
+  const data = configSheet.getRange(2, 1, lastRow - 1, 2).getValues();
+  const config = data.reduce((acc, row) => {
+    if (row[0]) {
+      acc[row[0]] = row[1];
+    }
+    return acc;
+  }, {});
+
+  cache.put('config', JSON.stringify(config), 300); // Cache for 5 minutes
+  return config;
+}
+
+
+function getMaxLogLength_() {
+  const config = getConfiguration_();
+  const maxLogLength = config['MaxLogLength'];
+  if (maxLogLength) {
+    const value = parseInt(maxLogLength, 10);
+    if (!isNaN(value) && value > 0) {
+      return value;
     }
   }
   return DEFAULT_MAX_LOG_LENGTH;
 }
 
-function log_(message) {
+function log_(message, severity = 'INFO') {
+  // 1. Write to the Google Sheet log
   const sheetName = (SCRIPT_EXECUTION_MODE === 'TEST') ? TEST_LOG_SHEET_NAME : LOG_SHEET_NAME;
   const logSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
   if (logSheet) {
-    logSheet.appendRow([new Date(), message]);
+    const timestamp = Utilities.formatDate(new Date(), SpreadsheetApp.getActive().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+    logSheet.appendRow([timestamp, '[' + severity.toUpperCase() + '] ' + message]);
+    
+    // Trim the log sheet if it's too long
     const maxLength = getMaxLogLength_();
     const lastRow = logSheet.getLastRow();
     const headerRows = 1;
     const rowsToDelete = lastRow - headerRows - maxLength;
     if (rowsToDelete > 0) {
       logSheet.deleteRows(headerRows + 1, rowsToDelete);
+    }
+  }
+
+  // 2. Write to Google Cloud Logging if enabled
+  const config = getConfiguration_();
+  const gcpLoggingEnabled = config['EnableGCPLogging'];
+
+  if (gcpLoggingEnabled === true || gcpLoggingEnabled === 'TRUE') {
+    const severityUpper = severity.toUpperCase();
+    switch (severityUpper) {
+      case 'ERROR':
+        console.error(message);
+        break;
+      case 'WARN':
+        console.warn(message);
+        break;
+      case 'INFO':
+        console.info(message);
+        break;
+      default:
+        console.log(message);
+        break;
     }
   }
 }

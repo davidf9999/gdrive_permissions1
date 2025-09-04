@@ -129,3 +129,20 @@ If you used the automated provisioning tool, a `teardown.sh` script is provided 
 ## Advanced Features
 
 This project also includes features for testing and logging, which are explained in more detail in [User Guide](./docs/USER_GUIDE.md) and [Testing](./docs/TESTING.md).
+
+### Advanced Logging with Google Cloud
+
+In addition to logging to a sheet, the script can be configured to send logs directly to **Google Cloud Logging (GCL)**. This provides a much more powerful, searchable, and persistent logging solution, which is highly recommended for production environments.
+
+**Benefits:**
+*   **Centralized Logging:** View logs from all script executions in one place.
+*   **Advanced Filtering:** Search and filter logs by severity (INFO, WARN, ERROR), time, or keyword.
+*   **Log-based Metrics & Alerts:** Create alerts for specific errors (e.g., notify you when a "FATAL ERROR" occurs).
+*   **Long-term Retention:** Store logs for extended periods, beyond the limits of a Google Sheet.
+
+**How to Enable:**
+
+1.  **Link to a GCP Project:** First, your Apps Script project **must** be linked to a standard Google Cloud Project. Follow the steps in the [Upgrading to a Production Environment](#upgrading-to-a-production-environment) section to do this.
+2.  **Enable in the Sheet:** In your Google Sheet, go to the `Config` sheet and change the value for `EnableGCPLogging` from `FALSE` to `TRUE`.
+
+Once enabled, all logs will be sent to Google Cloud Logging. You can view them by navigating to the [Logs Explorer](https://console.cloud.google.com/logs/viewer) in the Google Cloud Console for your linked project.
