@@ -5,6 +5,7 @@ const LOG_SHEET_NAME = 'Log';
 const TEST_LOG_SHEET_NAME = 'TestLog';
 const USER_GROUPS_SHEET_NAME = 'UserGroups';
 const CONFIG_SHEET_NAME = 'Config';
+const DEFAULT_MAX_LOG_LENGTH = 10000;
 
 // Column mapping for the ManagedFolders sheet
 const FOLDER_NAME_COL = 1;
@@ -108,8 +109,18 @@ function setupControlSheets_() {
     configSheet.getRange('A3:B3').setValues([['NotificationEmailAddress', '']]);
     configSheet.getRange('A4:B4').setValues([['EnableToasts', 'FALSE']]);
     configSheet.getRange('A5:B5').setValues([['GitHubRepoURL', 'https://github.com/davidf9999/gdrive_permissions1']]);
+    configSheet.getRange('A6:B6').setValues([['MaxLogLength', DEFAULT_MAX_LOG_LENGTH]]);
     configSheet.setFrozenRows(1);
     log_('Created "Config" sheet.');
+  }
+
+  if (configSheet) {
+    const settings = configSheet.getRange('A:A').getValues().flat();
+    if (settings.indexOf('MaxLogLength') === -1) {
+      const lastRow = configSheet.getLastRow() + 1;
+      configSheet.getRange(lastRow, 1, 1, 2).setValues([['MaxLogLength', DEFAULT_MAX_LOG_LENGTH]]);
+      log_('Added "MaxLogLength" setting with default ' + DEFAULT_MAX_LOG_LENGTH + '.');
+    }
   }
 }
 
@@ -1055,11 +1066,35 @@ function cleanupManualTestData() {
   }
 }
 
+function getMaxLogLength_() {
+  const configSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG_SHEET_NAME);
+  if (configSheet) {
+    const settings = configSheet.getRange('A2:B' + configSheet.getLastRow()).getValues();
+    for (let i = 0; i < settings.length; i++) {
+      if (settings[i][0] === 'MaxLogLength') {
+        const value = parseInt(settings[i][1], 10);
+        if (!isNaN(value) && value > 0) {
+          return value;
+        }
+        break;
+      }
+    }
+  }
+  return DEFAULT_MAX_LOG_LENGTH;
+}
+
 function log_(message) {
   const sheetName = (SCRIPT_EXECUTION_MODE === 'TEST') ? TEST_LOG_SHEET_NAME : LOG_SHEET_NAME;
   const logSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
   if (logSheet) {
     logSheet.appendRow([new Date(), message]);
+    const maxLength = getMaxLogLength_();
+    const lastRow = logSheet.getLastRow();
+    const headerRows = 1;
+    const rowsToDelete = lastRow - headerRows - maxLength;
+    if (rowsToDelete > 0) {
+      logSheet.deleteRows(headerRows + 1, rowsToDelete);
+    }
   }
 }
 
