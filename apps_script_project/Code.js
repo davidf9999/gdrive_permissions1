@@ -223,6 +223,30 @@ function syncUserGroups() {
         return;
     }
     
+    // If Admin SDK is unavailable, mark all rows as skipped and exit
+    if (shouldSkipGroupOps_()) {
+      log_('Admin SDK (Admin Directory) not available. Skipping syncUserGroups.', 'WARN');
+      const dataRange = userGroupsSheet.getRange(2, 1, lastRow - 1, 4);
+      const data = dataRange.getValues();
+      for (let i = 0; i < data.length; i++) {
+        const rowIndex = i + 2;
+        const statusCell = userGroupsSheet.getRange(rowIndex, 4);
+        const lastSyncedCell = userGroupsSheet.getRange(rowIndex, 3);
+        const groupName = data[i][0];
+        let groupEmail = data[i][1];
+        if (groupName && !groupEmail) {
+          groupEmail = generateGroupEmail_(groupName);
+          userGroupsSheet.getRange(rowIndex, 2).setValue(groupEmail);
+        }
+        if (groupName) {
+          lastSyncedCell.setValue(Utilities.formatDate(new Date(), SpreadsheetApp.getActive().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss'));
+          statusCell.setValue('SKIPPED (No Admin SDK)');
+        }
+      }
+      SpreadsheetApp.getUi().alert('User group sync skipped: Admin Directory service not available.');
+      return;
+    }
+    
     const dataRange = userGroupsSheet.getRange(2, 1, lastRow - 1, 4); // Get range for all data rows
     const data = dataRange.getValues();
 
@@ -390,8 +414,16 @@ function processRow_(rowIndex) {
     sheet.getRange(rowIndex, GROUP_EMAIL_COL).setValue(groupEmail);
 
     getOrCreateUserSheet_(userSheetName);
-    getOrCreateGroup_(groupEmail, userSheetName);
+    
+    // Skip group operations gracefully if Admin SDK is unavailable
+    if (shouldSkipGroupOps_()) {
+      log_('Skipping group operations for row ' + rowIndex + ' (Admin SDK not available).', 'WARN');
+      sheet.getRange(rowIndex, LAST_SYNCED_COL).setValue(Utilities.formatDate(new Date(), SpreadsheetApp.getActive().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss'));
+      statusCell.setValue('SKIPPED (No Admin SDK)');
+      return;
+    }
 
+    getOrCreateGroup_(groupEmail, userSheetName);
     setFolderPermission_(folder.getId(), groupEmail, role);
     syncGroupMembership_(groupEmail, userSheetName);
 
@@ -719,6 +751,26 @@ function assertAdminDirectoryAvailable_() {
   }
 }
 
+function isAdminDirectoryAvailable_() {
+  try { return typeof AdminDirectory !== 'undefined'; } catch (e) { return false; }
+}
+
+function isPersonalGmail_() {
+  try {
+    const email = Session.getActiveUser().getEmail();
+    const domain = email && email.indexOf('@') !== -1 ? email.split('@')[1].toLowerCase() : '';
+    return domain === 'gmail.com' || domain === 'googlemail.com';
+  } catch (e) {
+    return false;
+  }
+}
+
+function shouldSkipGroupOps_() {
+  // Skip group operations if Admin Directory advanced service is not available.
+  // Personal Gmail typically cannot use Admin SDK.
+  return !isAdminDirectoryAvailable_();
+}
+
 function setFolderPermission_(folderId, groupEmail, role) {
   try {
     const folder = DriveApp.getFolderById(folderId);
@@ -787,6 +839,10 @@ function generateGroupEmail_(baseName) {
 function runManualAccessTest() {
   SCRIPT_EXECUTION_MODE = 'TEST';
   try {
+    if (shouldSkipGroupOps_()) {
+      SpreadsheetApp.getUi().alert('Manual Access Test requires the Admin Directory service (Admin SDK). Please enable it or run on a Google Workspace domain. Test aborted.');
+      return;
+    }
     const ui = SpreadsheetApp.getUi();
     
     const folderName = ui.prompt('Test - Step 1/4: Folder Name', 'Enter a name for a new test folder to be created.', ui.ButtonSet.OK_CANCEL);
@@ -858,6 +914,10 @@ function runManualAccessTest() {
 function runStressTest() {
   SCRIPT_EXECUTION_MODE = 'TEST';
   try {
+    if (shouldSkipGroupOps_()) {
+      SpreadsheetApp.getUi().alert('Stress Test requires the Admin Directory service (Admin SDK). Please enable it or run on a Google Workspace domain. Test aborted.');
+      return;
+    }
     const ui = SpreadsheetApp.getUi();
 
     // --- Step 1: Get Test Parameters ---
@@ -957,6 +1017,10 @@ function runStressTest() {
 function cleanupStressTestData() {
   SCRIPT_EXECUTION_MODE = 'TEST';
   try {
+    if (shouldSkipGroupOps_()) {
+      SpreadsheetApp.getUi().alert('Cleanup requires the Admin Directory service (Admin SDK). Please enable it or run on a Google Workspace domain. Aborting.');
+      return;
+    }
     const ui = SpreadsheetApp.getUi();
     const response = ui.alert('Are you sure you want to delete all stress test data?', 'This will delete all folders, groups, and sheets with the "StressTestFolder_" prefix.', ui.ButtonSet.YES_NO);
     if (response !== ui.Button.YES) {
@@ -1018,6 +1082,10 @@ function cleanupStressTestData() {
 function cleanupManualTestData() {
   SCRIPT_EXECUTION_MODE = 'TEST';
   try {
+    if (shouldSkipGroupOps_()) {
+      SpreadsheetApp.getUi().alert('Cleanup requires the Admin Directory service (Admin SDK). Please enable it or run on a Google Workspace domain. Aborting.');
+      return;
+    }
     const ui = SpreadsheetApp.getUi();
     const folderNamePrompt = ui.prompt('Enter the name of the manual test folder to clean up:');
     if (folderNamePrompt.getSelectedButton() !== ui.Button.OK || !folderNamePrompt.getResponseText()) {
@@ -1248,231 +1316,6 @@ function onInstall() {
     onOpen();
 }
 
-
-function fullSync() {
-  setupControlSheets_(); // Ensure control sheets exist
-  const lock = LockService.getScriptLock();
-  if (!lock.tryLock(15000)) {
-    SpreadsheetApp.getUi().alert('Sync is already in progress. Please wait a few minutes and try again.');
-    return;
-  }
-
-  let summaryMessage = 'Sync process complete.';
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-
-  try {
-    showToast_('Starting full synchronization...', 'Full Sync', -1);
-    log_('Starting full synchronization...');
-
-    // 1. Sync Admins
-    syncAdmins();
-
-    // 2. Sync User Groups
-    syncUserGroups();
-
-    // 3. Process Managed Folders
-    processManagedFolders_();
-
-    // Check for any orphan sheets
-    const orphanSheets = checkForOrphanSheets_();
-    if (orphanSheets && orphanSheets.length > 0) {
-      const orphanMessage = 'Warning: Found orphan sheets that are not in the configuration: ' + orphanSheets.join(', ');
-      summaryMessage += '\n\n' + orphanMessage;
-      log_(orphanMessage);
-    }
-
-    showToast_('Full synchronization complete!', 'Full Sync', 5);
-    log_('Full synchronization completed.');
-    SpreadsheetApp.getUi().alert(summaryMessage + '\n\nCheck the \'Status\' column in the \'ManagedFolders\' sheet for details.');
-
-  } catch (e) {
-    const errorMessage = 'FATAL ERROR in fullSync: ' + e.toString() + '\n' + e.stack;
-    log_(errorMessage);
-    showToast_('Full sync failed with a fatal error.', 'Full Sync', 5);
-    SpreadsheetApp.getUi().alert('A fatal error occurred: ' + e.message);
-    sendErrorNotification_(errorMessage);
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-
-/***** CORE LOGIC *****/
-
-/**
- * Reads the ManagedFolders sheet and processes each row.
- */
-function processManagedFolders_() {
-  log_('Starting processing of ManagedFolders sheet...');
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
-  if (!sheet) {
-    SpreadsheetApp.getUi().alert('CRITICAL: Configuration sheet named "' + MANAGED_FOLDERS_SHEET_NAME + '" not found. Aborting.');
-    return;
-  }
-
-  setSheetUiStyles_();
-
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 2) {
-      log_('No data rows to process in ManagedFolders sheet.');
-      return;
-  }
-
-  // Loop through each row (starting from row 2 to skip header)
-  for (let i = 2; i <= lastRow; i++) {
-    showToast_('Processing row ' + i + ' of ' + lastRow + '...', 'Sync Progress', 10);
-    try {
-      processRow_(i);
-    } catch (e) {
-      log_('Error processing row ' + i + ': ' + e.toString());
-    }
-  }
-  log_('Finished processing all rows.');
-}
-
-/**
- * Processes a single row from the ManagedFolders sheet.
- * @param {number} rowIndex The index of the row to process.
- */
-function processRow_(rowIndex) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
-  const statusCell = sheet.getRange(rowIndex, STATUS_COL);
-  
-  try {
-    statusCell.setValue('Processing...');
-    
-    let folderName = sheet.getRange(rowIndex, FOLDER_NAME_COL).getValue();
-    let folderId = sheet.getRange(rowIndex, FOLDER_ID_COL).getValue();
-    let role = sheet.getRange(rowIndex, ROLE_COL).getValue();
-
-    if (!folderName && !folderId) {
-      throw new Error('Both FolderName and FolderID are blank.');
-    }
-    if (!role) {
-      throw new Error('Role is not specified.');
-    }
-
-    const folder = getOrCreateFolder_(folderName, folderId);
-    sheet.getRange(rowIndex, FOLDER_ID_COL).setValue(folder.getId());
-    sheet.getRange(rowIndex, FOLDER_NAME_COL).setValue(folder.getName());
-
-    const userSheetName = folder.getName() + '_' + role;
-    const groupEmail = generateGroupEmail_(userSheetName);
-    sheet.getRange(rowIndex, USER_SHEET_NAME_COL).setValue(userSheetName);
-    sheet.getRange(rowIndex, GROUP_EMAIL_COL).setValue(groupEmail);
-
-    getOrCreateUserSheet_(userSheetName);
-    getOrCreateGroup_(groupEmail, userSheetName);
-
-    setFolderPermission_(folder.getId(), groupEmail, role);
-    syncGroupMembership_(groupEmail, userSheetName);
-
-    sheet.getRange(rowIndex, LAST_SYNCED_COL).setValue(Utilities.formatDate(new Date(), SpreadsheetApp.getActive().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss'));
-    statusCell.setValue('OK');
-
-  } catch (e) {
-    log_('Failed to process row ' + rowIndex + '. Error: ' + e.message + ' Stack: ' + e.stack);
-    statusCell.setValue('Error: ' + e.message);
-  }
-}
-
-/**
- * Checks for sheets that are not part of the main configuration.
- * @return {Array<string>} A list of orphan sheet names.
- */
-function checkForOrphanSheets_() {
-  try {
-    log_('Checking for orphan sheets...');
-    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-    const allSheets = spreadsheet.getSheets();
-    const allSheetNames = allSheets.map(function(s) { return s.getName(); });
-
-    const requiredSheetNames = new Set();
-    requiredSheetNames.add(MANAGED_FOLDERS_SHEET_NAME);
-    requiredSheetNames.add(ADMINS_SHEET_NAME);
-    requiredSheetNames.add(USER_GROUPS_SHEET_NAME);
-    requiredSheetNames.add(CONFIG_SHEET_NAME);
-    requiredSheetNames.add(LOG_SHEET_NAME);
-    requiredSheetNames.add(TEST_LOG_SHEET_NAME);
-
-    const managedSheet = spreadsheet.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
-    if (managedSheet && managedSheet.getLastRow() > 1) {
-      const userSheetNames = managedSheet.getRange(2, USER_SHEET_NAME_COL, managedSheet.getLastRow() - 1, 1).getValues();
-      if (userSheetNames) {
-          userSheetNames.forEach(function(row) {
-            if (row[0]) requiredSheetNames.add(row[0]);
-          });
-      }
-    }
-    
-    const userGroupsSheet = spreadsheet.getSheetByName(USER_GROUPS_SHEET_NAME);
-    if (userGroupsSheet && userGroupsSheet.getLastRow() > 1) {
-        const groupSheetNames = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 1).getValues();
-        if (groupSheetNames) {
-            groupSheetNames.forEach(function(row) {
-                if (row[0]) requiredSheetNames.add(row[0]);
-            });
-        }
-    }
-
-    return allSheetNames.filter(function(name) { return !requiredSheetNames.has(name); });
-
-  } catch (e) {
-    log_('Error during orphan sheet check: ' + e.message);
-    return [];
-  }
-}
-
-
-/***** HELPER FUNCTIONS *****/
-
-function showToast_(message, title, timeoutSeconds) {
-  const configSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG_SHEET_NAME);
-  if (!configSheet) {
-    // If config sheet doesn't exist, show the toast by default
-    SpreadsheetApp.getActiveSpreadsheet().toast(message, title, timeoutSeconds);
-    return;
-  }
-  const settings = configSheet.getRange('A2:B').getValues();
-  let enableToasts = false; // Default to false
-  for (let i = 0; i < settings.length; i++) {
-    if (settings[i][0] === 'EnableToasts') {
-      enableToasts = settings[i][1];
-      break;
-    }
-  }
-
-  if (enableToasts === true) {
-    SpreadsheetApp.getActiveSpreadsheet().toast(message, title, timeoutSeconds);
-  }
-}
-
-function getOrCreateFolder_(folderName, folderId) {
-  if (folderId) {
-    try {
-      const folder = DriveApp.getFolderById(folderId);
-      if (folderName && folder.getName() !== folderName) {
-        throw new Error('Mismatch: Provided FolderID points to "' + folder.getName() + '"');
-      }
-      log_('Successfully found folder "' + folder.getName() + '" by ID.');
-      return folder;
-    } catch (e) {
-      log_('Could not retrieve folder by ID ' + folderId + '. Will try searching by name.');
-    }
-  }
-
-  if (!folderName) {
-    throw new Error('Cannot find or create folder without a name or a valid ID.');
-  }
-
-  const folders = DriveApp.getFoldersByName(folderName);
-  if (folders.hasNext()) {
-    const foundFolder = folders.next();
-    if (folders.hasNext()) {
-      throw new Error('Ambiguous: Multiple folders exist with the name "' + folderName + '". Please specify by ID.');
-    }
-    log_('Successfully found folder "' + folderName + '" by name.');
     return foundFolder;
   } else {
     log_('No folder found with name "' + folderName + '". Creating it now...');
@@ -1749,6 +1592,10 @@ function generateGroupEmail_(baseName) {
 function runManualAccessTest() {
   SCRIPT_EXECUTION_MODE = 'TEST';
   try {
+    if (shouldSkipGroupOps_()) {
+      SpreadsheetApp.getUi().alert('Manual Access Test requires the Admin Directory service (Admin SDK). Please enable it or run on a Google Workspace domain. Test aborted.');
+      return;
+    }
     const ui = SpreadsheetApp.getUi();
     
     const folderName = ui.prompt('Test - Step 1/4: Folder Name', 'Enter a name for a new test folder to be created.', ui.ButtonSet.OK_CANCEL);
@@ -1820,6 +1667,10 @@ function runManualAccessTest() {
 function runStressTest() {
   SCRIPT_EXECUTION_MODE = 'TEST';
   try {
+    if (shouldSkipGroupOps_()) {
+      SpreadsheetApp.getUi().alert('Stress Test requires the Admin Directory service (Admin SDK). Please enable it or run on a Google Workspace domain. Test aborted.');
+      return;
+    }
     const ui = SpreadsheetApp.getUi();
 
     // --- Step 1: Get Test Parameters ---
@@ -2047,159 +1898,4 @@ function cleanupManualTestData() {
   }
 }
 
-function getConfiguration_() {
-  const cache = CacheService.getScriptCache();
-  const cachedConfig = cache.get('config');
-  if (cachedConfig) {
-    return JSON.parse(cachedConfig);
-  }
-
-  const configSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG_SHEET_NAME);
-  if (!configSheet) return {};
-
-  const lastRow = configSheet.getLastRow();
-  if (lastRow < 2) return {};
-
-  const data = configSheet.getRange(2, 1, lastRow - 1, 2).getValues();
-  const config = data.reduce((acc, row) => {
-    if (row[0]) {
-      acc[row[0]] = row[1];
-    }
-    return acc;
-  }, {});
-
-  cache.put('config', JSON.stringify(config), 300); // Cache for 5 minutes
-  return config;
-}
-
-
-function getMaxLogLength_() {
-  const config = getConfiguration_();
-  const maxLogLength = config['MaxLogLength'];
-  if (maxLogLength) {
-    const value = parseInt(maxLogLength, 10);
-    if (!isNaN(value) && value > 0) {
-      return value;
-    }
-  }
-  return DEFAULT_MAX_LOG_LENGTH;
-}
-
-function log_(message, severity = 'INFO') {
-  // 1. Write to the Google Sheet log
-  const sheetName = (SCRIPT_EXECUTION_MODE === 'TEST') ? TEST_LOG_SHEET_NAME : LOG_SHEET_NAME;
-  const logSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
-  if (logSheet) {
-    const timestamp = Utilities.formatDate(new Date(), SpreadsheetApp.getActive().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss');
-    logSheet.appendRow([timestamp, '[' + severity.toUpperCase() + '] ' + message]);
-    
-    // Trim the log sheet if it's too long
-    const maxLength = getMaxLogLength_();
-    const lastRow = logSheet.getLastRow();
-    const headerRows = 1;
-    const rowsToDelete = lastRow - headerRows - maxLength;
-    if (rowsToDelete > 0) {
-      logSheet.deleteRows(headerRows + 1, rowsToDelete);
-    }
-  }
-
-  // 2. Write to Google Cloud Logging if enabled
-  const config = getConfiguration_();
-  const gcpLoggingEnabled = config['EnableGCPLogging'];
-
-  if (gcpLoggingEnabled === true || gcpLoggingEnabled === 'TRUE') {
-    const severityUpper = severity.toUpperCase();
-    switch (severityUpper) {
-      case 'ERROR':
-        console.error(message);
-        break;
-      case 'WARN':
-        console.warn(message);
-        break;
-      case 'INFO':
-        console.info(message);
-        break;
-      default:
-        console.log(message);
-        break;
-    }
-  }
-}
-
-function clearAllLogs() {
-  const ui = SpreadsheetApp.getUi();
-  const response = ui.alert('Are you sure you want to clear all logs?', 'This will delete all data in the "Log" and "TestLog" sheets.', ui.ButtonSet.YES_NO);
-  if (response !== ui.Button.YES) {
-    return;
-  }
-
-  const logSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(LOG_SHEET_NAME);
-  if (logSheet) {
-    logSheet.getRange('A2:B').clearContent();
-  }
-
-  const testLogSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(TEST_LOG_SHEET_NAME);
-  if (testLogSheet) {
-    testLogSheet.getRange('A2:B').clearContent();
-  }
-
-  ui.alert('Logs cleared.');
-}
-
-function sendErrorNotification_(errorMessage) {
-  try {
-    const configSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG_SHEET_NAME);
-    if (!configSheet) return;
-
-    const settings = configSheet.getRange('A2:B3').getValues();
-    const enableEmailNotifications = settings[0][1];
-    const notificationEmailAddress = settings[1][1];
-
-    if (enableEmailNotifications === true && notificationEmailAddress) {
-      MailApp.sendEmail(notificationEmailAddress, 'Permissions Manager Script - Fatal Error', errorMessage);
-    }
-  } catch (e) {
-    log_('Failed to send error notification email: ' + e.toString());
-  }
-}
-
-function getGitHubRepoUrl_() {
-    const configSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG_SHEET_NAME);
-    if (configSheet) {
-        const settings = configSheet.getRange('A2:B').getValues();
-        for (let i = 0; i < settings.length; i++) {
-            if (settings[i][0] === 'GitHubRepoURL') {
-                return settings[i][1];
-            }
-        }
-    }
-    return null;
-}
-
-function openUserGuide() {
-    const repoUrl = getGitHubRepoUrl_();
-    if (repoUrl) {
-        openUrl(repoUrl + '/blob/main/docs/USER_GUIDE.md');
-    }
-}
-
-function openTestingGuide() {
-    const repoUrl = getGitHubRepoUrl_();
-    if (repoUrl) {
-        openUrl(repoUrl + '/blob/main/TESTING.md');
-    }
-}
-
-function openReadme() {
-    const repoUrl = getGitHubRepoUrl_();
-    if (repoUrl) {
-        openUrl(repoUrl + '/blob/main/README.md');
-    }
-}
-
-function openUrl(url) {
-  log_('Attempting to open URL: ' + url);
-  const html = '<html><body><a href="' + url + '" target="_blank">Click here to open the documentation</a><br/><br/><input type="button" value="Close" onclick="google.script.host.close()" /></body></html>';
-  const ui = HtmlService.createHtmlOutput(html).setTitle('Open Documentation').setWidth(300);
-  SpreadsheetApp.getUi().showSidebar(ui);
-}
+// (Duplicate tail removed; canonical implementations defined earlier in this file.)

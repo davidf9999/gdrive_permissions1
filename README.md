@@ -17,6 +17,8 @@ The recommended setup is a simple, manual copy-and-paste of the core script, whi
 - [Usage Guide](#usage-guide)
 - [Upgrading to a Production Environment](#upgrading-to-a-production-environment)
 - [Tearing Down the Project](#tearing-down-the-project)
+ - [Admin Directory Prerequisites](#admin-directory-prerequisites)
+ - [First Run & Testing Notes](#first-run--testing-notes)
 
 ---
 
@@ -54,13 +56,29 @@ This guide will walk you through the simple, one-time setup process. This is the
 3.  Open the `apps_script_project/Code.js` file from this repository.
 4.  Copy the entire contents of `Code.js` and paste it into the Apps Script editor.
 
-### Step 4: Enable Advanced Services
+### Step 4: Enable Required APIs
 
-To create and manage Google Groups, the script needs access to an advanced Google service.
+To allow the script to create and manage Google Groups, you must enable two related services. This is a one-time setup action.
 
-1.  In the Apps Script editor, click the **+** icon next to the **Services** section in the left-hand menu.
-2.  From the list of available APIs, find **Admin SDK API** and select it.
-3.  Click the **Add** button. The `AdminDirectory` service will now appear in your list of services, and the error you encountered will be resolved.
+**Important:** This functionality requires a Google Workspace account with Super Admin privileges. It will not work with a standard `@gmail.com` account.
+
+#### Part A: Enable the Admin Directory API in Apps Script
+
+This step connects your script to Google's core administrative services.
+
+1.  In the Apps Script editor, look for the **Services** section in the left-hand menu.
+2.  Click the **+** icon to add a new service.
+3.  From the list of available APIs, find and select **Admin Directory API**.
+4.  Click **Add**. The `AdminDirectory` service will now appear in your list of services, making it available to the script.
+
+#### Part B: Enable the Admin SDK in the Google Cloud Project
+
+Every Apps Script project is backed by a Google Cloud project. You need to enable the corresponding API in that project.
+
+1.  In the Apps Script editor, click the **Project Settings** (gear icon ⚙️) on the left.
+2.  In the **Google Cloud Platform (GCP) Project** section, you will see a link that says `View project in Google Cloud Console`. Click this link. It will open the correct Google Cloud project in a new browser tab.
+3.  Once in the Google Cloud Console, use the search bar at the top to find **"Admin SDK API"**.
+4.  In the search results, click on **Admin SDK API** and then click the **Enable** button. If it's already enabled, you don't need to do anything.
 
 ### Step 5: Run the Initial Sync
 
@@ -146,3 +164,28 @@ In addition to logging to a sheet, the script can be configured to send logs dir
 2.  **Enable in the Sheet:** In your Google Sheet, go to the `Config` sheet and change the value for `EnableGCPLogging` from `FALSE` to `TRUE`.
 
 Once enabled, all logs will be sent to Google Cloud Logging. You can view them by navigating to the [Logs Explorer](https://console.cloud.google.com/logs/viewer) in the Google Cloud Console for your linked project.
+
+---
+
+## Admin Directory Prerequisites
+
+Some features (Google Group creation, membership sync, and permission assignment via groups) require the **Admin Directory** advanced service in Apps Script and the **Admin SDK** API in Google Cloud.
+
+- Apps Script: Add the service via the Services panel (Admin Directory API).
+- Google Cloud: Enable the Admin SDK in the linked GCP project.
+- Access: Requires Google Workspace. Personal `@gmail.com` accounts cannot use the Admin SDK.
+
+Behavior without Admin SDK:
+- The script runs, creates/updates sheets and folders, and logs progress.
+- Group operations are skipped and clearly marked as `SKIPPED (No Admin SDK)` in the `Status` columns.
+- Tests that require groups will alert and abort.
+
+---
+
+## First Run & Testing Notes
+
+- Manual Access Test and Stress Test require Admin SDK. If not enabled or if you’re on a personal Gmail account, they will show an alert and abort.
+- If you want to validate sheet/folder setup only (without Admin SDK), run `Permissions Manager > Sync All` and verify:
+  - `ManagedFolders` rows populate `FolderID`, `UserSheetName`, and `GroupEmail`.
+  - `Status` shows `SKIPPED (No Admin SDK)` when group ops are not available.
+- To fully exercise group membership and permissions, ensure Admin SDK is enabled and your account has the required admin privileges.

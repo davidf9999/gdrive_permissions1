@@ -6,9 +6,16 @@ This document provides instructions for using the testing functions built into t
 
 All test operations are logged to the **TestLog** sheet. If a test fails or does not behave as expected, this sheet is the first place to look for detailed error messages.
 
-If you have enabled the [Advanced Logging with Google Cloud](../../README.md#advanced-logging-with-google-cloud), the test logs will also be sent there, providing a more robust and searchable view of the test execution.
+If you have enabled the [Advanced Logging with Google Cloud](../README.md#advanced-logging-with-google-cloud), the test logs will also be sent there, providing a more robust and searchable view of the test execution.
 
 ## Running Tests
+
+Prerequisites for tests that manage Google Groups:
+- In Apps Script, add the Admin Directory API (advanced service).
+- In Google Cloud, enable the Admin SDK for the linked project.
+- You must be using a Google Workspace account with sufficient admin privileges.
+
+If Admin SDK is not available (e.g., personal `@gmail.com` account), the tests will alert and abort, and sync flows will mark rows as `SKIPPED (No Admin SDK)`.
 
 The testing functions are available in the **Permissions Manager > Testing** menu.
 
