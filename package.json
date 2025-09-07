@@ -1,0 +1,17 @@
+{
+  "name": "gdrive_permissions1",
+  "version": "1.0.0",
+  "description": "> **Project Status: Beta** > > This project is currently in Beta. It is feature-complete and has been tested, but it is still under active development. Please use it with the understanding that there may be bugs or changes to the functionality. Feedback and contributions are welcome!",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "node tests/utils.test.js",
+    "lint": "node --check apps_script_project/utils.js apps_script_project/Code.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}
