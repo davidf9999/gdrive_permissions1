@@ -206,12 +206,7 @@ function syncAdmins() {
   }
 }
 
-    log_('Admin sync complete.', 'INFO');
 
-  } catch (e) {
-    log_('ERROR in syncAdmins: ' + e.toString(), 'ERROR');
-  }
-}
 
 function syncUserGroups() {
   try {
@@ -315,7 +310,7 @@ function fullSync() {
 
     showToast_('Full synchronization complete!', 'Full Sync', 5);
     log_('Full synchronization completed.');
-    SpreadsheetApp.getUi().alert(summaryMessage + '\n\nCheck the 'Status' column in the 'ManagedFolders' sheet for details.');
+    SpreadsheetApp.getUi().alert(summaryMessage + '\n\nCheck the \'Status\' column in the \'ManagedFolders\' sheet for details.');
 
   } catch (e) {
     const errorMessage = 'FATAL ERROR in fullSync: ' + e.toString() + '\n' + e.stack;
@@ -814,11 +809,7 @@ function runManualAccessTest() {
 
     const folderId = managedSheet.getRange(testRowIndex, FOLDER_ID_COL).getValue();
     const folderUrl = DriveApp.getFolderById(folderId).getUrl();
-    const verification1 = ui.alert('Verify Access', 'Please open an Incognito Window, log in as ' + testEmail + ', and try to open this link:
-
-' + folderUrl + '
-
-Did you get access?', ui.ButtonSet.YES_NO);
+    const verification1 = ui.alert('Verify Access', 'Please open an Incognito Window, log in as ' + testEmail + ', and try to open this link:\n\n' + folderUrl + '\n\nDid you get access?', ui.ButtonSet.YES_NO);
 
     if (verification1 !== ui.Button.YES) {
       ui.alert('Test aborted. Please review the logs and configuration.');
@@ -829,9 +820,7 @@ Did you get access?', ui.ButtonSet.YES_NO);
     ui.alert('Revoking Access', 'The test email has been removed from the sheet. The script will now sync again to revoke folder access.', ui.ButtonSet.OK);
     fullSync(); // Changed from syncAll()
 
-    const verification2 = ui.alert('Verify Revoked Access', 'Please go back to your Incognito Window and refresh the folder page. You should see a 'permission denied' error.
-
-Was access revoked?', ui.ButtonSet.YES_NO);
+    const verification2 = ui.alert('Verify Revoked Access', 'Please go back to your Incognito Window and refresh the folder page. You should see a \'permission denied\' error.\n\nWas access revoked?', ui.ButtonSet.YES_NO);
 
     if (verification2 === ui.Button.YES) {
       ui.alert('Test Complete: SUCCESS!', 'The user was successfully granted and revoked access.', ui.ButtonSet.OK);
@@ -875,11 +864,11 @@ function runStressTest() {
     const emailParts = baseEmail.split('@');
     if (emailParts.length !== 2) return ui.alert('Invalid email address.');
 
-    ui.alert('Stress Test - Step 4/4', 
-            'The script will now create ' + numFolders + ' test folders and prepare ' + numUsers + ' users for each.
-
-This will take several steps. Please be patient.', 
-            ui.ButtonSet.OK);
+    ui.alert(
+      'Stress Test - Step 4/4',
+      'The script will now create ' + numFolders + ' test folders and prepare ' + numUsers + ' users for each.\n\nThis will take several steps. Please be patient.',
+      ui.ButtonSet.OK
+    );
 
     // --- Step 2: Setup Test Data ---
     const testRunId = new Date().getTime(); // Unique ID for this test run
