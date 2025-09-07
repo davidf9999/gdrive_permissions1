@@ -510,6 +510,7 @@ function getOrCreateFolder_(folderName, folderId) {
 }
 
 function getOrCreateGroup_(groupEmail, groupName) {
+  assertAdminDirectoryAvailable_();
   try {
     AdminDirectory.Groups.get(groupEmail);
     log_('Found existing group: ' + groupEmail);
@@ -685,6 +686,7 @@ function syncGroupMembership_(groupEmail, userSheetName) {
 }
 
 function fetchAllGroupMembers_(groupEmail) {
+  assertAdminDirectoryAvailable_();
   const members = [];
   let pageToken;
   try {
@@ -706,6 +708,15 @@ function fetchAllGroupMembers_(groupEmail) {
       throw e;
   }
   return members;
+}
+
+function assertAdminDirectoryAvailable_() {
+  // Provides a clear message if Admin Directory advanced service/API is not enabled.
+  if (typeof AdminDirectory === 'undefined') {
+    const msg = 'Admin Directory service is not available. Enable it in Apps Script (Services > Admin Directory API) and in Google Cloud (APIs & Services > Library > Admin SDK). Requires Google Workspace.';
+    log_(msg, 'ERROR');
+    throw new Error(msg);
+  }
 }
 
 function setFolderPermission_(folderId, groupEmail, role) {
