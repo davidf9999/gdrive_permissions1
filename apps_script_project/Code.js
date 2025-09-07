@@ -895,10 +895,11 @@ function runManualAccessTest() {
       ui.alert('Test Complete: FAILURE!', 'Access was not revoked as expected. This may be due to Google Drive permission propagation delays. Please wait a few minutes and check again.', ui.ButtonSet.OK);
     }
 
-    const cleanup = ui.alert('Cleanup', 'Do you want to remove the test row from ManagedFolders and delete the test user sheet (' + userSheetName + ')?', ui.ButtonSet.YES_NO);
+    const cleanup = ui.alert('Cleanup', 'Do you want to remove all test data (folder, group, and sheet)?', ui.ButtonSet.YES_NO);
     if (cleanup === ui.Button.YES) {
+      const groupEmail = managedSheet.getRange(testRowIndex, GROUP_EMAIL_COL).getValue();
+      cleanupFolderData_(testFolderName, folderId, groupEmail, userSheetName);
       managedSheet.deleteRow(testRowIndex);
-      SpreadsheetApp.getActiveSpreadsheet().deleteSheet(userSheet);
       ui.alert('Cleanup complete.');
     }
   } finally {
@@ -987,24 +988,19 @@ function runStressTest() {
     // --- Step 6: Cleanup ---
     const cleanup = ui.alert('Cleanup', 'Do you want to remove all test data (folders, groups, sheets, and configuration rows)?', ui.ButtonSet.YES_NO);
     if (cleanup === ui.Button.YES) {
-      ui.alert('Cleanup in Progress', 'This may take a few moments. Please wait for the confirmation alert.', ui.ButtonSet.OK);
-      const groupEmails = managedSheet.getRange(startRow, GROUP_EMAIL_COL, numFolders, 1).getValues().flat();
-      const folderIds = managedSheet.getRange(startRow, FOLDER_ID_COL, numFolders, 1).getValues().flat();
-
-      // Delete rows from sheet first
+      const managedData = managedSheet.getRange(startRow, 1, numFolders, GROUP_EMAIL_COL).getValues();
+      
+      // Delete rows from sheet first to prevent re-sync issues
       managedSheet.deleteRows(startRow, numFolders);
 
-      userSheetNames.forEach(function(sheetName) {
-        const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
-        if (sheet) SpreadsheetApp.getActiveSpreadsheet().deleteSheet(sheet);
-      });
+      ui.alert('Cleanup in Progress', 'This may take a few moments. Please wait for the confirmation alert.', ui.ButtonSet.OK);
 
-      groupEmails.forEach(function(groupEmail) { 
-        try { AdminDirectory.Groups.remove(groupEmail); } catch (e) { log_('Could not remove group ' + groupEmail + ': ' + e.message, 'WARN'); }
-      });
-
-      folderIds.forEach(function(folderId) { 
-        try { DriveApp.getFolderById(folderId).setTrashed(true); } catch (e) { log_('Could not trash folder ' + folderId + ': ' + e.message, 'WARN'); }
+      managedData.forEach(function(row) {
+        const folderName = row[FOLDER_NAME_COL - 1];
+        const folderId = row[FOLDER_ID_COL - 1];
+        const userSheetName = row[USER_SHEET_NAME_COL - 1];
+        const groupEmail = row[GROUP_EMAIL_COL - 1];
+        cleanupFolderData_(folderName, folderId, groupEmail, userSheetName);
       });
 
       ui.alert('Cleanup Complete!');
@@ -1118,60 +1114,74 @@ function cleanupManualTestData() {
       return;
     }
 
-    ui.alert('Cleanup in Progress', 'This may take a few moments. Please wait for the confirmation alert.', ui.ButtonSet.OK);
-
-    // Delete folder
-    if (folderId) {
-      try {
-        DriveApp.getFolderById(folderId).setTrashed(true);
-        log_('Trashed folder with ID: ' + folderId);
-      } catch (e) {
-        log_('Could not trash folder ' + folderId + ' by ID. It might have been already deleted. Error: ' + e.message, 'WARN');
-      }
-    } else if (folderName) {
-      // If no ID was in the sheet, try to find the folder by name
-      log_('No folder ID found in sheet. Searching for folder by name: "' + folderName + '" to delete.', 'INFO');
-      try {
-        const folders = DriveApp.getFoldersByName(folderName);
-        if (folders.hasNext()) {
-          const folderToDelete = folders.next();
-          folderToDelete.setTrashed(true);
-          log_('Found and trashed folder by name: "' + folderName + '" (ID: ' + folderToDelete.getId() + ')');
-          if (folders.hasNext()) {
-            log_('Found multiple folders with the same name. Only the first one was deleted.', 'WARN');
-          }
-        } else {
-          log_('Cleanup: No folder found with the name "' + folderName + '". It may have been deleted already.', 'INFO');
-        }
-      } catch (e) {
-        log_('Error while trying to find and trash folder by name. Error: ' + e.message, 'ERROR');
-      }
-    }
-
-    // Delete group
-    if (groupEmail) {
-      try {
-        AdminDirectory.Groups.remove(groupEmail);
-      } catch (e) {
-        log_('Could not remove group ' + groupEmail + ': ' + e.message, 'WARN');
-      }
-    }
-
-    // Delete sheet
-    if (userSheetName) {
-      const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(userSheetName);
-      if (sheet) {
-        SpreadsheetApp.getActiveSpreadsheet().deleteSheet(sheet);
-      }
-    }
-
-    // Delete row
+    cleanupFolderData_(folderName, folderId, groupEmail, userSheetName);
     managedSheet.deleteRow(rowIndexToDelete);
 
     ui.alert('Cleanup Complete!');
   } finally {
     SCRIPT_EXECUTION_MODE = 'DEFAULT';
   }
+}
+
+/**
+ * Helper function to robustly clean up all assets associated with a folder configuration.
+ * @param {string} folderName - The name of the folder.
+ * @param {string} folderId - The ID of the folder.
+ * @param {string} groupEmail - The email of the Google Group.
+ * @param {string} userSheetName - The name of the user sheet.
+ */
+function cleanupFolderData_(folderName, folderId, groupEmail, userSheetName) {
+  log_('Starting cleanup for "' + folderName + '"...');
+  const ui = SpreadsheetApp.getUi();
+  ui.alert('Cleanup in Progress', 'This may take a few moments. Please wait for the confirmation alert.', ui.ButtonSet.OK);
+
+  // Delete folder
+  if (folderId) {
+    try {
+      DriveApp.getFolderById(folderId).setTrashed(true);
+      log_('Trashed folder with ID: ' + folderId);
+    } catch (e) {
+      log_('Could not trash folder ' + folderId + ' by ID. It might have been already deleted. Error: ' + e.message, 'WARN');
+    }
+  } else if (folderName) {
+    // If no ID was in the sheet, try to find the folder by name
+    log_('No folder ID found in sheet. Searching for folder by name: "' + folderName + '" to delete.', 'INFO');
+    try {
+      const folders = DriveApp.getFoldersByName(folderName);
+      if (folders.hasNext()) {
+        const folderToDelete = folders.next();
+        folderToDelete.setTrashed(true);
+        log_('Found and trashed folder by name: "' + folderName + '" (ID: ' + folderToDelete.getId() + ')');
+        if (folders.hasNext()) {
+          log_('Found multiple folders with the same name. Only the first one was deleted.', 'WARN');
+        }
+      } else {
+        log_('Cleanup: No folder found with the name "' + folderName + '". It may have been deleted already.', 'INFO');
+      }
+    } catch (e) {
+      log_('Error while trying to find and trash folder by name. Error: ' + e.message, 'ERROR');
+    }
+  }
+
+  // Delete group
+  if (groupEmail) {
+    try {
+      AdminDirectory.Groups.remove(groupEmail);
+      log_('Removed group: ' + groupEmail);
+    } catch (e) {
+      log_('Could not remove group ' + groupEmail + '. It might have been already deleted. Error: ' + e.message, 'WARN');
+    }
+  }
+
+  // Delete sheet
+  if (userSheetName) {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(userSheetName);
+    if (sheet) {
+      SpreadsheetApp.getActiveSpreadsheet().deleteSheet(sheet);
+      log_('Deleted sheet: ' + userSheetName);
+    }
+  }
+  log_('Cleanup complete for "' + folderName + '"');
 }
 
 function getConfiguration_() {
