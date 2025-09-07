@@ -56,29 +56,45 @@ This guide will walk you through the simple, one-time setup process. This is the
 3.  Open the `apps_script_project/Code.js` file from this repository.
 4.  Copy the entire contents of `Code.js` and paste it into the Apps Script editor.
 
-### Step 4: Enable Required APIs
+### Step 4: Enable Required APIs (Detailed Guide)
 
-To allow the script to create and manage Google Groups, you must enable two related services. This is a one-time setup action.
+This is the most technical step, but it's a one-time setup. We need to give our script permission to manage Google Groups. To do this, we'll enable a service in two places: first within Apps Script itself, and then in the underlying Google Cloud project.
 
-**Important:** This functionality requires a Google Workspace account with Super Admin privileges. It will not work with a standard `@gmail.com` account.
+**Important:** This part is only possible with a **Google Workspace** account (e.g., `you@yourcompany.com`). It will not work with a personal `@gmail.com` account. You also need to be a **Super Admin** of your Workspace.
 
-#### Part A: Enable the Admin Directory API in Apps Script
+---
 
-This step connects your script to Google's core administrative services.
+#### **Part A: Enable the "Admin Directory API" in Apps Script**
 
-1.  In the Apps Script editor, look for the **Services** section in the left-hand menu.
-2.  Click the **+** icon to add a new service.
-3.  From the list of available APIs, find and select **Admin Directory API**.
-4.  Click **Add**. The `AdminDirectory` service will now appear in your list of services, making it available to the script.
+This makes the service available to your script's code.
 
-#### Part B: Enable the Admin SDK in the Google Cloud Project
+1.  **Find the "Services" section:** In the Apps Script editor, look at the left-hand navigation panel. You'll see "Editor" (with a `<>` icon), "Triggers" (with a clock icon), etc. A little further down, you'll see a section named **Services**.
 
-Every Apps Script project is backed by a Google Cloud project. You need to enable the corresponding API in that project.
+2.  **Add a new service:** Click the **plus icon (+)** next to the "Services" title. A dialog box titled "Add a service" will appear.
 
-1.  In the Apps Script editor, click the **Project Settings** (gear icon ⚙️) on the left.
-2.  In the **Google Cloud Platform (GCP) Project** section, you will see a link that says `View project in Google Cloud Console`. Click this link. It will open the correct Google Cloud project in a new browser tab.
-3.  Once in the Google Cloud Console, use the search bar at the top to find **"Admin SDK API"**.
-4.  In the search results, click on **Admin SDK API** and then click the **Enable** button. If it's already enabled, you don't need to do anything.
+3.  **Select the service:** Scroll through the list of available Google APIs until you find **Admin Directory API**. Click on it.
+
+4.  **Confirm:** Click the blue **Add** button. The dialog will close, and you will now see `AdminDirectory` listed under the "Services" section.
+
+---
+
+#### **Part B: Enable the "Admin SDK API" in Google Cloud**
+
+Every Apps Script project has a hidden Google Cloud project behind it. We need to turn on the API in that project.
+
+1.  **Go to Project Settings:** In the Apps Script editor, click on the **Project Settings** icon (a gear ⚙️) in the left-hand navigation panel.
+
+2.  **Find your Google Cloud Project:** In the settings page, scroll down to the "Google Cloud Platform (GCP) Project" section. You will see a **Project Number** and a blue, clickable link that says **`View project in Google Cloud Console`**.
+
+3.  **Open the Google Cloud Console:** Click that blue link. A new browser tab will open, taking you directly to the correct Google Cloud project dashboard. It might take a moment to load.
+
+4.  **Navigate to the API Library:** In the Google Cloud Console, you'll see a search bar at the top of the page that says "Search products and resources". Click in this search bar.
+
+5.  **Search for the API:** Type **`Admin SDK API`** into the search bar and press Enter.
+
+6.  **Enable the API:** In the search results, click on "Admin SDK API". This will take you to the API's overview page. You will see a blue **Enable** button. Click it. If the button says "Manage" and is grayed out, it means the API is already enabled, and you don't need to do anything else.
+
+---
 
 ### Step 5: Run the Initial Sync
 
