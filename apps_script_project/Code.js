@@ -313,7 +313,7 @@ function fullSync() {
 
   try {
     showToast_('Starting full synchronization...', 'Full Sync', -1);
-    log_('Starting full synchronization...');
+    log_('*** Starting full synchronization...');
 
     // 1. Sync Admins
     syncAdmins();
@@ -354,7 +354,7 @@ function fullSync() {
  * Reads the ManagedFolders sheet and processes each row.
  */
 function processManagedFolders_() {
-  log_('Starting processing of ManagedFolders sheet...');
+  log_('*** Starting processing of ManagedFolders sheet...');
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
   if (!sheet) {
@@ -586,7 +586,7 @@ function getOrCreateUserSheet_(sheetName) {
 }
 
 function syncGroupMembership_(groupEmail, userSheetName) {
-  log_('Starting membership sync for group "' + groupEmail + '" from sheet "' + userSheetName + '"');
+  log_('*** Starting membership sync for group "' + groupEmail + '" from sheet "' + userSheetName + '"');
   
   try {
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(userSheetName);
@@ -1124,8 +1124,27 @@ function cleanupManualTestData() {
     if (folderId) {
       try {
         DriveApp.getFolderById(folderId).setTrashed(true);
+        log_('Trashed folder with ID: ' + folderId);
       } catch (e) {
-        log_('Could not trash folder ' + folderId + ': ' + e.message, 'WARN');
+        log_('Could not trash folder ' + folderId + ' by ID. It might have been already deleted. Error: ' + e.message, 'WARN');
+      }
+    } else if (folderName) {
+      // If no ID was in the sheet, try to find the folder by name
+      log_('No folder ID found in sheet. Searching for folder by name: "' + folderName + '" to delete.', 'INFO');
+      try {
+        const folders = DriveApp.getFoldersByName(folderName);
+        if (folders.hasNext()) {
+          const folderToDelete = folders.next();
+          folderToDelete.setTrashed(true);
+          log_('Found and trashed folder by name: "' + folderName + '" (ID: ' + folderToDelete.getId() + ')');
+          if (folders.hasNext()) {
+            log_('Found multiple folders with the same name. Only the first one was deleted.', 'WARN');
+          }
+        } else {
+          log_('Cleanup: No folder found with the name "' + folderName + '". It may have been deleted already.', 'INFO');
+        }
+      } catch (e) {
+        log_('Error while trying to find and trash folder by name. Error: ' + e.message, 'ERROR');
       }
     }
 

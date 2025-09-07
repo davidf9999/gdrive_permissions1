@@ -41,8 +41,28 @@ This guide will walk you through the simple, one-time setup process. This is the
 
 ### Step 1: Prerequisites
 
+### Step 1: Prerequisites
+
 *   A **Google Workspace** account (a standard `@gmail.com` account is not sufficient).
 *   You must be a **Super Admin** for your Google Workspace domain to have the necessary permissions to create Google Groups.
+
+#### Who Can Run The Script? A Critical Requirement
+
+Only **Google Workspace Administrators** for your domain (e.g., `your-company.com`) can successfully run the script's synchronization functions (`Sync All`, `Sync User Groups`, etc.).
+
+This is because the script's core purpose is to create and manage Google Groups, which requires administrative permissions via Google's **Admin SDK API**. A regular user, even from within your domain, does not have these permissions by default. A personal `@gmail.com` account can **never** have these permissions for your domain.
+
+**What this means for you:**
+
+*   The person setting up this sheet **must** be a Workspace Admin.
+*   If you plan to have other colleagues run the syncs, they **must also** have Google Workspace accounts on your domain, and you must grant them the necessary administrative privileges (e.g., the "Groups Admin" role) from the Google Workspace Admin Console.
+*   When configuring the OAuth Consent Screen (detailed in Step 4), you **must** choose the **Internal** audience. This correctly restricts the script's usage to your internal, authorized administrators.
+
+#### A Note on External Users
+
+You might want to grant folder access to users with personal `@gmail.com` accounts. This is fully supported. The requirement above applies only to the administrators **running the script**, not to the end-users being managed.
+
+The ability to add external members to your Google Groups is a separate setting in your **Google Workspace Admin Console** (usually under `Groups > Sharing settings`). Please ensure your organization's settings permit adding members from outside the organization.
 
 ### Step 2: Create the Google Sheet
 
@@ -56,43 +76,73 @@ This guide will walk you through the simple, one-time setup process. This is the
 3.  Open the `apps_script_project/Code.js` file from this repository.
 4.  Copy the entire contents of `Code.js` and paste it into the Apps Script editor.
 
-### Step 4: Enable Required APIs (Detailed Guide)
+### Step 4: Enable Required APIs & Configure Consent
 
-This is the most technical step, but it's a one-time setup. We need to give our script permission to manage Google Groups. To do this, we'll enable a service in two places: first within Apps Script itself, and then in the underlying Google Cloud project.
+This is the most technical step, but it's a one-time setup. It involves enabling the correct API in Apps Script, creating a consent screen in Google Cloud, and then linking the two.
 
 **Important:** This part is only possible with a **Google Workspace** account (e.g., `you@yourcompany.com`). It will not work with a personal `@gmail.com` account. You also need to be a **Super Admin** of your Workspace.
 
 ---
 
-#### **Part A: Enable the "Admin Directory API" in Apps Script**
+#### **Part A: Enable the Admin SDK API in Apps Script**
 
-This makes the service available to your script's code.
+This makes the necessary services available to your script's code.
 
-1.  **Find the "Services" section:** In the Apps Script editor, look at the left-hand navigation panel. You'll see "Editor" (with a `<>` icon), "Triggers" (with a clock icon), etc. A little further down, you'll see a section named **Services**.
+1.  **Select the Editor:** In the Apps Script interface, make sure you are in the **Editor** view by clicking the `<>` icon in the left-hand navigation panel.
 
-2.  **Add a new service:** Click the **plus icon (+)** next to the "Services" title. A dialog box titled "Add a service" will appear.
+2.  **Add a Service:** In the "Editor" pane where files like `Code.js` are listed, find the **Services** section. Click the **plus icon (+)** next to the "Services" title. A dialog box titled "Add a service" will appear.
 
-3.  **Select the service:** Scroll through the list of available Google APIs until you find **Admin Directory API**. Click on it.
+3.  **Select the API:** Scroll through the list of available Google APIs until you find **Admin SDK API**. Click on it.
 
-4.  **Confirm:** Click the blue **Add** button. The dialog will close, and you will now see `AdminDirectory` listed under the "Services" section.
+4.  **Confirm:** Click the blue **Add** button. The dialog will close, and you will now see `AdminDirectory` listed under the "Services" section. (Note: Selecting "Admin SDK API" is what adds the `AdminDirectory` service that the code uses.)
 
 ---
 
-#### **Part B: Enable the "Admin SDK API" in Google Cloud**
+#### **Part B: Configure the OAuth Consent Screen in Google Cloud**
 
-Every Apps Script project has a hidden Google Cloud project behind it. We need to turn on the API in that project.
+Before your script can ask for permissions, you must configure a consent screen. This tells Google what to show users when the script asks for authorization.
 
 1.  **Go to Project Settings:** In the Apps Script editor, click on the **Project Settings** icon (a gear ⚙️) in the left-hand navigation panel.
 
-2.  **Find your Google Cloud Project:** In the settings page, scroll down to the "Google Cloud Platform (GCP) Project" section. You will see a **Project Number** and a blue, clickable link that says **`View project in Google Cloud Console`**.
+2.  **Attempt to Set Project:** In the "Google Cloud Platform (GCP) Project" section, click the **Change Project** button. You will see a message with the Project Number for the script's auto-created project. Copy this number, paste it into the text box, and click **Set Project**.
 
-3.  **Open the Google Cloud Console:** Click that blue link. A new browser tab will open, taking you directly to the correct Google Cloud project dashboard. It might take a moment to load.
+3.  **Trigger the Error:** You will most likely see an error stating that the OAuth consent screen needs to be configured. **This is expected.** The error message should contain a blue link to configure the consent screen. Click that link.
 
-4.  **Navigate to the API Library:** In the Google Cloud Console, you'll see a search bar at the top of the page that says "Search products and resources". Click in this search bar.
+4.  **Choose User Type:** The link will take you to the Google Cloud Console. 
+    *   You may be asked to choose a **User Type** (Internal vs. External). If so, select **Internal** and click **Create**. This is the simplest option.
+    *   If you are taken directly to the "App registration" screen, your app is being configured as **External**, which is also fine.
 
-5.  **Search for the API:** Type **`Admin SDK API`** into the search bar and press Enter.
+5.  **Fill in App Information:**
+    *   **App name:** Enter a descriptive name, like `Drive Permissions Manager`.
+    *   **User support email:** Select your email from the dropdown.
+    *   **Developer contact information:** Enter your email address.
+    *   Click **Save and Continue**.
 
-6.  **Enable the API:** In the search results, click on "Admin SDK API". This will take you to the API's overview page. You will see a blue **Enable** button. Click it. If the button says "Manage" and is grayed out, it means the API is already enabled, and you don't need to do anything else.
+6.  **Scopes:** On the "Scopes" page, click **Save and Continue** to skip it.
+
+7.  **Test Users (Crucial for External Apps):**
+    *   If your app is being configured as **External**, you will now be on the "Test users" page. **This is a required step.**
+    *   Click **+ Add Users**, type in your own Google Workspace email address, and click **Add**.
+
+8.  **Finish:** Click **Save and Continue** one last time. You should now see a summary of your registration. The consent screen is now configured.
+
+    **Note:** You may now be on a page that says "You haven't configured any OAuth clients". You can safely ignore this. Apps Script creates and manages this for you automatically when you run the script.
+
+---
+
+#### **Part C: Link the Project and Enable APIs**
+
+Now you can complete the connection.
+
+1.  **Return to Apps Script:** Go back to the Apps Script browser tab.
+
+2.  **Set the Project (for real this time):** Go to **Project Settings** > **Change Project** again. Paste the same Project Number in. This time, it will succeed.
+
+3.  **Open Google Cloud Console:** The settings page will now show a blue, clickable link with your Project ID. Click this link to go to the Google Cloud Console.
+
+4.  **Enable the Admin SDK API:** In the Google Cloud Console, use the top search bar to find and select **Admin SDK API**. On its page, click the blue **Enable** button. If it already says "Manage", you are all set.
+
+5.  **Enable the Google Drive API:** While still in the Google Cloud Console, use the search bar again to find and select **Google Drive API**. Click the blue **Enable** button. This is required for the script to create and manage folders.
 
 ---
 
