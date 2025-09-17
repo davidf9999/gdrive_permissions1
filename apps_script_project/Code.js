@@ -212,7 +212,7 @@ function syncAdmins() {
 
 
 
-function syncUserGroups() {
+function syncUserGroups(options = {}) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const userGroupsSheet = ss.getSheetByName(USER_GROUPS_SHEET_NAME);
@@ -230,7 +230,7 @@ function syncUserGroups() {
     // If Admin SDK is unavailable, mark all rows as skipped and exit
     if (shouldSkipGroupOps_()) {
       log_('Admin SDK (Admin Directory) not available. Skipping syncUserGroups.', 'WARN');
-      const dataRange = userGroupsSheet.getRange(2, 1, lastRow - 1, 4);
+      const dataRange = userGroupsSheet.getRange(2, 1, lastRow - 1, 4); 
       const data = dataRange.getValues();
       for (let i = 0; i < data.length; i++) {
         const rowIndex = i + 2;
@@ -255,7 +255,7 @@ function syncUserGroups() {
     const data = dataRange.getValues();
 
     for (let i = 0; i < data.length; i++) {
-      const rowIndex = i + 2; // Sheet row index (1-based, accounting for header)
+      const rowIndex = i + 2; // Sheet row index (1-based, accounting for header) 
       const statusCell = userGroupsSheet.getRange(rowIndex, 4);
       const lastSyncedCell = userGroupsSheet.getRange(rowIndex, 3);
       const groupEmailCell = userGroupsSheet.getRange(rowIndex, 2);
@@ -283,7 +283,7 @@ function syncUserGroups() {
         // Now proceed with creating resources and syncing
         getOrCreateUserSheet_(groupName);
         getOrCreateGroup_(groupEmail, groupName);
-        syncGroupMembership_(groupEmail, groupName);
+        syncGroupMembership_(groupEmail, groupName, options);
 
         lastSyncedCell.setValue(Utilities.formatDate(new Date(), SpreadsheetApp.getActive().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss'));
         statusCell.setValue('OK');
@@ -301,6 +301,87 @@ function syncUserGroups() {
     log_(errorMessage, 'ERROR');
     SpreadsheetApp.getUi().alert('A fatal error occurred during user group sync: ' + e.message);
     sendErrorNotification_(errorMessage);
+  }
+}
+
+function syncAdds() {
+  setupControlSheets_();
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) {
+    SpreadsheetApp.getUi().alert('Sync is already in progress. Please wait a few minutes and try again.');
+    return;
+  }
+
+  try {
+    showToast_('Starting non-destructive sync (adds only)...', 'Sync Adds', -1);
+    log_('*** Starting non-destructive synchronization (adds only)...');
+
+    // 1. Sync Admins
+    syncAdmins();
+
+    // 2. Sync User Groups (creates groups, adds members)
+    syncUserGroups({ addOnly: true });
+
+    // 3. Process Managed Folders (creates folders, permissions, adds members)
+    processManagedFolders_({ addOnly: true });
+
+    showToast_('Add-only sync complete!', 'Sync Adds', 5);
+    log_('Add-only synchronization completed.');
+    SpreadsheetApp.getUi().alert('Non-destructive sync (adds only) is complete.\n\nCheck the \'Status\' column in the sheets for details.');
+
+  } catch (e) {
+    const errorMessage = 'FATAL ERROR in syncAdds: ' + e.toString() + '\n' + e.stack;
+    log_(errorMessage, 'ERROR');
+    showToast_('Add-only sync failed with a fatal error.', 'Sync Adds', 5);
+    SpreadsheetApp.getUi().alert('A fatal error occurred during add-only sync: ' + e.message);
+    sendErrorNotification_(errorMessage);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function syncDeletes() {
+  const ui = SpreadsheetApp.getUi();
+  const response = ui.alert(
+    'Confirm Destructive Sync',
+    'This will ONLY process deletions. It will remove users from groups if they are no longer in the user sheets. It will NOT add any new users, groups, or folders. Are you sure you want to continue?',
+    ui.ButtonSet.YES_NO
+  );
+
+  if (response !== ui.Button.YES) {
+    ui.alert('Delete sync cancelled.');
+    return;
+  }
+
+  setupControlSheets_();
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) {
+    ui.alert('Sync is already in progress. Please wait a few minutes and try again.');
+    return;
+  }
+
+  try {
+    showToast_('Starting destructive sync (deletes only)...', 'Sync Deletes', -1);
+    log_('*** Starting destructive synchronization (deletes only)...');
+
+    // 1. Sync User Groups (removes members)
+    syncUserGroups({ removeOnly: true });
+
+    // 2. Process Managed Folders (removes members)
+    processManagedFolders_({ removeOnly: true });
+
+    showToast_('Delete-only sync complete!', 'Sync Deletes', 5);
+    log_('Delete-only synchronization completed.');
+    SpreadsheetApp.getUi().alert('Destructive sync (deletes only) is complete.\n\nCheck the \'Status\' column in the sheets for details.');
+
+  } catch (e) {
+    const errorMessage = 'FATAL ERROR in syncDeletes: ' + e.toString() + '\n' + e.stack;
+    log_(errorMessage, 'ERROR');
+    showToast_('Delete-only sync failed with a fatal error.', 'Sync Deletes', 5);
+    SpreadsheetApp.getUi().alert('A fatal error occurred during delete-only sync: ' + e.message);
+    sendErrorNotification_(errorMessage);
+  } finally {
+    lock.releaseLock();
   }
 }
 
@@ -357,7 +438,7 @@ function fullSync() {
 /**
  * Reads the ManagedFolders sheet and processes each row.
  */
-function processManagedFolders_() {
+function processManagedFolders_(options = {}) {
   log_('*** Starting processing of ManagedFolders sheet...');
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
@@ -378,7 +459,7 @@ function processManagedFolders_() {
   for (let i = 2; i <= lastRow; i++) {
     showToast_('Processing row ' + i + ' of ' + lastRow + '...', 'Sync Progress', 10);
     try {
-      processRow_(i);
+      processRow_(i, options);
     } catch (e) {
       log_('Error processing row ' + i + ': ' + e.toString(), 'ERROR');
     }
@@ -390,7 +471,7 @@ function processManagedFolders_() {
  * Processes a single row from the ManagedFolders sheet.
  * @param {number} rowIndex The index of the row to process.
  */
-function processRow_(rowIndex) {
+function processRow_(rowIndex, options = {}) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
   const statusCell = sheet.getRange(rowIndex, STATUS_COL);
   
@@ -429,7 +510,7 @@ function processRow_(rowIndex) {
 
     getOrCreateGroup_(groupEmail, userSheetName);
     setFolderPermission_(folder.getId(), groupEmail, role);
-    syncGroupMembership_(groupEmail, userSheetName);
+    syncGroupMembership_(groupEmail, userSheetName, options);
 
     sheet.getRange(rowIndex, LAST_SYNCED_COL).setValue(Utilities.formatDate(new Date(), SpreadsheetApp.getActive().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss'));
     statusCell.setValue('OK');
