@@ -41,3 +41,20 @@ The project is now in a robust, well-documented state with a **manual-first** se
 3.  **Improved Documentation:** The `README.md` has been significantly overhauled to reflect the new, simpler manual-first workflow. It now includes clear sections for the recommended manual setup and the optional production upgrade.
 
 4.  **`teardown.sh`:** A helper script is provided to automate the deletion of the GCP project created during the optional upgrade, making it easy to start fresh.
+
+## Refactoring Sync Logic (Add/Delete Separation)
+
+To prevent accidental data loss and provide more granular control, the main synchronization logic was refactored. The single `Sync All` function, which performed both additions and deletions, was supplemented with two new, more specific functions:
+
+1.  **`Sync Adds`**: This is a non-destructive operation. It is designed to be run to add new permissions. It will:
+    *   Create new folders and Google Groups if they are defined in the sheets but do not yet exist.
+    *   Add new members to Google Groups if they are listed in the user sheets but are not yet in the group.
+    *   It will **not** remove any users, groups, or folders.
+
+2.  **`Sync Deletes`**: This is a destructive operation that requires user confirmation before proceeding. It is designed to be run to revoke permissions. It will:
+    *   Remove members from Google Groups if they have been removed from the user sheets.
+    *   It will **not** add any new users, groups, or folders.
+
+3.  **`Full Sync (Add & Delete)`**: The original `Sync All` function still exists under this name and performs both add and delete operations simultaneously.
+
+This separation makes the script safer to use, especially in environments where manual changes might occur. A dedicated test function, `runAddDeleteSeparationTest`, was also added to verify this new, separated logic.

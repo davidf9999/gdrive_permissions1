@@ -27,14 +27,18 @@ let SCRIPT_EXECUTION_MODE = 'DEFAULT'; // Can be 'DEFAULT' or 'TEST'
 function onOpen() {
   const ui = SpreadsheetApp.getUi(); // Declare ui here
   const menu = ui.createMenu('Permissions Manager')
+      .addItem('Sync Adds', 'syncAdds')
+      .addItem('Sync Deletes', 'syncDeletes')
+      .addSeparator()
+      .addItem('Full Sync (Add & Delete)', 'fullSync')
+      .addSeparator()
       .addItem('Sync Admins', 'syncAdmins')
       .addItem('Sync User Groups', 'syncUserGroups')
-      .addItem('Sync All Folders', 'fullSync')
-      .addItem('Sync All', 'fullSync')
       .addSeparator()
       .addSubMenu(ui.createMenu('Testing') // Use ui here
           .addItem('Run Manual Access Test', 'runManualAccessTest')
           .addItem('Run Stress Test', 'runStressTest')
+          .addItem('Run Add/Delete Separation Test', 'runAddDeleteSeparationTest')
           .addSeparator()
           .addItem('Cleanup Manual Test Data', 'cleanupManualTestData')
           .addItem('Cleanup Stress Test Data', 'cleanupStressTestData'))
@@ -585,7 +589,8 @@ function getOrCreateUserSheet_(sheetName) {
   }
 }
 
-function syncGroupMembership_(groupEmail, userSheetName) {
+function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
+  const { addOnly = false, removeOnly = false } = options;
   log_('*** Starting membership sync for group "' + groupEmail + '" from sheet "' + userSheetName + '"');
   
   try {
@@ -619,22 +624,31 @@ function syncGroupMembership_(groupEmail, userSheetName) {
     const boundary = 'batch_' + new Date().getTime();
 
     // Create requests for adding members
-    emailsToAdd.forEach(function(email) {
-      const payload = { email: email, role: 'MEMBER' };
-      batchRequests.push({
-        method: 'POST',
-        path: '/admin/directory/v1/groups/' + groupEmail + '/members',
-        payload: JSON.stringify(payload)
+    if (!removeOnly && emailsToAdd.length > 0) {
+      emailsToAdd.forEach(function(email) {
+        const payload = { email: email, role: 'MEMBER' };
+        batchRequests.push({
+          method: 'POST',
+          path: '/admin/directory/v1/groups/' + groupEmail + '/members',
+          payload: JSON.stringify(payload)
+        });
       });
-    });
+    }
 
     // Create requests for removing members
-    emailsToRemove.forEach(function(email) {
-      batchRequests.push({
-        method: 'DELETE',
-        path: '/admin/directory/v1/groups/' + groupEmail + '/members/' + email
+    if (!addOnly && emailsToRemove.length > 0) {
+      emailsToRemove.forEach(function(email) {
+        batchRequests.push({
+          method: 'DELETE',
+          path: '/admin/directory/v1/groups/' + groupEmail + '/members/' + email
+        });
       });
-    });
+    }
+
+    if (batchRequests.length === 0) {
+      log_('No changes to apply in this mode.');
+      return;
+    }
 
     // Build the multipart request body
     let requestBody = '';
@@ -652,7 +666,7 @@ function syncGroupMembership_(groupEmail, userSheetName) {
     });
     requestBody += '--' + boundary + '--';
 
-    const options = {
+    const fetchOptions = {
       method: 'POST',
       contentType: 'multipart/mixed; boundary=' + boundary,
       payload: requestBody,
@@ -662,8 +676,8 @@ function syncGroupMembership_(groupEmail, userSheetName) {
       muteHttpExceptions: true // Important to parse the response manually
     };
 
-    log_('Sending batch request with ' + emailsToAdd.length + ' additions and ' + emailsToRemove.length + ' removals for ' + groupEmail);
-    const response = UrlFetchApp.fetch('https://www.googleapis.com/batch/admin/directory_v1', options);
+    log_('Sending batch request with ' + batchRequests.length + ' operations for ' + groupEmail);
+    const response = UrlFetchApp.fetch('https://www.googleapis.com/batch/admin/directory_v1', fetchOptions);
     const responseCode = response.getResponseCode();
     const responseBody = response.getContentText();
 
@@ -1342,3 +1356,100 @@ function openUrl(url) {
 }
 
 
+
+function runAddDeleteSeparationTest() {
+  SCRIPT_EXECUTION_MODE = 'TEST';
+  const ui = SpreadsheetApp.getUi();
+  let testFolderName, testEmail, testRole, testRowIndex, userSheetName, groupEmail, folderId;
+
+  try {
+    if (shouldSkipGroupOps_()) {
+      ui.alert('This test requires the Admin Directory service (Admin SDK). Please enable it or run on a Google Workspace domain. Test aborted.');
+      return;
+    }
+
+    // --- Test Setup ---
+    const folderNamePrompt = ui.prompt('Add/Delete Test - Step 1/3: Folder Name', 'Enter a unique name for a new test folder.', ui.ButtonSet.OK_CANCEL);
+    if (folderNamePrompt.getSelectedButton() !== ui.Button.OK || !folderNamePrompt.getResponseText()) return ui.alert('Test cancelled.');
+    testFolderName = folderNamePrompt.getResponseText();
+    testRole = 'Editor'; // Using a fixed role for simplicity
+
+    const emailPrompt = ui.prompt('Add/Delete Test - Step 2/3: Test Email', 'Enter a REAL email address you can access for testing.', ui.ButtonSet.OK_CANCEL);
+    if (emailPrompt.getSelectedButton() !== ui.Button.OK || !emailPrompt.getResponseText()) return ui.alert('Test cancelled.');
+    testEmail = emailPrompt.getResponseText().trim().toLowerCase();
+
+    ui.alert('Add/Delete Test - Step 3/3: Running Test', 'The script will now run through the add/delete separation test. Please follow the prompts.', ui.ButtonSet.OK);
+
+    // --- Phase 1: Initial Add ---
+    log_('TEST: Initial Add Phase');
+    const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+    testRowIndex = managedSheet.getLastRow() + 1;
+    managedSheet.getRange(testRowIndex, FOLDER_NAME_COL).setValue(testFolderName);
+    managedSheet.getRange(testRowIndex, ROLE_COL).setValue(testRole);
+    
+    syncAdds();
+    
+    userSheetName = managedSheet.getRange(testRowIndex, USER_SHEET_NAME_COL).getValue();
+    groupEmail = managedSheet.getRange(testRowIndex, GROUP_EMAIL_COL).getValue();
+    folderId = managedSheet.getRange(testRowIndex, FOLDER_ID_COL).getValue();
+    const userSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(userSheetName);
+    if (!userSheet) throw new Error('Test failed: Could not find the created user sheet: ' + userSheetName);
+    
+    userSheet.getRange('A2').setValue(testEmail);
+    syncAdds();
+
+    // --- Verification 1: User was added ---
+    let members = fetchAllGroupMembers_(groupEmail);
+    let isMember = members.some(m => m.email.toLowerCase() === testEmail);
+    if (!isMember) {
+      throw new Error('VERIFICATION FAILED: User ' + testEmail + ' was not added to group ' + groupEmail + ' after syncAdds.');
+    }
+    log_('VERIFICATION PASSED: User was successfully added to the group.');
+    ui.alert('Verification Passed', 'User ' + testEmail + ' was correctly added to the group.', ui.ButtonSet.OK);
+
+    // --- Phase 2: Run Delete (should do nothing) ---
+    log_('TEST: No-Op Delete Phase');
+    syncDeletes(); // This will prompt for confirmation
+
+    // --- Verification 2: User was NOT removed ---
+    members = fetchAllGroupMembers_(groupEmail);
+    isMember = members.some(m => m.email.toLowerCase() === testEmail);
+    if (!isMember) {
+      throw new Error('VERIFICATION FAILED: User ' + testEmail + ' was removed from group ' + groupEmail + ' after a no-op syncDeletes call.');
+    }
+    log_('VERIFICATION PASSED: User was not removed by no-op delete.');
+    ui.alert('Verification Passed', 'User ' + testEmail + ' was NOT removed by the delete sync (as expected).', ui.ButtonSet.OK);
+
+    // --- Phase 3: Actual Deletion ---
+    log_('TEST: Actual Deletion Phase');
+    userSheet.getRange('A2').clearContent();
+    syncDeletes(); // This will prompt for confirmation
+
+    // --- Verification 3: User was removed ---
+    members = fetchAllGroupMembers_(groupEmail);
+    isMember = members.some(m => m.email.toLowerCase() === testEmail);
+    if (isMember) {
+      throw new Error('VERIFICATION FAILED: User ' + testEmail + ' was NOT removed from group ' + groupEmail + ' after syncDeletes.');
+    }
+    log_('VERIFICATION PASSED: User was successfully removed from the group.');
+    ui.alert('Test Complete: SUCCESS!', 'The user was successfully added and then removed using the separated sync functions.', ui.ButtonSet.OK);
+
+  } catch (e) {
+    log_('TEST FAILED: ' + e.toString() + ' Stack: ' + e.stack, 'ERROR');
+    ui.alert('Test FAILED. Check the logs for details. Error: ' + e.message);
+  } finally {
+    // --- Cleanup ---
+    const cleanup = ui.alert('Cleanup', 'Do you want to remove all test data (folder, group, and sheet)?', ui.ButtonSet.YES_NO);
+    if (cleanup === ui.Button.YES) {
+      if (testFolderName) {
+          cleanupFolderData_(testFolderName, folderId, groupEmail, userSheetName);
+          const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+          if (testRowIndex && managedSheet.getRange(testRowIndex, FOLDER_NAME_COL).getValue() === testFolderName) {
+              managedSheet.deleteRow(testRowIndex);
+          }
+      }
+      ui.alert('Cleanup complete.');
+    }
+    SCRIPT_EXECUTION_MODE = 'DEFAULT';
+  }
+}

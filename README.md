@@ -250,8 +250,12 @@ Behavior without Admin SDK:
 
 ## First Run & Testing Notes
 
-- Manual Access Test and Stress Test require Admin SDK. If not enabled or if you’re on a personal Gmail account, they will show an alert and abort.
-- If you want to validate sheet/folder setup only (without Admin SDK), run `Permissions Manager > Sync All` and verify:
+- The menu contains three main sync options:
+  - **`Sync Adds`**: Performs only additions (creates folders/groups, adds members). This is safe to run to add new permissions without affecting existing ones.
+  - **`Sync Deletes`**: Performs only deletions (removes members from groups). It will ask for confirmation before proceeding.
+  - **`Full Sync (Add & Delete)`**: Performs both additions and deletions in one go.
+- Manual Access Test and Stress Test require Admin SDK. If not enabled or if you’re on a personal Gmail account, they will show an alert and abort. These tests use the `Full Sync` functionality.
+- If you want to validate sheet/folder setup only (without Admin SDK), run `Permissions Manager > Sync Adds` and verify:
   - `ManagedFolders` rows populate `FolderID`, `UserSheetName`, and `GroupEmail`.
   - `Status` shows `SKIPPED (No Admin SDK)` when group ops are not available.
 - To fully exercise group membership and permissions, ensure Admin SDK is enabled and your account has the required admin privileges.
