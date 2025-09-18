@@ -32,8 +32,12 @@ function onOpen() {
       .addSeparator()
       .addItem('Full Sync (Add & Delete)', 'fullSync')
       .addSeparator()
-      .addItem('Sync Admins', 'syncAdmins')
-      .addItem('Sync User Groups', 'syncUserGroups')
+      .addSubMenu(ui.createMenu('Granular Sync')
+          .addItem('Sync Admins', 'syncAdmins')
+          .addItem('Sync User Groups', 'syncUserGroups')
+          .addSeparator()
+          .addItem('Sync All Folders - Adds Only', 'syncManagedFoldersAdds')
+          .addItem('Sync All Folders - Deletes Only', 'syncManagedFoldersDeletes'))
       .addSeparator()
       .addSubMenu(ui.createMenu('Testing') // Use ui here
           .addItem('Run Manual Access Test', 'runManualAccessTest')
@@ -41,7 +45,8 @@ function onOpen() {
           .addItem('Run Add/Delete Separation Test', 'runAddDeleteSeparationTest')
           .addSeparator()
           .addItem('Cleanup Manual Test Data', 'cleanupManualTestData')
-          .addItem('Cleanup Stress Test Data', 'cleanupStressTestData'))
+          .addItem('Cleanup Stress Test Data', 'cleanupStressTestData')
+          .addItem('Cleanup Add/Delete Test Data', 'cleanupAddDeleteSeparationTestData'))
       .addSeparator()
       .addSubMenu(ui.createMenu('Logging') // Use ui here
           .addItem('Clear All Logs', 'clearAllLogs'));
@@ -213,94 +218,114 @@ function syncAdmins() {
 
 
 function syncUserGroups(options = {}) {
+  const { returnPlanOnly = false } = options;
+  let deletionPlan = [];
+
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const userGroupsSheet = ss.getSheetByName(USER_GROUPS_SHEET_NAME);
     if (!userGroupsSheet) {
-      SpreadsheetApp.getUi().alert('UserGroups sheet not found.');
-      return;
+      if (!returnPlanOnly) SpreadsheetApp.getUi().alert('UserGroups sheet not found.');
+      return returnPlanOnly ? [] : undefined;
     }
 
     const lastRow = userGroupsSheet.getLastRow();
     if (lastRow < 2) {
         log_('No data rows to process in UserGroups sheet.');
-        return;
+        return returnPlanOnly ? [] : undefined;
     }
     
-    // If Admin SDK is unavailable, mark all rows as skipped and exit
+    // If Admin SDK is unavailable, we can't create a plan or sync.
     if (shouldSkipGroupOps_()) {
       log_('Admin SDK (Admin Directory) not available. Skipping syncUserGroups.', 'WARN');
-      const dataRange = userGroupsSheet.getRange(2, 1, lastRow - 1, 4); 
-      const data = dataRange.getValues();
-      for (let i = 0; i < data.length; i++) {
-        const rowIndex = i + 2;
-        const statusCell = userGroupsSheet.getRange(rowIndex, 4);
-        const lastSyncedCell = userGroupsSheet.getRange(rowIndex, 3);
-        const groupName = data[i][0];
-        let groupEmail = data[i][1];
-        if (groupName && !groupEmail) {
-          groupEmail = generateGroupEmail_(groupName);
-          userGroupsSheet.getRange(rowIndex, 2).setValue(groupEmail);
-        }
-        if (groupName) {
-          lastSyncedCell.setValue(Utilities.formatDate(new Date(), SpreadsheetApp.getActive().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss'));
-          statusCell.setValue('SKIPPED (No Admin SDK)');
-        }
+      if (!returnPlanOnly) {
+          const dataRange = userGroupsSheet.getRange(2, 1, lastRow - 1, 4); 
+          const data = dataRange.getValues();
+          for (let i = 0; i < data.length; i++) {
+            const rowIndex = i + 2;
+            if (data[i][0]) { // If there's a group name
+              userGroupsSheet.getRange(rowIndex, 3).setValue(Utilities.formatDate(new Date(), SpreadsheetApp.getActive().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss'));
+              userGroupsSheet.getRange(rowIndex, 4).setValue('SKIPPED (No Admin SDK)');
+            }
+          }
+          SpreadsheetApp.getUi().alert('User group sync skipped: Admin Directory service not available.');
       }
-      SpreadsheetApp.getUi().alert('User group sync skipped: Admin Directory service not available.');
-      return;
+      return returnPlanOnly ? [] : undefined;
     }
     
-    const dataRange = userGroupsSheet.getRange(2, 1, lastRow - 1, 4); // Get range for all data rows
+    const dataRange = userGroupsSheet.getRange(2, 1, lastRow - 1, 4);
     const data = dataRange.getValues();
 
     for (let i = 0; i < data.length; i++) {
-      const rowIndex = i + 2; // Sheet row index (1-based, accounting for header) 
-      const statusCell = userGroupsSheet.getRange(rowIndex, 4);
-      const lastSyncedCell = userGroupsSheet.getRange(rowIndex, 3);
-      const groupEmailCell = userGroupsSheet.getRange(rowIndex, 2);
-
+      const rowIndex = i + 2;
       try {
         let groupName = data[i][0];
         let groupEmail = data[i][1];
 
         if (!groupName) {
-          // Skip empty rows
           continue;
         }
         
-        statusCell.setValue('Processing...');
-        showToast_('Processing user group: ' + groupName + '...', 'Sync Progress', 10);
         log_('Processing user group: ' + groupName);
 
-        // Generate group email if it doesn't exist
         if (!groupEmail) {
           groupEmail = generateGroupEmail_(groupName);
-          groupEmailCell.setValue(groupEmail);
           log_('Generated group email for ' + groupName + ': ' + groupEmail);
         }
 
-        // Now proceed with creating resources and syncing
-        getOrCreateUserSheet_(groupName);
-        getOrCreateGroup_(groupEmail, groupName);
-        syncGroupMembership_(groupEmail, groupName, options);
+        if (returnPlanOnly) {
+          const plan = syncGroupMembership_(groupEmail, groupName, options);
+          if (plan) {
+            deletionPlan.push(plan);
+          }
+        } else {
+          const statusCell = userGroupsSheet.getRange(rowIndex, 4);
+          const lastSyncedCell = userGroupsSheet.getRange(rowIndex, 3);
+          const groupEmailCell = userGroupsSheet.getRange(rowIndex, 2);
 
-        lastSyncedCell.setValue(Utilities.formatDate(new Date(), SpreadsheetApp.getActive().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss'));
-        statusCell.setValue('OK');
-        log_('Successfully synced user group: ' + groupName);
+          statusCell.setValue('Processing...');
+          showToast_('Processing user group: ' + groupName + '...', 'Sync Progress', 10);
+          
+          if (!data[i][1]) { // If groupEmail was generated, write it to the sheet
+            groupEmailCell.setValue(groupEmail);
+          }
+
+          getOrCreateUserSheet_(groupName);
+          getOrCreateGroup_(groupEmail, groupName);
+          syncGroupMembership_(groupEmail, groupName, options);
+
+          lastSyncedCell.setValue(Utilities.formatDate(new Date(), SpreadsheetApp.getActive().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss'));
+          statusCell.setValue('OK');
+          log_('Successfully synced user group: ' + groupName);
+        }
 
       } catch (e) {
-        const errorMessage = 'ERROR: ' + e.message;
-        log_('Failed to process user group row ' + rowIndex + '. Error: ' + e.message + ' Stack: ' + e.stack, 'ERROR');
-        statusCell.setValue(errorMessage);
+        if (!returnPlanOnly) {
+          const statusCell = userGroupsSheet.getRange(rowIndex, 4);
+          const errorMessage = 'ERROR: ' + e.message;
+          log_('Failed to process user group row ' + rowIndex + '. Error: ' + e.message + ' Stack: ' + e.stack, 'ERROR');
+          statusCell.setValue(errorMessage);
+        } else {
+          log_('Error during deletion planning for group ' + (data[i][0] || 'unknown') + '. Error: ' + e.message, 'WARN');
+        }
       }
     }
+
+    if (returnPlanOnly) {
+      return deletionPlan;
+    }
+    
     SpreadsheetApp.getUi().alert('User groups sync complete.');
+
   } catch (e) {
     const errorMessage = 'FATAL ERROR in syncUserGroups: ' + e.toString() + '\n' + e.stack;
     log_(errorMessage, 'ERROR');
-    SpreadsheetApp.getUi().alert('A fatal error occurred during user group sync: ' + e.message);
-    sendErrorNotification_(errorMessage);
+    if (!returnPlanOnly) {
+      SpreadsheetApp.getUi().alert('A fatal error occurred during user group sync: ' + e.message);
+      sendErrorNotification_(errorMessage);
+    } else {
+      throw e; // Re-throw for the planner to catch
+    }
   }
 }
 
@@ -342,9 +367,45 @@ function syncAdds() {
 
 function syncDeletes() {
   const ui = SpreadsheetApp.getUi();
+  
+  // --- Phase 1: Planning ---
+  log_('*** Starting deletion planning phase...');
+  showToast_('Planning deletions...', 'Sync Deletes', 10);
+  
+  let deletionPlan = [];
+  try {
+    const planOptions = { removeOnly: true, returnPlanOnly: true };
+    const groupDeletions = syncUserGroups(planOptions);
+    const folderDeletions = processManagedFolders_(planOptions);
+    deletionPlan = (groupDeletions || []).concat(folderDeletions || []);
+  } catch (e) {
+    const errorMessage = 'FATAL ERROR during deletion planning: ' + e.toString() + '\n' + e.stack;
+    log_(errorMessage, 'ERROR');
+    showToast_('Deletion planning failed with a fatal error.', 'Sync Deletes', 5);
+    ui.alert('A fatal error occurred during the deletion planning phase: ' + e.message);
+    sendErrorNotification_(errorMessage);
+    return;
+  }
+
+  if (deletionPlan.length === 0) {
+    log_('No deletions are pending.');
+    ui.alert('No pending deletions found.');
+    return;
+  }
+
+  // --- Phase 2: Confirmation ---
+  let confirmationMessage = 'This will process deletions and remove the following users from groups:\n';
+  deletionPlan.forEach(plan => {
+    confirmationMessage += '\nFrom Group \'' + plan.groupName + '\':\n';
+    plan.usersToRemove.forEach(user => {
+      confirmationMessage += '  - ' + user + '\n';
+    });
+  });
+  confirmationMessage += '\nAre you sure you want to continue?';
+
   const response = ui.alert(
     'Confirm Destructive Sync',
-    'This will ONLY process deletions. It will remove users from groups if they are no longer in the user sheets. It will NOT add any new users, groups, or folders. Are you sure you want to continue?',
+    confirmationMessage,
     ui.ButtonSet.YES_NO
   );
 
@@ -353,6 +414,7 @@ function syncDeletes() {
     return;
   }
 
+  // --- Phase 3: Execution ---
   setupControlSheets_();
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(15000)) {
@@ -364,21 +426,19 @@ function syncDeletes() {
     showToast_('Starting destructive sync (deletes only)...', 'Sync Deletes', -1);
     log_('*** Starting destructive synchronization (deletes only)...');
 
-    // 1. Sync User Groups (removes members)
-    syncUserGroups({ removeOnly: true });
-
-    // 2. Process Managed Folders (removes members)
-    processManagedFolders_({ removeOnly: true });
+    const execOptions = { removeOnly: true };
+    syncUserGroups(execOptions);
+    processManagedFolders_(execOptions);
 
     showToast_('Delete-only sync complete!', 'Sync Deletes', 5);
     log_('Delete-only synchronization completed.');
-    SpreadsheetApp.getUi().alert('Destructive sync (deletes only) is complete.\n\nCheck the \'Status\' column in the sheets for details.');
+    ui.alert('Destructive sync (deletes only) is complete.\n\nCheck the \'Status\' column in the sheets for details.');
 
   } catch (e) {
     const errorMessage = 'FATAL ERROR in syncDeletes: ' + e.toString() + '\n' + e.stack;
     log_(errorMessage, 'ERROR');
     showToast_('Delete-only sync failed with a fatal error.', 'Sync Deletes', 5);
-    SpreadsheetApp.getUi().alert('A fatal error occurred during delete-only sync: ' + e.message);
+    ui.alert('A fatal error occurred during delete-only sync: ' + e.message);
     sendErrorNotification_(errorMessage);
   } finally {
     lock.releaseLock();
@@ -432,6 +492,76 @@ function fullSync() {
   }
 }
 
+function syncManagedFoldersAdds() {
+  setupControlSheets_();
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) {
+    SpreadsheetApp.getUi().alert('Sync is already in progress. Please wait a few minutes and try again.');
+    return;
+  }
+
+  try {
+    showToast_('Starting folder-only sync (adds only)...', 'Sync Folders - Adds', -1);
+    log_('*** Starting Managed Folders only synchronization (adds only)...');
+
+    processManagedFolders_({ addOnly: true });
+
+    showToast_('Folder-only sync (adds) complete!', 'Sync Folders - Adds', 5);
+    log_('Managed Folders only synchronization (adds) completed.');
+    SpreadsheetApp.getUi().alert('Folder-only sync (adds only) is complete.\n\nCheck the \'Status\' column in the \'ManagedFolders\' sheet for details.');
+
+  } catch (e) {
+    const errorMessage = 'FATAL ERROR in syncManagedFoldersAdds: ' + e.toString() + '\n' + e.stack;
+    log_(errorMessage, 'ERROR');
+    showToast_('Folder-only sync (adds) failed with a fatal error.', 'Sync Folders - Adds', 5);
+    SpreadsheetApp.getUi().alert('A fatal error occurred during folder-only sync (adds): ' + e.message);
+    sendErrorNotification_(errorMessage);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function syncManagedFoldersDeletes() {
+  const ui = SpreadsheetApp.getUi();
+  const response = ui.alert(
+    'Confirm Destructive Folder Sync',
+    'This will ONLY process deletions for your Managed Folders. It will remove users from the groups associated with your folders if they are no longer in the user sheets. Are you sure you want to continue?',
+    ui.ButtonSet.YES_NO
+  );
+
+  if (response !== ui.Button.YES) {
+    ui.alert('Delete sync cancelled.');
+    return;
+  }
+
+  setupControlSheets_();
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) {
+    ui.alert('Sync is already in progress. Please wait a few minutes and try again.');
+    return;
+  }
+
+  try {
+    showToast_('Starting folder-only sync (deletes only)...', 'Sync Folders - Deletes', -1);
+    log_('*** Starting Managed Folders only synchronization (deletes only)...');
+
+    processManagedFolders_({ removeOnly: true });
+
+    showToast_('Folder-only sync (deletes) complete!', 'Sync Folders - Deletes', 5);
+    log_('Managed Folders only synchronization (deletes) completed.');
+    SpreadsheetApp.getUi().alert('Destructive folder-only sync (deletes only) is complete.\n\nCheck the \'Status\' column in the \'ManagedFolders\' sheet for details.');
+
+  } catch (e) {
+    const errorMessage = 'FATAL ERROR in syncManagedFoldersDeletes: ' + e.toString() + '\n' + e.stack;
+    log_(errorMessage, 'ERROR');
+    showToast_('Folder-only sync (deletes) failed with a fatal error.', 'Sync Folders - Deletes', 5);
+    SpreadsheetApp.getUi().alert('A fatal error occurred during folder-only sync (deletes): ' + e.message);
+    sendErrorNotification_(errorMessage);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 
 /***** CORE LOGIC *****/
 
@@ -439,42 +569,58 @@ function fullSync() {
  * Reads the ManagedFolders sheet and processes each row.
  */
 function processManagedFolders_(options = {}) {
+  const { returnPlanOnly = false } = options;
+  let deletionPlan = [];
+
   log_('*** Starting processing of ManagedFolders sheet...');
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
   if (!sheet) {
-    SpreadsheetApp.getUi().alert('CRITICAL: Configuration sheet named "' + MANAGED_FOLDERS_SHEET_NAME + '" not found. Aborting.');
-    return;
+    if (!returnPlanOnly) SpreadsheetApp.getUi().alert('CRITICAL: Configuration sheet named "' + MANAGED_FOLDERS_SHEET_NAME + '" not found. Aborting.');
+    return returnPlanOnly ? [] : undefined;
   }
 
-  setSheetUiStyles_();
+  if (!returnPlanOnly) setSheetUiStyles_();
 
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) {
       log_('No data rows to process in ManagedFolders sheet.');
-      return;
+      return returnPlanOnly ? [] : undefined;
   }
 
-  // Loop through each row (starting from row 2 to skip header)
   for (let i = 2; i <= lastRow; i++) {
-    showToast_('Processing row ' + i + ' of ' + lastRow + '...', 'Sync Progress', 10);
+    if (!returnPlanOnly) showToast_('Processing row ' + i + ' of ' + lastRow + '...', 'Sync Progress', 10);
     try {
-      processRow_(i, options);
+      const plan = processRow_(i, options);
+      if (plan) {
+        deletionPlan.push(plan);
+      }
     } catch (e) {
       log_('Error processing row ' + i + ': ' + e.toString(), 'ERROR');
     }
   }
   log_('Finished processing all rows.');
+
+  if (returnPlanOnly) {
+    return deletionPlan;
+  }
 }
 
-/**
- * Processes a single row from the ManagedFolders sheet.
- * @param {number} rowIndex The index of the row to process.
- */
 function processRow_(rowIndex, options = {}) {
+  const { returnPlanOnly = false } = options;
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
-  const statusCell = sheet.getRange(rowIndex, STATUS_COL);
   
+  if (returnPlanOnly) {
+    const groupEmail = sheet.getRange(rowIndex, GROUP_EMAIL_COL).getValue();
+    const userSheetName = sheet.getRange(rowIndex, USER_SHEET_NAME_COL).getValue();
+    if (groupEmail && userSheetName && !shouldSkipGroupOps_()) {
+      return syncGroupMembership_(groupEmail, userSheetName, options);
+    }
+    return null; // Cannot create a plan if group info isn't already populated in the sheet.
+  }
+
+  // --- Fall through to original execution logic if not in planning mode ---
+  const statusCell = sheet.getRange(rowIndex, STATUS_COL);
   try {
     statusCell.setValue('Processing...');
     
@@ -500,12 +646,11 @@ function processRow_(rowIndex, options = {}) {
 
     getOrCreateUserSheet_(userSheetName);
     
-    // Skip group operations gracefully if Admin SDK is unavailable
     if (shouldSkipGroupOps_()) {
       log_('Skipping group operations for row ' + rowIndex + ' (Admin SDK not available).', 'WARN');
       sheet.getRange(rowIndex, LAST_SYNCED_COL).setValue(Utilities.formatDate(new Date(), SpreadsheetApp.getActive().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss'));
       statusCell.setValue('SKIPPED (No Admin SDK)');
-      return;
+      return null;
     }
 
     getOrCreateGroup_(groupEmail, userSheetName);
@@ -519,6 +664,7 @@ function processRow_(rowIndex, options = {}) {
     log_('Failed to process row ' + rowIndex + '. Error: ' + e.message + ' Stack: ' + e.stack, 'ERROR');
     statusCell.setValue('Error: ' + e.message);
   }
+  return null;
 }
 
 /**
@@ -671,7 +817,7 @@ function getOrCreateUserSheet_(sheetName) {
 }
 
 function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
-  const { addOnly = false, removeOnly = false } = options;
+  const { addOnly = false, removeOnly = false, returnPlanOnly = false } = options;
   log_('*** Starting membership sync for group "' + groupEmail + '" from sheet "' + userSheetName + '"');
   
   try {
@@ -695,6 +841,17 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
       return !sheetSet.has(m.email.toLowerCase()) && m.role !== 'OWNER';
     });
     const emailsToRemove = membersToRemove.map(function(m) { return m.email; });
+
+    if (returnPlanOnly && removeOnly && emailsToRemove.length > 0) {
+      return {
+        groupEmail: groupEmail,
+        groupName: userSheetName, 
+        usersToRemove: emailsToRemove
+      };
+    }
+    if (returnPlanOnly) {
+        return null;
+    }
 
     if (emailsToAdd.length === 0 && emailsToRemove.length === 0) {
       log_('No membership changes required for group "' + groupEmail + '". Sync complete.');
@@ -1179,6 +1336,54 @@ function cleanupManualTestData() {
     }
     const ui = SpreadsheetApp.getUi();
     const folderNamePrompt = ui.prompt('Enter the name of the manual test folder to clean up:');
+    if (folderNamePrompt.getSelectedButton() !== ui.Button.OK || !folderNamePrompt.getResponseText()) {
+      return;
+    }
+    const folderName = folderNamePrompt.getResponseText();
+
+    const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+    const data = managedSheet.getDataRange().getValues();
+    let rowIndexToDelete = -1;
+    let folderId, groupEmail, userSheetName;
+
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][FOLDER_NAME_COL - 1] === folderName) {
+        rowIndexToDelete = i + 1;
+        folderId = data[i][FOLDER_ID_COL - 1];
+        groupEmail = data[i][GROUP_EMAIL_COL - 1];
+        userSheetName = data[i][USER_SHEET_NAME_COL - 1];
+        break;
+      }
+    }
+
+    if (rowIndexToDelete === -1) {
+      ui.alert('Folder not found in the ManagedFolders sheet.');
+      return;
+    }
+
+    const response = ui.alert('Are you sure you want to delete the test data for folder "' + folderName + '"?', 'This will delete the folder, group, and sheet.', ui.ButtonSet.YES_NO);
+    if (response !== ui.Button.YES) {
+      return;
+    }
+
+    cleanupFolderData_(folderName, folderId, groupEmail, userSheetName);
+    managedSheet.deleteRow(rowIndexToDelete);
+
+    ui.alert('Cleanup Complete!');
+  } finally {
+    SCRIPT_EXECUTION_MODE = 'DEFAULT';
+  }
+}
+
+function cleanupAddDeleteSeparationTestData() {
+  SCRIPT_EXECUTION_MODE = 'TEST';
+  try {
+    if (shouldSkipGroupOps_()) {
+      SpreadsheetApp.getUi().alert('Cleanup requires the Admin Directory service (Admin SDK). Please enable it or run on a Google Workspace domain. Aborting.');
+      return;
+    }
+    const ui = SpreadsheetApp.getUi();
+    const folderNamePrompt = ui.prompt('Enter the name of the Add/Delete Separation test folder to clean up:');
     if (folderNamePrompt.getSelectedButton() !== ui.Button.OK || !folderNamePrompt.getResponseText()) {
       return;
     }

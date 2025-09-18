@@ -41,14 +41,12 @@ This guide will walk you through the simple, one-time setup process. This is the
 
 ### Step 1: Prerequisites
 
-### Step 1: Prerequisites
-
 *   A **Google Workspace** account (a standard `@gmail.com` account is not sufficient).
 *   You must be a **Super Admin** for your Google Workspace domain to have the necessary permissions to create Google Groups.
 
 #### Who Can Run The Script? A Critical Requirement
 
-Only **Google Workspace Administrators** for your domain (e.g., `your-company.com`) can successfully run the script's synchronization functions (`Sync All`, `Sync User Groups`, etc.).
+Only **Google Workspace Administrators** for your domain (e.g., `your-company.com`) can successfully run the script's synchronization functions (`Full Sync (Add & Delete)`, `Sync User Groups`, etc.).
 
 This is because the script's core purpose is to create and manage Google Groups, which requires administrative permissions via Google's **Admin SDK API**. A regular user, even from within your domain, does not have these permissions by default. A personal `@gmail.com` account can **never** have these permissions for your domain.
 
@@ -104,29 +102,23 @@ Before your script can ask for permissions, you must configure a consent screen.
 
 1.  **Go to Project Settings:** In the Apps Script editor, click on the **Project Settings** icon (a gear ⚙️) in the left-hand navigation panel.
 
-2.  **Attempt to Set Project:** In the "Google Cloud Platform (GCP) Project" section, click the **Change Project** button. You will see a message with the Project Number for the script's auto-created project. Copy this number, paste it into the text box, and click **Set Project**.
+2.  **Get Project Number:** In the "Google Cloud Platform (GCP) Project" section, a GCP project is associated with your script. It will have a Project ID and a Project Number. **Copy the Project Number.** (If you have previously linked other projects, ensure you are using the default project for this script).
 
-3.  **Trigger the Error:** You will most likely see an error stating that the OAuth consent screen needs to be configured. **This is expected.** The error message should contain a blue link to configure the consent screen. Click that link.
+3.  **Check for Existing Consent Screen:** Click the **Change Project** button, paste the copied Project Number into the text box, and click **Set Project**.
+    *   **If it succeeds without error:** The consent screen is already configured. You can skip the rest of Part B and proceed directly to **Part C: Link the Project and Enable APIs**.
+    *   **If you see an error:** You will see an error stating that the OAuth consent screen needs to be configured. This is expected if it's your first time. The error message should contain a blue link to "configure the consent screen". **Click that link to proceed to the next step.**
 
-4.  **Choose User Type:** The link will take you to the Google Cloud Console. 
-    *   You may be asked to choose a **User Type** (Internal vs. External). If so, select **Internal** and click **Create**. This is the simplest option.
-    *   If you are taken directly to the "App registration" screen, your app is being configured as **External**, which is also fine.
-
-5.  **Fill in App Information:**
+4.  **Configure Consent Screen (if required):** The link will take you to the Google Cloud Console.
+    *   You may be asked to choose a **User Type** (Internal vs. External). Select **Internal** and click **Create**.
     *   **App name:** Enter a descriptive name, like `Drive Permissions Manager`.
     *   **User support email:** Select your email from the dropdown.
     *   **Developer contact information:** Enter your email address.
     *   Click **Save and Continue**.
 
-6.  **Scopes:** On the "Scopes" page, click **Save and Continue** to skip it.
-
-7.  **Test Users (Crucial for External Apps):**
-    *   If your app is being configured as **External**, you will now be on the "Test users" page. **This is a required step.**
-    *   Click **+ Add Users**, type in your own Google Workspace email address, and click **Add**.
-
-8.  **Finish:** Click **Save and Continue** one last time. You should now see a summary of your registration. The consent screen is now configured.
-
-    **Note:** You may now be on a page that says "You haven't configured any OAuth clients". You can safely ignore this. Apps Script creates and manages this for you automatically when you run the script.
+5.  **Scopes & Test Users:**
+    *   On the "Scopes" page, click **Save and Continue** to skip it.
+    *   If your app is "External", you will be on the "Test users" page. Click **+ Add Users**, type in your own Google Workspace email address, and click **Add**.
+    *   Click **Save and Continue** to finish.
 
 ---
 
@@ -151,7 +143,7 @@ Now you can complete the connection.
 1.  Save the script project by clicking the **Save project** (disk icon 💾) at the top of the Apps Script editor.
 2.  Go back to your Google Sheet tab and **refresh the page**.
 3.  A new menu named **Permissions Manager** should appear in the Google Sheets menu bar.
-4.  Click **Permissions Manager > Sync All**.
+4.  Click **Permissions Manager > Full Sync (Add & Delete)**.
 5.  The first time you run this, Google will ask you to authorize the script. Follow the on-screen prompts to grant the necessary permissions.
 
 Your setup is now complete! The script will have automatically created the necessary control sheets (`ManagedFolders`, `Admins`, etc.) for you.
