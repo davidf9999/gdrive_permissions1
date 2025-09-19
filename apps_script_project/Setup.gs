@@ -89,4 +89,13 @@ function setupLogSheets_() {
     testLogSheet.getRange('A1:B1').setValues([['Timestamp', 'Message']]).setFontWeight('bold');
     testLogSheet.setFrozenRows(1);
   }
+
+  // Check for DryRunAuditLog sheet
+  let auditLogSheet = ss.getSheetByName(DRY_RUN_AUDIT_LOG_SHEET_NAME);
+  if (!auditLogSheet) {
+    auditLogSheet = ss.insertSheet(DRY_RUN_AUDIT_LOG_SHEET_NAME);
+    const headers = ['Timestamp', 'Type', 'Identifier', 'Issue', 'Details'];
+    auditLogSheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
+    auditLogSheet.setFrozenRows(1);
+  }
 }

@@ -6,7 +6,7 @@
 
 This repository contains a powerful solution for managing access to a large number of Google Drive folders using a central Google Sheet. It uses Google Groups to provide a scalable and auditable permissions system, all managed from a familiar spreadsheet interface.
 
-The recommended setup is a simple, manual copy-and-paste of the core script, which can be done in minutes. An optional, more advanced setup is available for production environments that require higher API quotas.
+The recommended setup uses the `clasp` command-line tool to deploy the script, which handles the multi-file project structure automatically. An optional, more advanced setup is available for production environments that require higher API quotas.
 
 ---
 
@@ -35,44 +35,48 @@ This solution automates the entire lifecycle of this approach:
 
 ---
 
-## Setup Guide (Recommended Manual Setup)
+## Setup Guide
 
-This guide will walk you through the simple, one-time setup process. This is the recommended approach and requires no special tools.
+This guide will walk you through setting up the project for the first time. Because the script is now split into multiple files for better organization, the installation process uses a command-line tool called `clasp`.
 
 ### Step 1: Prerequisites
 
 *   A **Google Workspace** account (a standard `@gmail.com` account is not sufficient).
-*   You must be a **Super Admin** for your Google Workspace domain to have the necessary permissions to create Google Groups.
+*   You must be a **Super Admin** for your Google Workspace domain to have the necessary permissions.
+*   **Node.js and npm:** You must have Node.js and npm installed on your computer. You can download them from [https://nodejs.org/](https://nodejs.org/).
+*   **Clasp:** Install Google's command-line tool for Apps Script by running this command in your terminal:
+    ```bash
+    npm install -g @google/clasp
+    ```
 
-#### Who Can Run The Script? A Critical Requirement
+### Step 2: Create the Google Sheet & Apps Script Project
 
-Only **Google Workspace Administrators** for your domain (e.g., `your-company.com`) can successfully run the script's synchronization functions (`Full Sync (Add & Delete)`, `Sync User Groups`, etc.).
+1.  **Create the Sheet:** Go to [Google Sheets](https://sheets.google.com) and create a new, blank spreadsheet. Give it a descriptive name (e.g., `Drive Permissions Control`).
+2.  **Open the Script Editor:** In your new sheet, click on **Extensions > Apps Script**. This creates a new, empty Apps Script project that is bound to your sheet.
+3.  **Get the Script ID:** In the Apps Script editor, click on **Project Settings** (the gear icon ⚙️). Copy the **Script ID** from the "IDs" section. You will need this in the next step.
 
-This is because the script's core purpose is to create and manage Google Groups, which requires administrative permissions via Google's **Admin SDK API**. A regular user, even from within your domain, does not have these permissions by default. A personal `@gmail.com` account can **never** have these permissions for your domain.
+### Step 3: Configure and Deploy the Script with `clasp`
 
-**What this means for you:**
-
-*   The person setting up this sheet **must** be a Workspace Admin.
-*   If you plan to have other colleagues run the syncs, they **must also** have Google Workspace accounts on your domain, and you must grant them the necessary administrative privileges (e.g., the "Groups Admin" role) from the Google Workspace Admin Console.
-*   When configuring the OAuth Consent Screen (detailed in Step 4), you **must** choose the **Internal** audience. This correctly restricts the script's usage to your internal, authorized administrators.
-
-#### A Note on External Users
-
-You might want to grant folder access to users with personal `@gmail.com` accounts. This is fully supported. The requirement above applies only to the administrators **running the script**, not to the end-users being managed.
-
-The ability to add external members to your Google Groups is a separate setting in your **Google Workspace Admin Console** (usually under `Groups > Sharing settings`). Please ensure your organization's settings permit adding members from outside the organization.
-
-### Step 2: Create the Google Sheet
-
-1.  Go to [Google Sheets](https://sheets.google.com) and create a new, blank spreadsheet.
-2.  Give it a descriptive name, for example: `Drive Permissions Control`.
-
-### Step 3: Install the Apps Script
-
-1.  In your new Google Sheet, click on **Extensions > Apps Script**. A new browser tab will open with the script editor.
-2.  In the editor, click on `Code.gs` on the left, and delete the default `function myFunction() {}` code.
-3.  Open the `apps_script_project/Code.js` file from this repository.
-4.  Copy the entire contents of `Code.js` and paste it into the Apps Script editor.
+1.  **Clone this Repository:** If you haven't already, clone this project repository to your local machine.
+2.  **Log in to `clasp`:** In your terminal, run `clasp login` and follow the prompts to authorize it with your Google account.
+3.  **Configure the Project:** In the root directory of this repository, create a file named `.clasp.json` and add the following content, pasting the Script ID you copied in the previous step:
+    ```json
+    {
+      "scriptId": "YOUR_SCRIPT_ID_HERE",
+      "rootDir": "apps_script_project"
+    }
+    ```
+    The `rootDir` property is essential, as it tells `clasp` that our script files are located in the `apps_script_project` folder.
+4.  **Fetch the Manifest:** Before you can push the code, you need the project's manifest file. Run the following command to pull it from the empty project you just created:
+    ```bash
+    clasp pull
+    ```
+    This will create an `appsscript.json` file inside the `apps_script_project` directory.
+5.  **Deploy the Code:** Now, push all the local script files to your Apps Script project by running:
+    ```bash
+    clasp push
+    ```
+    This will upload all the `.js` and `.gs` files from the `apps_script_project` directory.
 
 ### Step 4: Enable Required APIs & Configure Consent
 
@@ -153,6 +157,18 @@ Your setup is now complete! The script will have automatically created the neces
 ## Usage Guide
 
 For a detailed tutorial on how to use the spreadsheet, what each sheet and column means, and common workflows, please see the dedicated **[User Guide](./docs/USER_GUIDE.md)**.
+
+---
+
+## Dry Run Audit
+
+This project includes a powerful, read-only audit feature to help you verify your permissions configuration.
+
+*   **What it does:** The audit checks for discrepancies between your configuration in the sheets and the actual permissions in Google Drive and Google Groups. It does **not** make any changes.
+*   **How to run it:** From the spreadsheet menu, select **Permissions Manager > Dry Run Audit**.
+*   **How to read the results:** All findings are logged in the **`DryRunAuditLog`** sheet. If this sheet is empty after a run, it means no problems were found.
+
+For a detailed explanation of the different issues the audit can find, please see the **[User Guide](./docs/USER_GUIDE.md)**.
 
 ---
 

@@ -58,3 +58,35 @@ To prevent accidental data loss and provide more granular control, the main sync
 3.  **`Full Sync (Add & Delete)`**: The original `Sync All` function still exists under this name and performs both add and delete operations simultaneously.
 
 This separation makes the script safer to use, especially in environments where manual changes might occur. A dedicated test function, `runAddDeleteSeparationTest`, was also added to verify this new, separated logic.
+
+## Code Refactoring and `clasp` Integration
+
+To improve maintainability and scalability, the monolithic `Code.js` file was refactored into a modular, multi-file structure. This change makes the codebase much easier to understand and manage.
+
+*   **New File Structure:** The logic is now organized into the following files within the `apps_script_project` directory:
+    *   `Code.js`: The main file, containing only global constants and the `onOpen()` menu creation function.
+    *   `Setup.gs`: Functions for creating and configuring the necessary sheets.
+    *   `Sync.gs`: The main functions for syncing permissions (`syncAdds`, `syncDeletes`, etc.).
+    *   `Core.gs`: The core logic for interacting with Google Drive and Google Groups.
+    *   `Utils.gs`: Helper functions for logging, configuration, and other utilities.
+    *   `Help.gs`: Functions for the "Help" menu.
+    *   `Audit.gs`: Contains the logic for the new Dry Run Audit feature.
+    *   `Tests.gs`: All test-related functions.
+
+*   **`clasp` for Deployment:** Due to the new multi-file structure, using the `clasp` command-line tool is now the **required method** for deploying the script. The old manual copy-paste method is no longer feasible. The `README.md` has been updated with detailed instructions on how to configure and use `clasp`, including setting the `rootDir` in a `.clasp.json` file.
+
+## New Feature: Dry Run Audit
+
+A new "Dry Run Audit" feature was added to allow administrators to verify the integrity of their permissions configuration without making any changes.
+
+*   **Purpose:** The audit checks for discrepancies between the desired state (defined in the Google Sheets) and the actual state (in Google Drive and Google Groups).
+*   **How it Works:** When run from the **Permissions Manager > Dry Run Audit** menu, the script performs the following checks:
+    1.  **Folder Permissions:** Verifies that each managed folder has the correct Google Group assigned to it with the proper role (Viewer, Editor, etc.).
+    2.  **Group Membership:** For every managed group, it compares the list of desired members (from the user sheets) against the actual members in the Google Group.
+*   **Reporting:** All findings are logged in a new **`DryRunAuditLog`** sheet. If the sheet is empty after a run, it means no discrepancies were found. The audit will log issues such as:
+    *   `Permission Mismatch`: A group has the wrong role on a folder.
+    *   `Missing Members`: Users who are in a sheet but not in the corresponding Google Group.
+    *   `Extra Members`: Users who are in a Google Group but have been removed from the sheet.
+    *   `Folder Not Found`: A folder ID in the sheet does not correspond to an existing folder.
+
+This feature provides a powerful, read-only way to ensure the system is in its expected state and to troubleshoot any issues.

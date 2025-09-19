@@ -75,6 +75,35 @@ Once enabled, you can view the logs in the [Google Cloud Logs Explorer](https://
 
 ---
 
+## Verifying Permissions with the Dry Run Audit
+
+The script includes a powerful, read-only **Dry Run Audit** feature that lets you check for any issues or discrepancies without making any changes. It's highly recommended to run this periodically to ensure the integrity of your permissions setup.
+
+### How to Run the Audit
+
+From the spreadsheet menu, select **Permissions Manager > Dry Run Audit**.
+
+The script will run in the background and post its findings to a dedicated log sheet.
+
+### Understanding the `DryRunAuditLog` Sheet
+
+After the audit runs, check the **`DryRunAuditLog`** sheet.
+
+*   **If the sheet is empty:** Congratulations! The audit found no problems. Your configured permissions match the actual state in Google Drive and Google Groups.
+*   **If the sheet has entries:** Each row represents a discrepancy that the audit found. Here are the common issues it can detect:
+
+| Issue Type          | Identifier    | Issue                 | Details                                                                              |
+| :------------------ | :------------ | :-------------------- | :----------------------------------------------------------------------------------- |
+| **Folder Permission** | Folder Name   | `Permission Mismatch` | The group has a different role on the folder than what is configured. (e.g., Expected: Viewer, Actual: NONE). |
+| **Folder**          | Folder Name   | `Folder Not Found`    | The Folder ID in the `ManagedFolders` sheet is invalid or points to a deleted folder. |
+| **Group Membership**  | Group Name    | `Missing Members`     | Users are listed in the user sheet but are not in the actual Google Group.         |
+| **Group Membership**  | Group Name    | `Extra Members`       | Users are in the Google Group but are not listed in the corresponding user sheet.    |
+| **Group Membership**  | Group Name    | `Error`               | The audit could not check the group, often because the group itself does not exist.  |
+
+Running the audit is a safe and effective way to confirm that your permissions are exactly as you've defined them in the sheets.
+
+---
+
 ## Common Workflows
 
 ### How to Grant a Team Access to a New Folder
