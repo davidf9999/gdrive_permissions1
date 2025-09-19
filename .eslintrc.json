@@ -4,16 +4,15 @@
     "eslint:recommended",
     "prettier"
   ],
-  "parserOptions": {
-    "ecmaVersion": 2020
-  },
-  "env": {
-    "es6": true
-  },
-  "rules": {},
   "overrides": [
     {
       "files": ["apps_script_project/**/*.js", "apps_script_project/**/*.gs"],
+      "parserOptions": {
+        "ecmaVersion": 2020
+      },
+      "env": {
+        "es6": true
+      },
       "globals": {
         "AdminDirectory": "readonly",
         "CacheService": "readonly",
@@ -26,9 +25,11 @@
         "Session": "readonly",
         "SpreadsheetApp": "readonly",
         "UrlFetchApp": "readonly",
-        "Utilities": "readonly"
+        "Utilities": "readonly",
+        "ScriptApp": "readonly"
       },
       "rules": {
+        "no-undef": "off",
         "no-unused-vars": "off"
       }
     },
@@ -37,6 +38,9 @@
       "env": {
         "node": true,
         "jest": true
+      },
+      "rules": {
+        "no-undef": "error"
       }
     }
   ]
