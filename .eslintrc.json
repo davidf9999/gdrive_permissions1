@@ -4,12 +4,12 @@
     "eslint:recommended",
     "prettier"
   ],
+  "parserOptions": {
+    "ecmaVersion": 2020
+  },
   "overrides": [
     {
       "files": ["apps_script_project/**/*.js", "apps_script_project/**/*.gs"],
-      "parserOptions": {
-        "ecmaVersion": 2020
-      },
       "env": {
         "es6": true
       },
@@ -34,7 +34,7 @@
       }
     },
     {
-      "files": ["*.js", "tests/**/*.js"],
+      "files": ["jest.config.js", "tests/**/*.js"],
       "env": {
         "node": true,
         "jest": true

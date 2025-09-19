@@ -8,7 +8,6 @@
   },
   "scripts": {
     "test": "jest",
-    "lint": "eslint --config .eslintrc.json .",
     "format": "prettier --write apps_script_project/"
   },
   "repository": {
