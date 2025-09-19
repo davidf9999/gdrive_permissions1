@@ -1,36 +1,43 @@
 {
+  "root": true,
   "extends": [
     "eslint:recommended",
     "prettier"
   ],
   "parserOptions": {
-    "ecmaVersion": 2020,
-    "sourceType": "script"
+    "ecmaVersion": 2020
   },
   "env": {
     "es6": true
   },
-  "globals": {
-    "AdminDirectory": "readonly",
-    "CacheService": "readonly",
-    "DriveApp": "readonly",
-    "HtmlService": "readonly",
-    "LockService": "readonly",
-    "Logger": "readonly",
-    "MailApp": "readonly",
-    "PropertiesService": "readonly",
-    "Session": "readonly",
-    "SpreadsheetApp": "readonly",
-    "UrlFetchApp": "readonly",
-    "Utilities": "readonly",
-    "jest": "readonly",
-    "describe": "readonly",
-    "it": "readonly",
-    "expect": "readonly",
-    "beforeEach": "readonly",
-    "afterEach": "readonly"
-  },
-  "rules": {
-    "no-console": "off"
-  }
+  "rules": {},
+  "overrides": [
+    {
+      "files": ["apps_script_project/**/*.js", "apps_script_project/**/*.gs"],
+      "globals": {
+        "AdminDirectory": "readonly",
+        "CacheService": "readonly",
+        "DriveApp": "readonly",
+        "HtmlService": "readonly",
+        "LockService": "readonly",
+        "Logger": "readonly",
+        "MailApp": "readonly",
+        "PropertiesService": "readonly",
+        "Session": "readonly",
+        "SpreadsheetApp": "readonly",
+        "UrlFetchApp": "readonly",
+        "Utilities": "readonly"
+      },
+      "rules": {
+        "no-unused-vars": "off"
+      }
+    },
+    {
+      "files": ["*.js", "tests/**/*.js"],
+      "env": {
+        "node": true,
+        "jest": true
+      }
+    }
+  ]
 }
