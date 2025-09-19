@@ -4,6 +4,9 @@
     "plugin:googleappsscript/recommended",
     "prettier"
   ],
+  "plugins": [
+    "googleappsscript"
+  ],
   "parserOptions": {
     "ecmaVersion": 2020
   },
