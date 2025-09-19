@@ -1,17 +1,34 @@
 {
   "extends": [
     "eslint:recommended",
-    "plugin:googleappsscript/recommended",
     "prettier"
   ],
-  "plugins": [
-    "googleappsscript"
-  ],
   "parserOptions": {
-    "ecmaVersion": 2020
+    "ecmaVersion": 2020,
+    "sourceType": "script"
   },
   "env": {
     "es6": true
+  },
+  "globals": {
+    "AdminDirectory": "readonly",
+    "CacheService": "readonly",
+    "DriveApp": "readonly",
+    "HtmlService": "readonly",
+    "LockService": "readonly",
+    "Logger": "readonly",
+    "MailApp": "readonly",
+    "PropertiesService": "readonly",
+    "Session": "readonly",
+    "SpreadsheetApp": "readonly",
+    "UrlFetchApp": "readonly",
+    "Utilities": "readonly",
+    "jest": "readonly",
+    "describe": "readonly",
+    "it": "readonly",
+    "expect": "readonly",
+    "beforeEach": "readonly",
+    "afterEach": "readonly"
   },
   "rules": {
     "no-console": "off"
