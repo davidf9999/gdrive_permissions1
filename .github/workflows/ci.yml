@@ -1,4 +1,4 @@
-name: Lint Code
+name: Build and Test
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
     branches: [ main ]
 
 jobs:
-  lint:
+  build-and-test:
     runs-on: ubuntu-latest
 
     steps:
@@ -24,3 +24,6 @@ jobs:
 
     - name: Run linter
       run: npm run lint
+
+    - name: Run tests
+      run: npm test

@@ -7,8 +7,8 @@
     "doc": "docs"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "lint": "eslint apps_script_project/",
+    "test": "jest",
+    "lint": "ESLINT_USE_FLAT_CONFIG=false eslint apps_script_project/",
     "format": "prettier --write apps_script_project/"
   },
   "repository": {
@@ -27,6 +27,7 @@
     "eslint": "^9.35.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-googleappsscript": "^1.0.5",
+    "jest": "^30.1.3",
     "prettier": "^3.6.2"
   }
 }

@@ -377,6 +377,7 @@ Behavior without Admin SDK:
 
 ## First Run & Testing Notes
 
+- **Two Types of Tests:** The project includes fast, automated **unit tests** (`npm test`) to check code logic and **manual tests** in the sheet menu to verify the live integration with Google services. See the [Testing Guide](./docs/TESTING.md) for a full explanation.
 - The menu contains three main sync options:
   - **`Sync Adds`**: Performs only additions (creates folders/groups, adds members). This is safe to run to add new permissions without affecting existing ones.
   - **`Sync Deletes`**: Performs only deletions (removes members from groups). It will ask for confirmation before proceeding.

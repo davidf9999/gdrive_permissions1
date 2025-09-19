@@ -1,6 +1,58 @@
 # Testing Guide
 
-This document provides instructions for using the testing functions built into the Google Drive Permission Manager script.
+This project uses a two-pronged approach to testing to ensure both the correctness of the code's logic and its proper functioning in a live Google environment. This guide covers both testing strategies.
+
+---
+
+## Automated Unit Testing (with Jest)
+
+*   **Environment:** Runs locally on your computer (or in a CI/CD pipeline).
+*   **Goal:** To verify the **correctness of individual functions** in isolation.
+
+These are fast, automated tests that check small, specific pieces of logic. For example, a unit test might verify that the `generateGroupEmail_` function correctly formats a string, or that the audit logic correctly identifies a missing user in a list.
+
+Because they don't use live Google services (they use mock data), they can run in seconds and are ideal for running frequently during development to prevent bugs and regressions. They are the foundation of the project's CI/CD pipeline.
+
+### How to Run the Tests
+
+1.  **Install Dependencies:** If you haven't already, install the necessary development dependencies by running:
+    ```bash
+    npm install
+    ```
+2.  **Run the Tests:** Execute the test suite by running:
+    ```bash
+    npm test
+    ```
+    Jest will discover and run all test files (ending in `.test.js`) located in the `tests/` directory.
+
+### How it Works: Mocking Apps Script Services
+
+A major challenge of testing Apps Script code locally is that the global Google services (e.g., `SpreadsheetApp`, `DriveApp`, `Session`) are not available.
+
+To solve this, the test environment uses **mocks**. The `tests/setup.js` file creates simple, fake versions of these global services. When Jest runs, it uses these fake objects instead of the real ones. This allows us to test the logic of our functions without needing to connect to live Google services.
+
+For example, the mock for `Session` is configured to return a fake user email, allowing us to test functions that rely on `Session.getActiveUser().getEmail()` without needing a real user to be logged in.
+
+### How to Write a New Test
+
+1.  Create a new file in the `tests/` directory with the `.test.js` suffix (e.g., `tests/Core.test.js`).
+2.  At the top of your test file, you will need to load the `.gs` file containing the function you want to test. Since Apps Script files are not standard JavaScript modules, you must load them manually. The current pattern is to use Jest's `setupFiles` configuration in `jest.config.js` to load the necessary scripts into the global scope before tests run.
+3.  Write your test cases using Jest's `describe`, `it`, and `expect` functions.
+4.  If your function uses a global Apps Script service, you can rely on the default mocks in `tests/setup.js` or override them for a specific test if needed.
+
+---
+
+## Manual & End-to-End Testing (from Google Sheets)
+
+*   **Environment:** Runs inside the Google Apps Script editor.
+*   **Goal:** To verify the **entire end-to-end workflow** and its integration with live Google services.
+
+These tests are run from the **Permissions Manager > Testing** menu inside your Google Sheet. They are designed to confirm that all the pieces of the system (the sheet, the script, Google Drive, and Google Groups) are working together correctly in your specific Google Workspace environment.
+
+Because they create real folders and groups, they are much slower than unit tests. They are perfect for:
+*   Verifying your initial setup and API permissions.
+*   Performing a full system health check.
+*   Troubleshooting complex, environment-specific issues.
 
 ## Viewing Test Logs
 
