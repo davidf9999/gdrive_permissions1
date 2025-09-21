@@ -417,16 +417,17 @@ function setFolderPermission_(folderId, groupEmail, role) {
   try {
     const folder = DriveApp.getFolderById(folderId);
     const roleLower = role.toLowerCase();
+    const sendNotifications = shouldSendShareNotifications_(); // Get the setting
 
     switch (roleLower) {
       case 'editor':
-        folder.addEditor(groupEmail);
+        folder.addEditor(groupEmail, sendNotifications); // Pass the setting
         break;
       case 'viewer':
-        folder.addViewer(groupEmail);
+        folder.addViewer(groupEmail, sendNotifications); // Pass the setting
         break;
       case 'commenter':
-        folder.addCommenter(groupEmail);
+        folder.addCommenter(groupEmail, sendNotifications); // Pass the setting
         break;
       default:
         throw new Error('Unsupported role: "' + role + '"');

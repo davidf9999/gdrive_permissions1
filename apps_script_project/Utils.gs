@@ -177,3 +177,10 @@ function sendErrorNotification_(errorMessage) {
     log_('Failed to send error notification email: ' + e.toString(), 'ERROR');
   }
 }
+
+function shouldSendShareNotifications_() {
+  const config = getConfiguration_();
+  const sendNotifications = config['SendShareNotifications'];
+  // Default to true if setting is not found or is invalid
+  return sendNotifications !== false && sendNotifications !== 'FALSE';
+}
