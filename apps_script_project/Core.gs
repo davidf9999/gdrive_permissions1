@@ -1,13 +1,18 @@
 function processManagedFolders_(options = {}) {
   const { returnPlanOnly = false } = options;
   let deletionPlan = [];
+  let errorCount = 0;
 
   log_('*** Starting processing of ManagedFolders sheet...');
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
   if (!sheet) {
-    if (!returnPlanOnly) SpreadsheetApp.getUi().alert('CRITICAL: Configuration sheet named "' + MANAGED_FOLDERS_SHEET_NAME + '" not found. Aborting.');
-    return returnPlanOnly ? [] : undefined;
+    const msg = 'CRITICAL: Configuration sheet named "' + MANAGED_FOLDERS_SHEET_NAME + '" not found. Aborting.';
+    if (!returnPlanOnly) {
+      SpreadsheetApp.getUi().alert(msg);
+      throw new Error(msg);
+    }
+    return [];
   }
 
   if (!returnPlanOnly) setSheetUiStyles_();
@@ -26,13 +31,18 @@ function processManagedFolders_(options = {}) {
         deletionPlan.push(plan);
       }
     } catch (e) {
-      log_('Error processing row ' + i + ': ' + e.toString(), 'ERROR');
+      // Error is already logged and cell updated by processRow_
+      errorCount++;
     }
   }
   log_('Finished processing all rows.');
 
   if (returnPlanOnly) {
     return deletionPlan;
+  }
+
+  if (errorCount > 0) {
+    throw new Error(errorCount + ' row(s) in ManagedFolders failed to process. Please check the logs and the Status column for details.');
   }
 }
 
@@ -97,7 +107,23 @@ function processRow_(rowIndex, options = {}) {
 
     getOrCreateGroup_(groupEmail, userSheetName);
     setFolderPermission_(folder.getId(), groupEmail, role);
-    syncGroupMembership_(groupEmail, userSheetName, options);
+    const membershipChanges = syncGroupMembership_(groupEmail, userSheetName, options);
+
+    // Manually send notifications to new users if enabled
+    if (membershipChanges && membershipChanges.added && membershipChanges.added.length > 0 && shouldSendShareNotifications_()) {
+      const folderName = folder.getName();
+      const folderUrl = folder.getUrl();
+      membershipChanges.added.forEach(function(email) {
+        try {
+          const subject = 'Folder shared with you: "' + folderName + '"';
+          const body = 'The folder \'' + folderName + '\' has been shared with you. You can access it here: ' + folderUrl;
+          MailApp.sendEmail(email, subject, body);
+          log_('Sent manual share notification to ' + email + ' for folder ' + folderName);
+        } catch (e) {
+          log_('Failed to send manual notification to ' + email + '. Error: ' + e.toString(), 'ERROR');
+        }
+      });
+    }
 
     sheet.getRange(rowIndex, LAST_SYNCED_COL).setValue(Utilities.formatDate(new Date(), SpreadsheetApp.getActive().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss'));
     statusCell.setValue('OK');
@@ -105,6 +131,7 @@ function processRow_(rowIndex, options = {}) {
   } catch (e) {
     log_('Failed to process row ' + rowIndex + '. Error: ' + e.message + ' Stack: ' + e.stack, 'ERROR');
     statusCell.setValue('Error: ' + e.message);
+    throw e; // Re-throw to allow the caller to handle it.
   }
   return null;
 }
@@ -381,6 +408,7 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
     }
 
     log_('Membership sync complete for group "' + groupEmail + '"');
+    return { added: emailsToAdd, removed: emailsToRemove };
 
   } catch (e) {
     log_('FATAL ERROR in syncGroupMembership for group ' + groupEmail + '. Error: ' + e.toString() + ' Stack: ' + e.stack, 'ERROR');
@@ -417,21 +445,36 @@ function setFolderPermission_(folderId, groupEmail, role) {
   try {
     const folder = DriveApp.getFolderById(folderId);
     const roleLower = role.toLowerCase();
-    const sendNotifications = shouldSendShareNotifications_(); // Get the setting
+    const sendNotifications = shouldSendShareNotifications_();
 
+    // The Drive API uses 'writer' for editor, 'reader' for viewer.
+    let driveRole;
     switch (roleLower) {
       case 'editor':
-        folder.addEditor(groupEmail, sendNotifications); // Pass the setting
+        driveRole = 'writer';
         break;
       case 'viewer':
-        folder.addViewer(groupEmail, sendNotifications); // Pass the setting
+        driveRole = 'reader';
         break;
       case 'commenter':
-        folder.addCommenter(groupEmail, sendNotifications); // Pass the setting
+        // The 'commenter' role is consistent across DriveApp and Drive API v2.
+        driveRole = 'commenter';
         break;
       default:
         throw new Error('Unsupported role: "' + role + '"');
     }
+
+    const permission = {
+      role: driveRole,
+      type: 'group',
+      value: groupEmail
+    };
+
+    // Using Drive API v2 to have control over sending notification emails.
+    Drive.Permissions.insert(permission, folderId, {
+      sendNotificationEmails: sendNotifications
+    });
+
     log_('Successfully set role "' + role + '" for group "' + groupEmail + '" on folder "' + folder.getName() + '"');
 
   } catch (e) {

@@ -50,6 +50,18 @@ global.SpreadsheetApp = mockSpreadsheetApp;
 global.DriveApp = mockDriveApp;
 global.Utilities = mockUtilities;
 
+const mockDrive = {
+  Permissions: {
+    insert: jest.fn(),
+  },
+};
+global.Drive = mockDrive;
+
+const mockMailApp = {
+  sendEmail: jest.fn(),
+};
+global.MailApp = mockMailApp;
+
 global.SCRIPT_EXECUTION_MODE = 'DEFAULT'; // Default value for tests
 global.LOG_SHEET_NAME = 'Log';
 global.TEST_LOG_SHEET_NAME = 'TestLog';

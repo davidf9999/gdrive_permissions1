@@ -1,110 +1,113 @@
 const fs = require('fs');
 const path = require('path');
 
-// Define script execution mode for testing
+// --- Test Configuration ---
 const SCRIPT_EXECUTION_MODE = 'TEST';
-const TEST_LOG_SHEET_NAME = 'TestLog';
-const LOG_SHEET_NAME = 'Log';
-const CONFIG_SHEET_NAME = 'Config';
-const DEFAULT_MAX_LOG_LENGTH = 1000;
 
-
-// Load the script files to make their functions available to the test
-const corePath = path.resolve(__dirname, '../apps_script_project/Core.gs');
-const coreCode = fs.readFileSync(corePath, 'utf8');
+// --- File Loading and Mocking ---
+let codeJsContent = fs.readFileSync(path.resolve(__dirname, '../apps_script_project/Code.js'), 'utf8');
+codeJsContent = codeJsContent.replace(/const /g, 'global.');
+eval(codeJsContent);
+eval(fs.readFileSync(path.resolve(__dirname, '../apps_script_project/Utils.gs'), 'utf8'));
+const coreCode = fs.readFileSync(path.resolve(__dirname, '../apps_script_project/Core.gs'), 'utf8');
 eval(coreCode);
 
-const utilsPath = path.resolve(__dirname, '../apps_script_project/Utils.gs');
-const utilsCode = fs.readFileSync(utilsPath, 'utf8');
-eval(utilsCode);
-
-describe('setFolderPermission_', () => {
-  let mockFolder;
-  let mockGetSheetByName;
-  let mockGetRange;
-  let mockGetValues;
-  let mockLogSheet;
+describe('processRow_', () => {
+  let mockSheet, mockGetRange, mockGetValue, mockSetValue, mockGetValues, mockFolder, mockConfigSheet, mockRange;
 
   beforeEach(() => {
-    // Reset all mocks before each test
     jest.clearAllMocks();
 
-    // Mock global objects
-    global.CacheService = {
-      getScriptCache: jest.fn(() => ({
-        get: jest.fn(),
-        put: jest.fn(),
-      })),
-    };
-    global.Utilities = {
-      formatDate: jest.fn(),
-    };
-    global.Session = {
-      getActiveUser: jest.fn(() => ({
-        getEmail: jest.fn(() => 'test@example.com'),
-      })),
-    };
+    // --- Mock GAS Global Objects ---
+    global.CacheService = { getScriptCache: jest.fn(() => ({ get: jest.fn(), put: jest.fn() })) };
+    global.Utilities = { formatDate: jest.fn(date => date.toISOString()) };
+    global.Session = { getActiveUser: jest.fn(() => ({ getEmail: jest.fn(() => 'test.user@example.com') })) };
+    global.AdminDirectory = { Groups: { get: jest.fn(), insert: jest.fn() }, Members: { list: jest.fn(() => ({ members: [] })) } };
 
-    // Mock the folder object and its methods
+    // --- Mock DriveApp ---
     mockFolder = {
-      addEditor: jest.fn(),
-      addViewer: jest.fn(),
-      addCommenter: jest.fn(),
-      getName: () => 'Mock Folder',
+      getId: jest.fn(() => 'mockFolderId'),
+      getName: jest.fn(() => 'mockFolderName'),
+      getUrl: jest.fn(() => 'http://mock.folder.url'),
     };
     DriveApp.getFolderById.mockReturnValue(mockFolder);
+    DriveApp.getFoldersByName.mockReturnValue({ hasNext: jest.fn(() => false), next: jest.fn() });
+    DriveApp.createFolder = jest.fn().mockReturnValue(mockFolder);
 
-    // Mock the SpreadsheetApp chain to control config sheet values
-    mockGetValues = jest.fn().mockReturnValue([]);
-    mockGetRange = jest.fn(() => ({ getValues: mockGetValues }));
-    mockLogSheet = {
+    // --- Mock SpreadsheetApp ---
+    mockGetValue = jest.fn();
+    mockSetValue = jest.fn();
+    mockGetValues = jest.fn(() => []);
+    mockRange = { getValue: mockGetValue, setValue: mockSetValue, getValues: mockGetValues };
+    mockGetRange = jest.fn(() => mockRange);
+    mockSheet = {
+      getRange: mockGetRange,
+      insertSheet: jest.fn(() => mockSheet), // Return itself for chaining
+      getSheets: jest.fn(() => []),
+      setFrozenRows: jest.fn(),
       appendRow: jest.fn(),
-      getLastRow: jest.fn().mockReturnValue(1),
+      getLastRow: jest.fn(() => 1),
       deleteRows: jest.fn(),
     };
-    mockGetSheetByName = jest.fn((sheetName) => {
-      if (sheetName === TEST_LOG_SHEET_NAME) {
-        return mockLogSheet;
-      }
-      if (sheetName === CONFIG_SHEET_NAME) {
-        return {
-          getRange: mockGetRange,
-          getLastRow: jest.fn().mockReturnValue(2),
-        };
-      }
-      return {
-        getRange: mockGetRange,
-      };
-    });
+    mockConfigSheet = {
+      getRange: jest.fn(() => mockRange),
+      getLastRow: jest.fn().mockReturnValue(2),
+    };
     SpreadsheetApp.getActiveSpreadsheet.mockReturnValue({
-      getSheetByName: mockGetSheetByName,
+      getSheetByName: jest.fn(name => {
+        if (name === global.CONFIG_SHEET_NAME) return mockConfigSheet;
+        return mockSheet;
+      }),
+      getSpreadsheetTimeZone: jest.fn(() => 'UTC'),
     });
   });
 
-  it('should send notifications by default if setting is TRUE', () => {
-    mockGetValues.mockReturnValue([['SendShareNotifications', 'TRUE']]);
+  it('should send manual notifications to newly added users when enabled', () => {
+    // Arrange
+    mockGetValue.mockReturnValue('someValue');
+    mockGetValues.mockReturnValue([['new.user@example.com']]);
+    AdminDirectory.Members.list.mockReturnValueOnce({ members: [] }); // No initial members
 
-    setFolderPermission_('folderId', 'group@example.com', 'editor');
-    expect(mockFolder.addEditor).toHaveBeenCalledWith('group@example.com', true);
+    // Act
+    processRow_(2, { addOnly: true });
+
+    // Assert
+    expect(MailApp.sendEmail).toHaveBeenCalledTimes(1);
+    expect(MailApp.sendEmail).toHaveBeenCalledWith(
+      'new.user@example.com',
+      'Folder shared with you: "mockFolderName"',
+      'The folder \'mockFolderName\' has been shared with you. You can access it here: http://mock.folder.url'
+    );
   });
 
-  it('should not send notifications if setting is FALSE', () => {
-    mockGetValues.mockReturnValue([['SendShareNotifications', 'FALSE']]);
+  it('should NOT send manual notifications if the setting is FALSE', () => {
+    // Arrange
+    mockConfigSheet.getRange().getValues.mockReturnValue([['SendShareNotifications', 'FALSE']]);
+    mockGetValue.mockReturnValue('someValue');
+    mockGetValues.mockReturnValue([['new.user@example.com']]);
+    AdminDirectory.Members.list.mockReturnValueOnce({ members: [] });
 
-    setFolderPermission_('folderId', 'group@example.com', 'viewer');
-    expect(mockFolder.addViewer).toHaveBeenCalledWith('group@example.com', false);
+    // Act
+    processRow_(2, { addOnly: true });
+
+    // Assert
+    expect(MailApp.sendEmail).not.toHaveBeenCalled();
   });
 
-  it('should send notifications if setting is missing', () => {
-    mockGetValues.mockReturnValue([]); // No setting found
+  it('should call Drive.Permissions.insert with correct parameters', () => {
+    // Arrange
+    mockGetValue.mockReturnValueOnce('My Folder')
+                 .mockReturnValueOnce('folder-id')
+                 .mockReturnValueOnce('viewer');
 
-    setFolderPermission_('folderId', 'group@example.com', 'commenter');
-    expect(mockFolder.addCommenter).toHaveBeenCalledWith('group@example.com', true);
-  });
+    // Act
+    processRow_(2, {});
 
-  it('should handle unsupported roles', () => {
-    expect(() => {
-      setFolderPermission_('folderId', 'group@example.com', 'unsupported');
-    }).toThrow('Unsupported role: "unsupported"');
+    // Assert
+    expect(Drive.Permissions.insert).toHaveBeenCalledWith(
+      { role: 'reader', type: 'group', value: 'my-folder_viewer@example.com' },
+      'mockFolderId',
+      { sendNotificationEmails: true }
+    );
   });
 });
