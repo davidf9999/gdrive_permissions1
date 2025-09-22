@@ -105,6 +105,7 @@ function processRow_(rowIndex, options = {}) {
   } catch (e) {
     log_('Failed to process row ' + rowIndex + '. Error: ' + e.message + ' Stack: ' + e.stack, 'ERROR');
     statusCell.setValue('Error: ' + e.message);
+    throw e;
   }
   return null;
 }
