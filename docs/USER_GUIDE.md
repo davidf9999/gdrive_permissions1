@@ -139,3 +139,17 @@ The script will now add all the members from the `Sales Team` group to the `Q4 S
 1.  Find the correct user sheet for the folder and role you want to change.
 2.  To remove a user, delete the row containing their email address.
 3.  Run **Permissions Manager > Sync Deletes**. You will be asked to confirm the deletion.
+
+---
+
+## Troubleshooting & FAQ
+
+### I added a user, but they didn't get an email notification. Why?
+
+This is a common and complex issue that can have several causes:
+
+1.  **The Group Already Had Permission:** The script works by giving a *Google Group* access to a folder. The "Folder shared with you" email is only sent the very first time the group is granted access. If the group already had permission from a previous run, adding a new user to that group will *not* trigger a new folder-sharing email from Google. The only notification the user might receive is one saying "You have been added to group X," which is controlled by the Google Group's own settings.
+
+2.  **Browser/Gmail Notification Settings:** Notification delivery depends heavily on the user's own client-side settings. For notifications to appear, the user must have granted Gmail permission to show notifications in their browser. They can typically check this by looking for a prompt from their browser when in Gmail or by checking their browser's site settings for `mail.google.com`.
+
+3.  **Google Workspace / Account Settings:** Notification behavior can sometimes vary based on your organization's Google Workspace settings or a user's individual Google account settings.
