@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <link rel="stylesheet" href="https://ssl.gstatic.com/docs/script/css/add-ons1.css">
+    <style>
+      .sidebar { padding: 10px; }
+      button { margin: 5px 0; width: 100%; }
+      .separator { border-top: 1px solid #ccc; margin: 10px 0; }
+    </style>
+  </head>
+  <body>
+    <div class="sidebar">
+      <h4>Sync Operations</h4>
+      <button id="syncAdds">Sync Adds</button>
+      <button id="syncDeletes">Sync Deletes</button>
+      <button id="fullSync" class="blue">Full Sync (Add & Delete)</button>
+      
+      <div class="separator"></div>
+
+      <h4>Audits & Other</h4>
+      <button id="dryRunAudit">Dry Run Audit</button>
+      <button id="syncAdmins">Sync Admins</button>
+
+      <div id="status" style="margin-top: 15px; font-style: italic;"></div>
+    </div>
+
+    <script>
+      // Generic helper to call server-side functions
+      function callServerFunction(fn, button, runningMessage) {
+        button.disabled = true;
+        document.getElementById('status').textContent = runningMessage;
+
+        google.script.run
+          .withSuccessHandler(message => {
+            document.getElementById('status').textContent = message || 'Operation completed successfully.';
+            button.disabled = false;
+          })
+          .withFailureHandler(error => {
+            document.getElementById('status').textContent = 'Error: ' + error.message;
+            button.disabled = false;
+          })
+          [fn]();
+      }
+
+      // Button-specific functions
+      function callSyncAdds() {
+        callServerFunction('syncAdds_secure', this, 'Running Sync Adds...');
+      }
+
+      function callFullSync() {
+        callServerFunction('fullSync_secure', this, 'Running Full Sync...');
+      }
+
+      function callSyncDeletes() {
+        if (window.confirm('Are you sure you want to run a destructive sync? This will remove users from groups.')) {
+          callServerFunction('syncDeletes_secure', this, 'Running Sync Deletes...');
+        }
+      }
+
+      function callDryRunAudit() {
+        callServerFunction('dryRunAudit_secure', this, 'Running Audit...');
+      }
+
+      function callSyncAdmins() {
+        if (window.confirm('Are you sure you want to sync spreadsheet admins?')) {
+          callServerFunction('syncAdmins_secure', this, 'Syncing Admins...');
+        }
+      }
+
+      // Add event listeners
+      document.getElementById('syncAdds').addEventListener('click', callSyncAdds);
+      document.getElementById('fullSync').addEventListener('click', callFullSync);
+      document.getElementById('syncDeletes').addEventListener('click', callSyncDeletes);
+      document.getElementById('dryRunAudit').addEventListener('click', callDryRunAudit);
+      document.getElementById('syncAdmins').addEventListener('click', callSyncAdmins);
+    </script>
+  </body>
+</html>

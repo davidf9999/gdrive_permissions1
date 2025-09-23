@@ -23,46 +23,25 @@ let SCRIPT_EXECUTION_MODE = 'DEFAULT'; // Can be 'DEFAULT' or 'TEST'
 /***** MENU & TRIGGERS *****/
 
 /**
- * Adds a custom menu to the spreadsheet UI.
+ * Adds a custom menu to the spreadsheet UI to launch the sidebar.
  */
 function onOpen() {
-  const ui = SpreadsheetApp.getUi(); // Declare ui here
-  const menu = ui.createMenu('Permissions Manager')
-      .addItem('Sync Adds', 'syncAdds')
-      .addItem('Sync Deletes', 'syncDeletes')
-      .addSeparator()
-      .addItem('Full Sync (Add & Delete)', 'fullSync')
-      .addSeparator()
-      .addItem('Dry Run Audit', 'dryRunAudit')
-      .addSeparator()
-      .addSubMenu(ui.createMenu('Granular Sync')
-          .addItem('Sync Admins', 'syncAdmins')
-          .addItem('Sync User Groups', 'syncUserGroups')
-          .addSeparator()
-          .addItem('Sync All Folders - Adds Only', 'syncManagedFoldersAdds')
-          .addItem('Sync All Folders - Deletes Only', 'syncManagedFoldersDeletes'))
-      .addSeparator()
-      .addSubMenu(ui.createMenu('Testing') // Use ui here
-          .addItem('Run Manual Access Test', 'runManualAccessTest')
-          .addItem('Run Stress Test', 'runStressTest')
-          .addItem('Run Add/Delete Separation Test', 'runAddDeleteSeparationTest')
-          .addSeparator()
-          .addItem('Cleanup Manual Test Data', 'cleanupManualTestData')
-          .addItem('Cleanup Stress Test Data', 'cleanupStressTestData')
-          .addItem('Cleanup Add/Delete Test Data', 'cleanupAddDeleteSeparationTestData'))
-      .addSeparator()
-      .addSubMenu(ui.createMenu('Logging') // Use ui here
-          .addItem('Clear All Logs', 'clearAllLogs'));
-
-  const helpMenu = ui.createMenu('Help');
-  helpMenu.addItem('User Guide', 'openUserGuide');
-  helpMenu.addItem('Testing Guide', 'openTestingGuide');
-  helpMenu.addItem('README', 'openReadme');
-  menu.addSeparator();
-  menu.addSubMenu(helpMenu);
-
-  menu.addToUi();
-
+  SpreadsheetApp.getUi()
+      .createMenu('Permissions Manager')
+      .addItem('Show Controls', 'showSidebar')
+      .addToUi();
+  
+  // Still run setup on open
   setupControlSheets_();
   setupLogSheets_();
+}
+
+/**
+ * Displays the main sidebar UI.
+ */
+function showSidebar() {
+  const html = HtmlService.createHtmlOutputFromFile('Sidebar')
+      .setTitle('Permissions Manager')
+      .setWidth(300);
+  SpreadsheetApp.getUi().showSidebar(html);
 }

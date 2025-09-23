@@ -177,3 +177,49 @@ function sendErrorNotification_(errorMessage) {
     log_('Failed to send error notification email: ' + e.toString(), 'ERROR');
   }
 }
+
+/**
+ * Checks if the current user is an administrator as defined in the Admins sheet.
+ * Caches the admin list for 5 minutes to improve performance.
+ * @return {boolean} True if the user is an admin, false otherwise.
+ */
+function isUserAdmin_() {
+  const cache = CacheService.getScriptCache();
+  const activeUserEmail = Session.getActiveUser().getEmail().toLowerCase();
+  
+  // The owner of the spreadsheet is always considered an admin.
+  const ownerEmail = SpreadsheetApp.getActiveSpreadsheet().getOwner().getEmail().toLowerCase();
+  if (activeUserEmail === ownerEmail) {
+    return true;
+  }
+
+  // Check cache first
+  const cachedAdmins = cache.get('admin_users_list');
+  if (cachedAdmins) {
+    const adminList = JSON.parse(cachedAdmins);
+    return adminList.includes(activeUserEmail);
+  }
+
+  // If not in cache, fetch from sheet
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(ADMINS_SHEET_NAME);
+  if (!sheet) {
+    log_('Could not check admin status: Admins sheet not found.', 'ERROR');
+    return false; // Fail safe
+  }
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) {
+    // No admins listed besides the owner
+    cache.put('admin_users_list', JSON.stringify([]), 300);
+    return false; 
+  }
+
+  const adminEmails = sheet.getRange('A2:A' + lastRow).getValues()
+    .map(row => row[0].toString().trim().toLowerCase())
+    .filter(email => email);
+  
+  // Cache the list
+  cache.put('admin_users_list', JSON.stringify(adminEmails), 300); // Cache for 5 minutes
+
+  return adminEmails.includes(activeUserEmail);
+}
