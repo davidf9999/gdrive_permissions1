@@ -219,7 +219,7 @@ After linking your script to the new GCP project, you **must** manually configur
 4.  **Add Test Users:**
     *   While your app's publishing status is "Testing", you must explicitly add allowed users.
     *   Navigate to the **Test users** section on the same page.
-    *   Click **+ Add Users** and enter the email addresses of all admins who need to run the script (including your own `dfront@gmail.com`).
+    *   Click **+ Add Users** and enter the email addresses of all admins who need to run the script.
     *   Click **Save**.
 
 Your script is now linked to the high-performance GCP project and configured to allow access for the specified users.
