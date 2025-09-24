@@ -113,16 +113,17 @@ Before your script can ask for permissions, you must configure a consent screen.
     *   **If you see an error:** You will see an error stating that the OAuth consent screen needs to be configured. This is expected if it's your first time. The error message should contain a blue link to "configure the consent screen". **Click that link to proceed to the next step.**
 
 4.  **Configure Consent Screen (if required):** The link will take you to the Google Cloud Console.
-    *   You may be asked to choose a **User Type** (Internal vs. External). Select **Internal** and click **Create**.
-    *   **App name:** Enter a descriptive name, like `Drive Permissions Manager`.
-    *   **User support email:** Select your email from the dropdown.
-    *   **Developer contact information:** Enter your email address.
-    *   Click **Save and Continue**.
-
-5.  **Scopes & Test Users:**
-    *   On the "Scopes" page, click **Save and Continue** to skip it.
-    *   If your app is "External", you will be on the "Test users" page. Click **+ Add Users**, type in your own Google Workspace email address, and click **Add**.
-    *   Click **Save and Continue** to finish.
+    *   You will be asked to choose a **User Type**. Select **External** and click **Create**. This is necessary to allow admins who are not part of your Google Workspace (e.g., those with `@gmail.com` accounts) to run the script.
+    *   **App Information:**
+        *   **App name:** Enter a descriptive name, like `Drive Permissions Manager`.
+        *   **User support email:** Select your email from the dropdown.
+        *   **Developer contact information:** Enter your email address.
+        *   Click **Save and Continue**.
+    *   **Scopes:** Click **Save and Continue** to skip this page.
+    *   **Test Users:**
+        *   On this page, you must add all administrators who will be running the script.
+        *   Click **+ Add Users**, type in the email addresses of the admins defined in your `Admins` sheet, and click **Add**.
+        *   Click **Save and Continue**.
 
 ---
 
