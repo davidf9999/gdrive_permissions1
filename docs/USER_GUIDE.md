@@ -40,7 +40,7 @@ This is the most important sheet. Each row represents a folder you want the scri
 For every row in `ManagedFolders`, the script creates a corresponding **user sheet**. The name of this sheet is shown in the `UserSheetName` column.
 
 *   **Purpose:** This is where you list the email addresses of the people who should have the specified role for that folder.
-*   **How to Use:** Simply add or remove email addresses in Column A of the relevant user sheet.
+*   **How to Use:** Simply add or remove email addresses in Column A of the relevant user sheet. Enter **exactly one valid email address per row** (for example, `user@example.com`). If a cell contains multiple addresses or anything other than a single valid email, the script will log an error and ignore that entry.
 
 ### 3. `UserGroups`
 
