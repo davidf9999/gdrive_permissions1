@@ -199,7 +199,29 @@ This command will create a new, dedicated GCP project and output its **Project N
 3.  Under the **Google Cloud Platform (GCP) Project** section, click **Change Project**.
 4.  Paste the **Project Number** you copied from the provisioning step and click **Set Project**.
 
-Your script is now linked to the high-performance GCP project. You don't need to change anything else.
+### Step 3: Configure the OAuth Consent Screen
+
+After linking your script to the new GCP project, you **must** manually configure its consent screen to make it accessible to external users (like free `@gmail.com` accounts). If you skip this, users will see an "Access blocked: org_internal" error.
+
+1.  **Get your GCP Project ID:** This is the ID you specified in your `setup.conf` file (e.g., `your-gcp-project-id`).
+
+2.  **Navigate to the OAuth Consent Screen:** Open this URL in your browser, replacing `YOUR_PROJECT_ID` with your actual project ID:
+    ```
+    https://console.cloud.google.com/apis/credentials/consent?project=YOUR_PROJECT_ID
+    ```
+
+3.  **Change User Type to External:**
+    *   On the OAuth consent screen page, click **Edit App**.
+    *   Under "User type", change the selection from "Internal" to **External**.
+    *   Click **Save**.
+
+4.  **Add Test Users:**
+    *   While your app's publishing status is "Testing", you must explicitly add allowed users.
+    *   Navigate to the **Test users** section on the same page.
+    *   Click **+ Add Users** and enter the email addresses of all admins who need to run the script (including your own `dfront@gmail.com`).
+    *   Click **Save**.
+
+Your script is now linked to the high-performance GCP project and configured to allow access for the specified users.
 
 ---
 
