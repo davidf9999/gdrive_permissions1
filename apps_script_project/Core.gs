@@ -1,3 +1,6 @@
+const EMAIL_EXTRACTION_REGEX = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+const SINGLE_EMAIL_VALIDATION_REGEX = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
+
 function processManagedFolders_(options = {}) {
   const { returnPlanOnly = false } = options;
   let deletionPlan = [];
@@ -245,9 +248,43 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
     if (!sheet) {
       throw new Error('User sheet "' + userSheetName + '" not found.');
     }
-    const sheetEmails = sheet.getRange('A2:A' + sheet.getLastRow()).getValues()
-      .map(function(row) { return row[0].toString().trim().toLowerCase(); })
-      .filter(function(email) { return email && email.includes('@'); });
+
+    const lastRow = sheet.getLastRow();
+    const sheetEmails = [];
+    if (lastRow >= 2) {
+      const rawValues = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+      rawValues.forEach(function(row, index) {
+        const rawValue = row[0];
+        if (rawValue === null || rawValue === undefined) {
+          return;
+        }
+
+        const cellText = rawValue.toString().trim();
+        if (!cellText) {
+          return;
+        }
+
+        EMAIL_EXTRACTION_REGEX.lastIndex = 0;
+        const matches = cellText.match(EMAIL_EXTRACTION_REGEX) || [];
+        const sheetRowNumber = index + 2;
+
+        if (matches.length === 0) {
+          return; // No email found; ignore silently per requirements.
+        }
+
+        if (matches.length > 1) {
+          log_('Row ' + sheetRowNumber + ' in sheet "' + userSheetName + '" contains multiple email addresses ("' + cellText + '"). Each row must contain exactly one email. Skipping this entry.', 'ERROR');
+          return;
+        }
+
+        if (!SINGLE_EMAIL_VALIDATION_REGEX.test(cellText)) {
+          log_('Row ' + sheetRowNumber + ' in sheet "' + userSheetName + '" must contain a single valid email address, but found "' + cellText + '". Skipping this entry.', 'ERROR');
+          return;
+        }
+
+        sheetEmails.push(matches[0].toLowerCase());
+      });
+    }
     const sheetSet = new Set(sheetEmails);
     log_('Found ' + sheetSet.size + ' emails in sheet "' + userSheetName + '"');
 

@@ -105,3 +105,80 @@ describe('processRow_', () => {
     expect(() => processRow_(2, {})).toThrow('Unsupported role: "unsupported-role"');
   });
 });
+
+describe('syncGroupMembership_', () => {
+  let originalLog, originalFetchMembers;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    originalLog = log_;
+    originalFetchMembers = fetchAllGroupMembers_;
+    log_ = jest.fn();
+    fetchAllGroupMembers_ = jest.fn(() => []);
+  });
+
+  afterEach(() => {
+    log_ = originalLog;
+    fetchAllGroupMembers_ = originalFetchMembers;
+  });
+
+  function mockSpreadsheetForUserSheet(userSheetName, values) {
+    const mockUserSheet = {
+      getLastRow: jest.fn(() => values.length + 1),
+      getRange: jest.fn(() => ({
+        getValues: jest.fn(() => values)
+      }))
+    };
+
+    const mockSpreadsheet = {
+      getSheetByName: jest.fn(name => {
+        if (name === userSheetName) {
+          return mockUserSheet;
+        }
+        return null;
+      }),
+      getSpreadsheetTimeZone: jest.fn(() => 'UTC')
+    };
+
+    SpreadsheetApp.getActiveSpreadsheet.mockReturnValue(mockSpreadsheet);
+    return mockUserSheet;
+  }
+
+  it('logs an error when a row contains more than one email address', () => {
+    const values = [
+      ['valid@example.com'],
+      ['first@example.com second@example.com'],
+      ['']
+    ];
+
+    mockSpreadsheetForUserSheet('TeamSheet_Editor', values);
+
+    syncGroupMembership_('group@example.com', 'TeamSheet_Editor', { returnPlanOnly: true });
+
+    expect(fetchAllGroupMembers_).toHaveBeenCalledWith('group@example.com');
+    expect(log_).toHaveBeenCalledWith(
+      expect.stringContaining('multiple email addresses'),
+      'ERROR'
+    );
+    expect(
+      log_.mock.calls.some(call => call[0].includes('Found 1 emails in sheet "TeamSheet_Editor"'))
+    ).toBe(true);
+  });
+
+  it('accepts a single valid trimmed email and skips logging errors', () => {
+    const values = [
+      ['   Valid.User@Example.COM   '],
+      ['   ']
+    ];
+
+    mockSpreadsheetForUserSheet('TeamSheet_Viewer', values);
+
+    syncGroupMembership_('group@example.com', 'TeamSheet_Viewer', { returnPlanOnly: true });
+
+    expect(
+      log_.mock.calls.some(call => call[0].includes('Found 1 emails in sheet "TeamSheet_Viewer"'))
+    ).toBe(true);
+    const errorCalls = log_.mock.calls.filter(call => call[1] === 'ERROR');
+    expect(errorCalls).toHaveLength(0);
+  });
+});
