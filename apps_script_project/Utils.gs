@@ -35,15 +35,26 @@ function generateGroupEmail_(baseName) {
 
 function assertAdminDirectoryAvailable_() {
   // Provides a clear message if Admin Directory advanced service/API is not enabled.
-  if (typeof AdminDirectory === 'undefined') {
-    const msg = 'Admin Directory service is not available. Enable it in Apps Script (Services > Admin Directory API) and in Google Cloud (APIs & Services > Library > Admin SDK). Requires Google Workspace.';
+  if (!canUseAdminDirectory_()) {
+    const msg = 'Admin Directory service is not available. Enable it in Apps Script (Services > Admin Directory API), ensure the Admin SDK is enabled in your Google Cloud project, and that you have Google Workspace admin privileges.';
     log_(msg, 'ERROR');
     throw new Error(msg);
   }
 }
 
-function isAdminDirectoryAvailable_() {
-  try { return typeof AdminDirectory !== 'undefined'; } catch (e) { return false; }
+function canUseAdminDirectory_() {
+  if (typeof AdminDirectory === 'undefined') {
+    return false;
+  }
+  try {
+    // Perform a lightweight, read-only operation to truly check for API access and permissions.
+    AdminDirectory.Groups.list({ domain: Session.getActiveUser().getEmail().split('@')[1], maxResults: 1 });
+    return true; // If this line is reached, the user has permission.
+  } catch (e) {
+    // This catch block will now correctly handle "API not enabled" or "Not authorized" errors.
+    log_('Admin Directory API is not available for the current user. Skipping group operations. Error: ' + e.message, 'WARN');
+    return false;
+  }
 }
 
 function isPersonalGmail_() {
@@ -57,9 +68,9 @@ function isPersonalGmail_() {
 }
 
 function shouldSkipGroupOps_() {
-  // Skip group operations if Admin Directory advanced service is not available.
-  // Personal Gmail typically cannot use Admin SDK.
-  return !isAdminDirectoryAvailable_();
+  // Skip group operations if Admin Directory advanced service is not available
+  // or if the user lacks the necessary permissions.
+  return !canUseAdminDirectory_();
 }
 
 function getConfiguration_() {
