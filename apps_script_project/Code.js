@@ -17,6 +17,11 @@ const GROUP_EMAIL_COL = 5;
 const LAST_SYNCED_COL = 6;
 const STATUS_COL = 7;
 
+const ADMINS_GROUP_EMAIL_CELL = 'B2';
+const ADMINS_LAST_SYNC_CELL = 'C2';
+const ADMINS_STATUS_CELL = 'D2';
+const ADMINS_GROUP_NAME = 'Admins Control Panel';
+
 /***** GLOBAL STATE *****/
 let SCRIPT_EXECUTION_MODE = 'DEFAULT'; // Can be 'DEFAULT' or 'TEST'
 

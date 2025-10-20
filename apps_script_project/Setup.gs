@@ -25,11 +25,22 @@ function setupControlSheets_() {
 
   // Check for Admins sheet
   let adminSheet = ss.getSheetByName(ADMINS_SHEET_NAME);
+  const adminHeaders = ['Administrator Emails', 'Admins Group Email', 'Last Synced', 'Status'];
   if (!adminSheet) {
     adminSheet = ss.insertSheet(ADMINS_SHEET_NAME);
-    adminSheet.getRange('A1').setValue('Administrator Emails').setFontWeight('bold');
+    adminSheet.getRange(1, 1, 1, adminHeaders.length).setValues([adminHeaders]).setFontWeight('bold');
     adminSheet.setFrozenRows(1);
     log_('Created "Admins" sheet.');
+  } else {
+    const existingHeaders = adminSheet.getRange(1, 1, 1, adminHeaders.length).getValues()[0];
+    for (let i = 0; i < adminHeaders.length; i++) {
+      const headerCell = adminSheet.getRange(1, i + 1);
+      if (existingHeaders[i] !== adminHeaders[i]) {
+        headerCell.setValue(adminHeaders[i]);
+      }
+      headerCell.setFontWeight('bold');
+    }
+    adminSheet.setFrozenRows(1);
   }
   
     // Check for UserGroups sheet
