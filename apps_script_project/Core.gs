@@ -276,19 +276,65 @@ function getOrCreateUserSheet_(sheetName) {
   let sheet = spreadsheet.getSheetByName(sheetName);
 
   if (sheet) {
+    ensureUserSheetHeaders_(sheet);
     return sheet;
   } else {
     log_('User sheet "' + sheetName + '" not found. Creating it...');
     sheet = spreadsheet.insertSheet(sheetName, spreadsheet.getSheets().length);
 
-    const header = sheet.getRange('A1');
-    header.setValue('User Email Address');
-    header.setFontWeight('bold');
+    const headerRange = sheet.getRange(1, 1, 1, 2);
+    headerRange.setValues([['User Email Address', 'Disabled']]);
+    headerRange.setFontWeight('bold');
     sheet.setFrozenRows(1);
 
     log_('Successfully created user sheet: "' + sheetName + '"');
     return sheet;
   }
+}
+
+function ensureUserSheetHeaders_(sheet) {
+  try {
+    const headerRange = sheet.getRange(1, 1, 1, 2);
+    const headerValues = headerRange.getValues();
+    const currentHeaders = headerValues && headerValues.length > 0 ? headerValues[0] : [];
+    let headersUpdated = false;
+
+    if (!currentHeaders[0]) {
+      headerRange.getCell(1, 1).setValue('User Email Address');
+      headersUpdated = true;
+    }
+
+    if (!currentHeaders[1]) {
+      headerRange.getCell(1, 2).setValue('Disabled');
+      headersUpdated = true;
+    }
+
+    if (headersUpdated) {
+      log_('Updated headers on user sheet "' + sheet.getName() + '" to include the Disabled column.');
+    }
+
+    headerRange.setFontWeight('bold');
+    sheet.setFrozenRows(1);
+  } catch (e) {
+    log_('Failed to ensure headers for sheet "' + sheet.getName() + '": ' + e.toString(), 'WARN');
+  }
+}
+
+function isUserRowDisabled_(value) {
+  if (value === true) {
+    return true;
+  }
+  if (value === false || value === null || value === undefined) {
+    return false;
+  }
+  if (typeof value === 'number') {
+    return value === 1;
+  }
+  const normalized = value.toString().trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+  return normalized === 'true' || normalized === 'yes' || normalized === 'y' || normalized === '1' || normalized === 'disabled';
 }
 
 function renameSheetIfExists_(oldName, newName) {
@@ -331,10 +377,12 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
 
     const lastRow = sheet.getLastRow();
     const sheetEmails = [];
+    let disabledCount = 0;
     if (lastRow >= 2) {
-      const rawValues = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+      const rawValues = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
       rawValues.forEach(function(row, index) {
         const rawValue = row[0];
+        const disabledValue = row[1];
         if (rawValue === null || rawValue === undefined) {
           return;
         }
@@ -362,11 +410,21 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
           return;
         }
 
+        if (isUserRowDisabled_(disabledValue)) {
+          disabledCount++;
+          return;
+        }
+
         sheetEmails.push(matches[0].toLowerCase());
       });
     }
     const sheetSet = new Set(sheetEmails);
-    log_('Found ' + sheetSet.size + ' emails in sheet "' + userSheetName + '"');
+    if (disabledCount > 0) {
+      log_('Found ' + sheetSet.size + ' active emails in sheet "' + userSheetName + '" (skipped ' + disabledCount + ' disabled entr' +
+          (disabledCount === 1 ? 'y' : 'ies') + ').');
+    } else {
+      log_('Found ' + sheetSet.size + ' active emails in sheet "' + userSheetName + '"');
+    }
 
     const groupMembers = fetchAllGroupMembers_(groupEmail);
     const groupEmails = groupMembers.map(function(m) { return m.email.toLowerCase(); });

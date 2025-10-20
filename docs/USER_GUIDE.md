@@ -40,7 +40,7 @@ This is the most important sheet. Each row represents a folder you want the scri
 For every row in `ManagedFolders`, the script creates a corresponding **user sheet**. The name of this sheet is shown in the `UserSheetName` column.
 
 *   **Purpose:** This is where you list the email addresses of the people who should have the specified role for that folder.
-*   **How to Use:** Simply add or remove email addresses in Column A of the relevant user sheet. Enter **exactly one valid email address per row** (for example, `user@example.com`). If a cell contains multiple addresses or anything other than a single valid email, the script will log an error and ignore that entry.
+*   **How to Use:** Enter **exactly one valid email address per row** in Column A (`User Email Address`). If a cell contains multiple addresses or anything other than a single valid email, the script will log an error and ignore that entry. Optional Column B (`Disabled`) lets you temporarily exclude a user from receiving permissions—set it to `TRUE`, `YES`, or check the box to disable the user without deleting their row.
 
 ### 3. `UserGroups`
 
@@ -124,7 +124,7 @@ Let's say you want to give the "Sales Team" editor access to a new folder called
     *   Create the "Q4 Sales Reports" folder in Google Drive.
     *   Create a user sheet named `Q4 Sales Reports_Editor`.
     *   Create a Google Group for the Sales Team and a sheet named `Sales Team`.
-7.  **Go to the `Sales Team` sheet.** Add the email addresses of your sales team members to Column A.
+7.  **Go to the `Sales Team` sheet.** Add the email addresses of your sales team members to Column A. Mark Column B if you want any member to stay listed but not yet receive access.
 8.  **Go to the `Q4 Sales Reports_Editor` sheet.** In Column A, add the group email address for the sales team (you can copy this from the `GroupEmail` column in the `UserGroups` sheet).
 9. **Run the final sync.** Click **Permissions Manager > Sync Adds** again.
 
@@ -133,7 +133,7 @@ The script will now add all the members from the `Sales Team` group to the `Q4 S
 ### How to Add a User
 
 1.  Find the correct user sheet for the folder and role you want to change (e.g., `Q4 Sales Reports_Editor`).
-2.  To add a user, add their email address to a new row in Column A.
+2.  To add a user, add their email address to a new row in Column A. You can temporarily disable access later by marking Column B.
 3.  Run **Permissions Manager > Sync Adds**.
 
 ### How to Remove a User

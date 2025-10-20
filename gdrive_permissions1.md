@@ -33,6 +33,6 @@ The system is composed of:
 2.  They run `Sync Adds`. The script creates the folder (if needed), the corresponding Google Group, and a user sheet.
 3.  The administrator adds user emails to the newly created user sheet.
 4.  They run `Sync Adds` again. The script adds the users to the Google Group, granting them access to the folder.
-5.  To revoke access, the administrator removes a user's email from the sheet and runs `Sync Deletes`.
+5.  To revoke access, the administrator either removes a user's email from the sheet or marks the `Disabled` column for that user and runs `Sync Deletes`.
 
 This architecture provides a scalable, auditable, and user-friendly way to manage complex Google Drive permissions.
