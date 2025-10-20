@@ -79,6 +79,11 @@ function setupControlSheets_() {
       configSheet.getRange(lastRow, 1, 1, 2).setValues([['EnableGCPLogging', 'FALSE']]);
       log_('Added "EnableGCPLogging" setting with default FALSE.');
     }
+    if (settings.indexOf('EnableAutoSync') === -1) {
+      const lastRow = configSheet.getLastRow() + 1;
+      configSheet.getRange(lastRow, 1, 1, 2).setValues([['EnableAutoSync', 'TRUE']]);
+      log_('Added "EnableAutoSync" setting with default TRUE.');
+    }
   }
 }
 

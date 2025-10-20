@@ -154,6 +154,25 @@ Your setup is now complete! The script will have automatically created the neces
 
 ---
 
+## Optional: Enable Auto-Sync (Recommended for NGOs)
+
+If you want volunteers to edit sheets without manually triggering syncs:
+
+1. Go to **Permissions Manager → Auto-Sync → ⚡ Setup Auto-Sync (Hourly)**
+2. Click OK to install the trigger
+
+Now the script runs automatically every hour! Volunteers can simply edit sheets, and changes are applied automatically.
+
+**Benefits:**
+- ✅ Volunteers don't need to run menu items
+- ✅ Works with free Gmail accounts (volunteers don't need Workspace)
+- ✅ No OAuth issues for non-admin users
+- ✅ Changes applied within 1 hour automatically
+
+See the **[Auto-Sync Guide](./docs/AUTO_SYNC_GUIDE.md)** for full details.
+
+---
+
 ## Usage Guide
 
 For a detailed tutorial on how to use the spreadsheet, what each sheet and column means, and common workflows, please see the dedicated **[User Guide](./docs/USER_GUIDE.md)**.
