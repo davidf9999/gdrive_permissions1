@@ -13,7 +13,9 @@ const coreCode = fs.readFileSync(path.resolve(__dirname, '../apps_script_project
 eval(coreCode);
 
 describe('processRow_', () => {
-  let mockSheet, mockGetRange, mockGetValue, mockSetValue, mockGetValues, mockFolder, mockConfigSheet, mockRange;
+  let mockManagedSheet, mockGetValue, mockSetValue, mockGetValues, mockRange;
+  let mockFolder, mockConfigSheet, sheetRegistry, mockSpreadsheet, mockUserSheet, mockUi;
+  let currentUserSheetName, currentFolderName;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -25,13 +27,15 @@ describe('processRow_', () => {
     global.AdminDirectory = { Groups: { get: jest.fn(), insert: jest.fn() }, Members: { list: jest.fn(() => ({ members: [] })) } };
 
     // --- Mock DriveApp ---
+    currentFolderName = 'mockFolderName';
     mockFolder = {
       getId: jest.fn(() => 'mockFolderId'),
-      getName: jest.fn(() => 'mockFolderName'),
+      getName: jest.fn(() => currentFolderName),
       getUrl: jest.fn(() => 'http://mock.folder.url'),
       addEditor: jest.fn(),
       addViewer: jest.fn(),
       addCommenter: jest.fn(),
+      setName: jest.fn(newName => { currentFolderName = newName; }),
     };
     DriveApp.getFolderById.mockReturnValue(mockFolder);
     DriveApp.getFoldersByName.mockReturnValue({ hasNext: jest.fn(() => false), next: jest.fn() });
@@ -42,67 +46,159 @@ describe('processRow_', () => {
     mockSetValue = jest.fn();
     mockGetValues = jest.fn(() => []);
     mockRange = { getValue: mockGetValue, setValue: mockSetValue, getValues: mockGetValues };
-    mockGetRange = jest.fn(() => mockRange);
-    mockSheet = {
-      getRange: mockGetRange,
-      insertSheet: jest.fn(() => mockSheet),
+
+    mockManagedSheet = {
+      getRange: jest.fn(() => mockRange),
+      insertSheet: jest.fn(() => mockManagedSheet),
       getSheets: jest.fn(() => []),
       setFrozenRows: jest.fn(),
       appendRow: jest.fn(),
       getLastRow: jest.fn(() => 1),
       deleteRows: jest.fn(),
     };
+
     mockConfigSheet = {
       getRange: jest.fn(() => mockRange),
       getLastRow: jest.fn().mockReturnValue(2),
     };
-    SpreadsheetApp.getActiveSpreadsheet.mockReturnValue({
-      getSheetByName: jest.fn(name => {
-        if (name === global.CONFIG_SHEET_NAME) return mockConfigSheet;
-        return mockSheet;
-      }),
-      getSpreadsheetTimeZone: jest.fn(() => 'UTC'),
-    });
 
+    currentUserSheetName = 'mockFolderName_viewer';
+    sheetRegistry = new Map();
+    mockUserSheet = {
+      setName: jest.fn(newName => {
+        sheetRegistry.delete(currentUserSheetName);
+        currentUserSheetName = newName;
+        sheetRegistry.set(newName, mockUserSheet);
+      }),
+      getLastRow: jest.fn(() => 1),
+      getRange: jest.fn(() => ({
+        getValues: jest.fn(() => []),
+        setValue: jest.fn(),
+        setFontWeight: jest.fn(),
+      })),
+      setFrozenRows: jest.fn(),
+    };
+
+    sheetRegistry.set(global.MANAGED_FOLDERS_SHEET_NAME, mockManagedSheet);
+    sheetRegistry.set(global.CONFIG_SHEET_NAME, mockConfigSheet);
+    sheetRegistry.set(currentUserSheetName, mockUserSheet);
+
+    const getSheetByName = jest.fn(name => sheetRegistry.get(name) || null);
+    mockSpreadsheet = {
+      getSheetByName: getSheetByName,
+      getSpreadsheetTimeZone: jest.fn(() => 'UTC'),
+      getSheets: jest.fn(() => Array.from(sheetRegistry.values())),
+      insertSheet: jest.fn(name => {
+        let sheetName = name;
+        const newSheet = {
+          setName: jest.fn(newName => {
+            sheetRegistry.delete(sheetName);
+            sheetName = newName;
+            sheetRegistry.set(sheetName, newSheet);
+          }),
+          getLastRow: jest.fn(() => 1),
+          getRange: jest.fn(() => ({
+            getValues: jest.fn(() => []),
+            setValue: jest.fn(),
+            setFontWeight: jest.fn(),
+          })),
+          setFrozenRows: jest.fn(),
+        };
+        sheetRegistry.set(sheetName, newSheet);
+        return newSheet;
+      }),
+      toast: jest.fn(),
+    };
+
+    mockUi = {
+      alert: jest.fn(() => 'YES'),
+      ButtonSet: { YES_NO: 'YES_NO' },
+      Button: { YES: 'YES', NO: 'NO' },
+    };
+
+    SpreadsheetApp.getUi = jest.fn(() => mockUi);
+    SpreadsheetApp.getActiveSpreadsheet.mockReturnValue(mockSpreadsheet);
     SpreadsheetApp.getActive = jest.fn(() => ({
       getSpreadsheetTimeZone: jest.fn(() => 'UTC'),
     }));
   });
 
   it('should call DriveApp.addViewer for viewer role', () => {
-    // Arrange
-    mockGetValue.mockReturnValueOnce('My Folder')
-                 .mockReturnValueOnce('folder-id')
-                 .mockReturnValueOnce('viewer');
+    mockGetValue
+      .mockReturnValueOnce('mockFolderName')
+      .mockReturnValueOnce('folder-id')
+      .mockReturnValueOnce('viewer')
+      .mockReturnValueOnce('mockFolderName_viewer')
+      .mockReturnValueOnce('');
 
-    // Act
     processRow_(2, {});
 
-    // Assert
     expect(mockFolder.addViewer).toHaveBeenCalledWith('mockfoldernameviewer@example.com');
   });
 
   it('should call DriveApp.addEditor for editor role', () => {
-    // Arrange
-    mockGetValue.mockReturnValueOnce('My Folder')
-                 .mockReturnValueOnce('folder-id')
-                 .mockReturnValueOnce('editor');
+    mockGetValue
+      .mockReturnValueOnce('mockFolderName')
+      .mockReturnValueOnce('folder-id')
+      .mockReturnValueOnce('editor')
+      .mockReturnValueOnce('mockFolderName_editor')
+      .mockReturnValueOnce('');
 
-    // Act
     processRow_(2, {});
 
-    // Assert
     expect(mockFolder.addEditor).toHaveBeenCalledWith('mockfoldernameeditor@example.com');
   });
 
-  it('should throw an error for an unsupported role', () => {
-    // Arrange
-    mockGetValue.mockReturnValueOnce('My Folder')
-                 .mockReturnValueOnce('folder-id')
-                 .mockReturnValueOnce('unsupported-role');
+  it('renames the folder and existing user sheet when the configured name changes', () => {
+    sheetRegistry.delete(currentUserSheetName);
+    currentUserSheetName = 'LegacySheet_viewer';
+    sheetRegistry.set(currentUserSheetName, mockUserSheet);
 
-    // Act & Assert
+    mockGetValue
+      .mockReturnValueOnce('New Folder Name')
+      .mockReturnValueOnce('folder-id')
+      .mockReturnValueOnce('viewer')
+      .mockReturnValueOnce(currentUserSheetName)
+      .mockReturnValueOnce('existing-group@example.com');
+
+    processRow_(2, {});
+
+    expect(mockUi.alert).toHaveBeenCalledWith(
+      'Folder name mismatch',
+      expect.stringContaining('New Folder Name'),
+      mockUi.ButtonSet.YES_NO
+    );
+    expect(mockFolder.setName).toHaveBeenCalledWith('New Folder Name');
+    expect(mockUserSheet.setName).toHaveBeenCalledWith('New Folder Name_viewer');
+    expect(mockFolder.addViewer).toHaveBeenCalledWith('existing-group@example.com');
+  });
+
+  it('should throw an error for an unsupported role', () => {
+    mockGetValue
+      .mockReturnValueOnce('mockFolderName')
+      .mockReturnValueOnce('folder-id')
+      .mockReturnValueOnce('unsupported-role')
+      .mockReturnValueOnce('mockFolderName_viewer')
+      .mockReturnValueOnce('');
+
     expect(() => processRow_(2, {})).toThrow('Unsupported role: "unsupported-role"');
+  });
+
+  it('renames a folder when retrieved by ID with a different name', () => {
+    currentFolderName = 'Old Folder Name';
+
+    const folder = getOrCreateFolder_('Renamed Folder', 'folder-id');
+
+    expect(mockFolder.setName).toHaveBeenCalledWith('Renamed Folder');
+    expect(folder.getName()).toBe('Renamed Folder');
+  });
+
+  it('throws when a folder rename is declined by the user', () => {
+    currentFolderName = 'Original Name';
+    mockUi.alert.mockReturnValue(mockUi.Button.NO);
+
+    expect(() => getOrCreateFolder_('Desired Name', 'folder-id')).toThrow('Folder name mismatch for ID "folder-id"');
+    expect(mockFolder.setName).not.toHaveBeenCalled();
   });
 });
 
