@@ -3,23 +3,34 @@
  */
 function syncAdmins() {
   const ui = SpreadsheetApp.getUi();
+  let adminSheet;
   try {
     log_('Running Admin Sync...');
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(ADMINS_SHEET_NAME);
-    if (!sheet) {
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    adminSheet = spreadsheet.getSheetByName(ADMINS_SHEET_NAME);
+    if (!adminSheet) {
       log_('Admins sheet not found. Skipping admin sync.');
       ui.alert('Admins sheet not found. Skipping admin sync.');
       return;
     }
 
+    const groupEmailCell = adminSheet.getRange(ADMINS_GROUP_EMAIL_CELL);
+    let adminGroupEmail = groupEmailCell.getValue();
+    if (adminGroupEmail) {
+      adminGroupEmail = adminGroupEmail.toString().trim().toLowerCase();
+    }
+    if (!adminGroupEmail) {
+      adminGroupEmail = generateGroupEmail_(ADMINS_GROUP_NAME);
+    }
+    groupEmailCell.setValue(adminGroupEmail);
+
     // 1. Get desired admins
-    const adminEmails = sheet.getRange('A2:A').getValues()
+    const adminEmails = adminSheet.getRange('A2:A').getValues()
       .map(function(row) { return row[0].toString().trim().toLowerCase(); })
       .filter(function(email) { return email && email.length > 0; });
     const adminSet = new Set(adminEmails);
 
     // 2. Get current editors
-    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
     const currentEditors = spreadsheet.getEditors()
       .map(function(user) { return user.getEmail().toLowerCase(); });
     const editorSet = new Set(currentEditors);
@@ -27,16 +38,16 @@ function syncAdmins() {
     // 3. Determine changes
     const owner = spreadsheet.getOwner();
     if (owner) {
-        adminSet.add(owner.getEmail().toLowerCase()); // The owner should always be an editor
+      adminSet.add(owner.getEmail().toLowerCase());
     }
-    
+
     const emailsToAdd = adminEmails.filter(function(email) { return !editorSet.has(email); });
     const emailsToRemove = currentEditors.filter(function(email) { return !adminSet.has(email); });
 
-    // 4. Confirm and Execute
     if (emailsToAdd.length === 0 && emailsToRemove.length === 0) {
+      syncAdminsGroup_(adminSheet, adminGroupEmail);
       log_('Admin list is already up to date.');
-      ui.alert('Admin list is already up to date. No changes were needed.');
+      ui.alert('Admin list is already up to date. No changes were needed.\nAdmins group synced to ' + adminGroupEmail + '.');
       return;
     }
 
@@ -56,8 +67,11 @@ function syncAdmins() {
     if (response !== ui.Button.YES) {
       ui.alert('Admin sync cancelled.');
       log_('Admin sync cancelled by user.');
+      adminSheet.getRange(ADMINS_STATUS_CELL).setValue('CANCELLED');
       return;
     }
+
+    adminSheet.getRange(ADMINS_STATUS_CELL).setValue('Processing...');
 
     // 5. Perform the additions and removals
     if (emailsToAdd.length > 0) {
@@ -70,12 +84,43 @@ function syncAdmins() {
       spreadsheet.removeEditors(emailsToRemove);
     }
 
-    log_('Admin sync complete.');
-    ui.alert('Admin sync complete.');
+    syncAdminsGroup_(adminSheet, adminGroupEmail);
+
+    log_('Admin sync complete. Admins group email: ' + adminGroupEmail + '.');
+    ui.alert('Admin sync complete.\nAdmins group synced to ' + adminGroupEmail + '.');
 
   } catch (e) {
     log_('ERROR in syncAdmins: ' + e.toString());
+    if (adminSheet) {
+      try {
+        adminSheet.getRange(ADMINS_STATUS_CELL).setValue('ERROR: ' + e.message);
+      } catch (ignored) {}
+    }
     ui.alert('An error occurred during Admin sync: ' + e.message);
+  }
+}
+
+function syncAdminsGroup_(adminSheet, adminGroupEmail) {
+  const statusCell = adminSheet.getRange(ADMINS_STATUS_CELL);
+  const lastSyncedCell = adminSheet.getRange(ADMINS_LAST_SYNC_CELL);
+  statusCell.setValue('Processing group sync...');
+  const timestamp = Utilities.formatDate(new Date(), SpreadsheetApp.getActive().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+
+  if (shouldSkipGroupOps_()) {
+    log_('Admin Directory service not available. Skipping Admins group sync.', 'WARN');
+    statusCell.setValue('SKIPPED (No Admin SDK)');
+    lastSyncedCell.setValue(timestamp);
+    return;
+  }
+
+  try {
+    getOrCreateGroup_(adminGroupEmail, ADMINS_GROUP_NAME);
+    syncGroupMembership_(adminGroupEmail, ADMINS_SHEET_NAME);
+    statusCell.setValue('OK');
+    lastSyncedCell.setValue(timestamp);
+  } catch (e) {
+    statusCell.setValue('ERROR: ' + e.message);
+    throw e;
   }
 }
 

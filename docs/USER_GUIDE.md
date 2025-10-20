@@ -54,6 +54,8 @@ This sheet allows you to create your own reusable groups of people.
 
 This sheet controls who has permission to edit this spreadsheet itself. Add the email addresses of anyone who should be an administrator of this control panel.
 
+Each sync also keeps a dedicated Google Group in sync with this list. Column **B** shows the reusable group email so you can share any managed folder with all admins at once, and columns **C–D** record the latest group-sync status.
+
 ### 5. `Config`
 
 This sheet allows you to configure advanced settings, such as enabling email notifications for script errors.
