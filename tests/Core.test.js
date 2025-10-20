@@ -64,18 +64,24 @@ describe('processRow_', () => {
 
     currentUserSheetName = 'mockFolderName_viewer';
     sheetRegistry = new Map();
+    const createSheetRange = () => ({
+      getValue: jest.fn(),
+      setValue: jest.fn(),
+      getValues: jest.fn(() => []),
+      setValues: jest.fn(),
+      setFontWeight: jest.fn(),
+      getCell: jest.fn(() => ({ setValue: jest.fn() })),
+    });
+
     mockUserSheet = {
       setName: jest.fn(newName => {
         sheetRegistry.delete(currentUserSheetName);
         currentUserSheetName = newName;
         sheetRegistry.set(newName, mockUserSheet);
       }),
+      getName: jest.fn(() => currentUserSheetName),
       getLastRow: jest.fn(() => 1),
-      getRange: jest.fn(() => ({
-        getValues: jest.fn(() => []),
-        setValue: jest.fn(),
-        setFontWeight: jest.fn(),
-      })),
+      getRange: jest.fn(() => createSheetRange()),
       setFrozenRows: jest.fn(),
     };
 
@@ -96,12 +102,9 @@ describe('processRow_', () => {
             sheetName = newName;
             sheetRegistry.set(sheetName, newSheet);
           }),
+          getName: jest.fn(() => sheetName),
           getLastRow: jest.fn(() => 1),
-          getRange: jest.fn(() => ({
-            getValues: jest.fn(() => []),
-            setValue: jest.fn(),
-            setFontWeight: jest.fn(),
-          })),
+          getRange: jest.fn(() => createSheetRange()),
           setFrozenRows: jest.fn(),
         };
         sheetRegistry.set(sheetName, newSheet);
@@ -257,7 +260,7 @@ describe('syncGroupMembership_', () => {
       'ERROR'
     );
     expect(
-      log_.mock.calls.some(call => call[0].includes('Found 1 emails in sheet "TeamSheet_Editor"'))
+      log_.mock.calls.some(call => call[0].includes('Found 1 active emails in sheet "TeamSheet_Editor"'))
     ).toBe(true);
   });
 
@@ -272,9 +275,25 @@ describe('syncGroupMembership_', () => {
     syncGroupMembership_('group@example.com', 'TeamSheet_Viewer', { returnPlanOnly: true });
 
     expect(
-      log_.mock.calls.some(call => call[0].includes('Found 1 emails in sheet "TeamSheet_Viewer"'))
+      log_.mock.calls.some(call => call[0].includes('Found 1 active emails in sheet "TeamSheet_Viewer"'))
     ).toBe(true);
     const errorCalls = log_.mock.calls.filter(call => call[1] === 'ERROR');
     expect(errorCalls).toHaveLength(0);
+  });
+
+  it('skips disabled rows while keeping the email for auditing', () => {
+    const values = [
+      ['enabled@example.com', ''],
+      ['disabled@example.com', true],
+      ['another.disabled@example.com', 'yes']
+    ];
+
+    mockSpreadsheetForUserSheet('TeamSheet_Disabled', values);
+
+    syncGroupMembership_('group@example.com', 'TeamSheet_Disabled', { returnPlanOnly: true });
+
+    expect(
+      log_.mock.calls.some(call => call[0].includes('Found 1 active emails in sheet "TeamSheet_Disabled" (skipped 2 disabled entries).'))
+    ).toBe(true);
   });
 });
