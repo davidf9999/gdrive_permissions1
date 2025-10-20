@@ -72,10 +72,14 @@ function processRow_(rowIndex, options = {}) {
 
     // --- Full Sync (Add/Update) Execution Logic ---
     statusCell.setValue('Processing...');
-    
+
     let folderName = sheet.getRange(rowIndex, FOLDER_NAME_COL).getValue();
     let folderId = sheet.getRange(rowIndex, FOLDER_ID_COL).getValue();
     let role = sheet.getRange(rowIndex, ROLE_COL).getValue();
+    const userSheetCell = sheet.getRange(rowIndex, USER_SHEET_NAME_COL);
+    const groupEmailCell = sheet.getRange(rowIndex, GROUP_EMAIL_COL);
+    const existingUserSheetName = userSheetCell.getValue();
+    let existingGroupEmail = groupEmailCell.getValue();
 
     if (!folderName && !folderId) throw new Error('Both FolderName and FolderID are blank.');
     if (!role) throw new Error('Role is not specified.');
@@ -84,10 +88,21 @@ function processRow_(rowIndex, options = {}) {
     sheet.getRange(rowIndex, FOLDER_ID_COL).setValue(folder.getId());
     sheet.getRange(rowIndex, FOLDER_NAME_COL).setValue(folder.getName());
 
-    const userSheetName = folder.getName() + '_' + role;
-    const groupEmail = generateGroupEmail_(userSheetName);
-    sheet.getRange(rowIndex, USER_SHEET_NAME_COL).setValue(userSheetName);
-    sheet.getRange(rowIndex, GROUP_EMAIL_COL).setValue(groupEmail);
+    let userSheetName = folder.getName() + '_' + role;
+    const renameSucceeded = renameSheetIfExists_(existingUserSheetName, userSheetName);
+    if (!renameSucceeded && existingUserSheetName) {
+      userSheetName = existingUserSheetName;
+    }
+    userSheetCell.setValue(userSheetName);
+
+    if (existingGroupEmail) {
+      existingGroupEmail = existingGroupEmail.toString().trim();
+    }
+    let groupEmail = existingGroupEmail;
+    if (!groupEmail) {
+      groupEmail = generateGroupEmail_(userSheetName);
+    }
+    groupEmailCell.setValue(groupEmail);
 
     getOrCreateUserSheet_(userSheetName);
     
@@ -166,11 +181,48 @@ function getOrCreateFolder_(folderName, folderId) {
     try {
       const folder = DriveApp.getFolderById(folderId);
       if (folderName && folder.getName() !== folderName) {
-        throw new Error('Mismatch: Provided FolderID points to "' + folder.getName() + '"');
+        const originalName = folder.getName();
+        const ui = SpreadsheetApp.getUi();
+        const message =
+          'The Drive folder with ID "' +
+          folderId +
+          '" is currently named "' +
+          originalName +
+          '", but the ManagedFolders sheet expects "' +
+          folderName +
+          '". Rename the Drive folder to match the sheet?';
+        const response = ui.alert('Folder name mismatch', message, ui.ButtonSet.YES_NO);
+        if (response === ui.Button.YES) {
+          try {
+            folder.setName(folderName);
+            log_('Renamed folder "' + originalName + '" to "' + folderName + '" to match configuration after confirmation.');
+          } catch (renameError) {
+            log_('Failed to rename folder "' + originalName + '" to "' + folderName + '": ' + renameError.toString(), 'ERROR');
+            const renameFailureError = new Error('Could not rename folder "' + originalName + '" to "' + folderName + '": ' + renameError.message);
+            renameFailureError.code = 'FOLDER_RENAME_FAILED';
+            throw renameFailureError;
+          }
+        } else {
+          const warningMessage =
+            'Folder name mismatch for ID "' +
+            folderId +
+            '". Expected "' +
+            folderName +
+            '", but found "' +
+            originalName +
+            '". Update the ManagedFolders sheet or rename the Drive folder manually.';
+          log_(warningMessage, 'WARN');
+          const renameDeclinedError = new Error(warningMessage);
+          renameDeclinedError.code = 'FOLDER_RENAME_DECLINED';
+          throw renameDeclinedError;
+        }
       }
       log_('Successfully found folder "' + folder.getName() + '" by ID.');
       return folder;
     } catch (e) {
+      if (e && (e.code === 'FOLDER_RENAME_DECLINED' || e.code === 'FOLDER_RENAME_FAILED')) {
+        throw e;
+      }
       log_('Could not retrieve folder by ID ' + folderId + '. Will try searching by name.', 'WARN');
     }
   }
@@ -228,14 +280,42 @@ function getOrCreateUserSheet_(sheetName) {
   } else {
     log_('User sheet "' + sheetName + '" not found. Creating it...');
     sheet = spreadsheet.insertSheet(sheetName, spreadsheet.getSheets().length);
-    
+
     const header = sheet.getRange('A1');
     header.setValue('User Email Address');
     header.setFontWeight('bold');
     sheet.setFrozenRows(1);
-    
+
     log_('Successfully created user sheet: "' + sheetName + '"');
     return sheet;
+  }
+}
+
+function renameSheetIfExists_(oldName, newName) {
+  if (!oldName || oldName === newName) {
+    return true;
+  }
+
+  try {
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    const sheetToRename = spreadsheet.getSheetByName(oldName);
+    if (!sheetToRename) {
+      log_('Sheet "' + oldName + '" was not found when attempting to rename it to "' + newName + '".', 'WARN');
+      return false;
+    }
+
+    const conflictingSheet = spreadsheet.getSheetByName(newName);
+    if (conflictingSheet && conflictingSheet !== sheetToRename) {
+      log_('A sheet named "' + newName + '" already exists. Skipping rename of "' + oldName + '".', 'WARN');
+      return false;
+    }
+
+    sheetToRename.setName(newName);
+    log_('Renamed sheet "' + oldName + '" to "' + newName + '".');
+    return true;
+  } catch (e) {
+    log_('Failed to rename sheet "' + oldName + '" to "' + newName + '": ' + e.toString(), 'ERROR');
+    return false;
   }
 }
 
