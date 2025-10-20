@@ -158,11 +158,36 @@ Your setup is now complete! The script will have automatically created the neces
 
 For a detailed tutorial on how to use the spreadsheet, what each sheet and column means, and common workflows, please see the dedicated **[User Guide](./docs/USER_GUIDE.md)**.
 
+For details on how to handle manual permission changes, see the section on [Handling Manual Permission Changes (Reconciliation)](#handling-manual-permission-changes-reconciliation).
+
 ---
 
 ## Dry Run Audit
 
 This project includes a powerful, read-only audit feature to help you verify your permissions configuration.
+
+---
+
+## Handling Manual Permission Changes (Reconciliation)
+
+This project operates on a **"Stateless Enforcer"** model. This means the Google Sheet is treated as the single source of truth, and the script's main job is to enforce the permissions defined in it. The script has no memory of past changes.
+
+What happens when an admin makes a change manually (e.g., adds a user directly to a Google Group)?
+
+1.  **Detection**: The **`Permissions Manager > Dry Run Audit`** function will detect this change. It will report the manually added user as an `Extra Member` in the `DryRunAuditLog` sheet.
+2.  **Correction**: The **`Permissions Manager > Full Sync (Add & Delete)`** function will see this user as an "Extra Member" and **remove them** from the group to bring the system back in line with the sheet.
+
+### Approving Manual Changes with Merge & Reconcile
+
+There are legitimate cases where a manual addition should be kept. To handle this, the script provides a special tool to approve and import these manual changes into the official record (the Google Sheet).
+
+*   **What it does:** The **`Permissions Manager > Advanced > Merge & Reconcile Permissions`** function is designed specifically for this purpose. It performs a one-way merge:
+    1.  It scans every managed Google Group.
+    2.  It compares the list of members in the group with the list of members in the corresponding sheet.
+    3.  If it finds a member in the group who is **not** in the sheet (i.e., a manually added user), it **adds that user to the sheet**.
+*   **Why use it:** Run this function after you have manually added users to groups and you want to officially approve and document their membership. This updates your "source of truth" to reflect the reality you want to keep.
+*   **What it does NOT do:** It does not remove users from the sheet if they have been manually removed from a group. It is a non-destructive operation focused on importing new members.
+
 
 *   **What it does:** The audit checks for discrepancies between your configuration in the sheets and the actual permissions in Google Drive and Google Groups. It does **not** make any changes.
 *   **How to run it:** From the spreadsheet menu, select **Permissions Manager > Dry Run Audit**.

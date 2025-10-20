@@ -498,3 +498,8 @@ function setSheetUiStyles_() {
     log_('Could not apply UI styles. Error: ' + e.message, 'WARN');
   }
 }
+
+// Export for testing
+if (typeof module !== 'undefined') {
+  module.exports = { fetchAllGroupMembers_ };
+}
