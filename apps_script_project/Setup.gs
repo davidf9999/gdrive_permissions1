@@ -84,6 +84,28 @@ function setupControlSheets_() {
       configSheet.getRange(lastRow, 1, 1, 2).setValues([['EnableAutoSync', 'TRUE']]);
       log_('Added "EnableAutoSync" setting with default TRUE.');
     }
+    // Risk-based auto-sync settings
+    if (settings.indexOf('NotifyAfterSync') === -1) {
+      const lastRow = configSheet.getLastRow() + 1;
+      configSheet.getRange(lastRow, 1, 1, 2).setValues([['NotifyAfterSync', 'TRUE']]);
+      log_('Added "NotifyAfterSync" setting with default TRUE.');
+    }
+    if (settings.indexOf('NotifyDeletionsPending') === -1) {
+      const lastRow = configSheet.getLastRow() + 1;
+      configSheet.getRange(lastRow, 1, 1, 2).setValues([['NotifyDeletionsPending', 'TRUE']]);
+      log_('Added "NotifyDeletionsPending" setting with default TRUE.');
+    }
+    if (settings.indexOf('NotificationEmail') === -1) {
+      const lastRow = configSheet.getLastRow() + 1;
+      const defaultEmail = Session.getEffectiveUser().getEmail();
+      configSheet.getRange(lastRow, 1, 1, 2).setValues([['NotificationEmail', defaultEmail]]);
+      log_('Added "NotificationEmail" setting with default: ' + defaultEmail);
+    }
+    if (settings.indexOf('AutoSyncMaxDeletions') === -1) {
+      const lastRow = configSheet.getLastRow() + 1;
+      configSheet.getRange(lastRow, 1, 1, 2).setValues([['AutoSyncMaxDeletions', 10]]);
+      log_('Added "AutoSyncMaxDeletions" setting with default 10.');
+    }
   }
 }
 
