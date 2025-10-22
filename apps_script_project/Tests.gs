@@ -1,4 +1,3 @@
-
 /***** DEVELOPER-ONLY TEST FUNCTIONS *****/
 
 function runManualAccessTest() {
@@ -432,4 +431,50 @@ function runAddDeleteSeparationTest() {
         }
         SCRIPT_EXECUTION_MODE = 'DEFAULT';
     }
+}
+
+/**
+ * Cleans up all data associated with a test folder.
+ * @param {string} folderName The name of the folder.
+ * @param {string} folderId The ID of the folder.
+ * @param {string} groupEmail The email of the associated group.
+ * @param {string} userSheetName The name of the associated user sheet.
+ */
+function cleanupFolderData_(folderName, folderId, groupEmail, userSheetName) {
+    log_('Starting cleanup for test data: ' + folderName);
+
+    // 1. Delete the user sheet
+    if (userSheetName) {
+        try {
+            const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(userSheetName);
+            if (sheet) {
+                SpreadsheetApp.getActiveSpreadsheet().deleteSheet(sheet);
+                log_('Deleted sheet: ' + userSheetName);
+            }
+        } catch (e) {
+            log_('Could not delete sheet ' + userSheetName + ': ' + e.message, 'WARN');
+        }
+    }
+
+    // 2. Delete the Google Group
+    if (groupEmail) {
+        try {
+            AdminDirectory.Groups.remove(groupEmail);
+            log_('Deleted group: ' + groupEmail);
+        } catch (e) {
+            log_('Could not delete group ' + groupEmail + ': ' + e.message, 'WARN');
+        }
+    }
+
+    // 3. Trash the Google Drive folder
+    if (folderId) {
+        try {
+            const folder = DriveApp.getFolderById(folderId);
+            folder.setTrashed(true);
+            log_('Trashed folder: ' + folderName + ' (ID: ' + folderId + ')');
+        } catch (e) {
+            log_('Could not trash folder ' + folderId + ': ' + e.message, 'WARN');
+        }
+    }
+    log_('Cleanup finished for: ' + folderName);
 }
