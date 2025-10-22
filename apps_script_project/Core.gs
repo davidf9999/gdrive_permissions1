@@ -147,6 +147,7 @@ function checkForOrphanSheets_() {
     requiredSheetNames.add(CONFIG_SHEET_NAME);
     requiredSheetNames.add(LOG_SHEET_NAME);
     requiredSheetNames.add(TEST_LOG_SHEET_NAME);
+    requiredSheetNames.add(DRY_RUN_AUDIT_LOG_SHEET_NAME);
 
     const managedSheet = spreadsheet.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
     if (managedSheet && managedSheet.getLastRow() > 1) {
