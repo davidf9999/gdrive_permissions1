@@ -177,3 +177,14 @@ function sendErrorNotification_(errorMessage) {
     log_('Failed to send error notification email: ' + e.toString(), 'ERROR');
   }
 }
+
+function showTestMessage_(title, message) {
+    const config = getConfiguration_();
+    const showPrompts = config['ShowTestPrompts'];
+
+    if (showPrompts === true || showPrompts === 'TRUE') {
+        SpreadsheetApp.getUi().alert(title, message, SpreadsheetApp.getUi().ButtonSet.OK);
+    } else {
+        log_(`Test Message: ${title} - ${message}`, 'INFO');
+    }
+}

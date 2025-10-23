@@ -63,6 +63,7 @@ function setupControlSheets_() {
     configSheet.getRange('A5:B5').setValues([['GitHubRepoURL', 'https://github.com/davidf9999/gdrive_permissions1']]);
     configSheet.getRange('A6:B6').setValues([['MaxLogLength', DEFAULT_MAX_LOG_LENGTH]]);
     configSheet.getRange('A7:B7').setValues([['EnableGCPLogging', 'FALSE']]);
+    configSheet.getRange('A8:B8').setValues([['ShowTestPrompts', 'FALSE']]);
     configSheet.setFrozenRows(1);
     log_('Created "Config" sheet.');
   }
@@ -83,6 +84,11 @@ function setupControlSheets_() {
       const lastRow = configSheet.getLastRow() + 1;
       configSheet.getRange(lastRow, 1, 1, 2).setValues([['EnableAutoSync', 'TRUE']]);
       log_('Added "EnableAutoSync" setting with default TRUE.');
+    }
+    if (settings.indexOf('ShowTestPrompts') === -1) {
+      const lastRow = configSheet.getLastRow() + 1;
+      configSheet.getRange(lastRow, 1, 1, 2).setValues([['ShowTestPrompts', 'FALSE']]);
+      log_('Added "ShowTestPrompts" setting with default FALSE.');
     }
   }
 }

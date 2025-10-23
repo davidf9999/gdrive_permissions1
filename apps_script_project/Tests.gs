@@ -4,7 +4,7 @@ function runManualAccessTest() {
     SCRIPT_EXECUTION_MODE = 'TEST';
     try {
         if (shouldSkipGroupOps_()) {
-            SpreadsheetApp.getUi().alert('Manual Access Test requires the Admin Directory service (Admin SDK). Please enable it or run on a Google Workspace domain. Test aborted.');
+            showTestMessage_('Test Aborted', 'Manual Access Test requires the Admin Directory service (Admin SDK). Please enable it or run on a Google Workspace domain.');
             return;
         }
         const ui = SpreadsheetApp.getUi();
@@ -21,7 +21,7 @@ function runManualAccessTest() {
         if (email.getSelectedButton() !== ui.Button.OK || !email.getResponseText()) return ui.alert('Test cancelled.');
         const testEmail = email.getResponseText().trim().toLowerCase();
 
-        ui.alert('Step 4/4: Initial Setup', 'The script will now add this configuration to the ManagedFolders sheet and run the sync to create the folder, group, and user sheet. Click OK to proceed.', ui.ButtonSet.OK);
+        showTestMessage_('Step 4/4: Initial Setup', 'The script will now add this configuration to the ManagedFolders sheet and run the sync to create the folder, group, and user sheet.');
 
         const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
         const testRowIndex = managedSheet.getLastRow() + 1;
@@ -32,10 +32,13 @@ function runManualAccessTest() {
 
         const userSheetName = managedSheet.getRange(testRowIndex, USER_SHEET_NAME_COL).getValue();
         const userSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(userSheetName);
-        if (!userSheet) return ui.alert('Test failed: Could not find the created user sheet: ' + userSheetName);
+        if (!userSheet) {
+            showTestMessage_('Test Failed', 'Could not find the created user sheet: ' + userSheetName);
+            return;
+        }
 
         userSheet.getRange('A2').setValue(testEmail);
-        ui.alert('Granting Access', 'The test email has been added to the ' + userSheetName + ' sheet. The script will now sync again to grant folder access.', ui.ButtonSet.OK);
+        showTestMessage_('Granting Access', 'The test email has been added to the ' + userSheetName + ' sheet. The script will now sync again to grant folder access.');
         fullSync(); // Changed from syncAll()
 
         const folderId = managedSheet.getRange(testRowIndex, FOLDER_ID_COL).getValue();
@@ -48,15 +51,15 @@ function runManualAccessTest() {
         }
 
         userSheet.getRange('A2').clearContent();
-        ui.alert('Revoking Access', 'The test email has been removed from the sheet. The script will now sync again to revoke folder access.', ui.ButtonSet.OK);
+        showTestMessage_('Revoking Access', 'The test email has been removed from the sheet. The script will now sync again to revoke folder access.');
         fullSync(); // Changed from syncAll()
 
         const verification2 = ui.alert('Verify Revoked Access', 'Please go back to your Incognito Window and refresh the folder page. You should see a \'permission denied\' error.\n\nWas access revoked?', ui.ButtonSet.YES_NO);
 
         if (verification2 === ui.Button.YES) {
-            ui.alert('Test Complete: SUCCESS!', 'The user was successfully granted and revoked access.', ui.ButtonSet.OK);
+            showTestMessage_('Test Complete: SUCCESS!', 'The user was successfully granted and revoked access.');
         } else {
-            ui.alert('Test Complete: FAILURE!', 'Access was not revoked as expected. This may be due to Google Drive permission propagation delays. Please wait a few minutes and check again.', ui.ButtonSet.OK);
+            showTestMessage_('Test Complete: FAILURE!', 'Access was not revoked as expected. This may be due to Google Drive permission propagation delays. Please wait a few minutes and check again.');
         }
 
         const cleanup = ui.alert('Cleanup', 'Do you want to remove all test data (folder, group, and sheet)?', ui.ButtonSet.YES_NO);
@@ -64,7 +67,7 @@ function runManualAccessTest() {
             const groupEmail = managedSheet.getRange(testRowIndex, GROUP_EMAIL_COL).getValue();
             cleanupFolderData_(testFolderName, folderId, groupEmail, userSheetName);
             managedSheet.deleteRow(testRowIndex);
-            ui.alert('Cleanup complete.');
+            showTestMessage_('Cleanup', 'Cleanup complete.');
         }
     } finally {
         SCRIPT_EXECUTION_MODE = 'DEFAULT';
@@ -80,7 +83,7 @@ function runStressTest() {
     SCRIPT_EXECUTION_MODE = 'TEST';
     try {
         if (shouldSkipGroupOps_()) {
-            SpreadsheetApp.getUi().alert('Stress Test requires the Admin Directory service (Admin SDK). Please enable it or run on a Google Workspace domain. Test aborted.');
+            showTestMessage_('Test Aborted', 'Stress Test requires the Admin Directory service (Admin SDK). Please enable it or run on a Google Workspace domain.');
             return;
         }
         const ui = SpreadsheetApp.getUi();
@@ -100,10 +103,9 @@ function runStressTest() {
         const emailParts = baseEmail.split('@');
         if (emailParts.length !== 2) return ui.alert('Invalid email address.');
 
-        ui.alert(
+        showTestMessage_(
             'Stress Test - Step 4/4',
-            'The script will now create ' + numFolders + ' test folders and prepare ' + numUsers + ' users for each.\n\nThis will take several steps. Please be patient.',
-            ui.ButtonSet.OK
+            'The script will now create ' + numFolders + ' test folders and prepare ' + numUsers + ' users for each.'
         );
 
         // --- Step 2: Setup Test Data ---
@@ -125,11 +127,11 @@ function runStressTest() {
         SpreadsheetApp.flush();
 
         // --- Step 3: Initial Sync to Create Infrastructure ---
-        ui.alert('Setup Phase 1 Complete', 'Test folders have been added to the sheet. The script will now run a sync to create the necessary folders, groups, and user sheets.', ui.ButtonSet.OK);
+        showTestMessage_('Setup Phase 1 Complete', 'Test folders have been added to the sheet. The script will now run a sync to create the necessary folders, groups, and user sheets.');
         fullSync();
 
         // --- Step 4: Populate User Sheets ---
-        ui.alert('Setup Phase 2 Complete', 'The script will now populate all of the new user sheets with the test user emails.', ui.ButtonSet.OK);
+        showTestMessage_('Setup Phase 2 Complete', 'The script will now populate all of the new user sheets with the test user emails.');
         const userSheetNames = managedSheet.getRange(startRow, USER_SHEET_NAME_COL, numFolders, 1).getValues().flat();
         const userEmailsForSheet = userEmails.map(e => [e]); // Format for setting range values
 
@@ -141,13 +143,13 @@ function runStressTest() {
         });
 
         // --- Step 5: Run the Main Stress Test Sync ---
-        ui.alert('Setup Complete. Starting Stress Test', 'All test data is in place. The script will now run the main sync and time its execution.', ui.ButtonSet.OK);
+        showTestMessage_('Setup Complete. Starting Stress Test', 'All test data is in place. The script will now run the main sync and time its execution.');
         const startTime = new Date();
         fullSync();
         const endTime = new Date();
         const durationSeconds = (endTime.getTime() - startTime.getTime()) / 1000;
 
-        ui.alert('Stress Test Complete!', 'The sync process finished in ' + durationSeconds + ' seconds.', ui.ButtonSet.OK);
+        showTestMessage_('Stress Test Complete!', 'The sync process finished in ' + durationSeconds + ' seconds.');
 
         // --- Step 6: Cleanup ---
         const cleanup = ui.alert('Cleanup', 'Do you want to remove all test data (folders, groups, sheets, and configuration rows)?', ui.ButtonSet.YES_NO);
@@ -157,7 +159,7 @@ function runStressTest() {
             // Delete rows from sheet first to prevent re-sync issues
             managedSheet.deleteRows(startRow, numFolders);
 
-            ui.alert('Cleanup in Progress', 'This may take a few moments. Please wait for the confirmation alert.', ui.ButtonSet.OK);
+            showTestMessage_('Cleanup', 'Cleanup in Progress. This may take a few moments.');
 
             managedData.forEach(function (row) {
                 const folderName = row[FOLDER_NAME_COL - 1];
@@ -167,7 +169,7 @@ function runStressTest() {
                 cleanupFolderData_(folderName, folderId, groupEmail, userSheetName);
             });
 
-            ui.alert('Cleanup Complete!');
+            showTestMessage_('Cleanup', 'Cleanup Complete!');
         }
     } finally {
         SCRIPT_EXECUTION_MODE = 'DEFAULT';
@@ -178,7 +180,7 @@ function cleanupStressTestData() {
     SCRIPT_EXECUTION_MODE = 'TEST';
     try {
         if (shouldSkipGroupOps_()) {
-            SpreadsheetApp.getUi().alert('Cleanup requires the Admin Directory service (Admin SDK). Please enable it or run on a Google Workspace domain. Aborting.');
+            showTestMessage_('Cleanup Aborted', 'Cleanup requires the Admin Directory service (Admin SDK). Please enable it or run on a Google Workspace domain.');
             return;
         }
         const ui = SpreadsheetApp.getUi();
@@ -187,7 +189,7 @@ function cleanupStressTestData() {
             return;
         }
 
-        ui.alert('Cleanup in Progress', 'This may take a few moments. Please wait for the confirmation alert.', ui.ButtonSet.OK);
+        showTestMessage_('Cleanup', 'Cleanup in Progress. This may take a few moments.');
 
         // Clean up sheets
         const allSheets = SpreadsheetApp.getActiveSpreadsheet().getSheets();
@@ -233,7 +235,7 @@ function cleanupStressTestData() {
             }
         }
 
-        ui.alert('Cleanup Complete!');
+        showTestMessage_('Cleanup', 'Cleanup Complete!');
     } finally {
         SCRIPT_EXECUTION_MODE = 'DEFAULT';
     }
@@ -243,7 +245,7 @@ function cleanupManualTestData() {
     SCRIPT_EXECUTION_MODE = 'TEST';
     try {
         if (shouldSkipGroupOps_()) {
-            SpreadsheetApp.getUi().alert('Cleanup requires the Admin Directory service (Admin SDK). Please enable it or run on a Google Workspace domain. Aborting.');
+            showTestMessage_('Cleanup Aborted', 'Cleanup requires the Admin Directory service (Admin SDK). Please enable it or run on a Google Workspace domain.');
             return;
         }
         const ui = SpreadsheetApp.getUi();
@@ -269,7 +271,7 @@ function cleanupManualTestData() {
         }
 
         if (rowIndexToDelete === -1) {
-            ui.alert('Folder not found in the ManagedFolders sheet.');
+            showTestMessage_('Error', 'Folder not found in the ManagedFolders sheet.');
             return;
         }
 
@@ -281,7 +283,7 @@ function cleanupManualTestData() {
         cleanupFolderData_(folderName, folderId, groupEmail, userSheetName);
         managedSheet.deleteRow(rowIndexToDelete);
 
-        ui.alert('Cleanup Complete!');
+        showTestMessage_('Cleanup', 'Cleanup Complete!');
     } finally {
         SCRIPT_EXECUTION_MODE = 'DEFAULT';
     }
@@ -291,7 +293,7 @@ function cleanupAddDeleteSeparationTestData() {
     SCRIPT_EXECUTION_MODE = 'TEST';
     try {
         if (shouldSkipGroupOps_()) {
-            SpreadsheetApp.getUi().alert('Cleanup requires the Admin Directory service (Admin SDK). Please enable it or run on a Google Workspace domain. Aborting.');
+            showTestMessage_('Cleanup Aborted', 'Cleanup requires the Admin Directory service (Admin SDK). Please enable it or run on a Google Workspace domain.');
             return;
         }
         const ui = SpreadsheetApp.getUi();
@@ -317,7 +319,7 @@ function cleanupAddDeleteSeparationTestData() {
         }
 
         if (rowIndexToDelete === -1) {
-            ui.alert('Folder not found in the ManagedFolders sheet.');
+            showTestMessage_('Error', 'Folder not found in the ManagedFolders sheet.');
             return;
         }
 
@@ -329,7 +331,7 @@ function cleanupAddDeleteSeparationTestData() {
         cleanupFolderData_(folderName, folderId, groupEmail, userSheetName);
         managedSheet.deleteRow(rowIndexToDelete);
 
-        ui.alert('Cleanup Complete!');
+        showTestMessage_('Cleanup', 'Cleanup Complete!');
     } finally {
         SCRIPT_EXECUTION_MODE = 'DEFAULT';
     }
@@ -343,7 +345,7 @@ function runAddDeleteSeparationTest() {
 
     try {
         if (shouldSkipGroupOps_()) {
-            ui.alert('This test requires the Admin Directory service (Admin SDK). Please enable it or run on a Google Workspace domain. Test aborted.');
+            showTestMessage_('Test Aborted', 'This test requires the Admin Directory service (Admin SDK). Please enable it or run on a Google Workspace domain.');
             return;
         }
 
@@ -357,7 +359,7 @@ function runAddDeleteSeparationTest() {
         if (emailPrompt.getSelectedButton() !== ui.Button.OK || !emailPrompt.getResponseText()) return ui.alert('Test cancelled.');
         testEmail = emailPrompt.getResponseText().trim().toLowerCase();
 
-        ui.alert('Add/Delete Test - Step 3/3: Running Test', 'The script will now run through the add/delete separation test. Please follow the prompts.', ui.ButtonSet.OK);
+        showTestMessage_('Add/Delete Test - Step 3/3: Running Test', 'The script will now run through the add/delete separation test. Please follow the prompts.');
 
         // --- Phase 1: Initial Add ---
         log_('TEST: Initial Add Phase');
@@ -384,7 +386,7 @@ function runAddDeleteSeparationTest() {
             throw new Error('VERIFICATION FAILED: User ' + testEmail + ' was not added to group ' + groupEmail + ' after syncAdds.');
         }
         log_('VERIFICATION PASSED: User was successfully added to the group.');
-        ui.alert('Verification Passed', 'User ' + testEmail + ' was correctly added to the group.', ui.ButtonSet.OK);
+        showTestMessage_('Verification Passed', 'User ' + testEmail + ' was correctly added to the group.');
 
         // --- Phase 2: Run Delete (should do nothing) ---
         log_('TEST: No-Op Delete Phase');
@@ -397,7 +399,7 @@ function runAddDeleteSeparationTest() {
             throw new Error('VERIFICATION FAILED: User ' + testEmail + ' was removed from group ' + groupEmail + ' after a no-op syncDeletes call.');
         }
         log_('VERIFICATION PASSED: User was not removed by no-op delete.');
-        ui.alert('Verification Passed', 'User ' + testEmail + ' was NOT removed by the delete sync (as expected).', ui.ButtonSet.OK);
+        showTestMessage_('Verification Passed', 'User ' + testEmail + ' was NOT removed by the delete sync (as expected).');
 
         // --- Phase 3: Actual Deletion ---
         log_('TEST: Actual Deletion Phase');
@@ -411,7 +413,7 @@ function runAddDeleteSeparationTest() {
             throw new Error('VERIFICATION FAILED: User ' + testEmail + ' was NOT removed from group ' + groupEmail + ' after syncDeletes.');
         }
         log_('VERIFICATION PASSED: User was successfully removed from the group.');
-        ui.alert('Test Complete: SUCCESS!', 'The user was successfully added and then removed using the separated sync functions.', ui.ButtonSet.OK);
+        showTestMessage_('Test Complete: SUCCESS!', 'The user was successfully added and then removed using the separated sync functions.');
 
     } catch (e) {
         log_('TEST FAILED: ' + e.toString() + ' Stack: ' + e.stack, 'ERROR');
@@ -427,7 +429,7 @@ function runAddDeleteSeparationTest() {
                     managedSheet.deleteRow(testRowIndex);
                 }
             }
-            ui.alert('Cleanup complete.');
+            showTestMessage_('Cleanup', 'Cleanup complete.');
         }
         SCRIPT_EXECUTION_MODE = 'DEFAULT';
     }
