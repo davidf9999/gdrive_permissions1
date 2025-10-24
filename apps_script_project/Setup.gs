@@ -53,61 +53,39 @@ function setupControlSheets_() {
   }
   
   // Check for Config sheet
+  const defaultConfig = {
+    'EnableEmailNotifications': 'FALSE',
+    'NotificationEmailAddress': '',
+    'EnableToasts': 'FALSE',
+    'GitHubRepoURL': 'https://github.com/davidf9999/gdrive_permissions1',
+    'MaxLogLength': DEFAULT_MAX_LOG_LENGTH,
+    'EnableGCPLogging': 'FALSE',
+    'ShowTestPrompts': 'FALSE',
+    'TestFolderName': 'Test Folder',
+    'TestRole': 'Viewer',
+    'TestEmail': 'example@gmail.com',
+    'EnableAutoSync': 'TRUE'
+  };
+
   let configSheet = ss.getSheetByName(CONFIG_SHEET_NAME);
   if (!configSheet) {
     configSheet = ss.insertSheet(CONFIG_SHEET_NAME);
     configSheet.getRange('A1:B1').setValues([['Setting', 'Value']]).setFontWeight('bold');
-    configSheet.getRange('A2:B2').setValues([['EnableEmailNotifications', 'FALSE']]);
-    configSheet.getRange('A3:B3').setValues([['NotificationEmailAddress', '']]);
-    configSheet.getRange('A4:B4').setValues([['EnableToasts', 'FALSE']]);
-    configSheet.getRange('A5:B5').setValues([['GitHubRepoURL', 'https://github.com/davidf9999/gdrive_permissions1']]);
-    configSheet.getRange('A6:B6').setValues([['MaxLogLength', DEFAULT_MAX_LOG_LENGTH]]);
-    configSheet.getRange('A7:B7').setValues([['EnableGCPLogging', 'FALSE']]);
-    configSheet.getRange('A8:B8').setValues([['ShowTestPrompts', 'FALSE']]);
-    configSheet.getRange('A9:B9').setValues([['TestFolderName', 'Test Folder']]);
-    configSheet.getRange('A10:B10').setValues([['TestRole', 'Viewer']]);
-    configSheet.getRange('A11:B11').setValues([['TestEmail', 'example@gmail.com']]);
+    const newSettings = Object.entries(defaultConfig);
+    configSheet.getRange(2, 1, newSettings.length, 2).setValues(newSettings);
     configSheet.setFrozenRows(1);
     log_('Created "Config" sheet.');
-  }
+  } else {
+    const settingsRange = configSheet.getRange('A:A');
+    const settings = settingsRange.getValues().flat();
+    const lastRow = settings.filter(String).length;
 
-  if (configSheet) {
-    const settings = configSheet.getRange('A:A').getValues().flat();
-    if (settings.indexOf('MaxLogLength') === -1) {
-      const lastRow = configSheet.getLastRow() + 1;
-      configSheet.getRange(lastRow, 1, 1, 2).setValues([['MaxLogLength', DEFAULT_MAX_LOG_LENGTH]]);
-      log_('Added "MaxLogLength" setting with default ' + DEFAULT_MAX_LOG_LENGTH + '.');
-    }
-    if (settings.indexOf('EnableGCPLogging') === -1) {
-      const lastRow = configSheet.getLastRow() + 1;
-      configSheet.getRange(lastRow, 1, 1, 2).setValues([['EnableGCPLogging', 'FALSE']]);
-      log_('Added "EnableGCPLogging" setting with default FALSE.');
-    }
-    if (settings.indexOf('EnableAutoSync') === -1) {
-      const lastRow = configSheet.getLastRow() + 1;
-      configSheet.getRange(lastRow, 1, 1, 2).setValues([['EnableAutoSync', 'TRUE']]);
-      log_('Added "EnableAutoSync" setting with default TRUE.');
-    }
-    if (settings.indexOf('ShowTestPrompts') === -1) {
-      const lastRow = configSheet.getLastRow() + 1;
-      configSheet.getRange(lastRow, 1, 1, 2).setValues([['ShowTestPrompts', 'FALSE']]);
-      log_('Added "ShowTestPrompts" setting with default FALSE.');
-    }
-    if (settings.indexOf('TestFolderName') === -1) {
-      const lastRow = configSheet.getLastRow() + 1;
-      configSheet.getRange(lastRow, 1, 1, 2).setValues([['TestFolderName', 'Test Folder']]);
-      log_('Added "TestFolderName" setting with default value.');
-    }
-    if (settings.indexOf('TestRole') === -1) {
-      const lastRow = configSheet.getLastRow() + 1;
-      configSheet.getRange(lastRow, 1, 1, 2).setValues([['TestRole', 'Viewer']]);
-      log_('Added "TestRole" setting with default value.');
-    }
-    if (settings.indexOf('TestEmail') === -1) {
-      const lastRow = configSheet.getLastRow() + 1;
-      configSheet.getRange(lastRow, 1, 1, 2).setValues([['TestEmail', 'example@gmail.com']]);
-      log_('Added "TestEmail" setting with default value.');
-    }
+    Object.entries(defaultConfig).forEach(([key, value]) => {
+      if (settings.indexOf(key) === -1) {
+        configSheet.getRange(lastRow + 1, 1, 1, 2).setValues([[key, value]]);
+        log_(`Added missing "${key}" setting with default value.`);
+      }
+    });
   }
 }
 
