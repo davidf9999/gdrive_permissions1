@@ -93,6 +93,21 @@ function setupControlSheets_() {
       configSheet.getRange(lastRow, 1, 1, 2).setValues([['ShowTestPrompts', 'FALSE']]);
       log_('Added "ShowTestPrompts" setting with default FALSE.');
     }
+    if (settings.indexOf('TestFolderName') === -1) {
+      const lastRow = configSheet.getLastRow() + 1;
+      configSheet.getRange(lastRow, 1, 1, 2).setValues([['TestFolderName', 'Test Folder']]);
+      log_('Added "TestFolderName" setting with default value.');
+    }
+    if (settings.indexOf('TestRole') === -1) {
+      const lastRow = configSheet.getLastRow() + 1;
+      configSheet.getRange(lastRow, 1, 1, 2).setValues([['TestRole', 'Viewer']]);
+      log_('Added "TestRole" setting with default value.');
+    }
+    if (settings.indexOf('TestEmail') === -1) {
+      const lastRow = configSheet.getLastRow() + 1;
+      configSheet.getRange(lastRow, 1, 1, 2).setValues([['TestEmail', 'example@gmail.com']]);
+      log_('Added "TestEmail" setting with default value.');
+    }
   }
 }
 
