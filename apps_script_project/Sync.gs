@@ -47,7 +47,11 @@ function syncAdmins() {
     if (emailsToAdd.length === 0 && emailsToRemove.length === 0) {
       syncAdminsGroup_(adminSheet, adminGroupEmail);
       log_('Admin list is already up to date.');
-      ui.alert('Admin list is already up to date. No changes were needed.\nAdmins group synced to ' + adminGroupEmail + '.');
+      if (SCRIPT_EXECUTION_MODE === 'TEST') {
+        showTestMessage_('Admin Sync', 'Admin list is already up to date. No changes were needed. Admins group synced to ' + adminGroupEmail + '.');
+      } else {
+        ui.alert('Admin list is already up to date. No changes were needed.\nAdmins group synced to ' + adminGroupEmail + '.');
+      }
       return;
     }
 
@@ -87,7 +91,11 @@ function syncAdmins() {
     syncAdminsGroup_(adminSheet, adminGroupEmail);
 
     log_('Admin sync complete. Admins group email: ' + adminGroupEmail + '.');
-    ui.alert('Admin sync complete.\nAdmins group synced to ' + adminGroupEmail + '.');
+    if (SCRIPT_EXECUTION_MODE === 'TEST') {
+      showTestMessage_('Admin Sync', 'Admin sync complete. Admins group synced to ' + adminGroupEmail + '.');
+    } else {
+      ui.alert('Admin sync complete.\nAdmins group synced to ' + adminGroupEmail + '.');
+    }
 
   } catch (e) {
     log_('ERROR in syncAdmins: ' + e.toString());

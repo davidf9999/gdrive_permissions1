@@ -64,6 +64,9 @@ function setupControlSheets_() {
     configSheet.getRange('A6:B6').setValues([['MaxLogLength', DEFAULT_MAX_LOG_LENGTH]]);
     configSheet.getRange('A7:B7').setValues([['EnableGCPLogging', 'FALSE']]);
     configSheet.getRange('A8:B8').setValues([['ShowTestPrompts', 'FALSE']]);
+    configSheet.getRange('A9:B9').setValues([['TestFolderName', 'Test Folder']]);
+    configSheet.getRange('A10:B10').setValues([['TestRole', 'Viewer']]);
+    configSheet.getRange('A11:B11').setValues([['TestEmail', 'example@gmail.com']]);
     configSheet.setFrozenRows(1);
     log_('Created "Config" sheet.');
   }

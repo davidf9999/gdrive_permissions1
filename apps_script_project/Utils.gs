@@ -88,6 +88,15 @@ function getConfiguration_() {
 }
 
 
+function getTestConfiguration_() {
+    const config = getConfiguration_();
+    return {
+        folderName: config['TestFolderName'],
+        role: config['TestRole'],
+        email: config['TestEmail']
+    };
+}
+
 function getMaxLogLength_() {
   const config = getConfiguration_();
   const maxLogLength = config['MaxLogLength'];
