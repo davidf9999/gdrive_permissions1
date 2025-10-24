@@ -10,17 +10,26 @@ function runManualAccessTest() {
         const ui = SpreadsheetApp.getUi();
         const testConfig = getTestConfiguration_();
 
-        const folderName = testConfig.folderName || ui.prompt('Test - Step 1/4: Folder Name', 'Enter a name for a new test folder to be created.', ui.ButtonSet.OK_CANCEL);
-        if (folderName.getSelectedButton() && folderName.getSelectedButton() !== ui.Button.OK || !folderName.getResponseText()) return ui.alert('Test cancelled.');
-        const testFolderName = folderName.getResponseText ? folderName.getResponseText() : folderName;
+        let testFolderName = testConfig.folderName;
+        if (!testFolderName) {
+            const folderNamePrompt = ui.prompt('Test - Step 1/4: Folder Name', 'Enter a name for a new test folder to be created.', ui.ButtonSet.OK_CANCEL);
+            if (folderNamePrompt.getSelectedButton() !== ui.Button.OK || !folderNamePrompt.getResponseText()) return ui.alert('Test cancelled.');
+            testFolderName = folderNamePrompt.getResponseText();
+        }
 
-        const role = testConfig.role || ui.prompt('Test - Step 2/4: Role', 'Enter the role to test (e.g., Editor, Viewer).', ui.ButtonSet.OK_CANCEL);
-        if (role.getSelectedButton() && role.getSelectedButton() !== ui.Button.OK || !role.getResponseText()) return ui.alert('Test cancelled.');
-        const testRole = role.getResponseText ? role.getResponseText() : role;
+        let testRole = testConfig.role;
+        if (!testRole) {
+            const rolePrompt = ui.prompt('Test - Step 2/4: Role', 'Enter the role to test (e.g., Editor, Viewer).', ui.ButtonSet.OK_CANCEL);
+            if (rolePrompt.getSelectedButton() !== ui.Button.OK || !rolePrompt.getResponseText()) return ui.alert('Test cancelled.');
+            testRole = rolePrompt.getResponseText();
+        }
 
-        const email = testConfig.email || ui.prompt('Test - Step 3/4: Test Email', 'Enter a REAL email address you can access for testing (e.g., a personal Gmail).', ui.ButtonSet.OK_CANCEL);
-        if (email.getSelectedButton() && email.getSelectedButton() !== ui.Button.OK || !email.getResponseText()) return ui.alert('Test cancelled.');
-        const testEmail = (email.getResponseText ? email.getResponseText() : email).trim().toLowerCase();
+        let testEmail = testConfig.email;
+        if (!testEmail) {
+            const emailPrompt = ui.prompt('Test - Step 3/4: Test Email', 'Enter a REAL email address you can access for testing (e.g., a personal Gmail).', ui.ButtonSet.OK_CANCEL);
+            if (emailPrompt.getSelectedButton() !== ui.Button.OK || !emailPrompt.getResponseText()) return ui.alert('Test cancelled.');
+            testEmail = emailPrompt.getResponseText().trim().toLowerCase();
+        }
 
         showTestMessage_('Step 4/4: Initial Setup', 'The script will now add this configuration to the ManagedFolders sheet and run the sync to create the folder, group, and user sheet.');
 
@@ -352,14 +361,20 @@ function runAddDeleteSeparationTest() {
         const testConfig = getTestConfiguration_();
 
         // --- Test Setup ---
-        const folderNamePrompt = testConfig.folderName || ui.prompt('Add/Delete Test - Step 1/3: Folder Name', 'Enter a unique name for a new test folder.', ui.ButtonSet.OK_CANCEL);
-        if (folderNamePrompt.getSelectedButton() && folderNamePrompt.getSelectedButton() !== ui.Button.OK || !folderNamePrompt.getResponseText()) return ui.alert('Test cancelled.');
-        testFolderName = folderNamePrompt.getResponseText ? folderNamePrompt.getResponseText() : folderNamePrompt;
+        testFolderName = testConfig.folderName;
+        if (!testFolderName) {
+            const folderNamePrompt = ui.prompt('Add/Delete Test - Step 1/3: Folder Name', 'Enter a unique name for a new test folder.', ui.ButtonSet.OK_CANCEL);
+            if (folderNamePrompt.getSelectedButton() !== ui.Button.OK || !folderNamePrompt.getResponseText()) return ui.alert('Test cancelled.');
+            testFolderName = folderNamePrompt.getResponseText();
+        }
         testRole = 'Editor'; // Using a fixed role for simplicity
 
-        const emailPrompt = testConfig.email || ui.prompt('Add/Delete Test - Step 2/3: Test Email', 'Enter a REAL email address you can access for testing.', ui.ButtonSet.OK_CANCEL);
-        if (emailPrompt.getSelectedButton() && emailPrompt.getSelectedButton() !== ui.Button.OK || !emailPrompt.getResponseText()) return ui.alert('Test cancelled.');
-        testEmail = (emailPrompt.getResponseText ? emailPrompt.getResponseText() : emailPrompt).trim().toLowerCase();
+        testEmail = testConfig.email;
+        if (!testEmail) {
+            const emailPrompt = ui.prompt('Add/Delete Test - Step 2/3: Test Email', 'Enter a REAL email address you can access for testing.', ui.ButtonSet.OK_CANCEL);
+            if (emailPrompt.getSelectedButton() !== ui.Button.OK || !emailPrompt.getResponseText()) return ui.alert('Test cancelled.');
+            testEmail = emailPrompt.getResponseText().trim().toLowerCase();
+        }
 
         showTestMessage_('Add/Delete Test - Step 3/3: Running Test', 'The script will now run through the add/delete separation test. Please follow the prompts.');
 
