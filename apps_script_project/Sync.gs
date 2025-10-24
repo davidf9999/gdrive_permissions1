@@ -232,7 +232,11 @@ function syncUserGroups(options = {}) {
       return deletionPlan;
     }
     
-    SpreadsheetApp.getUi().alert('User groups sync complete.');
+    if (SCRIPT_EXECUTION_MODE === 'TEST') {
+      showTestMessage_('User Groups Sync', 'User groups sync complete.');
+    } else {
+      SpreadsheetApp.getUi().alert('User groups sync complete.');
+    }
 
   } catch (e) {
     const errorMessage = 'FATAL ERROR in syncUserGroups: ' + e.toString() + '\n' + e.stack;

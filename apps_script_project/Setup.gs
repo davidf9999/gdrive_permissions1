@@ -64,7 +64,8 @@ function setupControlSheets_() {
     'TestFolderName': 'Test Folder',
     'TestRole': 'Viewer',
     'TestEmail': 'example@gmail.com',
-    'EnableAutoSync': 'TRUE'
+    'EnableAutoSync': 'TRUE',
+    'TestCleanup': 'TRUE'
   };
 
   let configSheet = ss.getSheetByName(CONFIG_SHEET_NAME);

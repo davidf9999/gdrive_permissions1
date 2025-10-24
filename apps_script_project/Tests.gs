@@ -30,6 +30,7 @@ function runManualAccessTest() {
             if (emailPrompt.getSelectedButton() !== ui.Button.OK || !emailPrompt.getResponseText()) return ui.alert('Test cancelled.');
             testEmail = emailPrompt.getResponseText().trim().toLowerCase();
         }
+        log_('Using test email: ' + testEmail + '. If this is not a real Google account, a "Resource Not Found" error in the logs is expected.', 'INFO');
 
         showTestMessage_('Step 4/4: Initial Setup', 'The script will now add this configuration to the ManagedFolders sheet and run the sync to create the folder, group, and user sheet.');
 
@@ -72,8 +73,13 @@ function runManualAccessTest() {
             showTestMessage_('Test Complete: FAILURE!', 'Access was not revoked as expected. This may be due to Google Drive permission propagation delays. Please wait a few minutes and check again.');
         }
 
-        const cleanup = ui.alert('Cleanup', 'Do you want to remove all test data (folder, group, and sheet)?', ui.ButtonSet.YES_NO);
-        if (cleanup === ui.Button.YES) {
+        let cleanup = testConfig.cleanup === 'TRUE';
+        if (!cleanup) {
+            const cleanupPrompt = ui.alert('Cleanup', 'Do you want to remove all test data (folder, group, and sheet)?', ui.ButtonSet.YES_NO);
+            cleanup = cleanupPrompt === ui.Button.YES;
+        }
+
+        if (cleanup) {
             const groupEmail = managedSheet.getRange(testRowIndex, GROUP_EMAIL_COL).getValue();
             cleanupFolderData_(testFolderName, folderId, groupEmail, userSheetName);
             managedSheet.deleteRow(testRowIndex);
@@ -375,6 +381,7 @@ function runAddDeleteSeparationTest() {
             if (emailPrompt.getSelectedButton() !== ui.Button.OK || !emailPrompt.getResponseText()) return ui.alert('Test cancelled.');
             testEmail = emailPrompt.getResponseText().trim().toLowerCase();
         }
+        log_('Using test email: ' + testEmail + '. If this is not a real Google account, a "Resource Not Found" error in the logs is expected.', 'INFO');
 
         showTestMessage_('Add/Delete Test - Step 3/3: Running Test', 'The script will now run through the add/delete separation test. Please follow the prompts.');
 
@@ -437,8 +444,13 @@ function runAddDeleteSeparationTest() {
         ui.alert('Test FAILED. Check the logs for details. Error: ' + e.message);
     } finally {
         // --- Cleanup ---
-        const cleanup = ui.alert('Cleanup', 'Do you want to remove all test data (folder, group, and sheet)?', ui.ButtonSet.YES_NO);
-        if (cleanup === ui.Button.YES) {
+        let cleanup = testConfig.cleanup === 'TRUE';
+        if (!cleanup) {
+            const cleanupPrompt = ui.alert('Cleanup', 'Do you want to remove all test data (folder, group, and sheet)?', ui.ButtonSet.YES_NO);
+            cleanup = cleanupPrompt === ui.Button.YES;
+        }
+
+        if (cleanup) {
             if (testFolderName) {
                 cleanupFolderData_(testFolderName, folderId, groupEmail, userSheetName);
                 const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);

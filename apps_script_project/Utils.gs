@@ -93,7 +93,8 @@ function getTestConfiguration_() {
     return {
         folderName: config['TestFolderName'],
         role: config['TestRole'],
-        email: config['TestEmail']
+        email: config['TestEmail'],
+        cleanup: config['TestCleanup']
     };
 }
 
