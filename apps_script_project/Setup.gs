@@ -65,7 +65,8 @@ function setupControlSheets_() {
     'TestRole': 'Viewer',
     'TestEmail': 'example@gmail.com',
     'EnableAutoSync': 'TRUE',
-    'TestCleanup': 'TRUE'
+    'TestCleanup': 'TRUE',
+    'TestAutoConfirm': 'FALSE'
   };
 
   let configSheet = ss.getSheetByName(CONFIG_SHEET_NAME);

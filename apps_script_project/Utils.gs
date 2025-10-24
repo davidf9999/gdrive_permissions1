@@ -94,7 +94,8 @@ function getTestConfiguration_() {
         folderName: config['TestFolderName'],
         role: config['TestRole'],
         email: config['TestEmail'],
-        cleanup: config['TestCleanup']
+        cleanup: config['TestCleanup'],
+        autoConfirm: config['TestAutoConfirm']
     };
 }
 
