@@ -40,6 +40,11 @@ function runManualAccessTest() {
         managedSheet.getRange(testRowIndex, ROLE_COL).setValue(testRole);
 
         fullSync(); // Changed from syncAll()
+        let status = managedSheet.getRange(testRowIndex, STATUS_COL).getValue();
+        if (status !== 'OK') {
+            throw new Error('Sync failed after initial setup. Status: ' + status);
+        }
+        log_('Initial sync complete. Status: OK', 'INFO');
 
         const userSheetName = managedSheet.getRange(testRowIndex, USER_SHEET_NAME_COL).getValue();
         const userSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(userSheetName);
@@ -51,10 +56,18 @@ function runManualAccessTest() {
         userSheet.getRange('A2').setValue(testEmail);
         showTestMessage_('Granting Access', 'The test email has been added to the ' + userSheetName + ' sheet. The script will now sync again to grant folder access.');
         fullSync(); // Changed from syncAll()
+        status = managedSheet.getRange(testRowIndex, STATUS_COL).getValue();
+        if (status !== 'OK') {
+            throw new Error('Sync failed after granting access. Status: ' + status);
+        }
+        log_('Grant access sync complete. Status: OK', 'INFO');
 
         const folderId = managedSheet.getRange(testRowIndex, FOLDER_ID_COL).getValue();
         const folderUrl = DriveApp.getFolderById(folderId).getUrl();
-        const verification1 = ui.alert('Verify Access', 'Please open an Incognito Window, log in as ' + testEmail + ', and try to open this link:\n\n' + folderUrl + '\n\nDid you get access?', ui.ButtonSet.YES_NO);
+        let verification1 = ui.Button.YES;
+        if (testConfig.autoConfirm !== 'TRUE') {
+            verification1 = ui.alert('Verify Access', 'Please open an Incognito Window, log in as ' + testEmail + ', and try to open this link:\n\n' + folderUrl + '\n\nDid you get access?', ui.ButtonSet.YES_NO);
+        }
 
         if (verification1 !== ui.Button.YES) {
             ui.alert('Test aborted. Please review the logs and configuration.');
@@ -64,8 +77,16 @@ function runManualAccessTest() {
         userSheet.getRange('A2').clearContent();
         showTestMessage_('Revoking Access', 'The test email has been removed from the sheet. The script will now sync again to revoke folder access.');
         fullSync(); // Changed from syncAll()
+        status = managedSheet.getRange(testRowIndex, STATUS_COL).getValue();
+        if (status !== 'OK') {
+            throw new Error('Sync failed after revoking access. Status: ' + status);
+        }
+        log_('Revoke access sync complete. Status: OK', 'INFO');
 
-        const verification2 = ui.alert('Verify Revoked Access', 'Please go back to your Incognito Window and refresh the folder page. You should see a \'permission denied\' error.\n\nWas access revoked?', ui.ButtonSet.YES_NO);
+        let verification2 = ui.Button.YES;
+        if (testConfig.autoConfirm !== 'TRUE') {
+            verification2 = ui.alert('Verify Revoked Access', 'Please go back to your Incognito Window and refresh the folder page. You should see a \'permission denied\' error.\n\nWas access revoked?', ui.ButtonSet.YES_NO);
+        }
 
         if (verification2 === ui.Button.YES) {
             showTestMessage_('Test Complete: SUCCESS!', 'The user was successfully granted and revoked access.');
@@ -393,6 +414,11 @@ function runAddDeleteSeparationTest() {
         managedSheet.getRange(testRowIndex, ROLE_COL).setValue(testRole);
 
         syncAdds();
+        let status = managedSheet.getRange(testRowIndex, STATUS_COL).getValue();
+        if (status !== 'OK') {
+            throw new Error('Sync failed after initial setup. Status: ' + status);
+        }
+        log_('Initial sync complete. Status: OK', 'INFO');
 
         userSheetName = managedSheet.getRange(testRowIndex, USER_SHEET_NAME_COL).getValue();
         groupEmail = managedSheet.getRange(testRowIndex, GROUP_EMAIL_COL).getValue();
@@ -402,6 +428,11 @@ function runAddDeleteSeparationTest() {
 
         userSheet.getRange('A2').setValue(testEmail);
         syncAdds();
+        status = managedSheet.getRange(testRowIndex, STATUS_COL).getValue();
+        if (status !== 'OK') {
+            throw new Error('Sync failed after adding user. Status: ' + status);
+        }
+        log_('Add user sync complete. Status: OK', 'INFO');
 
         // --- Verification 1: User was added ---
         let members = fetchAllGroupMembers_(groupEmail);
@@ -429,6 +460,11 @@ function runAddDeleteSeparationTest() {
         log_('TEST: Actual Deletion Phase');
         userSheet.getRange('A2').clearContent();
         syncDeletes(); // This will prompt for confirmation
+        status = managedSheet.getRange(testRowIndex, STATUS_COL).getValue();
+        if (status !== 'OK') {
+            throw new Error('Sync failed after deleting user. Status: ' + status);
+        }
+        log_('Delete user sync complete. Status: OK', 'INFO');
 
         // --- Verification 3: User was removed ---
         members = fetchAllGroupMembers_(groupEmail);
