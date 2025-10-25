@@ -135,6 +135,7 @@ function runManualAccessTest() {
  */
 function runStressTest() {
     SCRIPT_EXECUTION_MODE = 'TEST';
+    const testStartTime = new Date(); // Record overall test start time
     try {
         if (shouldSkipGroupOps_()) {
             showTestMessage_('Test Aborted', 'Stress Test requires the Admin Directory service (Admin SDK). Please enable it or run on a Google Workspace domain.');
@@ -214,6 +215,12 @@ function runStressTest() {
         const durationSeconds = (endTime.getTime() - startTime.getTime()) / 1000;
 
         showTestMessage_('Stress Test Complete!', 'The sync process finished in ' + durationSeconds + ' seconds.');
+        log_('Stress Test sync duration: ' + durationSeconds + ' seconds', 'INFO');
+
+        // Record overall test duration
+        const testEndTime = new Date();
+        const testDurationSeconds = ((testEndTime.getTime() - testStartTime.getTime()) / 1000).toFixed(2);
+        log_('TEST DURATION: ' + testDurationSeconds + ' seconds', 'INFO');
 
         // --- Step 6: Cleanup ---
         let cleanup = testConfig.cleanup === true;
