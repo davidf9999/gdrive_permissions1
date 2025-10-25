@@ -66,7 +66,10 @@ function setupControlSheets_() {
     'TestEmail': 'example@gmail.com',
     'EnableAutoSync': 'TRUE',
     'TestCleanup': 'TRUE',
-    'TestAutoConfirm': 'FALSE'
+    'TestAutoConfirm': 'FALSE',
+    'TestNumFolders': '10',
+    'TestNumUsers': '200',
+    'TestBaseEmail': 'example@gmail.com'
   };
 
   let configSheet = ss.getSheetByName(CONFIG_SHEET_NAME);

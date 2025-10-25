@@ -95,7 +95,10 @@ function getTestConfiguration_() {
         role: config['TestRole'],
         email: config['TestEmail'],
         cleanup: (config['TestCleanup'] === true || config['TestCleanup'] === 'TRUE'),
-        autoConfirm: (config['TestAutoConfirm'] === true || config['TestAutoConfirm'] === 'TRUE')
+        autoConfirm: (config['TestAutoConfirm'] === true || config['TestAutoConfirm'] === 'TRUE'),
+        numFolders: parseInt(config['TestNumFolders'], 10),
+        numUsers: parseInt(config['TestNumUsers'], 10),
+        baseEmail: config['TestBaseEmail']
     };
     log_('Test Configuration loaded: ' + JSON.stringify(testConfig), 'INFO');
     return testConfig;

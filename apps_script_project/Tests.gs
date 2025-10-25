@@ -132,19 +132,29 @@ function runStressTest() {
             return;
         }
         const ui = SpreadsheetApp.getUi();
+        const testConfig = getTestConfiguration_();
 
         // --- Step 1: Get Test Parameters ---
-        const numFoldersStr = ui.prompt('Stress Test - Step 1/4', 'Enter the number of temporary folders to create (e.g., 10).', ui.ButtonSet.OK_CANCEL);
-        if (numFoldersStr.getSelectedButton() !== ui.Button.OK || !numFoldersStr.getResponseText()) return ui.alert('Test cancelled.');
-        const numFolders = parseInt(numFoldersStr.getResponseText(), 10);
+        let numFolders = testConfig.numFolders;
+        if (isNaN(numFolders)) {
+            const numFoldersStr = ui.prompt('Stress Test - Step 1/4', 'Enter the number of temporary folders to create (e.g., 10).', ui.ButtonSet.OK_CANCEL);
+            if (numFoldersStr.getSelectedButton() !== ui.Button.OK || !numFoldersStr.getResponseText()) return ui.alert('Test cancelled.');
+            numFolders = parseInt(numFoldersStr.getResponseText(), 10);
+        }
 
-        const numUsersStr = ui.prompt('Stress Test - Step 2/4', 'Enter the number of test users to create PER FOLDER (e.g., 200).', ui.ButtonSet.OK_CANCEL);
-        if (numUsersStr.getSelectedButton() !== ui.Button.OK || !numUsersStr.getResponseText()) return ui.alert('Test cancelled.');
-        const numUsers = parseInt(numUsersStr.getResponseText(), 10);
+        let numUsers = testConfig.numUsers;
+        if (isNaN(numUsers)) {
+            const numUsersStr = ui.prompt('Stress Test - Step 2/4', 'Enter the number of test users to create PER FOLDER (e.g., 200).', ui.ButtonSet.OK_CANCEL);
+            if (numUsersStr.getSelectedButton() !== ui.Button.OK || !numUsersStr.getResponseText()) return ui.alert('Test cancelled.');
+            numUsers = parseInt(numUsersStr.getResponseText(), 10);
+        }
 
-        const baseEmailStr = ui.prompt('Stress Test - Step 3/4', 'Enter a base email address to generate test users (e.g., your.name@gmail.com).', ui.ButtonSet.OK_CANCEL);
-        if (baseEmailStr.getSelectedButton() !== ui.Button.OK || !baseEmailStr.getResponseText()) return ui.alert('Test cancelled.');
-        const baseEmail = baseEmailStr.getResponseText().trim();
+        let baseEmail = testConfig.baseEmail;
+        if (!baseEmail) {
+            const baseEmailStr = ui.prompt('Stress Test - Step 3/4', 'Enter a base email address to generate test users (e.g., your.name@gmail.com).', ui.ButtonSet.OK_CANCEL);
+            if (baseEmailStr.getSelectedButton() !== ui.Button.OK || !baseEmailStr.getResponseText()) return ui.alert('Test cancelled.');
+            baseEmail = baseEmailStr.getResponseText().trim();
+        }
         const emailParts = baseEmail.split('@');
         if (emailParts.length !== 2) return ui.alert('Invalid email address.');
 
@@ -197,8 +207,13 @@ function runStressTest() {
         showTestMessage_('Stress Test Complete!', 'The sync process finished in ' + durationSeconds + ' seconds.');
 
         // --- Step 6: Cleanup ---
-        const cleanup = ui.alert('Cleanup', 'Do you want to remove all test data (folders, groups, sheets, and configuration rows)?', ui.ButtonSet.YES_NO);
-        if (cleanup === ui.Button.YES) {
+        let cleanup = testConfig.cleanup === true;
+        if (!cleanup) {
+            const cleanupPrompt = ui.alert('Cleanup', 'Do you want to remove all test data (folders, groups, sheets, and configuration rows)?', ui.ButtonSet.YES_NO);
+            cleanup = cleanupPrompt === ui.Button.YES;
+        }
+
+        if (cleanup) {
             const managedData = managedSheet.getRange(startRow, 1, numFolders, GROUP_EMAIL_COL).getValues();
 
             // Delete rows from sheet first to prevent re-sync issues
@@ -229,7 +244,12 @@ function cleanupStressTestData() {
             return;
         }
         const ui = SpreadsheetApp.getUi();
-        const response = ui.alert('Are you sure you want to delete all stress test data?', 'This will delete all folders, groups, and sheets with the "StressTestFolder_" prefix.', ui.ButtonSet.YES_NO);
+        const testConfig = getTestConfiguration_();
+
+        let response = ui.Button.YES;
+        if (testConfig.autoConfirm !== true) {
+            response = ui.alert('Are you sure you want to delete all stress test data?', 'This will delete all folders, groups, and sheets with the "StressTestFolder_" prefix.', ui.ButtonSet.YES_NO);
+        }
         if (response !== ui.Button.YES) {
             return;
         }
@@ -294,6 +314,8 @@ function cleanupManualTestData() {
             return;
         }
         const ui = SpreadsheetApp.getUi();
+        const testConfig = getTestConfiguration_();
+
         const folderNamePrompt = ui.prompt('Enter the name of the manual test folder to clean up:');
         if (folderNamePrompt.getSelectedButton() !== ui.Button.OK || !folderNamePrompt.getResponseText()) {
             return;
@@ -320,7 +342,10 @@ function cleanupManualTestData() {
             return;
         }
 
-        const response = ui.alert('Are you sure you want to delete the test data for folder "' + folderName + '"?', 'This will delete the folder, group, and sheet.', ui.ButtonSet.YES_NO);
+        let response = ui.Button.YES;
+        if (testConfig.autoConfirm !== true) {
+            response = ui.alert('Are you sure you want to delete the test data for folder "' + folderName + '"?', 'This will delete the folder, group, and sheet.', ui.ButtonSet.YES_NO);
+        }
         if (response !== ui.Button.YES) {
             return;
         }
@@ -342,6 +367,8 @@ function cleanupAddDeleteSeparationTestData() {
             return;
         }
         const ui = SpreadsheetApp.getUi();
+        const testConfig = getTestConfiguration_();
+
         const folderNamePrompt = ui.prompt('Enter the name of the Add/Delete Separation test folder to clean up:');
         if (folderNamePrompt.getSelectedButton() !== ui.Button.OK || !folderNamePrompt.getResponseText()) {
             return;
@@ -368,7 +395,10 @@ function cleanupAddDeleteSeparationTestData() {
             return;
         }
 
-        const response = ui.alert('Are you sure you want to delete the test data for folder "' + folderName + '"?', 'This will delete the folder, group, and sheet.', ui.ButtonSet.YES_NO);
+        let response = ui.Button.YES;
+        if (testConfig.autoConfirm !== true) {
+            response = ui.alert('Are you sure you want to delete the test data for folder "' + folderName + '"?', 'This will delete the folder, group, and sheet.', ui.ButtonSet.YES_NO);
+        }
         if (response !== ui.Button.YES) {
             return;
         }
