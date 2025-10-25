@@ -42,6 +42,13 @@ For every row in `ManagedFolders`, the script creates a corresponding **user she
 *   **Purpose:** This is where you list the email addresses of the people who should have the specified role for that folder.
 *   **How to Use:** Enter **exactly one valid email address per row** in Column A (`User Email Address`). If a cell contains multiple addresses or anything other than a single valid email, the script will log an error and ignore that entry. Optional Column B (`Disabled`) lets you temporarily exclude a user from receiving permissions—set it to `TRUE`, `YES`, or check the box to disable the user without deleting their row.
 
+**Important: Duplicate Email Validation**
+- Each email address must appear **only once** per sheet (case-insensitive)
+- The script will automatically detect duplicates and stop processing that folder with a clear error message
+- Example error: `"user@domain.com" appears in rows 2, 5, 8`
+- Use the **"Validate All User Sheets"** menu option to check all sheets at once for duplicates
+- Duplicates prevent sync operations to ensure data integrity
+
 ### 3. `UserGroups`
 
 This sheet allows you to create your own reusable groups of people.
@@ -100,11 +107,67 @@ After the audit runs, check the **`DryRunAuditLog`** sheet.
 | :------------------ | :------------ | :-------------------- | :----------------------------------------------------------------------------------- |
 | **Folder Permission** | Folder Name   | `Permission Mismatch` | The group has a different role on the folder than what is configured. (e.g., Expected: Viewer, Actual: NONE). |
 | **Folder**          | Folder Name   | `Folder Not Found`    | The Folder ID in the `ManagedFolders` sheet is invalid or points to a deleted folder. |
+| **Group Membership**  | Group Name    | `VALIDATION ERROR`    | Duplicate emails found in the user sheet (e.g., "user@domain.com" appears in rows 2, 5). |
 | **Group Membership**  | Group Name    | `Missing Members`     | Users are listed in the user sheet but are not in the actual Google Group.         |
 | **Group Membership**  | Group Name    | `Extra Members`       | Users are in the Google Group but are not listed in the corresponding user sheet.    |
 | **Group Membership**  | Group Name    | `Error`               | The audit could not check the group, often because the group itself does not exist.  |
 
 Running the audit is a safe and effective way to confirm that your permissions are exactly as you've defined them in the sheets.
+
+---
+
+## Validating User Sheets for Duplicate Emails
+
+To maintain data integrity and prevent sync errors, the system automatically validates that each email address appears only once in each user sheet (case-insensitive). This validation runs automatically during sync operations and audits.
+
+### Automatic Validation
+
+Duplicate email validation happens automatically in these scenarios:
+- **During sync operations**: Before processing any folder, the script validates its user sheet
+- **During dry run audit**: Each user sheet is validated before checking group membership
+- **When accessing existing sheets**: If a user sheet already exists with data, it's validated before use
+
+If duplicates are found, the script will:
+- Stop processing that specific folder/group
+- Log a clear error message with exact duplicate emails and row numbers
+- Update the folder status to show the validation error
+- Continue processing other folders normally (non-blocking)
+
+### Manual Validation: "Validate All User Sheets"
+
+You can manually check all user sheets at once using the menu option: **Permissions Manager > Validate All User Sheets**
+
+This will:
+1. Check all user sheets from `ManagedFolders`, `UserGroups`, and `Admins`
+2. Display a summary showing which sheets have errors
+3. Provide detailed information about each duplicate found
+
+**Example Output:**
+```
+Validated 10 user sheets.
+
+Sheets with errors: 2
+Sheets without errors: 8
+
+Details:
+✓ Project_A_Editors: OK
+✓ Project_A_Viewers: OK
+❌ Project_B_Editors: Duplicate emails found: "user@domain.com" appears in rows 3, 7
+✓ Project_C_Editors: OK
+❌ Marketing_Team: Duplicate emails found: "admin@company.com" appears in rows 2, 5, 9
+✓ Admins: OK
+...
+```
+
+### Fixing Duplicate Email Errors
+
+When you see a validation error:
+1. Note which sheet has the problem
+2. Open that sheet and look at the row numbers mentioned
+3. Remove the duplicate entries (keep only one instance of each email)
+4. Re-run the sync or validation to confirm the issue is resolved
+
+**Remember:** Email comparison is case-insensitive, so `user@domain.com`, `USER@domain.com`, and `UsEr@DoMaIn.CoM` are all considered duplicates.
 
 ---
 
