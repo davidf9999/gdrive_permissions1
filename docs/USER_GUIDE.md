@@ -58,7 +58,9 @@ Each sync also keeps a dedicated Google Group in sync with this list. Column **B
 
 ### 5. `Config`
 
-This sheet allows you to configure advanced settings, such as enabling email notifications for script errors.
+This sheet allows you to configure advanced settings, such as enabling email notifications for script errors. It also displays important system information:
+
+- **AdminGroupEmail**: Shows the email address of the administrators' Google Group (e.g., `admins-control-panel@yourdomain.com`). This is automatically updated when you run "Sync Admins" and can be used to grant admin access to any managed folder by adding this group email to the folder's user sheet.
 
 ### 6. `Log` & `TestLog`
 
