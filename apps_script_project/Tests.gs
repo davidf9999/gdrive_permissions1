@@ -445,6 +445,14 @@ function runAddDeleteSeparationTest() {
 
         // --- Phase 2: Run Delete (should do nothing) ---
         log_('TEST: No-Op Delete Phase');
+        let confirmNoOpDelete = ui.Button.YES;
+        if (testConfig.autoConfirm !== 'TRUE') {
+            confirmNoOpDelete = ui.alert('Confirm No-Op Delete', 'The script will now run a delete sync, but no deletions are expected. Continue?', ui.ButtonSet.YES_NO);
+        }
+        if (confirmNoOpDelete !== ui.Button.YES) {
+            ui.alert('Test cancelled.');
+            return;
+        }
         syncDeletes(); // This will prompt for confirmation
 
         // --- Verification 2: User was NOT removed ---
@@ -459,6 +467,14 @@ function runAddDeleteSeparationTest() {
         // --- Phase 3: Actual Deletion ---
         log_('TEST: Actual Deletion Phase');
         userSheet.getRange('A2').clearContent();
+        let confirmActualDelete = ui.Button.YES;
+        if (testConfig.autoConfirm !== 'TRUE') {
+            confirmActualDelete = ui.alert('Confirm Actual Delete', 'The script will now run a delete sync to remove the user. Continue?', ui.ButtonSet.YES_NO);
+        }
+        if (confirmActualDelete !== ui.Button.YES) {
+            ui.alert('Test cancelled.');
+            return;
+        }
         syncDeletes(); // This will prompt for confirmation
         status = managedSheet.getRange(testRowIndex, STATUS_COL).getValue();
         if (status !== 'OK') {
