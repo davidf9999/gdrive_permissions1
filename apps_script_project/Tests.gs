@@ -2,19 +2,9 @@
 
 function runManualAccessTest() {
     SCRIPT_EXECUTION_MODE = 'TEST';
+    let testFolderName, testRole, testEmail, testRowIndex; 
+    let userSheetName = null, groupEmail = null, folderId = null; // Initialize to null
     try {
-        const scriptCache = CacheService.getScriptCache();
-        if (scriptCache) {
-            try {
-                scriptCache.clear(); // Clear cache to ensure latest config is loaded
-                log_('Script cache cleared successfully.', 'INFO');
-            } catch (e) {
-                log_('Error clearing script cache: ' + e.message, 'WARN');
-            }
-        } else {
-            log_('Script cache service returned null.', 'WARN');
-        }
-
         if (shouldSkipGroupOps_()) {
             showTestMessage_('Test Aborted', 'Manual Access Test requires the Admin Directory service (Admin SDK). Please enable it or run on a Google Workspace domain.');
             return;
@@ -22,21 +12,21 @@ function runManualAccessTest() {
         const ui = SpreadsheetApp.getUi();
         const testConfig = getTestConfiguration_();
 
-        let testFolderName = testConfig.folderName;
+        testFolderName = testConfig.folderName;
         if (!testFolderName) {
             const folderNamePrompt = ui.prompt('Test - Step 1/4: Folder Name', 'Enter a name for a new test folder to be created.', ui.ButtonSet.OK_CANCEL);
             if (folderNamePrompt.getSelectedButton() !== ui.Button.OK || !folderNamePrompt.getResponseText()) return ui.alert('Test cancelled.');
             testFolderName = folderNamePrompt.getResponseText();
         }
 
-        let testRole = testConfig.role;
+        testRole = testConfig.role;
         if (!testRole) {
             const rolePrompt = ui.prompt('Test - Step 2/4: Role', 'Enter the role to test (e.g., Editor, Viewer).', ui.ButtonSet.OK_CANCEL);
             if (rolePrompt.getSelectedButton() !== ui.Button.OK || !rolePrompt.getResponseText()) return ui.alert('Test cancelled.');
             testRole = rolePrompt.getResponseText();
         }
 
-        let testEmail = testConfig.email;
+        testEmail = testConfig.email;
         if (!testEmail) {
             const emailPrompt = ui.prompt('Test - Step 3/4: Test Email', 'Enter a REAL email address you can access for testing (e.g., a personal Gmail).', ui.ButtonSet.OK_CANCEL);
             if (emailPrompt.getSelectedButton() !== ui.Button.OK || !emailPrompt.getResponseText()) return ui.alert('Test cancelled.');
@@ -108,8 +98,7 @@ function runManualAccessTest() {
 
         if (verification2 === ui.Button.YES) {
             showTestMessage_('Test Complete: SUCCESS!', 'The user was successfully granted and revoked access.');
-        }
-        else {
+        } else {
             showTestMessage_('Test Complete: FAILURE!', 'Access was not revoked as expected. This may be due to Google Drive permission propagation delays. Please wait a few minutes and check again.');
         }
 
@@ -396,18 +385,6 @@ function cleanupAddDeleteSeparationTestData() {
 
 function runAddDeleteSeparationTest() {
     SCRIPT_EXECUTION_MODE = 'TEST';
-    const scriptCache = CacheService.getScriptCache();
-    log_('Type of scriptCache: ' + (typeof scriptCache), 'INFO');
-    if (scriptCache) {
-        try {
-            scriptCache.clear(); // Clear cache to ensure latest config is loaded
-            log_('Script cache cleared successfully.', 'INFO');
-        } catch (e) {
-            log_('Error clearing script cache: ' + e.message, 'WARN');
-        }
-    } else {
-        log_('Script cache service returned null.', 'WARN');
-    }
     const ui = SpreadsheetApp.getUi();
     let testFolderName, testEmail, testRole, testRowIndex;
     let userSheetName = null, groupEmail = null, folderId = null; // Initialize to null
