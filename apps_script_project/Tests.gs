@@ -436,13 +436,14 @@ function runAddDeleteSeparationTest() {
     const ui = SpreadsheetApp.getUi();
     let testFolderName, testEmail, testRole, testRowIndex;
     let userSheetName = null, groupEmail = null, folderId = null; // Initialize to null
+    const startTime = new Date(); // Record start time
+    const testConfig = getTestConfiguration_(); // Declare testConfig at top scope
 
     try {
         if (shouldSkipGroupOps_()) {
             showTestMessage_('Test Aborted', 'This test requires the Admin Directory service (Admin SDK). Please enable it or run on a Google Workspace domain.');
             return;
         }
-        const testConfig = getTestConfiguration_();
 
         // --- Test Setup ---
         testFolderName = testConfig.folderName;

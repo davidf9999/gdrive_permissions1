@@ -273,7 +273,11 @@ function syncAdds() {
 
     showToast_('Add-only sync complete!', 'Sync Adds', 5);
     log_('Add-only synchronization completed.');
-    SpreadsheetApp.getUi().alert('Non-destructive sync (adds only) is complete.\n\nCheck the \'Status\' column in the sheets for details.');
+    if (SCRIPT_EXECUTION_MODE === 'TEST') {
+      showTestMessage_('Add-only Sync', 'Non-destructive sync (adds only) is complete.');
+    } else {
+      SpreadsheetApp.getUi().alert('Non-destructive sync (adds only) is complete.\n\nCheck the \'Status\' column in the sheets for details.');
+    }
 
   } catch (e) {
     const errorMessage = 'FATAL ERROR in syncAdds: ' + e.toString() + '\n' + e.stack;
