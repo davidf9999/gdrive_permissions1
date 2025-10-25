@@ -2,7 +2,8 @@
 
 function runManualAccessTest() {
     SCRIPT_EXECUTION_MODE = 'TEST';
-    let testFolderName, testRole, testEmail, testRowIndex; 
+    const startTime = new Date(); // Record start time
+    let testFolderName, testRole, testEmail, testRowIndex;
     let userSheetName = null, groupEmail = null, folderId = null; // Initialize to null
     try {
         if (shouldSkipGroupOps_()) {
@@ -103,6 +104,11 @@ function runManualAccessTest() {
         } else {
             showTestMessage_('Test Complete: FAILURE!', 'Access was not revoked as expected. This may be due to Google Drive permission propagation delays. Please wait a few minutes and check again.');
         }
+
+        // Record test duration
+        const endTime = new Date();
+        const durationSeconds = ((endTime.getTime() - startTime.getTime()) / 1000).toFixed(2);
+        log_('TEST DURATION: ' + durationSeconds + ' seconds', 'INFO');
 
         let cleanup = testConfig.cleanup === true;
         log_('testConfig.cleanup before Cleanup: ' + testConfig.cleanup, 'INFO');
@@ -591,9 +597,19 @@ function runAddDeleteSeparationTest() {
             showTestMessage_('Test Complete: SUCCESS!', 'The user was successfully added and then removed using the separated sync functions.');
         }
 
+        // Record test duration
+        const endTime = new Date();
+        const durationSeconds = ((endTime.getTime() - startTime.getTime()) / 1000).toFixed(2);
+        log_('TEST DURATION: ' + durationSeconds + ' seconds', 'INFO');
+
     } catch (e) {
         log_('TEST FAILED: ' + e.toString() + ' Stack: ' + e.stack, 'ERROR');
         ui.alert('Test FAILED. Check the logs for details. Error: ' + e.message);
+
+        // Record test duration even on failure
+        const endTime = new Date();
+        const durationSeconds = ((endTime.getTime() - startTime.getTime()) / 1000).toFixed(2);
+        log_('TEST DURATION: ' + durationSeconds + ' seconds', 'INFO');
     } finally {
         // --- Cleanup ---
         let cleanup = testConfig.cleanup === true;
@@ -661,4 +677,87 @@ function cleanupFolderData_(folderName, folderId, groupEmail, userSheetName) {
         }
     }
     log_('Cleanup finished for: ' + folderName);
+}
+
+/**
+ * Runs all three test functions in sequence.
+ * Tests run: Manual Access Test, Stress Test, Add/Delete Separation Test
+ */
+function runAllTests() {
+    SCRIPT_EXECUTION_MODE = 'TEST';
+    const overallStartTime = new Date();
+    const ui = SpreadsheetApp.getUi();
+    const testConfig = getTestConfiguration_();
+
+    try {
+        if (shouldSkipGroupOps_()) {
+            showTestMessage_('Test Aborted', 'All Tests require the Admin Directory service (Admin SDK). Please enable it or run on a Google Workspace domain.');
+            return;
+        }
+
+        let response = ui.Button.YES;
+        if (testConfig.autoConfirm !== true) {
+            response = ui.alert('Run All Tests', 'This will run all three tests sequentially:\n\n1. Manual Access Test\n2. Stress Test\n3. Add/Delete Separation Test\n\nThis may take several minutes. Continue?', ui.ButtonSet.YES_NO);
+        }
+        if (response !== ui.Button.YES) {
+            ui.alert('All Tests cancelled.');
+            return;
+        }
+
+        const testResults = [];
+
+        // Test 1: Manual Access Test
+        log_('========================================', 'INFO');
+        log_('ALL TESTS: Starting Manual Access Test (1/3)', 'INFO');
+        log_('========================================', 'INFO');
+        try {
+            runManualAccessTest();
+            testResults.push('Manual Access Test: COMPLETED');
+        } catch (e) {
+            log_('Manual Access Test failed: ' + e.message, 'ERROR');
+            testResults.push('Manual Access Test: FAILED - ' + e.message);
+        }
+
+        // Test 2: Stress Test
+        log_('========================================', 'INFO');
+        log_('ALL TESTS: Starting Stress Test (2/3)', 'INFO');
+        log_('========================================', 'INFO');
+        try {
+            runStressTest();
+            testResults.push('Stress Test: COMPLETED');
+        } catch (e) {
+            log_('Stress Test failed: ' + e.message, 'ERROR');
+            testResults.push('Stress Test: FAILED - ' + e.message);
+        }
+
+        // Test 3: Add/Delete Separation Test
+        log_('========================================', 'INFO');
+        log_('ALL TESTS: Starting Add/Delete Separation Test (3/3)', 'INFO');
+        log_('========================================', 'INFO');
+        try {
+            runAddDeleteSeparationTest();
+            testResults.push('Add/Delete Separation Test: COMPLETED');
+        } catch (e) {
+            log_('Add/Delete Separation Test failed: ' + e.message, 'ERROR');
+            testResults.push('Add/Delete Separation Test: FAILED - ' + e.message);
+        }
+
+        // Summary
+        const overallEndTime = new Date();
+        const overallDurationSeconds = ((overallEndTime.getTime() - overallStartTime.getTime()) / 1000).toFixed(2);
+
+        log_('========================================', 'INFO');
+        log_('ALL TESTS COMPLETE', 'INFO');
+        log_('========================================', 'INFO');
+        log_('OVERALL TEST DURATION: ' + overallDurationSeconds + ' seconds', 'INFO');
+        log_('Test Results:', 'INFO');
+        testResults.forEach(function(result) {
+            log_('  - ' + result, 'INFO');
+        });
+
+        showTestMessage_('All Tests Complete', 'All three tests have been executed.\n\nTotal Duration: ' + overallDurationSeconds + ' seconds\n\nCheck the TestLog sheet for detailed results.');
+
+    } finally {
+        SCRIPT_EXECUTION_MODE = 'DEFAULT';
+    }
 }

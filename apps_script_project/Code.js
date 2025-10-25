@@ -61,6 +61,8 @@ function onOpen() {
           .addItem('Sync All Folders - Deletes Only', 'syncManagedFoldersDeletes'))
       .addSeparator()
       .addSubMenu(ui.createMenu('Testing') // Use ui here
+          .addItem('Run All Tests', 'runAllTests')
+          .addSeparator()
           .addItem('Run Manual Access Test', 'runManualAccessTest')
           .addItem('Run Stress Test', 'runStressTest')
           .addItem('Run Add/Delete Separation Test', 'runAddDeleteSeparationTest')
