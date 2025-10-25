@@ -400,7 +400,11 @@ function fullSync() {
 
     showToast_('Full synchronization complete!', 'Full Sync', 5);
     log_('Full synchronization completed.');
-    SpreadsheetApp.getUi().alert(summaryMessage + '\n\nCheck the \'Status\' column in the \'ManagedFolders\' sheet for details.');
+    if (SCRIPT_EXECUTION_MODE === 'TEST') {
+      showTestMessage_('Full Sync', summaryMessage + '\n\nCheck the \'Status\' column in the \'ManagedFolders\' sheet for details.');
+    } else {
+      SpreadsheetApp.getUi().alert(summaryMessage + '\n\nCheck the \'Status\' column in the \'ManagedFolders\' sheet for details.');
+    }
 
   } catch (e) {
     const errorMessage = 'FATAL ERROR in fullSync: ' + e.toString() + '\n' + e.stack;

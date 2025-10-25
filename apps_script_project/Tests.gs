@@ -62,10 +62,12 @@ function runManualAccessTest() {
         }
         log_('Grant access sync complete. Status: OK', 'INFO');
 
-        const folderId = managedSheet.getRange(testRowIndex, FOLDER_ID_COL).getValue();
         const folderUrl = DriveApp.getFolderById(folderId).getUrl();
-        let verification1 = ui.Button.YES;
-        if (testConfig.autoConfirm !== 'TRUE') {
+        let verification1;
+        if (testConfig.autoConfirm === 'TRUE') {
+            verification1 = ui.Button.YES;
+            log_('Auto-confirming Verify Access.', 'INFO');
+        } else {
             verification1 = ui.alert('Verify Access', 'Please open an Incognito Window, log in as ' + testEmail + ', and try to open this link:\n\n' + folderUrl + '\n\nDid you get access?', ui.ButtonSet.YES_NO);
         }
 
@@ -83,8 +85,11 @@ function runManualAccessTest() {
         }
         log_('Revoke access sync complete. Status: OK', 'INFO');
 
-        let verification2 = ui.Button.YES;
-        if (testConfig.autoConfirm !== 'TRUE') {
+        let verification2;
+        if (testConfig.autoConfirm === 'TRUE') {
+            verification2 = ui.Button.YES;
+            log_('Auto-confirming Verify Revoked Access.', 'INFO');
+        } else {
             verification2 = ui.alert('Verify Revoked Access', 'Please go back to your Incognito Window and refresh the folder page. You should see a \'permission denied\' error.\n\nWas access revoked?', ui.ButtonSet.YES_NO);
         }
 
@@ -445,8 +450,11 @@ function runAddDeleteSeparationTest() {
 
         // --- Phase 2: Run Delete (should do nothing) ---
         log_('TEST: No-Op Delete Phase');
-        let confirmNoOpDelete = ui.Button.YES;
-        if (testConfig.autoConfirm !== 'TRUE') {
+        let confirmNoOpDelete;
+        if (testConfig.autoConfirm === 'TRUE') {
+            confirmNoOpDelete = ui.Button.YES;
+            log_('Auto-confirming No-Op Delete.', 'INFO');
+        } else {
             confirmNoOpDelete = ui.alert('Confirm No-Op Delete', 'The script will now run a delete sync, but no deletions are expected. Continue?', ui.ButtonSet.YES_NO);
         }
         if (confirmNoOpDelete !== ui.Button.YES) {
@@ -467,8 +475,11 @@ function runAddDeleteSeparationTest() {
         // --- Phase 3: Actual Deletion ---
         log_('TEST: Actual Deletion Phase');
         userSheet.getRange('A2').clearContent();
-        let confirmActualDelete = ui.Button.YES;
-        if (testConfig.autoConfirm !== 'TRUE') {
+        let confirmActualDelete;
+        if (testConfig.autoConfirm === 'TRUE') {
+            confirmActualDelete = ui.Button.YES;
+            log_('Auto-confirming Actual Deletion.', 'INFO');
+        } else {
             confirmActualDelete = ui.alert('Confirm Actual Delete', 'The script will now run a delete sync to remove the user. Continue?', ui.ButtonSet.YES_NO);
         }
         if (confirmActualDelete !== ui.Button.YES) {
