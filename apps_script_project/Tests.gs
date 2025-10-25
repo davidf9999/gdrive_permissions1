@@ -267,6 +267,21 @@ function cleanupStressTestData() {
             }
         });
 
+        // Clean up ManagedFolders sheet entries
+        const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+        if (managedSheet) {
+            const data = managedSheet.getDataRange().getValues();
+            const rowsToDelete = [];
+            for (let i = data.length - 1; i >= 0; i--) {
+                if (data[i][FOLDER_NAME_COL - 1] && data[i][FOLDER_NAME_COL - 1].startsWith('StressTestFolder_')) {
+                    rowsToDelete.push(i + 1); // +1 because sheet rows are 1-indexed
+                }
+            }
+            rowsToDelete.forEach(function (rowIndex) {
+                managedSheet.deleteRow(rowIndex);
+            });
+        }
+
         // Clean up groups
         let pageToken;
         let allGroups = [];
