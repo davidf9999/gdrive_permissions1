@@ -146,6 +146,12 @@ function runStressTest() {
         }
 
         let numUsers = testConfig.numUsers;
+        if (isNaN(numUsers) || numUsers < 1) {
+            const numUsersStr = ui.prompt('Stress Test - Step 2/4', 'Enter the number of test users to create PER FOLDER (e.g., 200).', ui.ButtonSet.OK_CANCEL);
+            if (numUsersStr.getSelectedButton() !== ui.Button.OK || !numUsersStr.getResponseText()) return ui.alert('Test cancelled.');
+            numUsers = parseInt(numUsersStr.getResponseText(), 10);
+        }
+
         let baseEmail = testConfig.baseEmail;
         if (!baseEmail) {
             const baseEmailStr = ui.prompt('Stress Test - Step 3/4', 'Enter a base email address to generate test users (e.g., your.name@gmail.com).', ui.ButtonSet.OK_CANCEL);
