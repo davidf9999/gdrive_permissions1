@@ -67,6 +67,7 @@ function runManualAccessTest() {
         folderId = managedSheet.getRange(testRowIndex, FOLDER_ID_COL).getValue();
         const folderUrl = DriveApp.getFolderById(folderId).getUrl();
         let verification1;
+        log_('testConfig.autoConfirm before Verify Access: ' + testConfig.autoConfirm, 'INFO');
         if (testConfig.autoConfirm === true) {
             verification1 = ui.Button.YES;
             log_('Auto-confirming Verify Access.', 'INFO');
@@ -89,6 +90,7 @@ function runManualAccessTest() {
         log_('Revoke access sync complete. Status: OK', 'INFO');
 
         let verification2;
+        log_('testConfig.autoConfirm before Verify Revoked Access: ' + testConfig.autoConfirm, 'INFO');
         if (testConfig.autoConfirm === true) {
             verification2 = ui.Button.YES;
             log_('Auto-confirming Verify Revoked Access.', 'INFO');
@@ -103,6 +105,7 @@ function runManualAccessTest() {
         }
 
         let cleanup = testConfig.cleanup === true;
+        log_('testConfig.cleanup before Cleanup: ' + testConfig.cleanup, 'INFO');
         if (!cleanup) {
             const cleanupPrompt = ui.alert('Cleanup', 'Do you want to remove all test data (folder, group, and sheet)?', ui.ButtonSet.YES_NO);
             cleanup = cleanupPrompt === ui.Button.YES;
@@ -143,12 +146,6 @@ function runStressTest() {
         }
 
         let numUsers = testConfig.numUsers;
-        if (isNaN(numUsers)) {
-            const numUsersStr = ui.prompt('Stress Test - Step 2/4', 'Enter the number of test users to create PER FOLDER (e.g., 200).', ui.ButtonSet.OK_CANCEL);
-            if (numUsersStr.getSelectedButton() !== ui.Button.OK || !numUsersStr.getResponseText()) return ui.alert('Test cancelled.');
-            numUsers = parseInt(numUsersStr.getResponseText(), 10);
-        }
-
         let baseEmail = testConfig.baseEmail;
         if (!baseEmail) {
             const baseEmailStr = ui.prompt('Stress Test - Step 3/4', 'Enter a base email address to generate test users (e.g., your.name@gmail.com).', ui.ButtonSet.OK_CANCEL);
@@ -485,6 +482,7 @@ function runAddDeleteSeparationTest() {
         // --- Phase 2: Run Delete (should do nothing) ---
         log_('TEST: No-Op Delete Phase');
         let confirmNoOpDelete;
+        log_('testConfig.autoConfirm before No-Op Delete: ' + testConfig.autoConfirm, 'INFO');
         if (testConfig.autoConfirm === true) {
             confirmNoOpDelete = ui.Button.YES;
             log_('Auto-confirming No-Op Delete.', 'INFO');
@@ -510,6 +508,7 @@ function runAddDeleteSeparationTest() {
         log_('TEST: Actual Deletion Phase');
         userSheet.getRange('A2').clearContent();
         let confirmActualDelete;
+        log_('testConfig.autoConfirm before Actual Deletion: ' + testConfig.autoConfirm, 'INFO');
         if (testConfig.autoConfirm === true) {
             confirmActualDelete = ui.Button.YES;
             log_('Auto-confirming Actual Deletion.', 'INFO');
@@ -542,6 +541,7 @@ function runAddDeleteSeparationTest() {
     } finally {
         // --- Cleanup ---
         let cleanup = testConfig.cleanup === true;
+        log_('testConfig.cleanup before Cleanup: ' + testConfig.cleanup, 'INFO');
         if (!cleanup) {
             const cleanupPrompt = ui.alert('Cleanup', 'Do you want to remove all test data (folder, group, and sheet)?', ui.ButtonSet.YES_NO);
             cleanup = cleanupPrompt === ui.Button.YES;
