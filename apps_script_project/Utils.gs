@@ -235,3 +235,62 @@ function updateConfigSetting_(settingName, value) {
   // Clear the cache so the new value is picked up
   CacheService.getScriptCache().remove('config');
 }
+
+/**
+ * Validates that a user sheet has no duplicate email addresses (case-insensitive)
+ * @param {string} sheetName - The name of the user sheet to validate
+ * @returns {Object} - { valid: boolean, duplicates: [{email, rows}], error: string }
+ */
+function validateUserSheetEmails_(sheetName) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+  if (!sheet) {
+    return {
+      valid: false,
+      duplicates: [],
+      error: 'Sheet "' + sheetName + '" not found'
+    };
+  }
+
+  const emailRange = sheet.getRange('A2:A');
+  const emails = emailRange.getValues();
+
+  const emailMap = new Map(); // email -> [row numbers]
+  const duplicates = [];
+
+  for (let i = 0; i < emails.length; i++) {
+    const rawEmail = emails[i][0];
+    if (!rawEmail) continue; // Skip empty cells
+
+    const email = rawEmail.toString().trim().toLowerCase();
+    if (!email) continue; // Skip whitespace-only cells
+
+    const rowNum = i + 2; // +2 for header row and 0-index
+
+    if (emailMap.has(email)) {
+      emailMap.get(email).push(rowNum);
+    } else {
+      emailMap.set(email, [rowNum]);
+    }
+  }
+
+  // Find duplicates
+  emailMap.forEach(function(rows, email) {
+    if (rows.length > 1) {
+      duplicates.push({ email: email, rows: rows });
+    }
+  });
+
+  if (duplicates.length > 0) {
+    const errorMsg = duplicates.map(function(d) {
+      return '"' + d.email + '" appears in rows ' + d.rows.join(', ');
+    }).join('; ');
+
+    return {
+      valid: false,
+      duplicates: duplicates,
+      error: 'Duplicate emails found: ' + errorMsg
+    };
+  }
+
+  return { valid: true, duplicates: [], error: null };
+}

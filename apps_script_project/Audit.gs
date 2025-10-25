@@ -149,6 +149,13 @@ function auditAllGroups_() {
 
 function auditGroupMembership_(groupName, groupEmail) {
   try {
+    // Validate for duplicate emails before auditing
+    const validation = validateUserSheetEmails_(groupName);
+    if (!validation.valid) {
+      logAndAudit_('Group Membership', groupName, 'VALIDATION ERROR', validation.error);
+      return; // Stop processing this group
+    }
+
     const desiredMembers = getDesiredMembers_(groupName);
     const actualMembers = getActualMembers_(groupEmail);
 
@@ -210,4 +217,82 @@ function logAndAudit_(type, identifier, issue, details) {
   const auditSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(DRY_RUN_AUDIT_LOG_SHEET_NAME);
   auditSheet.appendRow([timestamp, type, identifier, issue, details]);
   log_('AUDIT [' + type + ' | ' + identifier + ']: ' + issue + ' - ' + details, 'WARN');
+}
+
+/**
+ * Validates all user sheets for duplicate emails and displays a summary
+ */
+function validateAllUserSheets() {
+  const ui = SpreadsheetApp.getUi();
+  try {
+    log_('*** Starting Validate All User Sheets...');
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const allUserSheets = [];
+    const validationResults = [];
+
+    // 1. Collect all user sheets from UserGroups
+    const userGroupsSheet = ss.getSheetByName(USER_GROUPS_SHEET_NAME);
+    if (userGroupsSheet && userGroupsSheet.getLastRow() > 1) {
+      const userGroupsData = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 1).getValues();
+      userGroupsData.forEach(row => {
+        const sheetName = row[0];
+        if (sheetName) allUserSheets.push(sheetName);
+      });
+    }
+
+    // 2. Collect all user sheets from ManagedFolders
+    const managedFoldersSheet = ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+    if (managedFoldersSheet && managedFoldersSheet.getLastRow() > 1) {
+      const managedData = managedFoldersSheet.getRange(2, USER_SHEET_NAME_COL, managedFoldersSheet.getLastRow() - 1, 1).getValues();
+      managedData.forEach(row => {
+        const sheetName = row[0];
+        if (sheetName && !allUserSheets.includes(sheetName)) {
+          allUserSheets.push(sheetName);
+        }
+      });
+    }
+
+    // 3. Add Admins sheet
+    allUserSheets.push(ADMINS_SHEET_NAME);
+
+    if (allUserSheets.length === 0) {
+      ui.alert('Validation Complete', 'No user sheets found to validate.', ui.ButtonSet.OK);
+      return;
+    }
+
+    log_('Validating ' + allUserSheets.length + ' user sheets...');
+
+    // 4. Validate each sheet
+    let errorCount = 0;
+    allUserSheets.forEach(sheetName => {
+      const validation = validateUserSheetEmails_(sheetName);
+      if (!validation.valid) {
+        errorCount++;
+        validationResults.push('❌ ' + sheetName + ': ' + validation.error);
+        log_('VALIDATION ERROR in "' + sheetName + '": ' + validation.error, 'ERROR');
+      } else {
+        validationResults.push('✓ ' + sheetName + ': OK');
+        log_('Validation passed for "' + sheetName + '"', 'INFO');
+      }
+    });
+
+    // 5. Display results
+    const summary = 'Validated ' + allUserSheets.length + ' user sheets.\n\n' +
+                    'Sheets with errors: ' + errorCount + '\n' +
+                    'Sheets without errors: ' + (allUserSheets.length - errorCount) + '\n\n' +
+                    'Details:\n' + validationResults.join('\n');
+
+    if (errorCount > 0) {
+      ui.alert('Validation Complete - Errors Found', summary, ui.ButtonSet.OK);
+    } else {
+      ui.alert('Validation Complete - All OK!', summary, ui.ButtonSet.OK);
+    }
+
+    log_('*** Validate All User Sheets Complete. Errors found: ' + errorCount);
+
+  } catch (e) {
+    log_('ERROR in validateAllUserSheets: ' + e.toString(), 'ERROR');
+    ui.alert('Validation Error', 'An error occurred during validation: ' + e.message, ui.ButtonSet.OK);
+  }
 }

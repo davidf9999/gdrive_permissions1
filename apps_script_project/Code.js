@@ -39,6 +39,7 @@ function onOpen() {
       .addItem('Full Sync (Add & Delete)', 'fullSync')
       .addSeparator()
       .addItem('Dry Run Audit', 'dryRunAudit')
+      .addItem('Validate All User Sheets', 'validateAllUserSheets')
       .addSeparator()
       .addSubMenu(ui.createMenu('Auto-Sync')
           .addItem('⚡ Setup Auto-Sync (Hourly)', 'setupAutoSync')

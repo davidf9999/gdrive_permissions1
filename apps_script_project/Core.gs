@@ -278,6 +278,18 @@ function getOrCreateUserSheet_(sheetName) {
 
   if (sheet) {
     ensureUserSheetHeaders_(sheet);
+
+    // Validate for duplicate emails if sheet already exists and has data
+    const lastRow = sheet.getLastRow();
+    if (lastRow > 1) {
+      const validation = validateUserSheetEmails_(sheetName);
+      if (!validation.valid) {
+        const errorMsg = 'VALIDATION ERROR in existing sheet "' + sheetName + '": ' + validation.error;
+        log_(errorMsg, 'ERROR');
+        throw new Error(errorMsg);
+      }
+    }
+
     return sheet;
   } else {
     log_('User sheet "' + sheetName + '" not found. Creating it...');
@@ -374,6 +386,14 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(userSheetName);
     if (!sheet) {
       throw new Error('User sheet "' + userSheetName + '" not found.');
+    }
+
+    // Validate for duplicate emails (case-insensitive)
+    const validation = validateUserSheetEmails_(userSheetName);
+    if (!validation.valid) {
+      const errorMsg = 'VALIDATION ERROR in sheet "' + userSheetName + '": ' + validation.error;
+      log_(errorMsg, 'ERROR');
+      throw new Error(errorMsg);
     }
 
     const lastRow = sheet.getLastRow();
