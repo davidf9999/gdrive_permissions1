@@ -67,7 +67,7 @@ function runManualAccessTest() {
         folderId = managedSheet.getRange(testRowIndex, FOLDER_ID_COL).getValue();
         const folderUrl = DriveApp.getFolderById(folderId).getUrl();
         let verification1;
-        if (testConfig.autoConfirm === 'TRUE') {
+        if (testConfig.autoConfirm === true) {
             verification1 = ui.Button.YES;
             log_('Auto-confirming Verify Access.', 'INFO');
         } else {
@@ -89,7 +89,7 @@ function runManualAccessTest() {
         log_('Revoke access sync complete. Status: OK', 'INFO');
 
         let verification2;
-        if (testConfig.autoConfirm === 'TRUE') {
+        if (testConfig.autoConfirm === true) {
             verification2 = ui.Button.YES;
             log_('Auto-confirming Verify Revoked Access.', 'INFO');
         } else {
@@ -102,7 +102,7 @@ function runManualAccessTest() {
             showTestMessage_('Test Complete: FAILURE!', 'Access was not revoked as expected. This may be due to Google Drive permission propagation delays. Please wait a few minutes and check again.');
         }
 
-        let cleanup = testConfig.cleanup === 'TRUE';
+        let cleanup = testConfig.cleanup === true;
         if (!cleanup) {
             const cleanupPrompt = ui.alert('Cleanup', 'Do you want to remove all test data (folder, group, and sheet)?', ui.ButtonSet.YES_NO);
             cleanup = cleanupPrompt === ui.Button.YES;
@@ -455,7 +455,7 @@ function runAddDeleteSeparationTest() {
         // --- Phase 2: Run Delete (should do nothing) ---
         log_('TEST: No-Op Delete Phase');
         let confirmNoOpDelete;
-        if (testConfig.autoConfirm === 'TRUE') {
+        if (testConfig.autoConfirm === true) {
             confirmNoOpDelete = ui.Button.YES;
             log_('Auto-confirming No-Op Delete.', 'INFO');
         } else {
@@ -480,7 +480,7 @@ function runAddDeleteSeparationTest() {
         log_('TEST: Actual Deletion Phase');
         userSheet.getRange('A2').clearContent();
         let confirmActualDelete;
-        if (testConfig.autoConfirm === 'TRUE') {
+        if (testConfig.autoConfirm === true) {
             confirmActualDelete = ui.Button.YES;
             log_('Auto-confirming Actual Deletion.', 'INFO');
         } else {
@@ -511,7 +511,7 @@ function runAddDeleteSeparationTest() {
         ui.alert('Test FAILED. Check the logs for details. Error: ' + e.message);
     } finally {
         // --- Cleanup ---
-        let cleanup = testConfig.cleanup === 'TRUE';
+        let cleanup = testConfig.cleanup === true;
         if (!cleanup) {
             const cleanupPrompt = ui.alert('Cleanup', 'Do you want to remove all test data (folder, group, and sheet)?', ui.ButtonSet.YES_NO);
             cleanup = cleanupPrompt === ui.Button.YES;

@@ -94,8 +94,8 @@ function getTestConfiguration_() {
         folderName: config['TestFolderName'],
         role: config['TestRole'],
         email: config['TestEmail'],
-        cleanup: config['TestCleanup'],
-        autoConfirm: config['TestAutoConfirm']
+        cleanup: (config['TestCleanup'] === true || config['TestCleanup'] === 'TRUE'),
+        autoConfirm: (config['TestAutoConfirm'] === true || config['TestAutoConfirm'] === 'TRUE')
     };
     log_('Test Configuration loaded: ' + JSON.stringify(testConfig), 'INFO');
     return testConfig;
