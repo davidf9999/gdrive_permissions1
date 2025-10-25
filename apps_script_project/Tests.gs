@@ -2,6 +2,7 @@
 
 function runManualAccessTest() {
     SCRIPT_EXECUTION_MODE = 'TEST';
+    CacheService.getScriptCache().removeAll(); // Clear cache to ensure latest config is loaded
     let testFolderName, testRole, testEmail, testRowIndex; 
     let userSheetName = null, groupEmail = null, folderId = null; // Initialize to null
     try {
@@ -385,6 +386,7 @@ function cleanupAddDeleteSeparationTestData() {
 
 function runAddDeleteSeparationTest() {
     SCRIPT_EXECUTION_MODE = 'TEST';
+    CacheService.getScriptCache().removeAll(); // Clear cache to ensure latest config is loaded
     const ui = SpreadsheetApp.getUi();
     let testFolderName, testEmail, testRole, testRowIndex;
     let userSheetName = null, groupEmail = null, folderId = null; // Initialize to null
