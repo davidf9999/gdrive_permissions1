@@ -90,13 +90,15 @@ function getConfiguration_() {
 
 function getTestConfiguration_() {
     const config = getConfiguration_();
-    return {
+    const testConfig = {
         folderName: config['TestFolderName'],
         role: config['TestRole'],
         email: config['TestEmail'],
         cleanup: config['TestCleanup'],
         autoConfirm: config['TestAutoConfirm']
     };
+    log_('Test Configuration loaded: ' + JSON.stringify(testConfig), 'INFO');
+    return testConfig;
 }
 
 function getMaxLogLength_() {
