@@ -204,3 +204,34 @@ function showTestMessage_(title, message) {
         log_(`Test Message: ${title} - ${message}`, 'INFO');
     }
 }
+
+/**
+ * Updates a setting in the Config sheet
+ * @param {string} settingName - The name of the setting to update
+ * @param {string|boolean} value - The value to set
+ */
+function updateConfigSetting_(settingName, value) {
+  const configSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG_SHEET_NAME);
+  if (!configSheet) {
+    log_('Config sheet not found. Cannot update setting: ' + settingName, 'WARN');
+    return;
+  }
+
+  const settingsRange = configSheet.getRange('A:A');
+  const settings = settingsRange.getValues().flat();
+  const rowIndex = settings.indexOf(settingName);
+
+  if (rowIndex !== -1) {
+    // Setting exists, update it
+    configSheet.getRange(rowIndex + 1, 2).setValue(value);
+    log_('Updated Config setting "' + settingName + '" to: ' + value, 'INFO');
+  } else {
+    // Setting doesn't exist, add it
+    const lastRow = settings.filter(String).length;
+    configSheet.getRange(lastRow + 1, 1, 1, 2).setValues([[settingName, value]]);
+    log_('Added new Config setting "' + settingName + '" with value: ' + value, 'INFO');
+  }
+
+  // Clear the cache so the new value is picked up
+  CacheService.getScriptCache().remove('config');
+}

@@ -56,6 +56,7 @@ function setupControlSheets_() {
   const defaultConfig = {
     'EnableEmailNotifications': 'FALSE',
     'NotificationEmailAddress': '',
+    'AdminGroupEmail': '',
     'EnableToasts': 'FALSE',
     'GitHubRepoURL': 'https://github.com/davidf9999/gdrive_permissions1',
     'MaxLogLength': DEFAULT_MAX_LOG_LENGTH,

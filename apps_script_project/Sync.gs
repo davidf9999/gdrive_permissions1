@@ -124,6 +124,10 @@ function syncAdminsGroup_(adminSheet, adminGroupEmail) {
   try {
     getOrCreateGroup_(adminGroupEmail, ADMINS_GROUP_NAME);
     syncGroupMembership_(adminGroupEmail, ADMINS_SHEET_NAME);
+
+    // Update the Config sheet with the admin group email
+    updateConfigSetting_('AdminGroupEmail', adminGroupEmail);
+
     statusCell.setValue('OK');
     lastSyncedCell.setValue(timestamp);
   } catch (e) {
