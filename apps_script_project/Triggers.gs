@@ -72,18 +72,30 @@ function autoSync() {
   try {
     log_('*** Starting scheduled auto-sync...');
 
+    // Check if in Edit Mode (takes precedence)
+    if (isInEditMode_()) {
+      log_('Auto-sync skipped: spreadsheet is in Edit Mode.', 'INFO');
+      return;
+    }
+
     // Check if auto-sync is enabled in Config sheet
     if (!isAutoSyncEnabled_()) {
       log_('Auto-sync is disabled in Config sheet. Skipping.', 'INFO');
       return;
     }
 
-    // Perform the sync
-    // Option 1: Full sync (adds and deletes)
-    fullSync();
+    // RISK-BASED AUTO-SYNC IMPLEMENTATION
+    // Auto-sync only performs SAFE operations (all additions including admins)
+    // DESTRUCTIVE operations (deletions) require manual execution
 
-    // Option 2: Only adds (safer, never removes access)
-    // syncAdds();
+    log_('Performing SAFE operations (additions only)...');
+    syncAdds(); // Includes admin additions, user groups, and folder permissions
+
+    // Check for pending DESTRUCTIVE operations and notify admin
+    checkAndNotifyPendingDeletions_();
+
+    // Send summary email if configured
+    sendAutoSyncSummary_();
 
     log_('*** Scheduled auto-sync completed successfully.');
 
@@ -246,5 +258,165 @@ function viewTriggerStatus() {
     message += '\nEnabled in Config sheet: ' + (isAutoSyncEnabled_() ? 'YES' : 'NO');
 
     ui.alert('Auto-Sync Status', message, ui.ButtonSet.OK);
+  }
+}
+
+/**
+ * Checks for pending DESTRUCTIVE operations (deletions) and notifies admin.
+ * Called by autoSync() to alert admins when manual action is required.
+ */
+function checkAndNotifyPendingDeletions_() {
+  try {
+    // Check if notification is enabled
+    if (!getConfigValue_('NotifyDeletionsPending', true)) {
+      return;
+    }
+
+    log_('Checking for pending deletions...');
+
+    // Build deletion plan without executing
+    const planOptions = { removeOnly: true, returnPlanOnly: true };
+    let deletionPlan = [];
+
+    try {
+      const groupDeletions = syncUserGroups(planOptions) || [];
+      const folderDeletions = processManagedFolders_(planOptions) || [];
+      deletionPlan = groupDeletions.concat(folderDeletions);
+    } catch (e) {
+      log_('Error during deletion planning: ' + e.message, 'WARN');
+      return;
+    }
+
+    if (deletionPlan.length === 0) {
+      log_('No pending deletions found.');
+      return;
+    }
+
+    // Build notification message
+    const totalDeletions = deletionPlan.reduce((sum, plan) => sum + (plan.usersToRemove ? plan.usersToRemove.length : 0), 0);
+    log_('Found ' + totalDeletions + ' pending deletions across ' + deletionPlan.length + ' group(s).', 'WARN');
+
+    let message = '⚠️ MANUAL ACTION REQUIRED: Permission Deletions Pending\n\n';
+    message += 'Auto-sync detected users removed from permission sheets.\n';
+    message += 'The following deletions require manual approval:\n\n';
+
+    deletionPlan.forEach(plan => {
+      if (plan.usersToRemove && plan.usersToRemove.length > 0) {
+        message += 'From Group "' + plan.groupName + '":\n';
+        plan.usersToRemove.forEach(user => {
+          message += '  - ' + user + '\n';
+        });
+        message += '\n';
+      }
+    });
+
+    message += 'To execute these deletions:\n';
+    message += '1. Open the control spreadsheet\n';
+    message += '2. Go to: Permissions Manager → Sync Deletes\n';
+    message += '3. Review the deletion list carefully\n';
+    message += '4. Confirm to proceed\n\n';
+    message += 'Note: Deletions will NOT execute automatically.\n';
+
+    sendAdminNotification_('⚠️ Manual Action Required: ' + totalDeletions + ' Permission Deletions Pending', message);
+    log_('Admin notified of pending deletions via email.', 'INFO');
+
+  } catch (e) {
+    log_('Error in checkAndNotifyPendingDeletions_: ' + e.message, 'ERROR');
+  }
+}
+
+/**
+ * Sends a summary email after auto-sync completion.
+ * Includes statistics about what was synced and any pending manual actions.
+ */
+function sendAutoSyncSummary_() {
+  try {
+    // Check if notification is enabled
+    if (!getConfigValue_('NotifyAfterSync', true)) {
+      return;
+    }
+
+    log_('Sending auto-sync summary email...');
+
+    const timestamp = Utilities.formatDate(new Date(), SpreadsheetApp.getActive().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+
+    let message = '✅ Auto-Sync Completed Successfully\n\n';
+    message += 'Timestamp: ' + timestamp + '\n\n';
+    message += 'SAFE operations completed:\n';
+    message += '- User groups synced (additions)\n';
+    message += '- Folder permissions synced (additions)\n';
+    message += '- Admin list synced (additions)\n\n';
+    message += 'Check the Log sheet for detailed results.\n\n';
+    message += '---\n';
+    message += 'Spreadsheet: ' + SpreadsheetApp.getActiveSpreadsheet().getName() + '\n';
+    message += 'URL: ' + SpreadsheetApp.getActiveSpreadsheet().getUrl();
+
+    sendAdminNotification_('✅ Auto-Sync Completed - ' + timestamp, message);
+    log_('Auto-sync summary email sent.', 'INFO');
+
+  } catch (e) {
+    log_('Error in sendAutoSyncSummary_: ' + e.message, 'WARN');
+  }
+}
+
+/**
+ * Sends a notification email to admin(s).
+ * Reads email address from Config sheet.
+ *
+ * @param {string} subject - Email subject
+ * @param {string} message - Email body
+ */
+function sendAdminNotification_(subject, message) {
+  try {
+    const adminEmail = getConfigValue_('NotificationEmail', Session.getEffectiveUser().getEmail());
+
+    if (!adminEmail) {
+      log_('No admin email configured for notifications.', 'WARN');
+      return;
+    }
+
+    MailApp.sendEmail({
+      to: adminEmail,
+      subject: '[Drive Permission Manager] ' + subject,
+      body: message
+    });
+
+    log_('Notification email sent to: ' + adminEmail);
+
+  } catch (e) {
+    log_('Failed to send admin notification: ' + e.message, 'ERROR');
+  }
+}
+
+/**
+ * Helper function to get a value from the Config sheet.
+ *
+ * @param {string} key - The setting name to look up
+ * @param {*} defaultValue - Default value if not found
+ * @return {*} The value from Config sheet, or defaultValue if not found
+ */
+function getConfigValue_(key, defaultValue) {
+  try {
+    const configSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG_SHEET_NAME);
+    if (!configSheet) {
+      return defaultValue;
+    }
+
+    const data = configSheet.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0] === key) {
+        const value = data[i][1];
+        // Handle boolean strings
+        if (value === 'TRUE' || value === true) return true;
+        if (value === 'FALSE' || value === false) return false;
+        return value !== '' ? value : defaultValue;
+      }
+    }
+
+    return defaultValue;
+
+  } catch (e) {
+    log_('Error reading config value for ' + key + ': ' + e.message, 'WARN');
+    return defaultValue;
   }
 }

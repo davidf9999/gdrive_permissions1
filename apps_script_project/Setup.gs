@@ -66,6 +66,10 @@ function setupControlSheets_() {
     'TestRole': 'Viewer',
     'TestEmail': 'example@gmail.com',
     'EnableAutoSync': 'TRUE',
+    'NotifyAfterSync': 'TRUE',
+    'NotifyDeletionsPending': 'TRUE',
+    'NotificationEmail': '',
+    'AutoSyncMaxDeletions': 10,
     'TestCleanup': 'TRUE',
     'TestAutoConfirm': 'FALSE',
     'TestNumFolders': '10',
@@ -84,11 +88,16 @@ function setupControlSheets_() {
   } else {
     const settingsRange = configSheet.getRange('A:A');
     const settings = settingsRange.getValues().flat();
-    const lastRow = settings.filter(String).length;
 
     Object.entries(defaultConfig).forEach(([key, value]) => {
       if (settings.indexOf(key) === -1) {
-        configSheet.getRange(lastRow + 1, 1, 1, 2).setValues([[key, value]]);
+        const lastRow = configSheet.getLastRow() + 1;
+        // Handle dynamic default values
+        let finalValue = value;
+        if (key === 'NotificationEmail' && !value) {
+          finalValue = Session.getEffectiveUser().getEmail();
+        }
+        configSheet.getRange(lastRow, 1, 1, 2).setValues([[key, finalValue]]);
         log_(`Added missing "${key}" setting with default value.`);
       }
     });

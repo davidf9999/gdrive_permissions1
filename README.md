@@ -171,6 +171,16 @@ Now the script runs automatically every hour! Volunteers can simply edit sheets,
 
 See the **[Auto-Sync Guide](./docs/AUTO_SYNC_GUIDE.md)** for full details.
 
+### 💡 Pro Tip: Edit Mode
+
+When making bulk changes to the control sheets, use **Edit Mode** to temporarily suspend auto-sync:
+
+1. **Permissions Manager → Edit Mode → 🔒 Enter Edit Mode**
+2. Make your changes freely
+3. **Permissions Manager → Edit Mode → 🔓 Exit Edit Mode** when done
+
+This prevents partial syncs while you're reorganizing sheets or making bulk edits. See **[Edit Mode Guide](./docs/EDIT_MODE_GUIDE.md)** for details.
+
 ---
 
 ## Usage Guide

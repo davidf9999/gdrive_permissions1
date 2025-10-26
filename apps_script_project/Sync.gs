@@ -1,16 +1,21 @@
 /**
  * Synchronizes the editors of the spreadsheet file with the list in the Admins sheet.
+ *
+ * @param {Object} options - Options for sync behavior
+ * @param {boolean} options.addOnly - If true, only add admins (SAFE operations for auto-sync)
+ * @param {boolean} options.silentMode - If true, skip UI dialogs (for background execution)
  */
-function syncAdmins() {
+function syncAdmins(options = {}) {
+  const { addOnly = false, silentMode = false } = options;
   const ui = SpreadsheetApp.getUi();
   let adminSheet;
   try {
-    log_('Running Admin Sync...');
+    log_('Running Admin Sync... (addOnly: ' + addOnly + ', silentMode: ' + silentMode + ')');
     const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
     adminSheet = spreadsheet.getSheetByName(ADMINS_SHEET_NAME);
     if (!adminSheet) {
       log_('Admins sheet not found. Skipping admin sync.');
-      ui.alert('Admins sheet not found. Skipping admin sync.');
+      if (!silentMode) ui.alert('Admins sheet not found. Skipping admin sync.');
       return;
     }
 
@@ -44,57 +49,76 @@ function syncAdmins() {
     const emailsToAdd = adminEmails.filter(function(email) { return !editorSet.has(email); });
     const emailsToRemove = currentEditors.filter(function(email) { return !adminSet.has(email); });
 
-    if (emailsToAdd.length === 0 && emailsToRemove.length === 0) {
-      syncAdminsGroup_(adminSheet, adminGroupEmail);
+    // In addOnly mode, skip removals (DESTRUCTIVE operations)
+    if (addOnly && emailsToRemove.length > 0) {
+      log_('SAFE mode: Skipping ' + emailsToRemove.length + ' admin removal(s). Run "Sync Admins" manually to process removals.', 'WARN');
+      // Continue with additions only
+    }
+
+    if (emailsToAdd.length === 0 && (addOnly || emailsToRemove.length === 0)) {
+      syncAdminsGroup_(adminSheet, adminGroupEmail, { addOnly: addOnly });
       log_('Admin list is already up to date.');
-      if (SCRIPT_EXECUTION_MODE === 'TEST') {
-        showTestMessage_('Admin Sync', 'Admin list is already up to date. No changes were needed. Admins group synced to ' + adminGroupEmail + '.');
-      } else {
-        ui.alert('Admin list is already up to date. No changes were needed.\nAdmins group synced to ' + adminGroupEmail + '.');
+      if (!silentMode) {
+        if (SCRIPT_EXECUTION_MODE === 'TEST') {
+          showTestMessage_('Admin Sync', 'Admin list is already up to date. No changes were needed. Admins group synced to ' + adminGroupEmail + '.');
+        } else {
+          ui.alert('Admin list is already up to date. No changes were needed.\nAdmins group synced to ' + adminGroupEmail + '.');
+        }
       }
       return;
     }
 
+    // Build confirmation message
     let confirmationMessage = 'Admin Sync will make the following changes to the editors of this spreadsheet:\n';
     if (emailsToAdd.length > 0) {
       confirmationMessage += '\nADD:\n';
       emailsToAdd.forEach(function(email) { confirmationMessage += '  - ' + email + '\n'; });
     }
-    if (emailsToRemove.length > 0) {
+    if (!addOnly && emailsToRemove.length > 0) {
       confirmationMessage += '\nREMOVE:\n';
       emailsToRemove.forEach(function(email) { confirmationMessage += '  - ' + email + '\n'; });
     }
-    confirmationMessage += '\nAre you sure you want to continue?';
 
-    const response = ui.alert('Confirm Admin Sync', confirmationMessage, ui.ButtonSet.YES_NO);
+    // In silent mode or addOnly mode with only additions, skip confirmation
+    if (!silentMode && !addOnly && emailsToRemove.length > 0) {
+      confirmationMessage += '\nAre you sure you want to continue?';
+      const response = ui.alert('Confirm Admin Sync', confirmationMessage, ui.ButtonSet.YES_NO);
 
-    if (response !== ui.Button.YES) {
-      ui.alert('Admin sync cancelled.');
-      log_('Admin sync cancelled by user.');
-      adminSheet.getRange(ADMINS_STATUS_CELL).setValue('CANCELLED');
-      return;
+      if (response !== ui.Button.YES) {
+        if (!silentMode) ui.alert('Admin sync cancelled.');
+        log_('Admin sync cancelled by user.');
+        adminSheet.getRange(ADMINS_STATUS_CELL).setValue('CANCELLED');
+        return;
+      }
+    } else {
+      // Log changes in silent/addOnly mode
+      log_('AUTO-SYNC: Processing admin changes without confirmation:');
+      log_(confirmationMessage);
     }
 
     adminSheet.getRange(ADMINS_STATUS_CELL).setValue('Processing...');
 
-    // 5. Perform the additions and removals
+    // 5. Perform the additions
     if (emailsToAdd.length > 0) {
       log_('Adding ' + emailsToAdd.length + ' admin(s): ' + emailsToAdd.join(', '));
       spreadsheet.addEditors(emailsToAdd);
     }
 
-    if (emailsToRemove.length > 0) {
+    // Perform removals only if not in addOnly mode
+    if (!addOnly && emailsToRemove.length > 0) {
       log_('Removing ' + emailsToRemove.length + ' editor(s): ' + emailsToRemove.join(', '));
       spreadsheet.removeEditors(emailsToRemove);
     }
 
-    syncAdminsGroup_(adminSheet, adminGroupEmail);
+    syncAdminsGroup_(adminSheet, adminGroupEmail, { addOnly: addOnly });
 
     log_('Admin sync complete. Admins group email: ' + adminGroupEmail + '.');
-    if (SCRIPT_EXECUTION_MODE === 'TEST') {
-      showTestMessage_('Admin Sync', 'Admin sync complete. Admins group synced to ' + adminGroupEmail + '.');
-    } else {
-      ui.alert('Admin sync complete.\nAdmins group synced to ' + adminGroupEmail + '.');
+    if (!silentMode) {
+      if (SCRIPT_EXECUTION_MODE === 'TEST') {
+        showTestMessage_('Admin Sync', 'Admin sync complete. Admins group synced to ' + adminGroupEmail + '.');
+      } else {
+        ui.alert('Admin sync complete.\nAdmins group synced to ' + adminGroupEmail + '.');
+      }
     }
 
   } catch (e) {
@@ -104,11 +128,12 @@ function syncAdmins() {
         adminSheet.getRange(ADMINS_STATUS_CELL).setValue('ERROR: ' + e.message);
       } catch (ignored) {}
     }
-    ui.alert('An error occurred during Admin sync: ' + e.message);
+    if (!silentMode) ui.alert('An error occurred during Admin sync: ' + e.message);
   }
 }
 
-function syncAdminsGroup_(adminSheet, adminGroupEmail) {
+function syncAdminsGroup_(adminSheet, adminGroupEmail, options = {}) {
+  const { addOnly = false } = options;
   const statusCell = adminSheet.getRange(ADMINS_STATUS_CELL);
   const lastSyncedCell = adminSheet.getRange(ADMINS_LAST_SYNC_CELL);
   statusCell.setValue('Processing group sync...');
@@ -123,7 +148,7 @@ function syncAdminsGroup_(adminSheet, adminGroupEmail) {
 
   try {
     getOrCreateGroup_(adminGroupEmail, ADMINS_GROUP_NAME);
-    syncGroupMembership_(adminGroupEmail, ADMINS_SHEET_NAME);
+    syncGroupMembership_(adminGroupEmail, ADMINS_SHEET_NAME, { addOnly: addOnly });
 
     // Update the Config sheet with the admin group email
     updateConfigSetting_('AdminGroupEmail', adminGroupEmail);
@@ -266,8 +291,8 @@ function syncAdds() {
     showToast_('Starting non-destructive sync (adds only)...', 'Sync Adds', -1);
     log_('*** Starting non-destructive synchronization (adds only)...');
 
-    // 1. Sync Admins
-    syncAdmins();
+    // 1. Sync Admins (SAFE mode: additions only, silent for auto-sync)
+    syncAdmins({ addOnly: true, silentMode: true });
 
     // 2. Sync User Groups (creates groups, adds members)
     syncUserGroups({ addOnly: true });
