@@ -73,7 +73,7 @@ describe('syncAdminsGroup_', () => {
 
     expect(global.shouldSkipGroupOps_).toHaveBeenCalled();
     expect(global.getOrCreateGroup_).toHaveBeenCalledWith('admins@example.com', global.ADMINS_GROUP_NAME);
-    expect(global.syncGroupMembership_).toHaveBeenCalledWith('admins@example.com', ADMINS_SHEET_NAME);
+    expect(global.syncGroupMembership_).toHaveBeenCalledWith('admins@example.com', global.ADMINS_SHEET_NAME, { addOnly: false });
     expect(statusRange.setValue).toHaveBeenNthCalledWith(2, 'OK');
     expect(lastSyncedRange.setValue).toHaveBeenCalledWith('2024-01-01 00:00:00');
   });
