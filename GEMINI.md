@@ -40,6 +40,27 @@ The project follows a **"Stateless Enforcer"** model:
 
 This approach prioritizes simplicity, predictability, and maintainability. The administrator is the "state interpreter" who uses the audit tool to understand drift, while the script is the simple, reliable "state enforcer."
 
+## Enhanced Auditing for Direct Permissions
+
+To address the limitation of the original "Stateless Enforcer" model, which was blind to permissions granted directly to folders and files (bypassing the managed Google Groups), new auditing features have been introduced.
+
+1.  **Manual Addition Auditing:**
+    *   The main **`Dry Run Audit`** function has been enhanced to discover users who have been manually added to the system, either by being added to a Google Group directly or by being granted direct access to a folder.
+    *   If it finds a user who should be in a sheet but isn't, it will log this finding in the `DryRunAuditLog` sheet with the issue type **`Manual Addition`**.
+    *   The **`Merge & Reconcile`** feature uses this exact same discovery logic to propose adding these users to the correct sheet.
+
+2.  **Role Mismatch Auditing:**
+    *   The `Dry Run Audit` now performs an additional check. For every member of a managed group, it verifies their specific permission on the associated folder.
+    *   If a user's actual permission (e.g., `Editor`) does not match the permission they are supposed to have based on the `ManagedFolders` sheet (e.g., `Viewer`), it will log this in the `DryRunAuditLog` with the issue type **`Role Mismatch`**.
+    *   **Important:** This is a detection-only feature. The `Merge & Reconcile` function will **not** attempt to fix these mismatches. Correcting a role mismatch is a manual administrative task, as automatically downgrading a permission could be disruptive.
+
+3.  **Deep Audit (Files & Sub-folders):**
+    *   A new, separate function called **`Deep Audit a Folder...`** has been added to the **`Advanced`** menu.
+    *   This function prompts the user for the ID of a specific managed folder.
+    *   It then performs a **recursive** audit of **every file and sub-folder** within that managed folder.
+    *   Any user found to have direct access to any of these items (and who is not in the official Google Group) will be logged in the `DryRunAuditLog` sheet with the issue type **`Direct File Access`**.
+    *   **Performance Warning:** This is a powerful but potentially slow and API-intensive operation. It should be used sparingly and is intended for in-depth investigations of specific folders where permission drift is suspected, not for regular, broad audits.
+
 ## Refactoring Sync Logic (Add/Delete Separation)
 
 To prevent accidental data loss and provide more granular control, the main synchronization logic was refactored. The single `Sync All` function, which performed both additions and deletions, was supplemented with two new, more specific functions:
@@ -63,6 +84,7 @@ To improve maintainability and scalability, the monolithic `Code.js` file was re
 
 *   **New File Structure:** The logic is now organized into the following files within the `apps_script_project` directory:
     *   `Code.js`: The main file, containing only global constants and the `onOpen()` menu creation function.
+    *   `Discovery.gs`: Contains the centralized logic for discovering manual permission changes.
     *   `Setup.gs`: Functions for creating and configuring the necessary sheets.
     *   `Sync.gs`: The main functions for syncing permissions (`syncAdds`, `syncDeletes`, etc.).
     *   `Core.gs`: The core logic for interacting with Google Drive and Google Groups.

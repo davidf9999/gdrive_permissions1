@@ -121,7 +121,7 @@ function log_(message, severity = 'INFO') {
   const sheetName = (SCRIPT_EXECUTION_MODE === 'TEST') ? TEST_LOG_SHEET_NAME : LOG_SHEET_NAME;
   const logSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
   if (logSheet) {
-    const timestamp = Utilities.formatDate(new Date(), SpreadsheetApp.getActive().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+    const timestamp = Utilities.formatDate(new Date(), SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss');
     logSheet.appendRow([timestamp, '[' + severity.toUpperCase() + '] ' + message]);
     
     // Trim the log sheet if it's too long
@@ -293,4 +293,65 @@ function validateUserSheetEmails_(sheetName) {
   }
 
   return { valid: true, duplicates: [], error: null };
+}
+
+function getDirectFolderUsers_(folder) {
+  const users = [];
+  const owner = folder.getOwner() ? folder.getOwner().getEmail().toLowerCase() : null;
+
+  folder.getViewers().forEach(u => {
+    const email = u.getEmail().toLowerCase();
+    if (email !== owner) users.push({ email: email, role: 'Viewer' });
+  });
+
+  folder.getEditors().forEach(u => {
+    const email = u.getEmail().toLowerCase();
+    if (email !== owner) users.push({ email: email, role: 'Editor' });
+  });
+
+  return users;
+}
+
+function getDirectFileUsers_(file) {
+  const users = [];
+  const owner = file.getOwner() ? file.getOwner().getEmail().toLowerCase() : null;
+
+  file.getViewers().forEach(u => {
+    const email = u.getEmail().toLowerCase();
+    if (email !== owner) users.push({ email: email, role: 'Viewer' });
+  });
+  file.getCommenters().forEach(u => {
+    const email = u.getEmail().toLowerCase();
+    if (email !== owner) users.push({ email: email, role: 'Commenter' });
+  });
+  file.getEditors().forEach(u => {
+    const email = u.getEmail().toLowerCase();
+    if (email !== owner) users.push({ email: email, role: 'Editor' });
+  });
+
+  return users;
+}
+
+function getActualMembers_(groupEmail) {
+  assertAdminDirectoryAvailable_();
+  const members = [];
+  let pageToken;
+  try {
+    do {
+      const resp = AdminDirectory.Members.list(groupEmail, {
+        maxResults: 200,
+        pageToken: pageToken
+      });
+      if (resp && resp.members) {
+        members.push.apply(members, resp.members.map(m => m.email));
+      }
+      pageToken = resp ? resp.nextPageToken : null;
+    } while (pageToken);
+  } catch (e) {
+    if (e.message.includes('Resource Not Found: groupKey')) {
+      throw new Error('Group ' + groupEmail + ' does not exist.');
+    }
+    throw e;
+  }
+  return members;
 }

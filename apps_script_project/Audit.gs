@@ -1,3 +1,11 @@
+/**
+ * @file Audit.gs
+ * @description Contains the logic for the Dry Run Audit and Deep Audit features.
+ */
+
+/**
+ * Performs a dry run audit by discovering all manual additions and logging them.
+ */
 function dryRunAudit() {
   const ui = SpreadsheetApp.getUi();
   try {
@@ -10,11 +18,20 @@ function dryRunAudit() {
     }
     auditSheet.getRange(2, 1, auditSheet.getMaxRows() - 1, 5).clearContent();
 
-    // Audit Folders
-    auditManagedFolders_();
+    // 1. Discover users who should be in groups but aren't
+    const discoveryReport = discoverManualAdditions_();
+    discoveryReport.forEach(item => {
+      item.membersToAdd.forEach(member => {
+        logAndAudit_('Manual Addition', item.sheetName, `User needs to be added`, `Email: ${member.email}, Source: ${member.source}`);
+      });
+    });
 
-    // Audit Groups
-    auditAllGroups_();
+    // 2. Audit for permission mismatches (e.g., a Viewer who was manually made an Editor)
+    auditMemberRolesOnFolders_();
+
+    if (discoveryReport.length === 0) {
+      log_('Dry Run Audit found no manual additions to groups or folders.');
+    }
 
     log_('*** Dry Run Audit Complete.');
     showToast_('Dry Run Audit Complete.', 'Audit', 5);
@@ -28,271 +45,162 @@ function dryRunAudit() {
   }
 }
 
-function auditManagedFolders_() {
-  log_('Auditing Managed Folders...');
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
-  if (!sheet) {
-    logAndAudit_('ManagedFolders', 'Sheet', 'Sheet Not Found', 'Cannot audit managed folders.');
+/**
+ * Audits that the group for each managed folder has the correct role, and that each member
+ * of the group has the correct effective role.
+ */
+function auditMemberRolesOnFolders_() {
+  const managedFoldersSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+  if (!managedFoldersSheet || managedFoldersSheet.getLastRow() < 2) {
     return;
   }
 
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 2) {
-    log_('No managed folders to audit.');
-    return;
-  }
-
-  const data = sheet.getRange(2, 1, lastRow - 1, GROUP_EMAIL_COL).getValues();
-  for (let i = 0; i < data.length; i++) {
-    const row = data[i];
+  const managedFoldersData = managedFoldersSheet.getRange(2, 1, managedFoldersSheet.getLastRow() - 1, GROUP_EMAIL_COL).getValues();
+  managedFoldersData.forEach(row => {
     const folderName = row[FOLDER_NAME_COL - 1];
     const folderId = row[FOLDER_ID_COL - 1];
-    const role = row[ROLE_COL - 1];
+    const expectedRole = row[ROLE_COL - 1];
     const groupEmail = row[GROUP_EMAIL_COL - 1].toLowerCase();
 
-    if (!folderId) {
-      logAndAudit_('ManagedFolders', folderName, 'Missing Folder ID', 'Skipping audit for this folder.');
-      continue;
-    }
+    if (!folderId || !groupEmail || !expectedRole) return;
 
     try {
       const folder = DriveApp.getFolderById(folderId);
-      let hasCorrectPermission = false;
-      const roleUpper = role.toUpperCase();
+      
+      // First, check that the group itself has the correct role on the folder
+      auditGroupRoleOnFolder_(folder, folderName, expectedRole, groupEmail);
 
-      // Check if the group is in the correct permission list
-      if (roleUpper === 'VIEWER') {
-        const viewers = folder.getViewers().map(u => u.getEmail().toLowerCase());
-        if (viewers.includes(groupEmail)) {
-          hasCorrectPermission = true;
-        }
-      } else if (roleUpper === 'EDITOR') {
-        const editors = folder.getEditors().map(u => u.getEmail().toLowerCase());
-        if (editors.includes(groupEmail)) {
-          hasCorrectPermission = true;
-        }
-      } else if (roleUpper === 'COMMENTER') {
-        const commenters = folder.getCommenters().map(u => u.getEmail().toLowerCase());
-        if (commenters.includes(groupEmail)) {
-          hasCorrectPermission = true;
-        }
-      }
+      // Second, check individual members for role drift
+      const groupMembers = getActualMembers_(groupEmail);
+      const viewers = folder.getViewers().map(u => u.getEmail().toLowerCase());
+      const editors = folder.getEditors().map(u => u.getEmail().toLowerCase());
 
-      if (!hasCorrectPermission) {
-        // If the permission is wrong, figure out what the actual role is for better logging.
+      groupMembers.forEach(memberEmail => {
+        const member = memberEmail.toLowerCase();
         let actualRole = 'NONE';
-        if (folder.getViewers().map(u => u.getEmail().toLowerCase()).includes(groupEmail)) actualRole = 'Viewer';
-        if (folder.getCommenters().map(u => u.getEmail().toLowerCase()).includes(groupEmail)) actualRole = 'Commenter';
-        if (folder.getEditors().map(u => u.getEmail().toLowerCase()).includes(groupEmail)) actualRole = 'Editor';
-        
-        logAndAudit_('Folder Permission', folderName, 'Permission Mismatch', 'Expected: ' + role + ', Actual: ' + actualRole);
-      }
+        if (editors.includes(member)) {
+          actualRole = 'EDITOR';
+        } else if (viewers.includes(member)) {
+          actualRole = 'VIEWER';
+        }
+
+        if (actualRole.toUpperCase() !== expectedRole.toUpperCase()) {
+          logAndAudit_('Role Mismatch', folderName, `User has incorrect role`, `Email: ${member}, Expected: ${expectedRole}, Actual: ${actualRole}`);
+        }
+      });
 
     } catch (e) {
-      logAndAudit_('Folder', folderName, 'Folder Not Found', 'Could not access folder with ID: ' + folderId);
+      logAndAudit_('Folder Audit', folderName, 'Folder Not Found or Access Error', 'Could not access folder with ID: ' + folderId + ' or its members. Error: ' + e.message);
     }
-  }
-}
-
-function auditAllGroups_() {
-  log_('Auditing All User Groups...');
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const allGroups = new Map(); // Use a map to store groupName -> groupEmail to handle duplicates
-
-  // 1. Get groups from UserGroups sheet
-  const userGroupsSheet = ss.getSheetByName(USER_GROUPS_SHEET_NAME);
-  if (userGroupsSheet && userGroupsSheet.getLastRow() > 1) {
-    const userGroupsData = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 2).getValues();
-    userGroupsData.forEach(row => {
-      const groupName = row[0];
-      const groupEmail = row[1];
-      if (groupName && groupEmail) {
-        allGroups.set(groupName, groupEmail);
-      }
-    });
-  } else {
-    log_('No groups to audit in UserGroups sheet or sheet not found.');
-  }
-
-  // 2. Get groups from ManagedFolders sheet
-  const managedFoldersSheet = ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
-  if (managedFoldersSheet && managedFoldersSheet.getLastRow() > 1) {
-    const managedFoldersData = managedFoldersSheet.getRange(2, 1, managedFoldersSheet.getLastRow() - 1, GROUP_EMAIL_COL).getValues();
-    managedFoldersData.forEach(row => {
-      const groupName = row[USER_SHEET_NAME_COL - 1];
-      const groupEmail = row[GROUP_EMAIL_COL - 1];
-      if (groupName && groupEmail) {
-        allGroups.set(groupName, groupEmail);
-      }
-    });
-  } else {
-    log_('No groups to audit in ManagedFolders sheet or sheet not found.');
-  }
-
-  if (allGroups.size === 0) {
-    log_('No groups found to audit in any sheet.');
-    return;
-  }
-
-  log_(`Found ${allGroups.size} total unique groups to audit.`);
-
-  // 3. Audit each group
-  allGroups.forEach((groupEmail, groupName) => {
-    if (!groupEmail) {
-      logAndAudit_('Group Audit', groupName, 'Missing Group Email', 'Skipping membership audit for this group.');
-      return;
-    }
-    auditGroupMembership_(groupName, groupEmail);
   });
 }
 
-function auditGroupMembership_(groupName, groupEmail) {
-  try {
-    // Validate for duplicate emails before auditing
-    const validation = validateUserSheetEmails_(groupName);
-    if (!validation.valid) {
-      logAndAudit_('Group Membership', groupName, 'VALIDATION ERROR', validation.error);
-      return; // Stop processing this group
+
+function auditGroupRoleOnFolder_(folder, folderName, expectedRole, groupEmail) {
+    let hasCorrectPermission = false;
+    let actualRole = 'NONE';
+    const viewers = folder.getViewers().map(u => u.getEmail().toLowerCase());
+    const editors = folder.getEditors().map(u => u.getEmail().toLowerCase());
+
+    if (viewers.includes(groupEmail)) actualRole = 'Viewer';
+    if (editors.includes(groupEmail)) actualRole = 'Editor';
+
+    if (expectedRole.toUpperCase() === 'COMMENTER') {
+        logAndAudit_('Folder Permission', folderName, 'Invalid Role for Folder', 'The role \'Commenter\' is not applicable to folders, only files. Please use \'Viewer\' or \'Editor\'.');
+        return;
     }
 
-    const desiredMembers = getDesiredMembers_(groupName);
-    const actualMembers = getActualMembers_(groupEmail);
-
-    const desiredSet = new Set(desiredMembers.map(m => m.toLowerCase()));
-    const actualSet = new Set(actualMembers.map(m => m.toLowerCase()));
-
-    const missingMembers = desiredMembers.filter(m => !actualSet.has(m.toLowerCase()));
-    const extraMembers = actualMembers.filter(m => !desiredSet.has(m.toLowerCase()));
-
-    if (missingMembers.length > 0) {
-      logAndAudit_('Group Membership', groupName, 'Missing Members', missingMembers.join(', '));
+    if (actualRole.toUpperCase() === expectedRole.toUpperCase()) {
+        hasCorrectPermission = true;
     }
 
-    if (extraMembers.length > 0) {
-      logAndAudit_('Group Membership', groupName, 'Extra Members', extraMembers.join(', '));
+    if (!hasCorrectPermission) {
+        logAndAudit_('Folder Permission', folderName, 'Permission Mismatch', 'Expected: ' + expectedRole + ', Actual: ' + actualRole);
     }
-
-  } catch (e) {
-    logAndAudit_('Group Membership', groupName, 'Error', e.message);
-  }
 }
 
-function getDesiredMembers_(sheetName) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
-  if (!sheet) {
-    throw new Error('User sheet \'' + sheetName + '\' not found.');
-  }
-  return sheet.getRange('A2:A' + sheet.getLastRow()).getValues()
-    .map(row => row[0].toString().trim().toLowerCase())
-    .filter(email => email && email.includes('@'));
-}
+function deepAuditFolder() {
+  const ui = SpreadsheetApp.getUi();
+  const response = ui.prompt('Enter the ID of the managed folder to deep audit:', ui.ButtonSet.OK_CANCEL);
 
-function getActualMembers_(groupEmail) {
-  assertAdminDirectoryAvailable_();
-  const members = [];
-  let pageToken;
+  if (response.getSelectedButton() !== ui.Button.OK || !response.getResponseText()) {
+    return;
+  }
+
+  const folderId = response.getResponseText().trim();
+  const managedFolderInfo = getManagedFolderInfoById_(folderId);
+
+  if (!managedFolderInfo) {
+    ui.alert('Error', `Folder ID '${folderId}' is not a managed folder. Please enter an ID from the 'ManagedFolders' sheet.`, ui.ButtonSet.OK);
+    return;
+  }
+
+  const { folderName, groupEmail } = managedFolderInfo;
+
   try {
-    do {
-      const resp = AdminDirectory.Members.list(groupEmail, {
-        maxResults: 200,
-        pageToken: pageToken
+    log_(`*** Starting Deep Audit for folder: ${folderName} (${folderId})`);
+    showToast_(`Starting Deep Audit for ${folderName}...`, 'Deep Audit', -1);
+
+    const groupMembers = new Set(getActualMembers_(groupEmail).map(m => m.toLowerCase()));
+    const hierarchy = getFolderHierarchy_(DriveApp.getFolderById(folderId));
+
+    hierarchy.forEach(item => {
+      const directUsers = getDirectFileUsers_(item.item);
+      directUsers.forEach(user => {
+        if (user.email !== groupEmail && !groupMembers.has(user.email)) {
+          logAndAudit_('Direct File Access', item.path, 'User has direct access', `Email: ${user.email}, Role: ${user.role}`);
+        }
       });
-      if (resp && resp.members) {
-        members.push.apply(members, resp.members.map(m => m.email));
-      }
-      pageToken = resp ? resp.nextPageToken : null;
-    } while (pageToken);
+    });
+
+    log_(`*** Deep Audit Complete for folder: ${folderName}`);
+    showToast_('Deep Audit Complete.', 'Deep Audit', 5);
+    ui.alert(`Deep Audit for '${folderName}' is complete. See the 'DryRunAuditLog' sheet for details.`);
+
   } catch (e) {
-    if (e.message.includes('Resource Not Found: groupKey')) {
-      throw new Error('Group ' + groupEmail + ' does not exist.');
-    }
-    throw e;
+    log_(`FATAL ERROR in deepAuditFolder for ${folderName}: ` + e.toString() + '\n' + e.stack, 'ERROR');
+    showToast_('Deep Audit failed.', 'Deep Audit', 5);
+    ui.alert(`An error occurred during the deep audit for '${folderName}': ` + e.message);
   }
-  return members;
+}
+
+function getFolderHierarchy_(folder, path = '') {
+  const currentPath = path + '/' + folder.getName();
+  let hierarchy = [{ item: folder, path: currentPath }];
+
+  const files = folder.getFiles();
+  while (files.hasNext()) {
+    const file = files.next();
+    hierarchy.push({ item: file, path: currentPath + '/' + file.getName() });
+  }
+
+  const subFolders = folder.getFolders();
+  while (subFolders.hasNext()) {
+    const subFolder = subFolders.next();
+    hierarchy = hierarchy.concat(getFolderHierarchy_(subFolder, currentPath));
+  }
+
+  return hierarchy;
+}
+
+function getManagedFolderInfoById_(folderId) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+  if (!sheet) return null;
+  const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, GROUP_EMAIL_COL).getValues();
+  for (let i = 0; i < data.length; i++) {
+    if (data[i][FOLDER_ID_COL - 1] === folderId) {
+      return {
+        folderName: data[i][FOLDER_NAME_COL - 1],
+        groupEmail: data[i][GROUP_EMAIL_COL - 1].toLowerCase()
+      };
+    }
+  }
+  return null;
 }
 
 function logAndAudit_(type, identifier, issue, details) {
-  const timestamp = Utilities.formatDate(new Date(), SpreadsheetApp.getActive().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+  const timestamp = Utilities.formatDate(new Date(), SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss');
   const auditSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(DRY_RUN_AUDIT_LOG_SHEET_NAME);
   auditSheet.appendRow([timestamp, type, identifier, issue, details]);
   log_('AUDIT [' + type + ' | ' + identifier + ']: ' + issue + ' - ' + details, 'WARN');
-}
-
-/**
- * Validates all user sheets for duplicate emails and displays a summary
- */
-function validateAllUserSheets() {
-  const ui = SpreadsheetApp.getUi();
-  try {
-    log_('*** Starting Validate All User Sheets...');
-
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const allUserSheets = [];
-    const validationResults = [];
-
-    // 1. Collect all user sheets from UserGroups
-    const userGroupsSheet = ss.getSheetByName(USER_GROUPS_SHEET_NAME);
-    if (userGroupsSheet && userGroupsSheet.getLastRow() > 1) {
-      const userGroupsData = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 1).getValues();
-      userGroupsData.forEach(row => {
-        const sheetName = row[0];
-        if (sheetName) allUserSheets.push(sheetName);
-      });
-    }
-
-    // 2. Collect all user sheets from ManagedFolders
-    const managedFoldersSheet = ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
-    if (managedFoldersSheet && managedFoldersSheet.getLastRow() > 1) {
-      const managedData = managedFoldersSheet.getRange(2, USER_SHEET_NAME_COL, managedFoldersSheet.getLastRow() - 1, 1).getValues();
-      managedData.forEach(row => {
-        const sheetName = row[0];
-        if (sheetName && !allUserSheets.includes(sheetName)) {
-          allUserSheets.push(sheetName);
-        }
-      });
-    }
-
-    // 3. Add Admins sheet
-    allUserSheets.push(ADMINS_SHEET_NAME);
-
-    if (allUserSheets.length === 0) {
-      ui.alert('Validation Complete', 'No user sheets found to validate.', ui.ButtonSet.OK);
-      return;
-    }
-
-    log_('Validating ' + allUserSheets.length + ' user sheets...');
-
-    // 4. Validate each sheet
-    let errorCount = 0;
-    allUserSheets.forEach(sheetName => {
-      const validation = validateUserSheetEmails_(sheetName);
-      if (!validation.valid) {
-        errorCount++;
-        validationResults.push('❌ ' + sheetName + ': ' + validation.error);
-        log_('VALIDATION ERROR in "' + sheetName + '": ' + validation.error, 'ERROR');
-      } else {
-        validationResults.push('✓ ' + sheetName + ': OK');
-        log_('Validation passed for "' + sheetName + '"', 'INFO');
-      }
-    });
-
-    // 5. Display results
-    const summary = 'Validated ' + allUserSheets.length + ' user sheets.\n\n' +
-                    'Sheets with errors: ' + errorCount + '\n' +
-                    'Sheets without errors: ' + (allUserSheets.length - errorCount) + '\n\n' +
-                    'Details:\n' + validationResults.join('\n');
-
-    if (errorCount > 0) {
-      ui.alert('Validation Complete - Errors Found', summary, ui.ButtonSet.OK);
-    } else {
-      ui.alert('Validation Complete - All OK!', summary, ui.ButtonSet.OK);
-    }
-
-    log_('*** Validate All User Sheets Complete. Errors found: ' + errorCount);
-
-  } catch (e) {
-    log_('ERROR in validateAllUserSheets: ' + e.toString(), 'ERROR');
-    ui.alert('Validation Error', 'An error occurred during validation: ' + e.message, ui.ButtonSet.OK);
-  }
 }
