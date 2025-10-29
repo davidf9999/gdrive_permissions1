@@ -212,12 +212,11 @@ function deepAuditFolder() {
 
     hierarchy.forEach(item => {
       let directUsers;
-      if (item.item instanceof DriveApp.File) {
+      // Check for a function that only files have, like getMimeType.
+      if (typeof item.item.getMimeType === 'function') {
         directUsers = getDirectFileUsers_(item.item);
-      } else if (item.item instanceof DriveApp.Folder) {
-        directUsers = getDirectFolderUsers_(item.item);
       } else {
-        return; // Should not happen
+        directUsers = getDirectFolderUsers_(item.item);
       }
 
       directUsers.forEach(user => {
