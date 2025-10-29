@@ -59,7 +59,9 @@ This sheet allows you to create your own reusable groups of people.
 *   **`GroupEmail` (Column B):** *Managed by Script or Manual.* The script will generate the email for the Google Group.
     *   **For ASCII group names** (English, numbers): Leave blank - the script auto-generates (e.g., `marketing-team@yourdomain.com`)
     *   **For non-ASCII group names** (Hebrew, Arabic, Chinese, etc.): You must manually specify an ASCII email address (e.g., `coordinators@jvact.org`). See [Working with Non-ASCII Characters](#working-with-non-ascii-characters) below.
-*   **How it Works:** For each `GroupName` you define here, the script creates a corresponding sheet with that name. You then list the members of that group in that sheet. You can then use the `GroupEmail` in any of your other user sheets to grant access to everyone in that group at once.
+*   **How it Works:** For each `GroupName` you define here, the script creates a corresponding sheet with the name `GroupName_G` (the "_G" suffix distinguishes group sheets from folder sheets). You then list the members of that group in that sheet. You can then use the `GroupEmail` in any of your other user sheets to grant access to everyone in that group at once.
+    *   **Example:** Group name "Marketing Team" creates sheet "Marketing Team_G"
+    *   **Note:** The script automatically migrates old sheets without the "_G" suffix when you run sync
 
 ### 4. `Admins`
 
@@ -247,6 +249,38 @@ of the ManagedFolders sheet. Example: "coordinators-editor@jvact.org"
 ```
 
 Simply fill in the appropriate column with an ASCII email address and run the sync again!
+
+### Duplicate Group Email Validation
+
+**Important:** Each group email must be unique across your entire configuration. The system validates that no two groups share the same email address, as this would cause them to have the same members and create permission conflicts.
+
+**The validation checks:**
+- ✅ Within UserGroups sheet (Column B)
+- ✅ Within ManagedFolders sheet (Column E)
+- ✅ Between UserGroups and ManagedFolders
+
+**When duplicates are found:**
+- Sync is blocked before any changes are made
+- Clear error message shows all duplicate locations
+- Dry Run Audit reports duplicates in the audit log
+
+**Example error:**
+```
+VALIDATION ERROR: Duplicate group emails detected!
+
+Duplicate group email "team@jvact.org" found in:
+UserGroups row 2 (Group: Marketing);
+ManagedFolders row 5 (Folder: Project A, Role: Editor)
+
+Each group must have a unique email address. Please fix these duplicates and try again.
+```
+
+**How to fix:**
+1. Review the error message to see which groups/folders share the same email
+2. Update one or more of the duplicate emails to be unique
+3. Run the sync again
+
+**Note:** This validation prevents a common mistake where manually specifying the same email for multiple groups would silently cause them to share members.
 
 ---
 
