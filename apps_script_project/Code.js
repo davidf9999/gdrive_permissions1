@@ -39,7 +39,6 @@ function onOpen() {
       .addItem('Full Sync (Add & Delete)', 'fullSync')
       .addSeparator()
       .addItem('Dry Run Audit', 'dryRunAudit')
-      .addItem('Validate All User Sheets', 'validateAllUserSheets')
       .addSeparator()
       .addSubMenu(ui.createMenu('Auto-Sync')
           .addItem('⚡ Setup Auto-Sync (Hourly)', 'setupAutoSync')
@@ -77,10 +76,13 @@ function onOpen() {
           .addSeparator()
           .addItem('Cleanup Manual Test Data', 'cleanupManualTestData')
           .addItem('Cleanup Stress Test Data', 'cleanupStressTestData')
-          .addItem('Cleanup Add/Delete Test Data', 'cleanupAddDeleteSeparationTestData'))
+          .addItem('Cleanup Add/Delete Test Data', 'cleanupAddDeleteSeparationTestData')
+          .addSeparator()
+          .addItem('Clear All Test Data', 'clearAllTestsData'))
       .addSeparator()
       .addSubMenu(ui.createMenu('Logging') // Use ui here
-          .addItem('Clear All Logs', 'clearAllLogs'));
+          .addItem('Clear All Logs', 'clearAllLogs')
+          .addItem('Clear Dry Run Audit Log', 'clearDryRunAuditLog'));
 
   const helpMenu = ui.createMenu('Help');
   helpMenu.addItem('User Guide', 'openUserGuide');

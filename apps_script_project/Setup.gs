@@ -127,8 +127,12 @@ function setupLogSheets_() {
   let auditLogSheet = ss.getSheetByName(DRY_RUN_AUDIT_LOG_SHEET_NAME);
   if (!auditLogSheet) {
     auditLogSheet = ss.insertSheet(DRY_RUN_AUDIT_LOG_SHEET_NAME);
-    const headers = ['Timestamp', 'Type', 'Identifier', 'Issue', 'Details'];
-    auditLogSheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
-    auditLogSheet.setFrozenRows(1);
+    setupDryRunAuditLogSheet_(auditLogSheet);
   }
+}
+
+function setupDryRunAuditLogSheet_(sheet) {
+    const headers = ['Timestamp', 'Type', 'Identifier', 'Issue', 'Details'];
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
+    sheet.setFrozenRows(1);
 }

@@ -4,6 +4,56 @@
  */
 
 /**
+ * Validates all user sheets listed in the ManagedFolders sheet.
+ * @returns {boolean} True if all user sheets are valid, false otherwise.
+ */
+function validateUserSheets_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const managedFoldersSheet = ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+  if (!managedFoldersSheet) {
+    logAndAudit_('Validation', 'ManagedFolders', 'Sheet not found', 'The ManagedFolders sheet is missing.');
+    return false;
+  }
+
+  const userSheetNames = managedFoldersSheet.getRange(2, USER_SHEET_NAME_COL, managedFoldersSheet.getLastRow() - 1, 1).getValues().flat();
+  let isValid = true;
+
+  // Check for duplicate user sheet names
+  const sheetNameCounts = {};
+  userSheetNames.forEach(name => {
+    if (name) {
+      sheetNameCounts[name] = (sheetNameCounts[name] || 0) + 1;
+    }
+  });
+
+  for (const name in sheetNameCounts) {
+    if (sheetNameCounts[name] > 1) {
+      logAndAudit_('Validation', name, 'Duplicate user sheet', `The user sheet "${name}" is listed more than once in ManagedFolders.`);
+      isValid = false;
+    }
+  }
+
+  // Check if each user sheet exists and has a valid header
+  userSheetNames.forEach(name => {
+    if (name) {
+      const sheet = ss.getSheetByName(name);
+      if (!sheet) {
+        logAndAudit_('Validation', name, 'Sheet not found', `The user sheet "${name}" does not exist.`);
+        isValid = false;
+      } else {
+        const header = sheet.getRange(1, 1).getValue();
+        if (header !== 'Email') {
+          logAndAudit_('Validation', name, 'Invalid header', `The user sheet "${name}" has an invalid header. Expected "Email", but found "${header}".`);
+          isValid = false;
+        }
+      }
+    }
+  });
+
+  return isValid;
+}
+
+/**
  * Performs a dry run audit by discovering all manual additions and logging them.
  */
 function dryRunAudit() {
@@ -11,6 +61,9 @@ function dryRunAudit() {
   try {
     log_('*** Starting Dry Run Audit...');
     showToast_('Starting Dry Run Audit...', 'Audit', 10);
+
+    // 1. Validate user sheets
+    validateUserSheets_();
 
     const auditSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(DRY_RUN_AUDIT_LOG_SHEET_NAME);
     if (!auditSheet) {
@@ -203,4 +256,25 @@ function logAndAudit_(type, identifier, issue, details) {
   const auditSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(DRY_RUN_AUDIT_LOG_SHEET_NAME);
   auditSheet.appendRow([timestamp, type, identifier, issue, details]);
   log_('AUDIT [' + type + ' | ' + identifier + ']: ' + issue + ' - ' + details, 'WARN');
+}
+
+/**
+ * Clears all content from the DryRunAuditLog sheet.
+ */
+function clearDryRunAuditLog() {
+  const ui = SpreadsheetApp.getUi();
+  try {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(DRY_RUN_AUDIT_LOG_SHEET_NAME);
+    if (sheet) {
+      sheet.clear();
+      setupDryRunAuditLogSheet_(sheet); // Re-add header
+      log_('DryRunAuditLog sheet has been cleared.');
+      ui.alert('The Dry Run Audit Log has been cleared.');
+    } else {
+      ui.alert('DryRunAuditLog sheet not found.');
+    }
+  } catch (e) {
+    log_('Error clearing DryRunAuditLog sheet: ' + e.toString(), 'ERROR');
+    ui.alert('An error occurred while clearing the audit log: ' + e.message);
+  }
 }

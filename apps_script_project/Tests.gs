@@ -768,3 +768,38 @@ function runAllTests() {
         SCRIPT_EXECUTION_MODE = 'DEFAULT';
     }
 }
+
+/**
+ * Clears all test data, including stress test artifacts and the test log.
+ */
+function clearAllTestsData() {
+    SCRIPT_EXECUTION_MODE = 'TEST';
+    try {
+        const ui = SpreadsheetApp.getUi();
+        const response = ui.alert('Are you sure you want to delete all test data?', 'This will delete all test folders, groups, and sheets, and clear the TestLog.', ui.ButtonSet.YES_NO);
+        if (response !== ui.Button.YES) {
+            return;
+        }
+
+        showTestMessage_('Cleanup', 'Clearing all test data. This may take a moment.');
+
+        // Use existing cleanup function for stress test data
+        cleanupStressTestData();
+
+        // Clear the TestLog sheet
+        const testLogSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(TEST_LOG_SHEET_NAME);
+        if (testLogSheet) {
+            testLogSheet.clear();
+            testLogSheet.getRange('A1:B1').setValues([['Timestamp', 'Message']]).setFontWeight('bold');
+            log_('TestLog sheet has been cleared.');
+        }
+
+        showTestMessage_('Cleanup Complete', 'All test data has been cleared.');
+
+    } catch (e) {
+        log_('Error clearing all test data: ' + e.toString(), 'ERROR');
+        SpreadsheetApp.getUi().alert('An error occurred during cleanup: ' + e.message);
+    } finally {
+        SCRIPT_EXECUTION_MODE = 'DEFAULT';
+    }
+}
