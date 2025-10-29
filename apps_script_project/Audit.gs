@@ -62,14 +62,14 @@ function dryRunAudit() {
     log_('*** Starting Dry Run Audit...');
     showToast_('Starting Dry Run Audit...', 'Audit', 10);
 
-    // 1. Validate user sheets
-    validateUserSheets_();
-
     const auditSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(DRY_RUN_AUDIT_LOG_SHEET_NAME);
     if (!auditSheet) {
       throw new Error('DryRunAuditLog sheet not found. Please run the setup again.');
     }
     auditSheet.getRange(2, 1, auditSheet.getMaxRows() - 1, 5).clearContent();
+
+    // 1. Validate user sheets
+    validateUserSheets_();
 
     // 1. Discover users who should be in groups but aren't
     const discoveryReport = discoverManualAdditions_();
