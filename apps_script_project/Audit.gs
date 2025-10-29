@@ -33,7 +33,7 @@ function validateUserSheets_() {
     }
   }
 
-  // Check if each user sheet exists and has a valid header
+  // Check each user sheet for validity
   userSheetNames.forEach(name => {
     if (name) {
       const sheet = ss.getSheetByName(name);
@@ -41,10 +41,26 @@ function validateUserSheets_() {
         logAndAudit_('Validation', name, 'Sheet not found', `The user sheet "${name}" does not exist.`);
         isValid = false;
       } else {
+        // Check header
         const header = sheet.getRange(1, 1).getValue();
         if (header !== 'Email') {
           logAndAudit_('Validation', name, 'Invalid header', `The user sheet "${name}" has an invalid header. Expected "Email", but found "${header}".`);
           isValid = false;
+        }
+
+        // Check for duplicate emails
+        const emails = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).getValues().flat().filter(String);
+        const emailCounts = {};
+        emails.forEach(email => {
+          const lowerEmail = email.toLowerCase();
+          emailCounts[lowerEmail] = (emailCounts[lowerEmail] || 0) + 1;
+        });
+
+        for (const email in emailCounts) {
+          if (emailCounts[email] > 1) {
+            logAndAudit_('Validation', name, 'Duplicate email', `The email "${email}" appears ${emailCounts[email]} times in the sheet.`);
+            isValid = false;
+          }
         }
       }
     }
