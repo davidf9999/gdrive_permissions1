@@ -211,7 +211,15 @@ function deepAuditFolder() {
     const hierarchy = getFolderHierarchy_(DriveApp.getFolderById(folderId));
 
     hierarchy.forEach(item => {
-      const directUsers = getDirectFileUsers_(item.item);
+      let directUsers;
+      if (item.item instanceof DriveApp.File) {
+        directUsers = getDirectFileUsers_(item.item);
+      } else if (item.item instanceof DriveApp.Folder) {
+        directUsers = getDirectFolderUsers_(item.item);
+      } else {
+        return; // Should not happen
+      }
+
       directUsers.forEach(user => {
         if (user.email !== groupEmail && !groupMembers.has(user.email)) {
           logAndAudit_('Direct File Access', item.path, 'User has direct access', `Email: ${user.email}, Role: ${user.role}`);
