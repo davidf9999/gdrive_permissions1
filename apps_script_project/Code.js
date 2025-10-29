@@ -79,8 +79,7 @@ function onOpen() {
           .addItem('Clear All Test Data', 'clearAllTestsData'))
       .addSeparator()
       .addSubMenu(ui.createMenu('Logging') // Use ui here
-          .addItem('Clear All Logs', 'clearAllLogs')
-          .addItem('Clear Dry Run Audit Log', 'clearDryRunAuditLog'));
+          .addItem('Clear All Logs', 'clearAllLogs'));
 
   const advancedMenu = ui.createMenu('Advanced');
   advancedMenu.addItem('Clear Cache', 'clearCache');

@@ -159,7 +159,7 @@ function log_(message, severity = 'INFO') {
 
 function clearAllLogs() {
   const ui = SpreadsheetApp.getUi();
-  const response = ui.alert('Are you sure you want to clear all logs?', 'This will delete all data in the "Log" and "TestLog" sheets.', ui.ButtonSet.YES_NO);
+  const response = ui.alert('Are you sure you want to clear all logs?', 'This will delete all data in the "Log", "TestLog", "FoldersAuditLog", and "DeepFolderAuditLog" sheets.', ui.ButtonSet.YES_NO);
   if (response !== ui.Button.YES) {
     return;
   }
@@ -174,7 +174,19 @@ function clearAllLogs() {
     testLogSheet.getRange('A2:B').clearContent();
   }
 
-  ui.alert('Logs cleared.');
+  const foldersAuditLogSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('FoldersAuditLog');
+  if (foldersAuditLogSheet) {
+    foldersAuditLogSheet.clear();
+    setupDryRunAuditLogSheet_(foldersAuditLogSheet);
+  }
+
+  const deepFolderAuditLogSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('DeepFolderAuditLog');
+  if (deepFolderAuditLogSheet) {
+    deepFolderAuditLogSheet.clear();
+    setupDeepAuditLogSheet_(deepFolderAuditLogSheet);
+  }
+
+  ui.alert('All logs have been cleared.');
 }
 
 function sendErrorNotification_(errorMessage) {
