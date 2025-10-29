@@ -100,7 +100,17 @@ function processRow_(rowIndex, options = {}) {
     }
     let groupEmail = existingGroupEmail;
     if (!groupEmail) {
-      groupEmail = generateGroupEmail_(userSheetName);
+      try {
+        groupEmail = generateGroupEmail_(userSheetName);
+      } catch (e) {
+        // Provide a more specific error for ManagedFolders
+        throw new Error(
+          'Cannot auto-generate group email for folder "' + folderName + '" with role "' + role + '". ' +
+          'The folder name contains non-ASCII characters (e.g., Hebrew, Arabic, Chinese). ' +
+          'Please manually specify a group email in the "GroupEmail" column (Column E) of the ManagedFolders sheet. ' +
+          'Example: "coordinators-editor@' + Session.getActiveUser().getEmail().split('@')[1] + '"'
+        );
+      }
     }
     groupEmailCell.setValue(groupEmail);
 
