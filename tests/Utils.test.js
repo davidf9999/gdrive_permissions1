@@ -88,13 +88,27 @@ describe('generateGroupEmail_', () => {
     const baseName = '---';
     expect(() => {
       generateGroupEmail_(baseName);
-    }).toThrow('resulted in an empty email address');
+    }).toThrow('contains only non-ASCII characters');
   });
 
   it('should throw an error for names with only special characters', () => {
     const baseName = '!@#$%^&*()';
     expect(() => {
       generateGroupEmail_(baseName);
-    }).toThrow('resulted in an empty email address');
+    }).toThrow('contains only non-ASCII characters');
+  });
+
+  it('should throw a helpful error for Hebrew characters', () => {
+    const baseName = 'מתאמים';
+    expect(() => {
+      generateGroupEmail_(baseName);
+    }).toThrow('manually specify a group email');
+  });
+
+  it('should throw a helpful error for mixed Hebrew and English', () => {
+    const baseName = 'Team מתאמים';
+    // "Team " -> "team" but "מתאמים" is stripped, result should be "team"
+    const result = generateGroupEmail_(baseName);
+    expect(result).toBe('team@example.com');
   });
 });

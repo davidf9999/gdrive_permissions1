@@ -33,7 +33,11 @@ function generateGroupEmail_(baseName) {
     .replace(/^-+|-+$/g, '');          // Remove leading/trailing hyphens
 
   if (!sanitizedName) {
-    throw new Error('Group name "' + baseName + '" resulted in an empty email address after sanitization.');
+    throw new Error(
+      'Group name "' + baseName + '" contains only non-ASCII characters (e.g., Hebrew, Arabic, Chinese) which cannot be used in email addresses. ' +
+      'Please manually specify a group email in the "GroupEmail" column (Column B) using only ASCII characters (a-z, 0-9, hyphens). ' +
+      'Example: for "' + baseName + '", you could use "coordinators@' + domain + '" or "team-a@' + domain + '".'
+    );
   }
 
   return sanitizedName + '@' + domain;
