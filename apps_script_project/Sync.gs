@@ -19,15 +19,21 @@ function syncAdmins(options = {}) {
       return;
     }
 
-    const groupEmailCell = adminSheet.getRange(ADMINS_GROUP_EMAIL_CELL);
-    let adminGroupEmail = groupEmailCell.getValue();
+    // Get admin group email from Config sheet
+    let adminGroupEmail = getConfigValue_('AdminGroupEmail', '');
     if (adminGroupEmail) {
       adminGroupEmail = adminGroupEmail.toString().trim().toLowerCase();
     }
-    if (!adminGroupEmail) {
+    // Validate that adminGroupEmail is a valid email format (contains @ and a domain)
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!adminGroupEmail || !emailPattern.test(adminGroupEmail)) {
+      if (adminGroupEmail) {
+        log_('Invalid admin group email in Config: "' + adminGroupEmail + '". Regenerating...', 'WARN');
+      }
       adminGroupEmail = generateGroupEmail_(ADMINS_GROUP_NAME);
+      // Save the generated email to Config immediately
+      updateConfigSetting_('AdminGroupEmail', adminGroupEmail);
     }
-    groupEmailCell.setValue(adminGroupEmail);
 
     // 1. Get desired admins
     const adminEmails = adminSheet.getRange('A2:A').getValues()

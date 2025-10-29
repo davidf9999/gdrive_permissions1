@@ -25,21 +25,25 @@ function setupControlSheets_() {
 
   // Check for Admins sheet
   let adminSheet = ss.getSheetByName(ADMINS_SHEET_NAME);
-  const adminHeaders = ['Administrator Emails', 'Admins Group Email', 'Last Synced', 'Status'];
+  const adminHeaders = ['Administrator Emails', 'Last Synced', 'Status'];
   if (!adminSheet) {
     adminSheet = ss.insertSheet(ADMINS_SHEET_NAME);
     adminSheet.getRange(1, 1, 1, adminHeaders.length).setValues([adminHeaders]).setFontWeight('bold');
     adminSheet.setFrozenRows(1);
     log_('Created "Admins" sheet.');
   } else {
-    const existingHeaders = adminSheet.getRange(1, 1, 1, adminHeaders.length).getValues()[0];
-    for (let i = 0; i < adminHeaders.length; i++) {
-      const headerCell = adminSheet.getRange(1, i + 1);
-      if (existingHeaders[i] !== adminHeaders[i]) {
-        headerCell.setValue(adminHeaders[i]);
-      }
-      headerCell.setFontWeight('bold');
+    // Update headers (this will migrate old 4-column format to new 3-column format)
+    const existingHeaders = adminSheet.getRange(1, 1, 1, 4).getValues()[0];
+
+    // If old format detected (has 'Admins Group Email' in column B), migrate the data
+    if (existingHeaders[1] === 'Admins Group Email') {
+      log_('Migrating Admins sheet from old 4-column format to new 3-column format...', 'WARN');
+      // Delete column B (the old Admins Group Email column)
+      adminSheet.deleteColumn(2);
     }
+
+    // Set the new headers
+    adminSheet.getRange(1, 1, 1, adminHeaders.length).setValues([adminHeaders]).setFontWeight('bold');
     adminSheet.setFrozenRows(1);
   }
   

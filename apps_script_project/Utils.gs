@@ -24,11 +24,17 @@ function generateGroupEmail_(baseName) {
   if (!domain) {
     throw new Error('Could not determine user domain.');
   }
-  
+
   const sanitizedName = baseName
     .toLowerCase()
-    .replace(/\s+/g, '-')
-    .replace(/[^a-z0-9-]/g, '');
+    .replace(/\s+/g, '-')              // Replace spaces with hyphens
+    .replace(/[^a-z0-9-]/g, '')        // Remove invalid characters
+    .replace(/-+/g, '-')               // Collapse consecutive hyphens
+    .replace(/^-+|-+$/g, '');          // Remove leading/trailing hyphens
+
+  if (!sanitizedName) {
+    throw new Error('Group name "' + baseName + '" resulted in an empty email address after sanitization.');
+  }
 
   return sanitizedName + '@' + domain;
 }
