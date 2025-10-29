@@ -1,7 +1,47 @@
 /**
+ * Migrates old UserGroup sheets to new naming convention (adds "_G" suffix).
+ * This ensures compatibility with the new naming scheme where group sheets
+ * end with "_G" to distinguish them from folder sheets.
+ */
+function migrateUserGroupSheets_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const userGroupsSheet = ss.getSheetByName(USER_GROUPS_SHEET_NAME);
+
+  if (!userGroupsSheet || userGroupsSheet.getLastRow() < 2) {
+    return; // No user groups defined, nothing to migrate
+  }
+
+  const groupNames = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 1).getValues();
+
+  for (let i = 0; i < groupNames.length; i++) {
+    const groupName = groupNames[i][0];
+    if (!groupName || !groupName.toString().trim()) {
+      continue;
+    }
+
+    const oldSheetName = groupName.toString().trim();
+    const newSheetName = oldSheetName + '_G';
+
+    // Check if old sheet exists and new sheet doesn't
+    const oldSheet = ss.getSheetByName(oldSheetName);
+    const newSheet = ss.getSheetByName(newSheetName);
+
+    if (oldSheet && !newSheet && !oldSheetName.endsWith('_G')) {
+      try {
+        oldSheet.setName(newSheetName);
+        log_('Migrated user group sheet: "' + oldSheetName + '" → "' + newSheetName + '"', 'INFO');
+      } catch (e) {
+        log_('Failed to migrate sheet "' + oldSheetName + '": ' + e.message, 'WARN');
+      }
+    }
+  }
+}
+
+/**
  * Ensures the control sheets (ManagedFolders, Admins) exist.
  */
 function setupControlSheets_() {
+  migrateUserGroupSheets_(); // Run migration first
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   
   // Check for ManagedFolders sheet
