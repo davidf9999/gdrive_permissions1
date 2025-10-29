@@ -84,15 +84,15 @@ function dryRunAudit() {
     // 1. Validate user sheets
     validateUserSheets_();
 
-    // 1. Discover users who should be in groups but aren't
+    // 2. Discover users who should be in groups but aren't
     const discoveryReport = discoverManualAdditions_();
     discoveryReport.forEach(item => {
       item.membersToAdd.forEach(member => {
-        logAndAudit_('Manual Addition', item.sheetName, `User needs to be added`, `Email: ${member.email}, Source: ${member.source}`);
+        logAndAudit_('Manual Addition', item.sheetName, 'User is in Google Group but not in sheet', `Email: ${member.email}, Source: ${member.source}`);
       });
     });
 
-    // 2. Audit for permission mismatches (e.g., a Viewer who was manually made an Editor)
+    // 3. Audit for permission mismatches for users who ARE in the sheets
     auditMemberRolesOnFolders_();
 
     if (discoveryReport.length === 0) {
@@ -127,21 +127,27 @@ function auditMemberRolesOnFolders_() {
     const folderId = row[FOLDER_ID_COL - 1];
     const expectedRole = row[ROLE_COL - 1];
     const groupEmail = row[GROUP_EMAIL_COL - 1].toLowerCase();
+    const userSheetName = row[USER_SHEET_NAME_COL - 1];
 
-    if (!folderId || !groupEmail || !expectedRole) return;
+    if (!folderId || !groupEmail || !expectedRole || !userSheetName) return;
+
+    const userSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(userSheetName);
+    if (!userSheet) return;
+
+    const sheetMembers = new Set(
+      userSheet.getLastRow() > 1
+        ? userSheet.getRange('A2:A' + userSheet.getLastRow()).getValues().map(r => r[0].toString().trim().toLowerCase()).filter(e => e)
+        : []
+    );
+
+    if (sheetMembers.size === 0) return; // Skip if sheet is empty
 
     try {
       const folder = DriveApp.getFolderById(folderId);
-      
-      // First, check that the group itself has the correct role on the folder
-      auditGroupRoleOnFolder_(folder, folderName, expectedRole, groupEmail);
-
-      // Second, check individual members for role drift
-      const groupMembers = getActualMembers_(groupEmail);
       const viewers = folder.getViewers().map(u => u.getEmail().toLowerCase());
       const editors = folder.getEditors().map(u => u.getEmail().toLowerCase());
 
-      groupMembers.forEach(memberEmail => {
+      sheetMembers.forEach(memberEmail => {
         const member = memberEmail.toLowerCase();
         let actualRole = 'NONE';
         if (editors.includes(member)) {
