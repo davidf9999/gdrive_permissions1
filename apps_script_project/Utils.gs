@@ -195,6 +195,37 @@ function clearAllLogs() {
   ui.alert('All logs have been cleared.');
 }
 
+function clearAuxiliaryLogs() {
+  const ui = SpreadsheetApp.getUi();
+  const response = ui.alert(
+    'Clear auxiliary logs?',
+    'This will clear "TestLog", "FoldersAuditLog", and "DeepFolderAuditLog" sheets.\n\nThe main "Log" sheet will be preserved.',
+    ui.ButtonSet.YES_NO
+  );
+  if (response !== ui.Button.YES) {
+    return;
+  }
+
+  const testLogSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(TEST_LOG_SHEET_NAME);
+  if (testLogSheet) {
+    testLogSheet.getRange('A2:B').clearContent();
+  }
+
+  const foldersAuditLogSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('FoldersAuditLog');
+  if (foldersAuditLogSheet) {
+    foldersAuditLogSheet.clear();
+    setupDryRunAuditLogSheet_(foldersAuditLogSheet);
+  }
+
+  const deepFolderAuditLogSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('DeepFolderAuditLog');
+  if (deepFolderAuditLogSheet) {
+    deepFolderAuditLogSheet.clear();
+    setupDeepAuditLogSheet_(deepFolderAuditLogSheet);
+  }
+
+  ui.alert('Auxiliary logs have been cleared.\n\nThe main "Log" sheet has been preserved.');
+}
+
 function sendErrorNotification_(errorMessage) {
   try {
     const configSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG_SHEET_NAME);
