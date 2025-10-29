@@ -27,7 +27,7 @@ describe('generateGroupEmail_', () => {
 
   it('should handle special characters and sanitize the name', () => {
     const baseName = 'Project X (Devs) & QA!';
-    const expectedEmail = 'project-x-devs--qa@example.com';
+    const expectedEmail = 'project-x-devs-qa@example.com';
 
     const actualEmail = generateGroupEmail_(baseName);
 
@@ -54,5 +54,47 @@ describe('generateGroupEmail_', () => {
     const expectedEmail = 'already-sanitized@example.com';
     const actualEmail = generateGroupEmail_(baseName);
     expect(actualEmail).toBe(expectedEmail);
+  });
+
+  it('should remove leading hyphens', () => {
+    const baseName = '-Test Group';
+    const expectedEmail = 'test-group@example.com';
+    const actualEmail = generateGroupEmail_(baseName);
+    expect(actualEmail).toBe(expectedEmail);
+  });
+
+  it('should remove trailing hyphens', () => {
+    const baseName = 'Test Group-';
+    const expectedEmail = 'test-group@example.com';
+    const actualEmail = generateGroupEmail_(baseName);
+    expect(actualEmail).toBe(expectedEmail);
+  });
+
+  it('should collapse multiple consecutive hyphens', () => {
+    const baseName = 'Test---Group';
+    const expectedEmail = 'test-group@example.com';
+    const actualEmail = generateGroupEmail_(baseName);
+    expect(actualEmail).toBe(expectedEmail);
+  });
+
+  it('should handle names with multiple spaces', () => {
+    const baseName = 'Test    Group    Members';
+    const expectedEmail = 'test-group-members@example.com';
+    const actualEmail = generateGroupEmail_(baseName);
+    expect(actualEmail).toBe(expectedEmail);
+  });
+
+  it('should throw an error for names that result in empty strings', () => {
+    const baseName = '---';
+    expect(() => {
+      generateGroupEmail_(baseName);
+    }).toThrow('resulted in an empty email address');
+  });
+
+  it('should throw an error for names with only special characters', () => {
+    const baseName = '!@#$%^&*()';
+    expect(() => {
+      generateGroupEmail_(baseName);
+    }).toThrow('resulted in an empty email address');
   });
 });
