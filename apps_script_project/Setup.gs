@@ -129,6 +129,22 @@ function setupLogSheets_() {
     auditLogSheet = ss.insertSheet(DRY_RUN_AUDIT_LOG_SHEET_NAME);
     setupDryRunAuditLogSheet_(auditLogSheet);
   }
+
+  // Check for DeepAuditLog sheet
+  setupDeepAuditLogSheet_();
+}
+
+function setupDeepAuditLogSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName('DeepAuditLog');
+  if (!sheet) {
+    sheet = ss.insertSheet('DeepAuditLog');
+    const headers = ['Timestamp', 'Type', 'Identifier', 'Issue', 'Details'];
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
+    sheet.setFrozenRows(1);
+    log_('Created "DeepAuditLog" sheet.');
+  }
+  return sheet;
 }
 
 function setupDryRunAuditLogSheet_(sheet) {

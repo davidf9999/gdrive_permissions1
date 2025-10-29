@@ -213,12 +213,17 @@ function deepAuditFolder() {
     log_(`*** Starting Deep Audit for folder: ${folderName} (${folderId})`);
     showToast_(`Starting Deep Audit for ${folderName}...`, 'Deep Audit', -1);
 
+    const deepAuditSheet = setupDeepAuditLogSheet_();
+    deepAuditSheet.clearContents();
+    const headers = ['Timestamp', 'Type', 'Identifier', 'Issue', 'Details'];
+    deepAuditSheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
+    deepAuditSheet.setFrozenRows(1);
+
     const groupMembers = new Set(getActualMembers_(groupEmail).map(m => m.toLowerCase()));
     const hierarchy = getFolderHierarchy_(DriveApp.getFolderById(folderId));
 
     hierarchy.forEach(item => {
       let directUsers;
-      // Check for a function that only files have, like getMimeType.
       if (typeof item.item.getMimeType === 'function') {
         directUsers = getDirectFileUsers_(item.item);
       } else {
@@ -227,20 +232,27 @@ function deepAuditFolder() {
 
       directUsers.forEach(user => {
         if (user.email !== groupEmail && !groupMembers.has(user.email)) {
-          logAndAudit_('Direct File Access', item.path, 'User has direct access', `Email: ${user.email}, Role: ${user.role}`);
+          logToDeepAudit_('Direct File Access', item.path, 'User has direct access', `Email: ${user.email}, Role: ${user.role}`);
         }
       });
     });
 
     log_(`*** Deep Audit Complete for folder: ${folderName}`);
     showToast_('Deep Audit Complete.', 'Deep Audit', 5);
-    ui.alert(`Deep Audit for '${folderName}' is complete. See the 'DryRunAuditLog' sheet for details.`);
+    ui.alert(`Deep Audit for '${folderName}' is complete. See the 'DeepAuditLog' sheet for details.`);
 
   } catch (e) {
     log_(`FATAL ERROR in deepAuditFolder for ${folderName}: ` + e.toString() + '\n' + e.stack, 'ERROR');
     showToast_('Deep Audit failed.', 'Deep Audit', 5);
     ui.alert(`An error occurred during the deep audit for '${folderName}': ` + e.message);
   }
+}
+
+function logToDeepAudit_(type, identifier, issue, details) {
+  const timestamp = Utilities.formatDate(new Date(), SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+  const auditSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('DeepAuditLog');
+  auditSheet.appendRow([timestamp, type, identifier, issue, details]);
+  log_('DEEP AUDIT [' + type + ' | ' + identifier + ']: ' + issue + ' - ' + details, 'WARN');
 }
 
 function getFolderHierarchy_(folder, path = '') {
