@@ -21,6 +21,10 @@ const ADMINS_LAST_SYNC_CELL = 'B2';
 const ADMINS_STATUS_CELL = 'C2';
 const ADMINS_GROUP_NAME = 'Admins Control Panel';
 
+// User sheet header constants
+const USER_EMAIL_HEADER = 'User Email Address';
+const DISABLED_HEADER = 'Disabled';
+
 /***** GLOBAL STATE *****/
 let SCRIPT_EXECUTION_MODE = 'DEFAULT'; // Can be 'DEFAULT' or 'TEST'
 

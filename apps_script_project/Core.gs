@@ -306,7 +306,7 @@ function getOrCreateUserSheet_(sheetName) {
     sheet = spreadsheet.insertSheet(sheetName, spreadsheet.getSheets().length);
 
     const headerRange = sheet.getRange(1, 1, 1, 2);
-    headerRange.setValues([['User Email Address', 'Disabled']]);
+    headerRange.setValues([[USER_EMAIL_HEADER, DISABLED_HEADER]]);
     headerRange.setFontWeight('bold');
     sheet.setFrozenRows(1);
 
@@ -323,12 +323,12 @@ function ensureUserSheetHeaders_(sheet) {
     let headersUpdated = false;
 
     if (!currentHeaders[0]) {
-      headerRange.getCell(1, 1).setValue('User Email Address');
+      headerRange.getCell(1, 1).setValue(USER_EMAIL_HEADER);
       headersUpdated = true;
     }
 
     if (!currentHeaders[1]) {
-      headerRange.getCell(1, 2).setValue('Disabled');
+      headerRange.getCell(1, 2).setValue(DISABLED_HEADER);
       headersUpdated = true;
     }
 
