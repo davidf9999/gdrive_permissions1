@@ -31,7 +31,9 @@ This is the most important sheet. Each row represents a folder you want the scri
     *   `Viewer`: Can view files.
     *   `Commenter`: Can comment on files.
 *   **`UserSheetName` (Column D):** *Managed by Script.* The script will automatically generate the name of the sheet that will hold the user list for this folder/role combination (e.g., `MyProject_Editor`).
-*   **`GroupEmail` (Column E):** *Managed by Script.* The script will automatically generate the email address for the Google Group it creates for this folder/role.
+*   **`GroupEmail` (Column E):** *Managed by Script or Manual.* The script will automatically generate the email address for the Google Group it creates for this folder/role.
+    *   **For ASCII folder names** (English, numbers): Leave blank - the script auto-generates (e.g., `my-project-editor@yourdomain.com`)
+    *   **For non-ASCII folder names** (Hebrew, Arabic, Chinese, etc.): You must manually specify an ASCII email address (e.g., `coordinators-editor@jvact.org`). See [Working with Non-ASCII Characters](#working-with-non-ascii-characters) below.
 *   **`Last Synced` (Column F):** *Managed by Script.* A timestamp of the last time the script successfully processed this row.
 *   **`Status` (Column G):** *Managed by Script.* Shows the status of the last sync (`OK`, `Processing...`, or an error message).
 
@@ -53,8 +55,10 @@ For every row in `ManagedFolders`, the script creates a corresponding **user she
 
 This sheet allows you to create your own reusable groups of people.
 
-*   **`GroupName` (Column A):** A friendly name for your group (e.g., "Marketing Team", "Project X Developers").
-*   **`GroupEmail` (Column B):** *Managed by Script.* The script will generate the email for the Google Group.
+*   **`GroupName` (Column A):** A friendly name for your group (e.g., "Marketing Team", "Project X Developers", "מתאמים").
+*   **`GroupEmail` (Column B):** *Managed by Script or Manual.* The script will generate the email for the Google Group.
+    *   **For ASCII group names** (English, numbers): Leave blank - the script auto-generates (e.g., `marketing-team@yourdomain.com`)
+    *   **For non-ASCII group names** (Hebrew, Arabic, Chinese, etc.): You must manually specify an ASCII email address (e.g., `coordinators@jvact.org`). See [Working with Non-ASCII Characters](#working-with-non-ascii-characters) below.
 *   **How it Works:** For each `GroupName` you define here, the script creates a corresponding sheet with that name. You then list the members of that group in that sheet. You can then use the `GroupEmail` in any of your other user sheets to grant access to everyone in that group at once.
 
 ### 4. `Admins`
@@ -175,6 +179,74 @@ When you see a validation error:
 4. Re-run the sync or validation to confirm the issue is resolved
 
 **Remember:** Email comparison is case-insensitive, so `user@domain.com`, `USER@domain.com`, and `UsEr@DoMaIn.CoM` are all considered duplicates.
+
+---
+
+## Working with Non-ASCII Characters
+
+The system fully supports using non-ASCII characters (Hebrew, Arabic, Chinese, emoji, etc.) in most places, with one important limitation: **Google Group email addresses must use only ASCII characters** (a-z, 0-9, hyphens).
+
+### What Works Everywhere
+
+✅ **Folder names**: Hebrew, Arabic, Chinese, etc. are fully supported
+✅ **Group names**: Hebrew, Arabic, Chinese, etc. are fully supported
+✅ **Sheet names**: Any Unicode characters work
+✅ **User email addresses**: Any valid email format (including international domains)
+
+### The Email Address Limitation
+
+❌ **Group email addresses**: Must be ASCII only (Google's requirement, not ours)
+
+### How to Handle Non-ASCII Names
+
+When you create groups or folders with non-ASCII names, you must **manually specify the group email** using ASCII characters:
+
+#### Example 1: UserGroups Sheet
+
+| Column A (GroupName) | Column B (GroupEmail) ← **Manual for Hebrew** | Column C | Column D |
+|---------------------|-----------------------------------------------|----------|----------|
+| Marketing Team      | (leave empty - auto-generates)                |          |          |
+| מתאמים              | `coordinators@jvact.org`                      |          |          |
+| פעילים              | `activists@jvact.org`                         |          |          |
+
+#### Example 2: ManagedFolders Sheet
+
+| FolderName | FolderID | Role | UserSheetName | **Column E (GroupEmail)** ← **Manual for Hebrew** |
+|------------|----------|------|---------------|---------------------------------------------------|
+| Reports    | ...      | Editor | (auto)      | (leave empty - auto-generates)                    |
+| מתאמים     | ...      | Editor | (auto)      | `coordinators-editor@jvact.org`                   |
+| admin      | ...      | Viewer | (auto)      | (leave empty - auto-generates)                    |
+
+### Important Notes
+
+**💡 Google Groups are FREE!** You are not paying per group email - Google Groups are included with Google Workspace at no extra cost. When you specify a group email manually, the script still creates and manages the group for you automatically.
+
+**🎯 The script auto-creates everything:** Whether you let the script auto-generate the email or you specify it manually, the script handles creating the Google Group, adding members, and managing permissions. You're just choosing the email address format.
+
+**⚠️ Collision risk with auto-generation:** If you don't manually specify emails for non-ASCII names, multiple groups may generate the same email address (e.g., both "מתאמים" and "פעילים" would try to use similar ASCII-stripped emails), causing permission conflicts.
+
+### What Happens if You Forget
+
+If you forget to manually specify a group email for a non-ASCII name, the script will give you a clear, helpful error message:
+
+**For UserGroups:**
+```
+Group name "מתאמים" contains only non-ASCII characters (e.g., Hebrew, Arabic,
+Chinese) which cannot be used in email addresses. Please manually specify a
+group email in the "GroupEmail" column (Column B) using only ASCII characters
+(a-z, 0-9, hyphens). Example: for "מתאמים", you could use "coordinators@jvact.org"
+or "team-a@jvact.org".
+```
+
+**For ManagedFolders:**
+```
+Cannot auto-generate group email for folder "מתאמים" with role "Editor".
+The folder name contains non-ASCII characters (e.g., Hebrew, Arabic, Chinese).
+Please manually specify a group email in the "GroupEmail" column (Column E)
+of the ManagedFolders sheet. Example: "coordinators-editor@jvact.org"
+```
+
+Simply fill in the appropriate column with an ASCII email address and run the sync again!
 
 ---
 
