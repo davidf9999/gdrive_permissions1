@@ -57,7 +57,6 @@ function onOpen() {
           .addItem('📊 View Edit Mode Status', 'viewEditModeStatus'))
       .addSeparator()
       .addSubMenu(ui.createMenu('Advanced')
-          .addItem('Merge & Reconcile Permissions', 'mergeSync')
           .addItem('Deep Audit a Folder...', 'deepAuditFolder')
           .addSeparator()
           .addItem('Clear Cache', 'clearCache'))

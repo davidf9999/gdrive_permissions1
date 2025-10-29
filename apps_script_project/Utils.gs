@@ -320,10 +320,15 @@ function getDirectFileUsers_(file) {
     const email = u.getEmail().toLowerCase();
     if (email !== owner) users.push({ email: email, role: 'Viewer' });
   });
-  file.getCommenters().forEach(u => {
-    const email = u.getEmail().toLowerCase();
-    if (email !== owner) users.push({ email: email, role: 'Commenter' });
-  });
+
+  // The getCommenters() method only exists on the File object, not the Folder object.
+  if (file.getMimeType() !== MimeType.GOOGLE_DRIVE_FOLDER && typeof file.getCommenters === 'function') {
+    file.getCommenters().forEach(u => {
+      const email = u.getEmail().toLowerCase();
+      if (email !== owner) users.push({ email: email, role: 'Commenter' });
+    });
+  }
+
   file.getEditors().forEach(u => {
     const email = u.getEmail().toLowerCase();
     if (email !== owner) users.push({ email: email, role: 'Editor' });
