@@ -187,6 +187,8 @@ This prevents partial syncs while you're reorganizing sheets or making bulk edit
 
 For a detailed tutorial on how to use the spreadsheet, what each sheet and column means, and common workflows, please see the dedicated **[User Guide](./docs/USER_GUIDE.md)**.
 
+**Quick Tip:** The `Admins` sheet controls who can **edit** the control spreadsheet. To grant **view-only** access to the control sheets, simply use the standard Google Sheets "Share" button (no script configuration needed).
+
 For details on how to handle manual permission changes, see the section on [Handling Manual Permission Changes (Reconciliation)](#handling-manual-permission-changes-reconciliation).
 
 ---

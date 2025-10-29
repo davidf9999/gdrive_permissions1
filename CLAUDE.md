@@ -86,10 +86,14 @@ The main logic in `apps_script_project/Code.js` follows a clear pattern:
 ### Google Sheet Configuration
 The system uses multiple sheets for configuration:
 - `ManagedFolders`: Main configuration with folder names, IDs, roles, and group emails
-- `Admins`: List of users who can edit the spreadsheet
+- `Admins`: List of users who can edit the spreadsheet (Editor role managed by script; Viewer role managed manually via standard Google Sheets sharing)
 - `UserGroups`: Custom user group definitions
 - `Config`: System settings including email notifications
 - `Log` / `TestLog`: Operational logging
+
+**Control Sheet Permissions:**
+- **Editors**: Managed automatically via the `Admins` sheet and `syncAdmins()` function
+- **Viewers**: Managed manually using the standard Google Sheets "Share" button (not automated to avoid circular dependency)
 
 ### Permission Model
 - Creates Google Groups for each folder-role combination (e.g., `project-x-editors@domain.com`)

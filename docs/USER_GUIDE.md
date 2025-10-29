@@ -59,9 +59,11 @@ This sheet allows you to create your own reusable groups of people.
 
 ### 4. `Admins`
 
-This sheet controls who has permission to edit this spreadsheet itself. Add the email addresses of anyone who should be an administrator of this control panel.
+This sheet controls who has permission to **edit** this spreadsheet itself. Add the email addresses of anyone who should be an administrator of this control panel.
 
 Each sync also keeps a dedicated Google Group in sync with this list. Column **B** shows the reusable group email so you can share any managed folder with all admins at once, and columns **C–D** record the latest group-sync status.
+
+**Adding Viewers to the Control Sheet:** If you want to grant some users **view-only** access to the control sheets (without editing permissions), simply use the standard Google Sheets sharing functionality. Click the "Share" button in the top-right corner of the spreadsheet and add users with "Viewer" permissions. This does not need to be managed through the script.
 
 ### 5. `Config`
 
