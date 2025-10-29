@@ -81,10 +81,18 @@ function dryRunAudit() {
     }
     auditSheet.getRange(2, 1, auditSheet.getMaxRows() - 1, 5).clearContent();
 
-    // 1. Validate user sheets
+    // 1. Check for duplicate group emails
+    const emailValidation = validateUniqueGroupEmails_();
+    if (!emailValidation.valid) {
+      emailValidation.errors.forEach(error => {
+        logAndAudit_('Configuration', 'Group Emails', 'DUPLICATE EMAIL', error.message);
+      });
+    }
+
+    // 2. Validate user sheets
     validateUserSheets_();
 
-    // 2. Discover users who should be in groups but aren't
+    // 3. Discover users who should be in groups but aren't
     const discoveryReport = discoverManualAdditions_();
     discoveryReport.forEach(item => {
       item.membersToAdd.forEach(member => {
@@ -92,7 +100,7 @@ function dryRunAudit() {
       });
     });
 
-    // 3. Audit for permission mismatches for users who ARE in the sheets
+    // 4. Audit for permission mismatches for users who ARE in the sheets
     auditMemberRolesOnFolders_();
 
     if (discoveryReport.length === 0) {

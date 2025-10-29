@@ -43,6 +43,74 @@ function generateGroupEmail_(baseName) {
   return sanitizedName + '@' + domain;
 }
 
+function validateUniqueGroupEmails_() {
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const emailMap = new Map(); // email -> [{sheet: sheetName, row: rowNum, context: description}]
+  const errors = [];
+
+  // Collect emails from UserGroups sheet
+  const userGroupsSheet = spreadsheet.getSheetByName(USER_GROUPS_SHEET_NAME);
+  if (userGroupsSheet && userGroupsSheet.getLastRow() > 1) {
+    const data = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 2).getValues();
+    for (let i = 0; i < data.length; i++) {
+      const groupName = data[i][0];
+      const groupEmail = data[i][1];
+      if (groupEmail && groupEmail.toString().trim()) {
+        const email = groupEmail.toString().trim().toLowerCase();
+        if (!emailMap.has(email)) {
+          emailMap.set(email, []);
+        }
+        emailMap.get(email).push({
+          sheet: 'UserGroups',
+          row: i + 2,
+          context: 'Group: ' + groupName
+        });
+      }
+    }
+  }
+
+  // Collect emails from ManagedFolders sheet
+  const managedSheet = spreadsheet.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+  if (managedSheet && managedSheet.getLastRow() > 1) {
+    const data = managedSheet.getRange(2, 1, managedSheet.getLastRow() - 1, GROUP_EMAIL_COL).getValues();
+    for (let i = 0; i < data.length; i++) {
+      const folderName = data[i][FOLDER_NAME_COL - 1];
+      const role = data[i][ROLE_COL - 1];
+      const groupEmail = data[i][GROUP_EMAIL_COL - 1];
+      if (groupEmail && groupEmail.toString().trim()) {
+        const email = groupEmail.toString().trim().toLowerCase();
+        if (!emailMap.has(email)) {
+          emailMap.set(email, []);
+        }
+        emailMap.get(email).push({
+          sheet: 'ManagedFolders',
+          row: i + 2,
+          context: 'Folder: ' + folderName + ', Role: ' + role
+        });
+      }
+    }
+  }
+
+  // Check for duplicates
+  emailMap.forEach((locations, email) => {
+    if (locations.length > 1) {
+      const locationStrings = locations.map(loc =>
+        loc.sheet + ' row ' + loc.row + ' (' + loc.context + ')'
+      );
+      errors.push({
+        email: email,
+        locations: locationStrings,
+        message: 'Duplicate group email "' + email + '" found in: ' + locationStrings.join('; ')
+      });
+    }
+  });
+
+  return {
+    valid: errors.length === 0,
+    errors: errors
+  };
+}
+
 function assertAdminDirectoryAvailable_() {
   // Provides a clear message if Admin Directory advanced service/API is not enabled.
   if (typeof AdminDirectory === 'undefined') {

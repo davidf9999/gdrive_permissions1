@@ -242,9 +242,10 @@ function syncUserGroups(options = {}) {
             groupEmailCell.setValue(groupEmail);
           }
 
-          getOrCreateUserSheet_(groupName);
+          const groupSheetName = groupName + '_G';
+          getOrCreateUserSheet_(groupSheetName);
           getOrCreateGroup_(groupEmail, groupName);
-          syncGroupMembership_(groupEmail, groupName, options);
+          syncGroupMembership_(groupEmail, groupSheetName, options);
 
           lastSyncedCell.setValue(Utilities.formatDate(new Date(), SpreadsheetApp.getActive().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss'));
           statusCell.setValue('OK');
@@ -419,6 +420,17 @@ function fullSync() {
   try {
     showToast_('Starting full synchronization...', 'Full Sync', -1);
     log_('*** Starting full synchronization...');
+
+    // Validate unique group emails before starting
+    const validation = validateUniqueGroupEmails_();
+    if (!validation.valid) {
+      const errorDetails = validation.errors.map(e => e.message).join('\n\n');
+      const errorMessage = 'VALIDATION ERROR: Duplicate group emails detected!\n\n' + errorDetails +
+        '\n\nEach group must have a unique email address. Please fix these duplicates and try again.';
+      log_(errorMessage, 'ERROR');
+      SpreadsheetApp.getUi().alert(errorMessage);
+      throw new Error('Duplicate group emails detected. Sync aborted.');
+    }
 
     // 1. Sync Admins
     syncAdmins();
