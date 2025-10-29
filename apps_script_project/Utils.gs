@@ -355,3 +355,18 @@ function getActualMembers_(groupEmail) {
   }
   return members;
 }
+
+/**
+ * Clears the script's cache.
+ */
+function clearCache() {
+  const ui = SpreadsheetApp.getUi();
+  try {
+    CacheService.getScriptCache().removeAll(['config']);
+    log_('Script cache has been cleared.');
+    ui.alert('The script cache has been cleared.');
+  } catch (e) {
+    log_('Error clearing cache: ' + e.toString(), 'ERROR');
+    ui.alert('An error occurred while clearing the cache: ' + e.message);
+  }
+}
