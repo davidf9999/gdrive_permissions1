@@ -52,8 +52,10 @@ function validateUserSheets_() {
         const emails = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).getValues().flat().filter(String);
         const emailCounts = {};
         emails.forEach(email => {
-          const lowerEmail = email.toLowerCase();
-          emailCounts[lowerEmail] = (emailCounts[lowerEmail] || 0) + 1;
+          const lowerEmail = email.trim().toLowerCase();
+          if (lowerEmail) {
+            emailCounts[lowerEmail] = (emailCounts[lowerEmail] || 0) + 1;
+          }
         });
 
         for (const email in emailCounts) {
