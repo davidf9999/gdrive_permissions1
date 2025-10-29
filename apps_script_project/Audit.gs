@@ -207,7 +207,7 @@ function deepAuditFolder() {
     return;
   }
 
-  const { folderName, groupEmail } = managedFolderInfo;
+  const { folderName, groupEmail, userSheetName, expectedRole } = managedFolderInfo;
 
   try {
     log_(`*** Starting Deep Audit for folder: ${folderName} (${folderId})`);
@@ -219,10 +219,18 @@ function deepAuditFolder() {
     deepAuditSheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
     deepAuditSheet.setFrozenRows(1);
 
+    const userSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(userSheetName);
+    const sheetMembers = new Set(
+      userSheet && userSheet.getLastRow() > 1
+        ? userSheet.getRange('A2:A' + userSheet.getLastRow()).getValues().map(r => r[0].toString().trim().toLowerCase()).filter(e => e)
+        : []
+    );
+
     const groupMembers = new Set(getActualMembers_(groupEmail).map(m => m.toLowerCase()));
     const hierarchy = getFolderHierarchy_(DriveApp.getFolderById(folderId));
 
     hierarchy.forEach(item => {
+      // 1. Check for unauthorized direct access
       let directUsers;
       if (typeof item.item.getMimeType === 'function') {
         directUsers = getDirectFileUsers_(item.item);
@@ -232,9 +240,29 @@ function deepAuditFolder() {
 
       directUsers.forEach(user => {
         if (user.email !== groupEmail && !groupMembers.has(user.email)) {
-          logToDeepAudit_('Direct File Access', item.path, 'User has direct access', `Email: ${user.email}, Role: ${user.role}`);
+          logToDeepAudit_('Direct File Access', item.path, 'User has direct access but is not in group', `Email: ${user.email}, Role: ${user.role}`);
         }
       });
+
+      // 2. Check for role mismatches for sheet members
+      if (sheetMembers.size > 0) {
+        const viewers = item.item.getViewers().map(u => u.getEmail().toLowerCase());
+        const editors = item.item.getEditors().map(u => u.getEmail().toLowerCase());
+
+        sheetMembers.forEach(memberEmail => {
+          const member = memberEmail.toLowerCase();
+          let actualRole = 'NONE';
+          if (editors.includes(member)) {
+            actualRole = 'EDITOR';
+          } else if (viewers.includes(member)) {
+            actualRole = 'VIEWER';
+          }
+
+          if (actualRole.toUpperCase() !== expectedRole.toUpperCase()) {
+            logToDeepAudit_('Role Mismatch', item.path, 'User has incorrect role', `Email: ${member}, Expected: ${expectedRole}, Actual: ${actualRole}`);
+          }
+        });
+      }
     });
 
     log_(`*** Deep Audit Complete for folder: ${folderName}`);
@@ -282,7 +310,9 @@ function getManagedFolderInfoById_(folderId) {
     if (data[i][FOLDER_ID_COL - 1] === folderId) {
       return {
         folderName: data[i][FOLDER_NAME_COL - 1],
-        groupEmail: data[i][GROUP_EMAIL_COL - 1].toLowerCase()
+        groupEmail: data[i][GROUP_EMAIL_COL - 1].toLowerCase(),
+        userSheetName: data[i][USER_SHEET_NAME_COL - 1],
+        expectedRole: data[i][ROLE_COL - 1]
       };
     }
   }
