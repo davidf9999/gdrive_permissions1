@@ -57,9 +57,6 @@ function onOpen() {
           .addSeparator()
           .addItem('📊 View Edit Mode Status', 'viewEditModeStatus'))
       .addSeparator()
-      .addSubMenu(ui.createMenu('Advanced')
-          .addItem('Clear Cache', 'clearCache'))
-      .addSeparator()
       .addSubMenu(ui.createMenu('Granular Sync')
           .addItem('Sync Admins', 'syncAdmins')
           .addItem('Sync User Groups', 'syncUserGroups')
@@ -84,10 +81,16 @@ function onOpen() {
           .addItem('Clear All Logs', 'clearAllLogs')
           .addItem('Clear Dry Run Audit Log', 'clearDryRunAuditLog'));
 
+  const advancedMenu = ui.createMenu('Advanced');
+  advancedMenu.addItem('Clear Cache', 'clearCache');
+
   const helpMenu = ui.createMenu('Help');
   helpMenu.addItem('User Guide', 'openUserGuide');
   helpMenu.addItem('Testing Guide', 'openTestingGuide');
   helpMenu.addItem('README', 'openReadme');
+
+  menu.addSeparator();
+  menu.addSubMenu(advancedMenu);
   menu.addSeparator();
   menu.addSubMenu(helpMenu);
 
