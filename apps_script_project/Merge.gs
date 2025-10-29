@@ -20,24 +20,39 @@ function mergeSync() {
     log_('*** Starting Merge & Reconcile...');
     showToast_('Discovering manually added members...', 'Merge & Reconcile', 10);
 
-    // 1. Discover manual additions using the centralized discovery function
+    // 1. Discover manual additions and role mismatches
     const reconciliationPlan = discoverManualAdditions_();
+    const roleMismatches = getRoleMismatches_();
 
-    if (reconciliationPlan.length === 0) {
-      log_('No manually added members found. Sheets are already in sync with group memberships and folder permissions.');
-      ui.alert('No manually added members found. Sheets are already in sync with group memberships and folder permissions.');
+    if (reconciliationPlan.length === 0 && roleMismatches.length === 0) {
+      log_('No manually added members or role mismatches found. Sheets are already in sync.');
+      ui.alert('No manually added members or role mismatches found. Sheets are already in sync.');
       return;
     }
 
     // 2. Get user confirmation
-    let confirmationMessage = 'The following manually added members will be added to the user sheets:\n';
-    reconciliationPlan.forEach(plan => {
-      confirmationMessage += `\nSheet '${plan.sheetName}':\n`;
-      plan.membersToAdd.forEach(member => {
-        confirmationMessage += `  - ${member.email} (found via ${member.source})\n`;
+    let confirmationMessage = '';
+    if (reconciliationPlan.length > 0) {
+      confirmationMessage += 'The following manually added members will be added to the user sheets:\n';
+      reconciliationPlan.forEach(plan => {
+        confirmationMessage += `\nSheet '${plan.sheetName}':\n`;
+        plan.membersToAdd.forEach(member => {
+          confirmationMessage += `  - ${member.email} (found via ${member.source})\n`;
+        });
       });
-    });
-    confirmationMessage += '\nAre you sure you want to proceed?';
+    }
+
+    if (roleMismatches.length > 0) {
+      confirmationMessage += '\n---\n';
+      confirmationMessage += 'The following role mismatches were found and require manual correction:\n';
+      roleMismatches.forEach(mismatch => {
+        confirmationMessage += `\nFolder '${mismatch.folderName}':\n`;
+        confirmationMessage += `  - ${mismatch.email}: Expected ${mismatch.expected}, but has ${mismatch.actual}\n`;
+      });
+      confirmationMessage += '\nNote: Merge & Reconcile will not fix role mismatches. Please correct them manually in Google Drive.';
+    }
+
+    confirmationMessage += '\n\nAre you sure you want to proceed with adding the manually added members?';
 
     const response = ui.alert('Confirm Reconciliation', confirmationMessage, ui.ButtonSet.YES_NO);
 
@@ -47,14 +62,18 @@ function mergeSync() {
       return;
     }
 
-    // 3. Execute the reconciliation
-    log_('*** Executing reconciliation...');
-    showToast_('Adding members to sheets...', 'Merge & Reconcile', -1);
-    executeReconciliation_(reconciliationPlan);
-
-    log_('*** Merge & Reconcile Complete.');
-    showToast_('Merge & Reconcile Complete.', 'Merge & Reconcile', 5);
-    ui.alert('Merge & Reconcile sync is complete. Manually added members have been added to the sheets.');
+    // 3. Execute the reconciliation for manual additions
+    if (reconciliationPlan.length > 0) {
+      log_('*** Executing reconciliation...');
+      showToast_('Adding members to sheets...', 'Merge & Reconcile', -1);
+      executeReconciliation_(reconciliationPlan);
+      log_('*** Merge & Reconcile Complete.');
+      showToast_('Merge & Reconcile Complete.', 'Merge & Reconcile', 5);
+      ui.alert('Merge & Reconcile sync is complete. Manually added members have been added to the sheets.');
+    } else {
+      log_('No manual additions to reconcile.');
+      ui.alert('No manual additions to reconcile. Role mismatches must be fixed manually.');
+    }
 
   } catch (e) {
     const errorMessage = 'FATAL ERROR in mergeSync: ' + e.toString() + '\n' + e.stack;
@@ -82,4 +101,51 @@ function executeReconciliation_(reconciliationPlan) {
       log_(`Sheet '${plan.sheetName}' not found during execution. Skipping.`, 'WARN');
     }
   });
+}
+
+function getRoleMismatches_() {
+  const mismatches = [];
+  const managedFoldersSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+  if (!managedFoldersSheet || managedFoldersSheet.getLastRow() < 2) {
+    return mismatches;
+  }
+
+  const managedFoldersData = managedFoldersSheet.getRange(2, 1, managedFoldersSheet.getLastRow() - 1, GROUP_EMAIL_COL).getValues();
+  managedFoldersData.forEach(row => {
+    const folderName = row[FOLDER_NAME_COL - 1];
+    const folderId = row[FOLDER_ID_COL - 1];
+    const expectedRole = row[ROLE_COL - 1];
+    const groupEmail = row[GROUP_EMAIL_COL - 1].toLowerCase();
+
+    if (!folderId || !groupEmail || !expectedRole) return;
+
+    try {
+      const folder = DriveApp.getFolderById(folderId);
+      const groupMembers = getActualMembers_(groupEmail);
+      const viewers = folder.getViewers().map(u => u.getEmail().toLowerCase());
+      const editors = folder.getEditors().map(u => u.getEmail().toLowerCase());
+
+      groupMembers.forEach(memberEmail => {
+        const member = memberEmail.toLowerCase();
+        let actualRole = 'NONE';
+        if (editors.includes(member)) {
+          actualRole = 'EDITOR';
+        } else if (viewers.includes(member)) {
+          actualRole = 'VIEWER';
+        }
+
+        if (actualRole.toUpperCase() !== expectedRole.toUpperCase()) {
+          mismatches.push({
+            folderName: folderName,
+            email: member,
+            expected: expectedRole,
+            actual: actualRole
+          });
+        }
+      });
+    } catch (e) {
+      // Ignore errors here, they will be caught by the dry run audit
+    }
+  });
+  return mismatches;
 }
