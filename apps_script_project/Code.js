@@ -33,11 +33,10 @@ let SCRIPT_EXECUTION_MODE = 'DEFAULT'; // Can be 'DEFAULT' or 'TEST'
 function onOpen() {
   const ui = SpreadsheetApp.getUi(); // Declare ui here
   const menu = ui.createMenu('Permissions Manager')
-      .addItem('Sync Adds', 'syncAdds')
-      .addItem('Sync Deletes', 'syncDeletes')
-      .addSeparator()
       .addSubMenu(ui.createMenu('Manual-Sync')
           .addItem('Full Sync (Add & Delete)', 'fullSync')
+          .addItem('Sync Adds', 'syncAdds')
+          .addItem('Sync Deletes', 'syncDeletes')
           .addSeparator()
           .addSubMenu(ui.createMenu('Granular Sync')
               .addItem('Sync Admins', 'syncAdmins')
