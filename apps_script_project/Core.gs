@@ -669,6 +669,19 @@ function setSheetUiStyles_() {
   try {
     const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
     if (managedSheet && managedSheet.getLastRow() >= 2) {
+        // First, remove ALL existing protections from the data range
+        const protections = managedSheet.getProtections(SpreadsheetApp.ProtectionType.RANGE);
+        protections.forEach(function(protection) {
+          if (protection.getRange().getRow() >= 2) { // Only remove protections from data rows, not header
+            protection.remove();
+          }
+        });
+
+        // Clear old background colors from columns that might have been protected before
+        const clearBgRange = managedSheet.getRange(2, 1, managedSheet.getLastRow() - 1, 7);
+        clearBgRange.setBackground(null);
+
+        // Now apply new protection and styling to columns 5-7 only
         const range = managedSheet.getRange(2, USER_SHEET_NAME_COL, managedSheet.getLastRow() - 1, 3);
         range.setBackground('#f3f3f3');
         const protection = range.protect().setDescription('These columns are managed by the script.');
@@ -677,13 +690,60 @@ function setSheetUiStyles_() {
 
     const userGroupsSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(USER_GROUPS_SHEET_NAME);
     if (userGroupsSheet && userGroupsSheet.getLastRow() >= 2) {
+      // Remove existing protections
+      const protections = userGroupsSheet.getProtections(SpreadsheetApp.ProtectionType.RANGE);
+      protections.forEach(function(protection) {
+        if (protection.getRange().getRow() >= 2) {
+          protection.remove();
+        }
+      });
+
+      // Clear old backgrounds
+      const clearBgRange = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 4);
+      clearBgRange.setBackground(null);
+
+      // Apply new protection and styling
       const range = userGroupsSheet.getRange(2, 2, userGroupsSheet.getLastRow() - 1, 3);
       range.setBackground('#f3f3f3');
       const protection = range.protect().setDescription('These columns are managed by the script.');
       protection.setWarningOnly(true);
     }
+
+    // Apply Disabled dropdown to all user sheets
+    applyDisabledDropdownToAllUserSheets_();
   } catch (e) {
     log_('Could not apply UI styles. Error: ' + e.message, 'WARN');
+  }
+}
+
+/**
+ * Applies TRUE/FALSE dropdown validation to the Disabled column of all user sheets.
+ * This ensures existing sheets get the dropdown without needing to wait for a full sync.
+ */
+function applyDisabledDropdownToAllUserSheets_() {
+  try {
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    const allSheets = spreadsheet.getSheets();
+    const managedSheetNames = getAllManagedSheetNames_();
+
+    allSheets.forEach(function(sheet) {
+      const sheetName = sheet.getName();
+      // Only process user sheets (not control sheets)
+      if (managedSheetNames.has(sheetName) &&
+          sheetName !== MANAGED_FOLDERS_SHEET_NAME &&
+          sheetName !== ADMINS_SHEET_NAME &&
+          sheetName !== USER_GROUPS_SHEET_NAME &&
+          sheetName !== CONFIG_SHEET_NAME &&
+          sheetName !== LOG_SHEET_NAME &&
+          sheetName !== TEST_LOG_SHEET_NAME &&
+          sheetName !== DRY_RUN_AUDIT_LOG_SHEET_NAME &&
+          sheetName !== 'DeepFolderAuditLog') {
+
+        ensureUserSheetHeaders_(sheet);
+      }
+    });
+  } catch (e) {
+    log_('Could not apply Disabled dropdown to all user sheets. Error: ' + e.message, 'WARN');
   }
 }
 
