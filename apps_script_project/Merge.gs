@@ -18,9 +18,8 @@ function mergeSync() {
 
   try {
     log_('*** Starting Merge & Reconcile...');
-    showToast_('Discovering manually added members...', 'Merge & Reconcile', 10);
+    showToast_('Discovering issues...', 'Merge & Reconcile', 10);
 
-    // 1. Discover manual additions and role mismatches
     const reconciliationPlan = discoverManualAdditions_();
     const roleMismatches = getRoleMismatches_();
 
@@ -30,49 +29,48 @@ function mergeSync() {
       return;
     }
 
-    // 2. Get user confirmation
-    let confirmationMessage = '';
+    let message = '';
+    const hasActionableItems = reconciliationPlan.length > 0;
+
+    if (roleMismatches.length > 0) {
+      message += 'The following role mismatches were found and require manual correction in Google Drive:\n';
+      roleMismatches.forEach(mismatch => {
+        message += `\nFolder '${mismatch.folderName}':\n`;
+        message += `  - ${mismatch.email}: Expected ${mismatch.expected}, but has ${mismatch.actual}\n`;
+      });
+    }
+
     if (reconciliationPlan.length > 0) {
-      confirmationMessage += 'The following manually added members will be added to the user sheets:\n';
+      if (message !== '') {
+        message += '\n---\n';
+      }
+      message += 'The following manually added members can be automatically added to the user sheets:\n';
       reconciliationPlan.forEach(plan => {
-        confirmationMessage += `\nSheet '${plan.sheetName}':\n`;
+        message += `\nSheet '${plan.sheetName}':\n`;
         plan.membersToAdd.forEach(member => {
-          confirmationMessage += `  - ${member.email} (found via ${member.source})\n`;
+          message += `  - ${member.email} (found via ${member.source})\n`;
         });
       });
     }
 
-    if (roleMismatches.length > 0) {
-      confirmationMessage += '\n---\n';
-      confirmationMessage += 'The following role mismatches were found and require manual correction:\n';
-      roleMismatches.forEach(mismatch => {
-        confirmationMessage += `\nFolder '${mismatch.folderName}':\n`;
-        confirmationMessage += `  - ${mismatch.email}: Expected ${mismatch.expected}, but has ${mismatch.actual}\n`;
-      });
-      confirmationMessage += '\nNote: Merge & Reconcile will not fix role mismatches. Please correct them manually in Google Drive.';
-    }
+    if (hasActionableItems) {
+      message += '\nDo you want to proceed with adding the manually added members?';
+      const response = ui.alert('Confirm Reconciliation', message, ui.ButtonSet.YES_NO);
 
-    confirmationMessage += '\n\nAre you sure you want to proceed with adding the manually added members?';
-
-    const response = ui.alert('Confirm Reconciliation', confirmationMessage, ui.ButtonSet.YES_NO);
-
-    if (response !== ui.Button.YES) {
-      ui.alert('Reconciliation cancelled.');
-      log_('User cancelled reconciliation.');
-      return;
-    }
-
-    // 3. Execute the reconciliation for manual additions
-    if (reconciliationPlan.length > 0) {
-      log_('*** Executing reconciliation...');
-      showToast_('Adding members to sheets...', 'Merge & Reconcile', -1);
-      executeReconciliation_(reconciliationPlan);
-      log_('*** Merge & Reconcile Complete.');
-      showToast_('Merge & Reconcile Complete.', 'Merge & Reconcile', 5);
-      ui.alert('Merge & Reconcile sync is complete. Manually added members have been added to the sheets.');
+      if (response === ui.Button.YES) {
+        log_('*** Executing reconciliation...');
+        showToast_('Adding members to sheets...', 'Merge & Reconcile', -1);
+        executeReconciliation_(reconciliationPlan);
+        log_('*** Merge & Reconcile Complete.');
+        showToast_('Merge & Reconcile Complete.', 'Merge & Reconcile', 5);
+        ui.alert('Merge & Reconcile sync is complete. Manually added members have been added to the sheets.');
+      } else {
+        ui.alert('Reconciliation cancelled.');
+        log_('User cancelled reconciliation.');
+      }
     } else {
-      log_('No manual additions to reconcile.');
-      ui.alert('No manual additions to reconcile. Role mismatches must be fixed manually.');
+      // Only role mismatches were found
+      ui.alert('Reconciliation Not Needed', message, ui.ButtonSet.OK);
     }
 
   } catch (e) {
