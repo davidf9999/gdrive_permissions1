@@ -24,7 +24,12 @@ function syncAdmins(options = {}) {
     if (adminGroupEmail) {
       adminGroupEmail = adminGroupEmail.toString().trim().toLowerCase();
     }
-    if (!adminGroupEmail) {
+    // Validate that adminGroupEmail is a valid email format (contains @ and a domain)
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!adminGroupEmail || !emailPattern.test(adminGroupEmail)) {
+      if (adminGroupEmail) {
+        log_('Invalid admin group email in cell B2: "' + adminGroupEmail + '". Regenerating...', 'WARN');
+      }
       adminGroupEmail = generateGroupEmail_(ADMINS_GROUP_NAME);
     }
     groupEmailCell.setValue(adminGroupEmail);
