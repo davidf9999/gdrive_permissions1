@@ -5,7 +5,7 @@ const LOG_SHEET_NAME = 'Log';
 const TEST_LOG_SHEET_NAME = 'TestLog';
 const USER_GROUPS_SHEET_NAME = 'UserGroups';
 const CONFIG_SHEET_NAME = 'Config';
-const DRY_RUN_AUDIT_LOG_SHEET_NAME = 'DryRunAuditLog';
+const DRY_RUN_AUDIT_LOG_SHEET_NAME = 'FoldersAuditLog';
 const DEFAULT_MAX_LOG_LENGTH = 10000;
 
 // Column mapping for the ManagedFolders sheet

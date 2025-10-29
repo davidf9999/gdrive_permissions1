@@ -136,15 +136,15 @@ function setupLogSheets_() {
 
 function setupDeepAuditLogSheet_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName('DeepAuditLog');
+  let sheet = ss.getSheetByName('DeepFolderAuditLog');
   if (!sheet) {
     const dryRunAuditSheet = ss.getSheetByName(DRY_RUN_AUDIT_LOG_SHEET_NAME);
     const index = dryRunAuditSheet ? dryRunAuditSheet.getIndex() + 1 : ss.getSheets().length + 1;
-    sheet = ss.insertSheet('DeepAuditLog', index);
+    sheet = ss.insertSheet('DeepFolderAuditLog', index);
     const headers = ['Timestamp', 'Type', 'Identifier', 'Issue', 'Details'];
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
     sheet.setFrozenRows(1);
-    log_('Created "DeepAuditLog" sheet.');
+    log_('Created "DeepFolderAuditLog" sheet.');
   }
   return sheet;
 }

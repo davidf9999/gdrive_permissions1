@@ -267,7 +267,7 @@ function deepAuditFolder() {
 
     log_(`*** Deep Audit Complete for folder: ${folderName}`);
     showToast_('Deep Audit Complete.', 'Deep Audit', 5);
-    ui.alert(`Deep Audit for '${folderName}' is complete. See the 'DeepAuditLog' sheet for details.`);
+    ui.alert(`Deep Audit for '${folderName}' is complete. See the 'DeepFolderAuditLog' sheet for details.`);
 
   } catch (e) {
     log_(`FATAL ERROR in deepAuditFolder for ${folderName}: ` + e.toString() + '\n' + e.stack, 'ERROR');
@@ -278,7 +278,7 @@ function deepAuditFolder() {
 
 function logToDeepAudit_(type, identifier, issue, details) {
   const timestamp = Utilities.formatDate(new Date(), SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss');
-  const auditSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('DeepAuditLog');
+  const auditSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('DeepFolderAuditLog');
   auditSheet.appendRow([timestamp, type, identifier, issue, details]);
   log_('DEEP AUDIT [' + type + ' | ' + identifier + ']: ' + issue + ' - ' + details, 'WARN');
 }
