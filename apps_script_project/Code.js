@@ -12,10 +12,10 @@ const DEFAULT_MAX_LOG_LENGTH = 10000;
 const FOLDER_NAME_COL = 1;
 const FOLDER_ID_COL = 2;
 const ROLE_COL = 3;
-const USER_SHEET_NAME_COL = 4;
-const GROUP_EMAIL_COL = 5;
-const LAST_SYNCED_COL = 6;
-const STATUS_COL = 7;
+const GROUP_EMAIL_COL = 4;        // User-editable: manually specify for Hebrew names
+const USER_SHEET_NAME_COL = 5;    // Managed by script
+const LAST_SYNCED_COL = 6;         // Managed by script
+const STATUS_COL = 7;              // Managed by script
 
 const ADMINS_LAST_SYNC_CELL = 'B2';
 const ADMINS_STATUS_CELL = 'C2';

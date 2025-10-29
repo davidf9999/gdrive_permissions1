@@ -107,7 +107,7 @@ function processRow_(rowIndex, options = {}) {
         throw new Error(
           'Cannot auto-generate group email for folder "' + folderName + '" with role "' + role + '". ' +
           'The folder name contains non-ASCII characters (e.g., Hebrew, Arabic, Chinese). ' +
-          'Please manually specify a group email in the "GroupEmail" column (Column E) of the ManagedFolders sheet. ' +
+          'Please manually specify a group email in the "GroupEmail" column (Column D) of the ManagedFolders sheet. ' +
           'Example: "coordinators-editor@' + Session.getActiveUser().getEmail().split('@')[1] + '"'
         );
       }
@@ -310,6 +310,14 @@ function getOrCreateUserSheet_(sheetName) {
     headerRange.setFontWeight('bold');
     sheet.setFrozenRows(1);
 
+    // Add data validation to Disabled column (TRUE/FALSE dropdown)
+    const disabledRange = sheet.getRange('B2:B');
+    const rule = SpreadsheetApp.newDataValidation()
+      .requireValueInList(['TRUE', 'FALSE'], true)
+      .setAllowInvalid(false)
+      .build();
+    disabledRange.setDataValidation(rule);
+
     log_('Successfully created user sheet: "' + sheetName + '"');
     return sheet;
   }
@@ -338,6 +346,17 @@ function ensureUserSheetHeaders_(sheet) {
 
     headerRange.setFontWeight('bold');
     sheet.setFrozenRows(1);
+
+    // Ensure data validation on Disabled column (TRUE/FALSE dropdown)
+    const disabledRange = sheet.getRange('B2:B');
+    const existingRule = disabledRange.getDataValidation();
+    if (!existingRule || existingRule.getCriteriaType() !== SpreadsheetApp.DataValidationCriteria.VALUE_IN_LIST) {
+      const rule = SpreadsheetApp.newDataValidation()
+        .requireValueInList(['TRUE', 'FALSE'], true)
+        .setAllowInvalid(false)
+        .build();
+      disabledRange.setDataValidation(rule);
+    }
   } catch (e) {
     log_('Failed to ensure headers for sheet "' + sheet.getName() + '": ' + e.toString(), 'WARN');
   }
@@ -650,7 +669,7 @@ function setSheetUiStyles_() {
   try {
     const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
     if (managedSheet && managedSheet.getLastRow() >= 2) {
-        const range = managedSheet.getRange(2, USER_SHEET_NAME_COL, managedSheet.getLastRow() - 1, 4);
+        const range = managedSheet.getRange(2, USER_SHEET_NAME_COL, managedSheet.getLastRow() - 1, 3);
         range.setBackground('#f3f3f3');
         const protection = range.protect().setDescription('These columns are managed by the script.');
         protection.setWarningOnly(true);

@@ -38,20 +38,60 @@ function migrateUserGroupSheets_() {
 }
 
 /**
+ * Migrates ManagedFolders sheet from old column order to new order.
+ * Old: FolderName, FolderID, Role, UserSheetName, GroupEmail, Last Synced, Status
+ * New: FolderName, FolderID, Role, GroupEmail, UserSheetName, Last Synced, Status
+ * (GroupEmail moved to column 4, UserSheetName moved to column 5)
+ */
+function migrateManagedFoldersColumns_(sheet) {
+  try {
+    const headers = sheet.getRange(1, 1, 1, 7).getValues()[0];
+
+    // Check if migration is needed (old order has UserSheetName in col 4, GroupEmail in col 5)
+    if (headers[3] === 'UserSheetName' && headers[4] === 'GroupEmail') {
+      log_('Migrating ManagedFolders columns from old order to new order...', 'INFO');
+
+      // Get all data
+      const lastRow = sheet.getLastRow();
+      if (lastRow > 1) {
+        // Get columns D and E data (UserSheetName and GroupEmail)
+        const userSheetData = sheet.getRange(2, 4, lastRow - 1, 1).getValues();
+        const groupEmailData = sheet.getRange(2, 5, lastRow - 1, 1).getValues();
+
+        // Swap them: put GroupEmail in col 4, UserSheetName in col 5
+        sheet.getRange(2, 4, lastRow - 1, 1).setValues(groupEmailData);
+        sheet.getRange(2, 5, lastRow - 1, 1).setValues(userSheetData);
+      }
+
+      // Update headers
+      sheet.getRange(1, 4).setValue('GroupEmail');
+      sheet.getRange(1, 5).setValue('UserSheetName');
+
+      log_('Successfully migrated ManagedFolders columns. GroupEmail is now column D (4), UserSheetName is column E (5).', 'INFO');
+    }
+  } catch (e) {
+    log_('Failed to migrate ManagedFolders columns: ' + e.message, 'WARN');
+  }
+}
+
+/**
  * Ensures the control sheets (ManagedFolders, Admins) exist.
  */
 function setupControlSheets_() {
   migrateUserGroupSheets_(); // Run migration first
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  
+
   // Check for ManagedFolders sheet
   let managedSheet = ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
   if (!managedSheet) {
     managedSheet = ss.insertSheet(MANAGED_FOLDERS_SHEET_NAME, 0);
-    const headers = ['FolderName', 'FolderID', 'Role', 'UserSheetName', 'GroupEmail', 'Last Synced', 'Status'];
+    const headers = ['FolderName', 'FolderID', 'Role', 'GroupEmail', 'UserSheetName', 'Last Synced', 'Status'];
     managedSheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
     managedSheet.setFrozenRows(1);
     log_('Created "ManagedFolders" sheet.');
+  } else {
+    // Migrate old column order if needed
+    migrateManagedFoldersColumns_(managedSheet);
   }
 
   // Add data validation for the Role column
