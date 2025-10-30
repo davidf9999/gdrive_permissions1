@@ -158,6 +158,7 @@ function checkForOrphanSheets_() {
     requiredSheetNames.add(LOG_SHEET_NAME);
     requiredSheetNames.add(TEST_LOG_SHEET_NAME);
     requiredSheetNames.add(DRY_RUN_AUDIT_LOG_SHEET_NAME);
+    requiredSheetNames.add('DeepFolderAuditLog');
 
     const managedSheet = spreadsheet.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
     if (managedSheet && managedSheet.getLastRow() > 1) {
@@ -174,7 +175,7 @@ function checkForOrphanSheets_() {
         const groupSheetNames = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 1).getValues();
         if (groupSheetNames) {
             groupSheetNames.forEach(function(row) {
-                if (row[0]) requiredSheetNames.add(row[0]);
+                if (row[0]) requiredSheetNames.add(row[0] + '_G');
             });
         }
     }
@@ -310,11 +311,10 @@ function getOrCreateUserSheet_(sheetName) {
     headerRange.setFontWeight('bold');
     sheet.setFrozenRows(1);
 
-    // Add data validation to Disabled column (TRUE/FALSE dropdown)
+    // Add data validation to Disabled column (checkbox)
     const disabledRange = sheet.getRange('B2:B');
     const rule = SpreadsheetApp.newDataValidation()
-      .requireValueInList(['TRUE', 'FALSE'], true)
-      .setAllowInvalid(false)
+      .requireCheckbox()
       .build();
     disabledRange.setDataValidation(rule);
 
@@ -347,13 +347,12 @@ function ensureUserSheetHeaders_(sheet) {
     headerRange.setFontWeight('bold');
     sheet.setFrozenRows(1);
 
-    // Ensure data validation on Disabled column (TRUE/FALSE dropdown)
+    // Ensure data validation on Disabled column (checkbox)
     const disabledRange = sheet.getRange('B2:B');
     const existingRule = disabledRange.getDataValidation();
-    if (!existingRule || existingRule.getCriteriaType() !== SpreadsheetApp.DataValidationCriteria.VALUE_IN_LIST) {
+    if (!existingRule || existingRule.getCriteriaType() !== SpreadsheetApp.DataValidationCriteria.CHECKBOX) {
       const rule = SpreadsheetApp.newDataValidation()
-        .requireValueInList(['TRUE', 'FALSE'], true)
-        .setAllowInvalid(false)
+        .requireCheckbox()
         .build();
       disabledRange.setDataValidation(rule);
     }
@@ -710,17 +709,45 @@ function setSheetUiStyles_() {
     }
 
     // Apply Disabled dropdown to all user sheets
-    applyDisabledDropdownToAllUserSheets_();
+    updateUserSheetHeaders_();
   } catch (e) {
     log_('Could not apply UI styles. Error: ' + e.message, 'WARN');
   }
 }
 
+function getAllManagedSheetNames_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const managedSheetNames = new Set();
+
+  // From ManagedFolders
+  const managedFoldersSheet = ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+  if (managedFoldersSheet && managedFoldersSheet.getLastRow() > 1) {
+    const userSheetNames = managedFoldersSheet.getRange(2, USER_SHEET_NAME_COL, managedFoldersSheet.getLastRow() - 1, 1).getValues();
+    userSheetNames.forEach(function(row) {
+      if (row[0]) {
+        managedSheetNames.add(row[0]);
+      }
+    });
+  }
+
+  // From UserGroups
+  const userGroupsSheet = ss.getSheetByName(USER_GROUPS_SHEET_NAME);
+  if (userGroupsSheet && userGroupsSheet.getLastRow() > 1) {
+    const groupNames = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 1).getValues();
+    groupNames.forEach(function(row) {
+      if (row[0]) {
+        managedSheetNames.add(row[0] + '_G');
+      }
+    });
+  }
+
+  return managedSheetNames;
+}
+
 /**
- * Applies TRUE/FALSE dropdown validation to the Disabled column of all user sheets.
- * This ensures existing sheets get the dropdown without needing to wait for a full sync.
+ * Ensures the "Disabled" column with checkbox validation exists on all user sheets.
  */
-function applyDisabledDropdownToAllUserSheets_() {
+function updateUserSheetHeaders_() {
   try {
     const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
     const allSheets = spreadsheet.getSheets();
@@ -743,7 +770,7 @@ function applyDisabledDropdownToAllUserSheets_() {
       }
     });
   } catch (e) {
-    log_('Could not apply Disabled dropdown to all user sheets. Error: ' + e.message, 'WARN');
+    log_('Could not update user sheet headers. Error: ' + e.message, 'WARN');
   }
 }
 

@@ -320,6 +320,40 @@ The script will now add all the members from the `Sales Team` group to the `Q4 S
 2.  To remove a user, delete the row containing their email address.
 3.  Run **Permissions Manager > Sync Deletes**. You will be asked to confirm the deletion.
 
+**Note on `Sync Deletes`**: This function only *revokes permissions* by removing users from the Google Groups associated with your folders. It does **not** delete the Google Group itself, the Google Drive folder, or the user sheet from your spreadsheet. This is a safety feature to prevent accidental data loss. See the next section for how to handle obsolete resources.
+
+---
+
+## Handling Obsolete Permissions (Manual Deletion)
+
+When you no longer need to manage a folder or a group, you might remove its corresponding row from the `ManagedFolders` or `UserGroups` sheet. It is important to understand what happens when you do this.
+
+**The script does not automatically delete any resources.**
+
+Removing a row from a control sheet simply tells the script to *stop managing* that resource. The actual Google Drive folder, the Google Group, and the associated user sheet in your spreadsheet will **not** be deleted automatically. This is a critical safety feature to prevent accidental deletion of important data.
+
+After you have removed a folder or group from your control sheets and run a sync, you will need to manually clean up the obsolete resources if you wish to remove them completely.
+
+### Manual Deletion Checklist
+
+1.  **Delete the Google Drive Folder:**
+    *   Go to [Google Drive](https://drive.google.com).
+    *   Navigate to the folder you no longer need.
+    *   Right-click the folder and select **Move to trash**.
+
+2.  **Delete the Google Group:**
+    *   Go to [Google Groups](https://groups.google.com/my-groups).
+    *   Find the group associated with the folder/role you removed (the group email is visible in the `ManagedFolders` or `UserGroups` sheet before you delete the row).
+    *   Open the group, go to **Group settings**, and look for an option to **Delete group**.
+    *   *Note: You must be an owner of the group to delete it. The script automatically makes the script owner an owner of each group it creates.*
+
+3.  **Delete the User Sheet:**
+    *   In your control spreadsheet, find the user sheet associated with the folder/role you removed (e.g., `MyProject_Editor`).
+    *   Right-click on the sheet tab at the bottom of the screen.
+    *   Select **Delete**. You will be asked to confirm.
+
+By following these steps, you can ensure that your Google Drive and Google Groups environment stays clean and free of obsolete items.
+
 ---
 
 ## Troubleshooting & FAQ

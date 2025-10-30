@@ -420,3 +420,30 @@ function getConfigValue_(key, defaultValue) {
     return defaultValue;
   }
 }
+
+function onEdit(e) {
+  const range = e.range;
+  const sheet = range.getSheet();
+  const sheetName = sheet.getName();
+  const row = range.getRow();
+  const col = range.getColumn();
+
+  let disabledCol;
+  if (sheetName === ADMINS_SHEET_NAME) {
+    disabledCol = 4;
+  } else if (sheetName.endsWith('_G')) {
+    disabledCol = 2;
+  } else {
+    return; // Not a sheet we care about
+  }
+
+  // Check if the edited cell is the header of the "Disabled" column
+  if (row === 1 && col === disabledCol) {
+    const headerCheckboxValue = range.getValue();
+    const lastRow = sheet.getLastRow();
+    if (lastRow > 1) {
+      const disabledColumnRange = sheet.getRange(2, disabledCol, lastRow - 1, 1);
+      disabledColumnRange.setValue(headerCheckboxValue);
+    }
+  }
+}

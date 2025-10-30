@@ -96,16 +96,15 @@ function setupControlSheets_() {
 
   // Add data validation for the Role column
   const roleRange = managedSheet.getRange('C2:C');
-  const existingRule = roleRange.getDataValidation();
-  if (!existingRule || existingRule.getCriteriaType() !== SpreadsheetApp.DataValidationCriteria.VALUE_IN_LIST) {
+  const existingRoleRule = roleRange.getDataValidation();
+  if (!existingRoleRule || existingRoleRule.getCriteriaType() !== SpreadsheetApp.DataValidationCriteria.VALUE_IN_LIST) {
       const rule = SpreadsheetApp.newDataValidation().requireValueInList(['Editor', 'Viewer', 'Commenter'], true).build();
       roleRange.setDataValidation(rule);
   }
 
-
   // Check for Admins sheet
   let adminSheet = ss.getSheetByName(ADMINS_SHEET_NAME);
-  const adminHeaders = ['Administrator Emails', 'Last Synced', 'Status'];
+  const adminHeaders = ['Administrator Emails', 'Last Synced', 'Status', 'Disabled'];
   if (!adminSheet) {
     adminSheet = ss.insertSheet(ADMINS_SHEET_NAME);
     adminSheet.getRange(1, 1, 1, adminHeaders.length).setValues([adminHeaders]).setFontWeight('bold');
@@ -127,6 +126,14 @@ function setupControlSheets_() {
     adminSheet.setFrozenRows(1);
   }
   
+  // Add checkbox validation for the Disabled column
+  const adminDisabledRange = adminSheet.getRange('D2:D');
+  const existingAdminDisabledRule = adminDisabledRange.getDataValidation();
+  if (!existingAdminDisabledRule || existingAdminDisabledRule.getCriteriaType() !== SpreadsheetApp.DataValidationCriteria.CHECKBOX) {
+    const rule = SpreadsheetApp.newDataValidation().requireCheckbox().build();
+    adminDisabledRange.setDataValidation(rule);
+  }
+
     // Check for UserGroups sheet
   let userGroupsSheet = ss.getSheetByName(USER_GROUPS_SHEET_NAME);
   if (!userGroupsSheet) {

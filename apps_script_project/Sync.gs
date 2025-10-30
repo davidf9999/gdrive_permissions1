@@ -36,9 +36,14 @@ function syncAdmins(options = {}) {
     }
 
     // 1. Get desired admins
-    const adminEmails = adminSheet.getRange('A2:A').getValues()
-      .map(function(row) { return row[0].toString().trim().toLowerCase(); })
-      .filter(function(email) { return email && email.length > 0; });
+    const adminData = adminSheet.getRange('A2:D' + adminSheet.getLastRow()).getValues();
+    const adminEmails = adminData.filter(function(row) {
+      const email = row[0].toString().trim().toLowerCase();
+      const isDisabled = row[3];
+      return email && email.length > 0 && !isDisabled;
+    }).map(function(row) {
+      return row[0].toString().trim().toLowerCase();
+    });
     const adminSet = new Set(adminEmails);
 
     // 2. Get current editors
