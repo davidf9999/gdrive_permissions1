@@ -113,7 +113,13 @@ function syncAdmins(options = {}) {
     // Perform removals only if not in addOnly mode
     if (!addOnly && emailsToRemove.length > 0) {
       log_('Removing ' + emailsToRemove.length + ' editor(s): ' + emailsToRemove.join(', '));
-      spreadsheet.removeEditors(emailsToRemove);
+      emailsToRemove.forEach(function(email) {
+        try {
+          spreadsheet.removeEditor(email);
+        } catch (e) {
+          log_('Failed to remove editor ' + email + ': ' + e.message, 'ERROR');
+        }
+      });
     }
 
     syncAdminsGroup_(adminSheet, adminGroupEmail, { addOnly: addOnly });
