@@ -21,15 +21,27 @@ function processManagedFolders_(options = {}) {
       return returnPlanOnly ? [] : undefined;
   }
 
-  for (let i = 2; i <= lastRow; i++) {
-    if (!returnPlanOnly) showToast_('Processing row ' + i + ' of ' + lastRow + '...', 'Sync Progress', 10);
+  const dataRange = sheet.getRange(2, 1, lastRow - 1, 2); // Get only FolderName and FolderID
+  const folderData = dataRange.getValues();
+
+  for (let i = 0; i < folderData.length; i++) {
+    const row = folderData[i];
+    const folderName = row[0];
+    const folderId = row[1];
+
+    if (!folderName && !folderId) {
+      continue; // Skip empty rows
+    }
+
+    const rowIndex = i + 2;
+    if (!returnPlanOnly) showToast_('Processing row ' + rowIndex + ' of ' + lastRow + '...', 'Sync Progress', 10);
     try {
-      const plan = processRow_(i, options);
+      const plan = processRow_(rowIndex, options);
       if (plan) {
         deletionPlan.push(plan);
       }
     } catch (e) {
-      log_('Error processing row ' + i + ': ' + e.toString(), 'ERROR');
+      log_('Error processing row ' + rowIndex + ': ' + e.toString(), 'ERROR');
     }
   }
   log_('Finished processing all rows.');
