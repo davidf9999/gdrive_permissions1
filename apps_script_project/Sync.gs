@@ -236,7 +236,8 @@ function syncUserGroups(options = {}) {
         }
 
         if (returnPlanOnly) {
-          const plan = syncGroupMembership_(groupEmail, groupName, options);
+          const groupSheetName = groupName + '_G';
+          const plan = syncGroupMembership_(groupEmail, groupSheetName, options);
           if (plan) {
             deletionPlan.push(plan);
           }

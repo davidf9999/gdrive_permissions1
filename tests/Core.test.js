@@ -70,6 +70,7 @@ describe('processRow_', () => {
       getValues: jest.fn(() => []),
       setValues: jest.fn(),
       setFontWeight: jest.fn(),
+      setDataValidation: jest.fn(), // Fix: Add the missing mock function
       getCell: jest.fn(() => ({ setValue: jest.fn() })),
     });
 
