@@ -81,6 +81,59 @@ This is useful if you want to pause automatic syncing temporarily (e.g., during 
 
 ---
 
+## Google Workspace User Configuration
+
+For the auto-sync feature to function correctly, the Google Workspace user account that owns the script must have specific administrative privileges. This is best accomplished by creating a custom admin role with the minimum necessary permissions.
+
+### Creating a Custom Admin Role
+
+1.  **Sign in to your Google Admin console.**
+    *   Go to [admin.google.com](https://admin.google.com/) and sign in with a super administrator account.
+
+2.  **Navigate to Admin roles.**
+    *   From the Admin console Home page, go to **Menu** (☰) > **Account** > **Admin roles**.
+
+3.  **Create a new role.**
+    *   Click **Create new role**.
+    *   Enter a **Name** for the role (e.g., "Drive and Groups Permission Manager").
+    *   (Optional) Enter a **Description** for the role.
+    *   Click **CONTINUE**.
+
+4.  **Select privileges for Google Groups.**
+    *   In the privileges list, find the section **Admin API privileges**.
+    *   Expand the **Groups** entry.
+    *   Select the following four privileges:
+        *   **Read**
+        *   **Create**
+        *   **Update**
+        *   **Delete**
+
+5.  **Review and create the role.**
+    *   Click **CONTINUE**.
+    *   Review the selected privileges.
+    *   Click **CREATE ROLE**.
+
+6.  **Assign the role to the user.**
+    *   Once the role is created, you need to assign it to the user who owns the Apps Script project.
+    *   From the "Admin roles" page, click on the custom role you just created.
+    *   Click **Assign members**. A new panel or dialog will open.
+    *   Enter the name or email of the user.
+    *   Click **ASSIGN ROLE**.
+
+After assigning this custom role, the user will have the necessary permissions to manage Google Groups through the script.  
+
+### Note on `gcloud` CLI
+
+It's important to distinguish between Google Workspace admin roles and Google Cloud Platform (GCP) IAM roles. The `gcloud` command-line interface is primarily used for managing GCP IAM roles and resources.
+
+**`gcloud` CLI is NOT used for:**
+*   Creating or managing Google Workspace custom admin roles.
+*   Assigning Google Workspace admin roles to users.
+
+These operations are performed either through the Google Workspace Admin Console (as described above) or programmatically via the Google Admin SDK Directory API. The `gcloud` CLI does not directly interact with Google Workspace administrative functions for user and role management.
+
+---
+
 ## For NGO Administrators
 
 ### Setting Up for Your Volunteers

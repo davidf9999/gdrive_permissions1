@@ -54,6 +54,47 @@ Because they create real folders and groups, they are much slower than unit test
 *   Performing a full system health check.
 *   Troubleshooting complex, environment-specific issues.
 
+### Verifying the Auto-Sync Trigger
+
+The following steps provide a gradual plan to safely verify that the scheduled, automatic sync is working correctly.
+
+**Phase 1: Admin Verification (Default Safe Mode)**
+
+The system is designed to be safe by default. The automatic sync will only process additions; it will not automatically remove users. Deletions require manual approval.
+
+1.  **Enable and Verify the Trigger**:
+    *   In your sheet, go to **Permissions Manager → Auto-Sync → ⚡ Setup Auto-Sync (Hourly)**.
+    *   The first time you run this, it's normal to see a `"No auto-sync triggers were found."` message, followed by an `"Auto-Sync Enabled"` confirmation.
+    *   Verify it's active by going to **Permissions Manager → Auto-Sync → 📊 View Trigger Status**.
+
+2.  **Perform an "Add" Test**:
+    *   Add a **test user's email** to one of the permission sheets (e.g., a sheet named `MyFolder_Viewers_G`).
+    *   Wait for the next hourly sync (triggers run at the top of the hour).
+    *   **Verification**: Check the **`Log`** sheet to confirm the sync ran. Then, check the **`Status`** column in the **`ManagedFolders`** sheet for the corresponding folder row. It should update to `OK`. Finally, verify the test user was actually added to the correct Google Group or given direct folder access.
+
+3.  **Perform a "Deletion Detection" Test**:
+    *   Now, remove the same **test user** from the permission sheet.
+    *   Wait for the next hourly sync.
+    *   **Verification**:
+        *   The user will **NOT** be removed from the Google Group. This is the expected safe behavior.
+        *   Check your email. You should receive a **"MANUAL ACTION REQUIRED"** notification listing the pending deletion.
+        *   To complete the deletion, you must manually run **Permissions Manager → Sync Deletes**.
+
+**Phase 2: Non-Admin User Verification**
+
+This simulates the experience for a volunteer or non-technical user.
+
+1.  **Share the Sheet**:
+    *   Share the main Google Sheet with a non-admin user (a regular Gmail account is perfect) and give them **Editor** access to the sheet itself.
+
+2.  **Instruct the User**:
+    *   Ask the non-admin user to add a new test user's email to a permission sheet.
+    *   Crucially, tell them **not to click any menu items**; they should only edit the cell.
+
+3.  **Wait and Verify**:
+    *   After the next hourly sync, you (the admin) can verify that the new user was added to the correct Google Group.
+    *   The non-admin user will see the **`Status`** column in the `ManagedFolders` sheet update, confirming their change was processed automatically without any manual action on their part.
+
 ## Viewing Test Logs
 
 All test operations are logged to the **TestLog** sheet. If a test fails or does not behave as expected, this sheet is the first place to look for detailed error messages.
