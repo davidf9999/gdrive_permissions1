@@ -7,7 +7,6 @@
  */
 function syncAdmins(options = {}) {
   const { addOnly = false, silentMode = false } = options;
-  const ui = SpreadsheetApp.getUi();
   let adminSheet;
   try {
     log_('Running Admin Sync... (addOnly: ' + addOnly + ', silentMode: ' + silentMode + ')');
@@ -15,7 +14,7 @@ function syncAdmins(options = {}) {
     adminSheet = spreadsheet.getSheetByName(ADMINS_SHEET_NAME);
     if (!adminSheet) {
       log_('Admins sheet not found. Skipping admin sync.');
-      if (!silentMode) ui.alert('Admins sheet not found. Skipping admin sync.');
+      if (!silentMode) SpreadsheetApp.getUi().alert('Admins sheet not found. Skipping admin sync.');
       return;
     }
 
@@ -73,7 +72,7 @@ function syncAdmins(options = {}) {
         if (SCRIPT_EXECUTION_MODE === 'TEST') {
           showTestMessage_('Admin Sync', 'Admin list is already up to date. No changes were needed. Admins group synced to ' + adminGroupEmail + '.');
         } else {
-          ui.alert('Admin list is already up to date. No changes were needed.\nAdmins group synced to ' + adminGroupEmail + '.');
+          SpreadsheetApp.getUi().alert('Admin list is already up to date. No changes were needed.\nAdmins group synced to ' + adminGroupEmail + '.');
         }
       }
       return;
@@ -93,10 +92,10 @@ function syncAdmins(options = {}) {
     // In silent mode or addOnly mode with only additions, skip confirmation
     if (!silentMode && !addOnly && emailsToRemove.length > 0) {
       confirmationMessage += '\nAre you sure you want to continue?';
-      const response = ui.alert('Confirm Admin Sync', confirmationMessage, ui.ButtonSet.YES_NO);
+      const response = SpreadsheetApp.getUi().alert('Confirm Admin Sync', confirmationMessage, SpreadsheetApp.getUi().ButtonSet.YES_NO);
 
-      if (response !== ui.Button.YES) {
-        if (!silentMode) ui.alert('Admin sync cancelled.');
+      if (response !== SpreadsheetApp.getUi().Button.YES) {
+        if (!silentMode) SpreadsheetApp.getUi().alert('Admin sync cancelled.');
         log_('Admin sync cancelled by user.');
         adminSheet.getRange(ADMINS_STATUS_CELL).setValue('CANCELLED');
         return;
@@ -134,7 +133,7 @@ function syncAdmins(options = {}) {
       if (SCRIPT_EXECUTION_MODE === 'TEST') {
         showTestMessage_('Admin Sync', 'Admin sync complete. Admins group synced to ' + adminGroupEmail + '.');
       } else {
-        ui.alert('Admin sync complete.\nAdmins group synced to ' + adminGroupEmail + '.');
+        SpreadsheetApp.getUi().alert('Admin sync complete.\nAdmins group synced to ' + adminGroupEmail + '.');
       }
     }
 
@@ -145,7 +144,7 @@ function syncAdmins(options = {}) {
         adminSheet.getRange(ADMINS_STATUS_CELL).setValue('ERROR: ' + e.message);
       } catch (ignored) {}
     }
-    if (!silentMode) ui.alert('An error occurred during Admin sync: ' + e.message);
+    if (!silentMode) SpreadsheetApp.getUi().alert('An error occurred during Admin sync: ' + e.message);
   }
 }
 
@@ -181,14 +180,14 @@ function syncAdminsGroup_(adminSheet, adminGroupEmail, options = {}) {
 
 
 function syncUserGroups(options = {}) {
-  const { returnPlanOnly = false } = options;
+  const { returnPlanOnly = false, silentMode = false } = options;
   let deletionPlan = [];
 
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const userGroupsSheet = ss.getSheetByName(USER_GROUPS_SHEET_NAME);
     if (!userGroupsSheet) {
-      if (!returnPlanOnly) SpreadsheetApp.getUi().alert('UserGroups sheet not found.');
+      if (!returnPlanOnly && !silentMode) SpreadsheetApp.getUi().alert('UserGroups sheet not found.');
       return returnPlanOnly ? [] : undefined;
     }
 
@@ -211,7 +210,7 @@ function syncUserGroups(options = {}) {
               userGroupsSheet.getRange(rowIndex, 4).setValue('SKIPPED (No Admin SDK)');
             }
           }
-          SpreadsheetApp.getUi().alert('User group sync skipped: Admin Directory service not available.');
+          if (!silentMode) SpreadsheetApp.getUi().alert('User group sync skipped: Admin Directory service not available.');
       }
       return returnPlanOnly ? [] : undefined;
     }
@@ -247,7 +246,7 @@ function syncUserGroups(options = {}) {
           const groupEmailCell = userGroupsSheet.getRange(rowIndex, 2);
 
           statusCell.setValue('Processing...');
-          showToast_('Processing user group: ' + groupName + '...', 'Sync Progress', 10);
+          if (!silentMode) showToast_('Processing user group: ' + groupName + '...', 'Sync Progress', 10);
           
           if (!data[i][1]) { // If groupEmail was generated, write it to the sheet
             groupEmailCell.setValue(groupEmail);
@@ -281,14 +280,14 @@ function syncUserGroups(options = {}) {
     
     if (SCRIPT_EXECUTION_MODE === 'TEST') {
       showTestMessage_('User Groups Sync', 'User groups sync complete.');
-    } else {
+    } else if (!silentMode) {
       SpreadsheetApp.getUi().alert('User groups sync complete.');
     }
 
   } catch (e) {
     const errorMessage = 'FATAL ERROR in syncUserGroups: ' + e.toString() + '\n' + e.stack;
     log_(errorMessage, 'ERROR');
-    if (!returnPlanOnly) {
+    if (!returnPlanOnly && !silentMode) {
       SpreadsheetApp.getUi().alert('A fatal error occurred during user group sync: ' + e.message);
       sendErrorNotification_(errorMessage);
     } else {
@@ -297,40 +296,41 @@ function syncUserGroups(options = {}) {
   }
 }
 
-function syncAdds() {
+function syncAdds(options = {}) {
+  const { silentMode = false } = options;
   setupControlSheets_();
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(15000)) {
-    SpreadsheetApp.getUi().alert('Sync is already in progress. Please wait a few minutes and try again.');
+    if (!silentMode) SpreadsheetApp.getUi().alert('Sync is already in progress. Please wait a few minutes and try again.');
     return;
   }
 
   try {
-    showToast_('Starting non-destructive sync (adds only)...', 'Sync Adds', -1);
+    if (!silentMode) showToast_('Starting non-destructive sync (adds only)...', 'Sync Adds', -1);
     log_('*** Starting non-destructive synchronization (adds only)...');
 
     // 1. Sync Admins (SAFE mode: additions only, silent for auto-sync)
     syncAdmins({ addOnly: true, silentMode: true });
 
     // 2. Sync User Groups (creates groups, adds members)
-    syncUserGroups({ addOnly: true });
+    syncUserGroups({ addOnly: true, silentMode: silentMode });
 
     // 3. Process Managed Folders (creates folders, permissions, adds members)
-    processManagedFolders_({ addOnly: true });
+    processManagedFolders_({ addOnly: true, silentMode: silentMode });
 
-    showToast_('Add-only sync complete!', 'Sync Adds', 5);
+    if (!silentMode) showToast_('Add-only sync complete!', 'Sync Adds', 5);
     log_('Add-only synchronization completed.');
     if (SCRIPT_EXECUTION_MODE === 'TEST') {
       showTestMessage_('Add-only Sync', 'Non-destructive sync (adds only) is complete.');
-    } else {
+    } else if (!silentMode) {
       SpreadsheetApp.getUi().alert('Non-destructive sync (adds only) is complete.\n\nCheck the \'Status\' column in the sheets for details.');
     }
 
   } catch (e) {
     const errorMessage = 'FATAL ERROR in syncAdds: ' + e.toString() + '\n' + e.stack;
     log_(errorMessage, 'ERROR');
-    showToast_('Add-only sync failed with a fatal error.', 'Sync Adds', 5);
-    SpreadsheetApp.getUi().alert('A fatal error occurred during add-only sync: ' + e.message);
+    if (!silentMode) showToast_('Add-only sync failed with a fatal error.', 'Sync Adds', 5);
+    if (!silentMode) SpreadsheetApp.getUi().alert('A fatal error occurred during add-only sync: ' + e.message);
     sendErrorNotification_(errorMessage);
   } finally {
     lock.releaseLock();

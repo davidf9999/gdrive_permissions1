@@ -2,18 +2,18 @@ const EMAIL_EXTRACTION_REGEX = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 const SINGLE_EMAIL_VALIDATION_REGEX = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
 
 function processManagedFolders_(options = {}) {
-  const { returnPlanOnly = false } = options;
+  const { returnPlanOnly = false, silentMode = false } = options;
   let deletionPlan = [];
 
   log_('*** Starting processing of ManagedFolders sheet...');
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
   if (!sheet) {
-    if (!returnPlanOnly) SpreadsheetApp.getUi().alert('CRITICAL: Configuration sheet named "' + MANAGED_FOLDERS_SHEET_NAME + '" not found. Aborting.');
+    if (!returnPlanOnly && !silentMode) SpreadsheetApp.getUi().alert('CRITICAL: Configuration sheet named "' + MANAGED_FOLDERS_SHEET_NAME + '" not found. Aborting.');
     return returnPlanOnly ? [] : undefined;
   }
 
-  if (!returnPlanOnly) setSheetUiStyles_();
+  if (!returnPlanOnly && !silentMode) setSheetUiStyles_();
 
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) {
@@ -34,7 +34,7 @@ function processManagedFolders_(options = {}) {
     }
 
     const rowIndex = i + 2;
-    if (!returnPlanOnly) showToast_('Processing row ' + rowIndex + ' of ' + lastRow + '...', 'Sync Progress', 10);
+    if (!returnPlanOnly && !silentMode) showToast_('Processing row ' + rowIndex + ' of ' + lastRow + '...', 'Sync Progress', 10);
     try {
       const plan = processRow_(rowIndex, options);
       if (plan) {
@@ -52,7 +52,7 @@ function processManagedFolders_(options = {}) {
 }
 
 function processRow_(rowIndex, options = {}) {
-  const { returnPlanOnly = false, removeOnly = false } = options;
+  const { returnPlanOnly = false, removeOnly = false, silentMode = false } = options;
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
   const statusCell = sheet.getRange(rowIndex, STATUS_COL);
 
@@ -96,7 +96,7 @@ function processRow_(rowIndex, options = {}) {
     if (!folderName && !folderId) throw new Error('Both FolderName and FolderID are blank.');
     if (!role) throw new Error('Role is not specified.');
 
-    const folder = getOrCreateFolder_(folderName, folderId);
+    const folder = getOrCreateFolder_(folderName, folderId, { silentMode });
     sheet.getRange(rowIndex, FOLDER_ID_COL).setValue(folder.getId());
     sheet.getRange(rowIndex, FOLDER_NAME_COL).setValue(folder.getName());
 
@@ -135,7 +135,16 @@ function processRow_(rowIndex, options = {}) {
       return null;
     }
 
-    getOrCreateGroup_(groupEmail, userSheetName);
+    const wasGroupNewlyCreated = getOrCreateGroup_(groupEmail, userSheetName);
+
+    // If the group was just created, pause for 60 seconds to allow it to propagate
+    // through Google's systems. This prevents a race condition where Drive tries to send
+    // a notification to a group email that isn't fully active yet.
+    if (wasGroupNewlyCreated) {
+        log_('Pausing for 60 seconds to allow for new group email propagation...');
+        Utilities.sleep(60000);
+    }
+
     setFolderPermission_(folder.getId(), groupEmail, role);
     syncGroupMembership_(groupEmail, userSheetName, options);
 
@@ -200,23 +209,28 @@ function checkForOrphanSheets_() {
   }
 }
 
-function getOrCreateFolder_(folderName, folderId) {
+function getOrCreateFolder_(folderName, folderId, options = {}) {
+  const { silentMode = false } = options;
   if (folderId) {
     try {
       const folder = DriveApp.getFolderById(folderId);
       if (folderName && folder.getName() !== folderName) {
         const originalName = folder.getName();
-        const ui = SpreadsheetApp.getUi();
-        const message =
-          'The Drive folder with ID "' +
-          folderId +
-          '" is currently named "' +
-          originalName +
-          '", but the ManagedFolders sheet expects "' +
-          folderName +
-          '". Rename the Drive folder to match the sheet?';
-        const response = ui.alert('Folder name mismatch', message, ui.ButtonSet.YES_NO);
-        if (response === ui.Button.YES) {
+        let response = silentMode ? SpreadsheetApp.getUi().Button.NO : null;
+        if (!silentMode) {
+            const ui = SpreadsheetApp.getUi();
+            const message =
+            'The Drive folder with ID "' +
+            folderId +
+            '" is currently named "' +
+            originalName +
+            '", but the ManagedFolders sheet expects "' +
+            folderName +
+            '". Rename the Drive folder to match the sheet?';
+            response = ui.alert('Folder name mismatch', message, ui.ButtonSet.YES_NO);
+        }
+
+        if (response === SpreadsheetApp.getUi().Button.YES) {
           try {
             folder.setName(folderName);
             log_('Renamed folder "' + originalName + '" to "' + folderName + '" to match configuration after confirmation.');
@@ -276,7 +290,7 @@ function getOrCreateGroup_(groupEmail, groupName) {
   try {
     AdminDirectory.Groups.get(groupEmail);
     log_('Found existing group: ' + groupEmail);
-    return;
+    return false; // Group already existed
   } catch (e) {
     log_('Group "' + groupEmail + '" not found. Will attempt to create it.');
   }
@@ -289,6 +303,7 @@ function getOrCreateGroup_(groupEmail, groupName) {
     };
     AdminDirectory.Groups.insert(newGroup);
     log_('Successfully created group: ' + groupEmail);
+    return true; // Group was newly created
   } catch (e) {
     log_('Failed to create group ' + groupEmail + '. Error: ' + e.toString(), 'ERROR');
     throw new Error('Could not create group: ' + e.message);

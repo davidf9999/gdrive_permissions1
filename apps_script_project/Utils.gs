@@ -300,15 +300,11 @@ function clearAuxiliaryLogs() {
 
 function sendErrorNotification_(errorMessage) {
   try {
-    const configSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG_SHEET_NAME);
-    if (!configSheet) return;
+    const enableEmailNotifications = getConfigValue_('EnableEmailNotifications', false);
+    const adminEmail = getConfigValue_('NotificationEmail', null);
 
-    const settings = configSheet.getRange('A2:B3').getValues();
-    const enableEmailNotifications = settings[0][1];
-    const notificationEmailAddress = settings[1][1];
-
-    if (enableEmailNotifications === true && notificationEmailAddress) {
-      MailApp.sendEmail(notificationEmailAddress, 'Permissions Manager Script - Fatal Error', errorMessage);
+    if (enableEmailNotifications === true && adminEmail) {
+      MailApp.sendEmail(adminEmail, 'Permissions Manager Script - Fatal Error', errorMessage);
     }
   } catch (e) {
     log_('Failed to send error notification email: ' + e.toString(), 'ERROR');

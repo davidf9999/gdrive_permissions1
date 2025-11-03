@@ -60,7 +60,12 @@ function removeAutoSync() {
  *
  * You can modify this to only run syncAdds if you prefer non-destructive syncs.
  */
-function autoSync() {
+function autoSync(e) {
+  // When run by a real trigger, the event object 'e' will have a triggerUid.
+  // When run manually from the menu, 'e' will be undefined.
+  // This allows us to run silently for triggers, but show UI for manual runs.
+  const silentMode = e && e.triggerUid ? true : false;
+
   const lock = LockService.getScriptLock();
 
   // Try to acquire lock. If another sync is running, skip this execution.
@@ -89,7 +94,7 @@ function autoSync() {
     // DESTRUCTIVE operations (deletions) require manual execution
 
     log_('Performing SAFE operations (additions only)...');
-    syncAdds(); // Includes admin additions, user groups, and folder permissions
+    syncAdds({ silentMode: silentMode }); // Includes admin additions, user groups, and folder permissions
 
     // Check for pending DESTRUCTIVE operations and notify admin
     checkAndNotifyPendingDeletions_();

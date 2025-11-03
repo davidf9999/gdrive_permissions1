@@ -198,7 +198,7 @@ If auto-sync encounters an error:
 1. **Email notifications** (if enabled in Config sheet):
    - You'll receive an email with the error
    - Configure: `EnableEmailNotifications = TRUE`
-   - Set: `NotificationEmailAddress = your@email.com`
+   - Set: `NotificationEmail = your@email.com`
 
 2. **Check the Log sheet:**
    - All auto-sync runs are logged
