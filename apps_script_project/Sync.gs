@@ -329,13 +329,16 @@ function syncAdds(options = {}) {
     log_('*** Starting non-destructive synchronization (adds only)...');
 
     // 1. Sync Admins (SAFE mode: additions only, silent for auto-sync)
-    syncAdmins({ addOnly: true, silentMode: true });
+    const adminSummary = syncAdmins({ addOnly: true, silentMode: true });
+    if (adminSummary) {
+      totalSummary.added += adminSummary.added;
+      totalSummary.failed += adminSummary.failed;
+    }
 
     // 2. Sync User Groups (creates groups, adds members)
     const userGroupsSummary = syncUserGroups({ addOnly: true, silentMode: silentMode });
     if (userGroupsSummary) {
       totalSummary.added += userGroupsSummary.added;
-      totalSummary.removed += userGroupsSummary.removed;
       totalSummary.failed += userGroupsSummary.failed;
     }
 
@@ -343,7 +346,6 @@ function syncAdds(options = {}) {
     const managedFoldersSummary = processManagedFolders_({ addOnly: true, silentMode: silentMode });
     if (managedFoldersSummary) {
       totalSummary.added += managedFoldersSummary.added;
-      totalSummary.removed += managedFoldersSummary.removed;
       totalSummary.failed += managedFoldersSummary.failed;
     }
 
