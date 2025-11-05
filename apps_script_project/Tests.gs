@@ -43,8 +43,8 @@ function runManualAccessTest() {
         managedSheet.getRange(testRowIndex, FOLDER_NAME_COL).setValue(testFolderName);
         managedSheet.getRange(testRowIndex, ROLE_COL).setValue(testRole);
 
-        fullSync(); // Changed from syncAll()
-        let status = managedSheet.getRange(testRowIndex, STATUS_COL).getValue();
+        // Use optimized single-folder sync instead of fullSync()
+        const status = syncSingleFolder_(testRowIndex);
         if (status !== 'OK') {
             throw new Error('Sync failed after initial setup. Status: ' + status);
         }
@@ -59,10 +59,10 @@ function runManualAccessTest() {
 
         userSheet.getRange('A2').setValue(testEmail);
         showTestMessage_('Granting Access', 'The test email has been added to the ' + userSheetName + ' sheet. The script will now sync again to grant folder access.');
-        fullSync(); // Changed from syncAll()
-        status = managedSheet.getRange(testRowIndex, STATUS_COL).getValue();
-        if (status !== 'OK') {
-            throw new Error('Sync failed after granting access. Status: ' + status);
+        // Use optimized single-folder sync instead of fullSync()
+        let status2 = syncSingleFolder_(testRowIndex);
+        if (status2 !== 'OK') {
+            throw new Error('Sync failed after granting access. Status: ' + status2);
         }
         log_('Grant access sync complete. Status: OK', 'INFO');
 
@@ -84,10 +84,10 @@ function runManualAccessTest() {
 
         userSheet.getRange('A2').clearContent();
         showTestMessage_('Revoking Access', 'The test email has been removed from the sheet. The script will now sync again to revoke folder access.');
-        fullSync(); // Changed from syncAll()
-        status = managedSheet.getRange(testRowIndex, STATUS_COL).getValue();
-        if (status !== 'OK') {
-            throw new Error('Sync failed after revoking access. Status: ' + status);
+        // Use optimized single-folder sync instead of fullSync()
+        let status3 = syncSingleFolder_(testRowIndex);
+        if (status3 !== 'OK') {
+            throw new Error('Sync failed after revoking access. Status: ' + status3);
         }
         log_('Revoke access sync complete. Status: OK', 'INFO');
 
@@ -123,11 +123,13 @@ function runManualAccessTest() {
         // Check if testConfig exists before using it (may be undefined if error occurred early)
         if (typeof testConfig !== 'undefined') {
             let cleanup = testConfig.cleanup === true;
-            log_('testConfig.cleanup before Cleanup: ' + testConfig.cleanup, 'INFO');
+            log_('Auto-cleanup check: testConfig.cleanup = ' + testConfig.cleanup + ', evaluates to: ' + cleanup, 'INFO');
+
             if (!cleanup) {
                 try {
                     const cleanupPrompt = SpreadsheetApp.getUi().alert('Cleanup', 'Do you want to remove all test data (folder, group, and sheet)?', SpreadsheetApp.getUi().ButtonSet.YES_NO);
                     cleanup = cleanupPrompt === SpreadsheetApp.getUi().Button.YES;
+                    log_('User selected cleanup: ' + cleanup, 'INFO');
                 } catch (alertError) {
                     log_('Could not show cleanup prompt: ' + alertError.message, 'WARN');
                     cleanup = false;
@@ -135,11 +137,30 @@ function runManualAccessTest() {
             }
 
             if (cleanup) {
-                groupEmail = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME).getRange(testRowIndex, GROUP_EMAIL_COL).getValue();
-                cleanupFolderData_(testFolderName, folderId, groupEmail, userSheetName);
-                SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME).deleteRow(testRowIndex);
-                showTestMessage_('Cleanup', 'Cleanup complete.');
+                log_('Starting automatic cleanup for: ' + testFolderName, 'INFO');
+                try {
+                    // Get groupEmail if not already set
+                    if (!groupEmail) {
+                        groupEmail = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME).getRange(testRowIndex, GROUP_EMAIL_COL).getValue();
+                        log_('Retrieved groupEmail from sheet: ' + groupEmail, 'INFO');
+                    }
+
+                    cleanupFolderData_(testFolderName, folderId, groupEmail, userSheetName);
+
+                    // Delete the row from ManagedFolders sheet
+                    SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME).deleteRow(testRowIndex);
+
+                    log_('Automatic cleanup completed successfully', 'INFO');
+                    showTestMessage_('Cleanup', 'Cleanup complete.');
+                } catch (cleanupError) {
+                    log_('ERROR during automatic cleanup: ' + cleanupError.message + '\nStack: ' + cleanupError.stack, 'ERROR');
+                    showTestMessage_('Cleanup Error', 'Automatic cleanup failed. You may need to run manual cleanup. Error: ' + cleanupError.message);
+                }
+            } else {
+                log_('Cleanup skipped (cleanup = false)', 'INFO');
             }
+        } else {
+            log_('Cleanup skipped (testConfig undefined)', 'WARN');
         }
         SCRIPT_EXECUTION_MODE = 'DEFAULT';
     }
@@ -212,7 +233,8 @@ function runStressTest() {
 
         // --- Step 3: Initial Sync to Create Infrastructure ---
         showTestMessage_('Setup Phase 1 Complete', 'Test folders have been added to the sheet. The script will now run a sync to create the necessary folders, groups, and user sheets.');
-        fullSync();
+        // Use optimized test-only sync instead of fullSync()
+        testOnlySync_(['StressTestFolder_'], false);
 
         // --- Step 4: Populate User Sheets ---
         showTestMessage_('Setup Phase 2 Complete', 'The script will now populate all of the new user sheets with the test user emails.');
@@ -229,7 +251,8 @@ function runStressTest() {
         // --- Step 5: Run the Main Stress Test Sync ---
         showTestMessage_('Setup Complete. Starting Stress Test', 'All test data is in place. The script will now run the main sync and time its execution.');
         const startTime = new Date();
-        fullSync();
+        // Use optimized test-only sync instead of fullSync()
+        testOnlySync_(['StressTestFolder_'], false);
         const endTime = new Date();
         const durationSeconds = (endTime.getTime() - startTime.getTime()) / 1000;
 
@@ -251,12 +274,15 @@ function runStressTest() {
 
         // --- Step 6: Cleanup ---
         // Check if testConfig exists before using it (may be undefined if error occurred early)
-        if (typeof testConfig !== 'undefined') {
+        if (typeof testConfig !== 'undefined' && typeof numFolders !== 'undefined' && typeof startRow !== 'undefined') {
             let cleanup = testConfig.cleanup === true;
+            log_('Auto-cleanup check (Stress Test): testConfig.cleanup = ' + testConfig.cleanup + ', evaluates to: ' + cleanup, 'INFO');
+
             if (!cleanup) {
                 try {
                     const cleanupPrompt = SpreadsheetApp.getUi().alert('Cleanup', 'Do you want to remove all test data (folders, groups, sheets, and configuration rows)?', SpreadsheetApp.getUi().ButtonSet.YES_NO);
                     cleanup = cleanupPrompt === SpreadsheetApp.getUi().Button.YES;
+                    log_('User selected cleanup: ' + cleanup, 'INFO');
                 } catch (alertError) {
                     log_('Could not show cleanup prompt: ' + alertError.message, 'WARN');
                     cleanup = false;
@@ -264,23 +290,36 @@ function runStressTest() {
             }
 
             if (cleanup) {
-                const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
-                const managedData = managedSheet.getRange(startRow, 1, numFolders, GROUP_EMAIL_COL).getValues();
+                log_('Starting automatic cleanup for stress test folders', 'INFO');
+                try {
+                    const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+                    const managedData = managedSheet.getRange(startRow, 1, numFolders, GROUP_EMAIL_COL).getValues();
 
-                managedSheet.deleteRows(startRow, numFolders);
+                    showTestMessage_('Cleanup', 'Cleanup in Progress. This may take a few moments.');
 
-                showTestMessage_('Cleanup', 'Cleanup in Progress. This may take a few moments.');
+                    // Clean up all test resources first
+                    managedData.forEach(function (row) {
+                        const folderName = row[FOLDER_NAME_COL - 1];
+                        const folderId = row[FOLDER_ID_COL - 1];
+                        const userSheetName = row[USER_SHEET_NAME_COL - 1];
+                        const groupEmail = row[GROUP_EMAIL_COL - 1];
+                        cleanupFolderData_(folderName, folderId, groupEmail, userSheetName);
+                    });
 
-                managedData.forEach(function (row) {
-                    const folderName = row[FOLDER_NAME_COL - 1];
-                    const folderId = row[FOLDER_ID_COL - 1];
-                    const userSheetName = row[USER_SHEET_NAME_COL - 1];
-                    const groupEmail = row[GROUP_EMAIL_COL - 1];
-                    cleanupFolderData_(folderName, folderId, groupEmail, userSheetName);
-                });
+                    // Then delete rows from sheet
+                    managedSheet.deleteRows(startRow, numFolders);
 
-                showTestMessage_('Cleanup', 'Cleanup Complete!');
+                    log_('Automatic cleanup completed successfully', 'INFO');
+                    showTestMessage_('Cleanup', 'Cleanup Complete!');
+                } catch (cleanupError) {
+                    log_('ERROR during automatic cleanup: ' + cleanupError.message + '\nStack: ' + cleanupError.stack, 'ERROR');
+                    showTestMessage_('Cleanup Error', 'Automatic cleanup failed. You may need to run manual cleanup. Error: ' + cleanupError.message);
+                }
+            } else {
+                log_('Cleanup skipped (cleanup = false)', 'INFO');
             }
+        } else {
+            log_('Cleanup skipped (required variables undefined)', 'WARN');
         }
         SCRIPT_EXECUTION_MODE = 'DEFAULT';
     }
@@ -520,8 +559,8 @@ function runAddDeleteSeparationTest() {
         managedSheet.getRange(testRowIndex, FOLDER_NAME_COL).setValue(testFolderName);
         managedSheet.getRange(testRowIndex, ROLE_COL).setValue(testRole);
 
-        syncAdds();
-        let status = managedSheet.getRange(testRowIndex, STATUS_COL).getValue();
+        // Use optimized single-folder sync instead of syncAdds()
+        const status = syncSingleFolder_(testRowIndex, true);
         if (status !== 'OK') {
             throw new Error('Sync failed after initial setup. Status: ' + status);
         }
@@ -534,10 +573,10 @@ function runAddDeleteSeparationTest() {
         if (!userSheet) throw new Error('Test failed: Could not find the created user sheet: ' + userSheetName);
 
         userSheet.getRange('A2').setValue(testEmail);
-        syncAdds();
-        status = managedSheet.getRange(testRowIndex, STATUS_COL).getValue();
-        if (status !== 'OK') {
-            throw new Error('Sync failed after adding user. Status: ' + status);
+        // Use optimized single-folder sync instead of syncAdds()
+        let status2 = syncSingleFolder_(testRowIndex, true);
+        if (status2 !== 'OK') {
+            throw new Error('Sync failed after adding user. Status: ' + status2);
         }
         log_('Add user sync complete. Status: OK', 'INFO');
 
@@ -579,7 +618,8 @@ function runAddDeleteSeparationTest() {
                 confirmNoOpDelete = ui.alert('Confirm No-Op Delete', 'The script will now run a delete sync, but no deletions are expected. Continue?', ui.ButtonSet.YES_NO);
             }
             if (confirmNoOpDelete !== ui.Button.YES) { ui.alert('Test cancelled.'); return false; }
-            syncDeletes();
+            // Use optimized test-only sync for deletes
+            testOnlySync_([testFolderName], false);
 
             members = fetchAllGroupMembers_(groupEmail);
             isMember = members.some(m => m.email.toLowerCase() === testEmail);
@@ -606,10 +646,11 @@ function runAddDeleteSeparationTest() {
                 confirmActualDelete = ui.alert('Confirm Actual Delete', 'The script will now run a delete sync to remove the user. Continue?', ui.ButtonSet.YES_NO);
             }
             if (confirmActualDelete !== ui.Button.YES) { ui.alert('Test cancelled.'); return false; }
-            syncDeletes();
-            status = managedSheet.getRange(testRowIndex, STATUS_COL).getValue();
-            if (status !== 'OK') {
-                throw new Error('Sync failed after deleting user. Status: ' + status);
+            // Use optimized test-only sync for deletes
+            testOnlySync_([testFolderName], false);
+            const statusFinal = managedSheet.getRange(testRowIndex, STATUS_COL).getValue();
+            if (statusFinal !== 'OK') {
+                throw new Error('Sync failed after deleting user. Status: ' + statusFinal);
             }
             log_('Delete user sync complete. Status: OK', 'INFO');
 
@@ -639,10 +680,13 @@ function runAddDeleteSeparationTest() {
         // Check if testConfig exists before using it (may be undefined if error occurred early)
         if (typeof testConfig !== 'undefined') {
             let cleanup = testConfig.cleanup === true;
+            log_('Auto-cleanup check (Add/Delete Test): testConfig.cleanup = ' + testConfig.cleanup + ', evaluates to: ' + cleanup, 'INFO');
+
             if (!cleanup) {
                 try {
                     const cleanupPrompt = SpreadsheetApp.getUi().alert('Cleanup', 'Do you want to remove all test data (folder, group, and sheet)?', SpreadsheetApp.getUi().ButtonSet.YES_NO);
                     cleanup = cleanupPrompt === SpreadsheetApp.getUi().Button.YES;
+                    log_('User selected cleanup: ' + cleanup, 'INFO');
                 } catch (alertError) {
                     log_('Could not show cleanup prompt: ' + alertError.message, 'WARN');
                     cleanup = false;
@@ -650,13 +694,26 @@ function runAddDeleteSeparationTest() {
             }
 
             if (cleanup && testFolderName) {
-                cleanupFolderData_(testFolderName, folderId, groupEmail, userSheetName);
-                const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
-                if (testRowIndex && managedSheet.getRange(testRowIndex, FOLDER_NAME_COL).getValue() === testFolderName) {
-                    managedSheet.deleteRow(testRowIndex);
+                log_('Starting automatic cleanup for: ' + testFolderName, 'INFO');
+                try {
+                    cleanupFolderData_(testFolderName, folderId, groupEmail, userSheetName);
+
+                    const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+                    if (testRowIndex && managedSheet.getRange(testRowIndex, FOLDER_NAME_COL).getValue() === testFolderName) {
+                        managedSheet.deleteRow(testRowIndex);
+                    }
+
+                    log_('Automatic cleanup completed successfully', 'INFO');
+                    showTestMessage_('Cleanup', 'Cleanup complete.');
+                } catch (cleanupError) {
+                    log_('ERROR during automatic cleanup: ' + cleanupError.message + '\nStack: ' + cleanupError.stack, 'ERROR');
+                    showTestMessage_('Cleanup Error', 'Automatic cleanup failed. You may need to run manual cleanup. Error: ' + cleanupError.message);
                 }
-                showTestMessage_('Cleanup', 'Cleanup complete.');
+            } else {
+                log_('Cleanup skipped (cleanup = false or testFolderName undefined)', 'INFO');
             }
+        } else {
+            log_('Cleanup skipped (testConfig undefined)', 'WARN');
         }
         SCRIPT_EXECUTION_MODE = 'DEFAULT';
     }
@@ -789,40 +846,64 @@ function runAllTests() {
         const testResults = [];
 
         // Test 1: Manual Access Test
-        log_('========================================', 'INFO');
-        log_('ALL TESTS: Starting Manual Access Test (1/3)', 'INFO');
-        log_('========================================', 'INFO');
+        log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
+        log_('║  TEST 1/3: Manual Access Test                                ║', 'INFO');
+        log_('╚══════════════════════════════════════════════════════════════╝', 'INFO');
         const manualTestResult = runManualAccessTest();
+        const manualStatus = manualTestResult ? '✓ PASSED' : '✗ FAILED';
+        log_('>>> TEST RESULT: Manual Access Test ' + manualStatus, manualTestResult ? 'INFO' : 'ERROR');
+        log_('', 'INFO');
         testResults.push('Manual Access Test: ' + (manualTestResult ? 'PASSED' : 'FAILED'));
 
         // Test 2: Stress Test
-        log_('========================================', 'INFO');
-        log_('ALL TESTS: Starting Stress Test (2/3)', 'INFO');
-        log_('========================================', 'INFO');
+        log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
+        log_('║  TEST 2/3: Stress Test                                       ║', 'INFO');
+        log_('╚══════════════════════════════════════════════════════════════╝', 'INFO');
         const stressTestResult = runStressTest();
+        const stressStatus = stressTestResult ? '✓ PASSED' : '✗ FAILED';
+        log_('>>> TEST RESULT: Stress Test ' + stressStatus, stressTestResult ? 'INFO' : 'ERROR');
+        log_('', 'INFO');
         testResults.push('Stress Test: ' + (stressTestResult ? 'PASSED' : 'FAILED'));
 
         // Test 3: Add/Delete Separation Test
-        log_('========================================', 'INFO');
-        log_('ALL TESTS: Starting Add/Delete Separation Test (3/3)', 'INFO');
-        log_('========================================', 'INFO');
+        log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
+        log_('║  TEST 3/3: Add/Delete Separation Test                        ║', 'INFO');
+        log_('╚══════════════════════════════════════════════════════════════╝', 'INFO');
         const addDeleteTestResult = runAddDeleteSeparationTest();
+        const addDeleteStatus = addDeleteTestResult ? '✓ PASSED' : '✗ FAILED';
+        log_('>>> TEST RESULT: Add/Delete Separation Test ' + addDeleteStatus, addDeleteTestResult ? 'INFO' : 'ERROR');
+        log_('', 'INFO');
         testResults.push('Add/Delete Separation Test: ' + (addDeleteTestResult ? 'PASSED' : 'FAILED'));
 
         // Summary
         const overallEndTime = new Date();
         const overallDurationSeconds = ((overallEndTime.getTime() - overallStartTime.getTime()) / 1000).toFixed(2);
 
-        log_('========================================', 'INFO');
-        log_('ALL TESTS COMPLETE', 'INFO');
-        log_('========================================', 'INFO');
-        log_('OVERALL TEST DURATION: ' + overallDurationSeconds + ' seconds', 'INFO');
-        log_('Test Results:', 'INFO');
-        testResults.forEach(function(result) {
-            log_('  - ' + result, 'INFO');
-        });
+        const passedCount = testResults.filter(r => r.includes('PASSED')).length;
+        const failedCount = testResults.filter(r => r.includes('FAILED')).length;
+        const allPassed = failedCount === 0;
 
-        showTestMessage_('All Tests Complete', 'All three tests have been executed.\n\n' + testResults.join('\n') + '\n\nTotal Duration: ' + overallDurationSeconds + ' seconds\n\nCheck the TestLog sheet for detailed results.');
+        log_('', 'INFO');
+        log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
+        log_('║                    TEST SUMMARY                              ║', 'INFO');
+        log_('╚══════════════════════════════════════════════════════════════╝', 'INFO');
+        log_('Total Tests Run: 3', 'INFO');
+        log_('Tests Passed: ' + passedCount + ' ✓', 'INFO');
+        log_('Tests Failed: ' + failedCount + (failedCount > 0 ? ' ✗' : ''), failedCount > 0 ? 'ERROR' : 'INFO');
+        log_('Overall Duration: ' + overallDurationSeconds + ' seconds', 'INFO');
+        log_('', 'INFO');
+        log_('Individual Test Results:', 'INFO');
+        testResults.forEach(function(result) {
+            const isPassed = result.includes('PASSED');
+            const icon = isPassed ? '  ✓' : '  ✗';
+            log_(icon + ' ' + result, isPassed ? 'INFO' : 'ERROR');
+        });
+        log_('', 'INFO');
+        log_('═══════════════════════════════════════════════════════════════', 'INFO');
+        log_(allPassed ? '✓✓✓ ALL TESTS PASSED ✓✓✓' : '✗✗✗ SOME TESTS FAILED ✗✗✗', allPassed ? 'INFO' : 'ERROR');
+        log_('═══════════════════════════════════════════════════════════════', 'INFO');
+
+        showTestMessage_('All Tests Complete', 'All three tests have been executed.\n\n' + testResults.map(function(r) { return (r.includes('PASSED') ? '✓' : '✗') + ' ' + r; }).join('\n') + '\n\nTotal Duration: ' + overallDurationSeconds + ' seconds\n\nCheck the TestLog sheet for detailed results.');
 
     } finally {
         SCRIPT_EXECUTION_MODE = 'DEFAULT';

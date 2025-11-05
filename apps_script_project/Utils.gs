@@ -156,10 +156,31 @@ function getConfiguration_() {
   const data = configSheet.getRange(2, 1, lastRow - 1, 2).getValues();
   const config = data.reduce((acc, row) => {
     if (row[0]) {
-      acc[row[0]] = row[1];
+      // Filter out spreadsheet errors (#ERROR!, #N/A, #VALUE!, etc.)
+      const value = row[1];
+      const valueStr = String(value);
+
+      // Check if the value is a spreadsheet error
+      if (valueStr.startsWith('#') && (valueStr.includes('ERROR') || valueStr.includes('N/A') || valueStr.includes('VALUE') || valueStr.includes('REF') || valueStr.includes('DIV'))) {
+        // Log a warning about the error but don't include it in config
+        if (SCRIPT_EXECUTION_MODE === 'TEST') {
+          // Only log once during tests to avoid spam
+          if (!config['_errorsDetected']) {
+            log_('Warning: Config sheet contains formula errors. Please check the Config sheet and fix any cells showing #ERROR! or similar.', 'WARN');
+            config['_errorsDetected'] = true;
+          }
+        }
+        // Skip this config value
+        return acc;
+      }
+
+      acc[row[0]] = value;
     }
     return acc;
   }, {});
+
+  // Remove the temporary error flag before caching
+  delete config['_errorsDetected'];
 
   cache.put('config', JSON.stringify(config), 300); // Cache for 5 minutes
   return config;
@@ -195,12 +216,19 @@ function getMaxLogLength_() {
 }
 
 function log_(message, severity = 'INFO') {
+  // Filter out spreadsheet errors to prevent #ERROR! from appearing in logs
+  const messageStr = String(message);
+  if (messageStr.startsWith('#') && (messageStr.includes('ERROR') || messageStr.includes('N/A') || messageStr.includes('VALUE') || messageStr.includes('REF') || messageStr.includes('DIV'))) {
+    // Skip logging spreadsheet errors - they're not useful log messages
+    return;
+  }
+
   const sheetName = (SCRIPT_EXECUTION_MODE === 'TEST') ? TEST_LOG_SHEET_NAME : LOG_SHEET_NAME;
   const logSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
   if (logSheet) {
     const timestamp = Utilities.formatDate(new Date(), SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss');
     const lastRow = logSheet.getLastRow();
-    logSheet.getRange(lastRow + 1, 1, 1, 3).setValues([[timestamp, severity.toUpperCase(), message]]);
+    logSheet.getRange(lastRow + 1, 1, 1, 3).setValues([[timestamp, severity.toUpperCase(), messageStr]]);
   }
 }
 

@@ -205,7 +205,14 @@ function setupControlSheets_() {
     const existingSettings = new Map();
     existingData.forEach(row => {
         if (row[0] && !row[0].startsWith('---')) {
-            existingSettings.set(row[0], row[1]);
+            // Filter out spreadsheet errors (#ERROR!, #N/A, etc.)
+            const value = row[1];
+            const valueStr = String(value);
+            if (!valueStr.startsWith('#') || (!valueStr.includes('ERROR') && !valueStr.includes('N/A') && !valueStr.includes('VALUE') && !valueStr.includes('REF') && !valueStr.includes('DIV'))) {
+                existingSettings.set(row[0], value);
+            } else {
+                log_('Warning: Skipping Config setting "' + row[0] + '" due to formula error: ' + valueStr, 'WARN');
+            }
         }
     });
 
