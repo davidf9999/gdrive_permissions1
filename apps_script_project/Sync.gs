@@ -433,14 +433,12 @@ function syncDeletes() {
     const execOptions = { removeOnly: true };
     const userGroupsSummary = syncUserGroups(execOptions);
     if (userGroupsSummary) {
-      totalSummary.added += userGroupsSummary.added;
       totalSummary.removed += userGroupsSummary.removed;
       totalSummary.failed += userGroupsSummary.failed;
     }
 
     const managedFoldersSummary = processManagedFolders_(execOptions);
     if (managedFoldersSummary) {
-      totalSummary.added += managedFoldersSummary.added;
       totalSummary.removed += managedFoldersSummary.removed;
       totalSummary.failed += managedFoldersSummary.failed;
     }
