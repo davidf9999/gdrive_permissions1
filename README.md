@@ -397,6 +397,16 @@ If you used the automated provisioning tool, a `teardown.sh` script is provided 
 
 This project also includes features for testing and logging, which are explained in more detail in [User Guide](./docs/USER_GUIDE.md) and [Testing](./docs/TESTING.md).
 
+### Logging and Auditing
+
+To improve the traceability and observability of the script's operations, the logging and auditing capabilities have been enhanced.
+
+*   **Logging Levels:** The script now uses logging levels (e.g., INFO, WARN, ERROR) to provide more granular control over the log output. This allows administrators to easily filter and identify important events, such as errors or warnings, in the log sheets.
+
+*   **Numeric Summary of Changes:** At the end of each synchronization operation, the script logs a numeric summary of the changes made. This summary includes the number of users added, removed, and any failed operations, providing a clear and concise overview of the outcome of the synchronization process.
+
+For a more detailed explanation of these features, please see the [Project Evolution Summary](./GEMINI.md).
+
 ### Advanced Logging with Google Cloud
 
 In addition to logging to a sheet, the script can be configured to send logs directly to **Google Cloud Logging (GCL)**. This provides a much more powerful, searchable, and persistent logging solution, which is highly recommended for production environments.

@@ -94,3 +94,11 @@ To improve maintainability and scalability, the monolithic `Code.js` file was re
     *   `Tests.gs`: All test-related functions.
 
 *   **`clasp` for Deployment:** Due to the new multi-file structure, using the `clasp` command-line tool is now the **required method** for deploying the script. The old manual copy-paste method is no longer feasible. The `README.md` has been updated with detailed instructions on how to configure and use `clasp`, including setting the `rootDir` in a `.clasp.json` file.
+
+## Logging and Auditing
+
+To improve the traceability and observability of the script's operations, the logging and auditing capabilities have been enhanced.
+
+*   **Logging Levels:** The script now uses logging levels (e.g., INFO, WARN, ERROR) to provide more granular control over the log output. This allows administrators to easily filter and identify important events, such as errors or warnings, in the log sheets.
+
+*   **Numeric Summary of Changes:** At the end of each synchronization operation, the script logs a numeric summary of the changes made. This summary includes the number of users added, removed, and any failed operations, providing a clear and concise overview of the outcome of the synchronization process.
