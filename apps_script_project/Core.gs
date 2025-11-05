@@ -11,7 +11,7 @@ function processManagedFolders_(options = {}) {
   const sheet = ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
   if (!sheet) {
     if (!returnPlanOnly && !silentMode) SpreadsheetApp.getUi().alert('CRITICAL: Configuration sheet named "' + MANAGED_FOLDERS_SHEET_NAME + '" not found. Aborting.');
-    return returnPlanOnly ? [] : undefined;
+    return returnPlanOnly ? [] : totalSummary;
   }
 
   if (!returnPlanOnly && !silentMode) setSheetUiStyles_();
