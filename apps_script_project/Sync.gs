@@ -491,7 +491,12 @@ function fullSync(options = {}) {
     }
 
     // 1. Sync Admins
-    syncAdmins(options);
+    const adminSummary = syncAdmins(options);
+    if (adminSummary) {
+      totalSummary.added += adminSummary.added;
+      totalSummary.removed += adminSummary.removed;
+      totalSummary.failed += adminSummary.failed;
+    }
 
     // 2. Sync User Groups
     const userGroupsSummary = syncUserGroups(options);
