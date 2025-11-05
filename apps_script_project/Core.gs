@@ -633,7 +633,7 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
             log_('Could not parse status for a batch operation part for group ' + groupEmail + '. Part: ' + part, 'ERROR');
         }
       }
-      log_('Batch processing summary for ' + groupEmail + ': ' + summary.added + ' added, ' + summary.removed + ' removed, ' + summary.failed + ' failed.');
+      log_('Batch processing summary for ' + groupEmail + ': ' + summary.added + ' added, ' + summary.removed + ' removed, ' + summary.failed + ' failed.', 'INFO');
       if(summary.failed > 0) {
         log_('WARNING: ' + summary.failed + ' membership operations failed to sync for group ' + groupEmail + '. See logs for details.', 'WARN');
       }
