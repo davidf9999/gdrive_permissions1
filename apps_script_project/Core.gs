@@ -669,7 +669,32 @@ function setFolderPermission_(folderId, groupEmail, role) {
   try {
     const folder = DriveApp.getFolderById(folderId);
     const roleLower = role.toLowerCase();
+    const groupEmailLower = groupEmail.toLowerCase();
+    const access = folder.getAccess(groupEmail);
 
+    if (roleLower === 'editor' && access === DriveApp.Permission.EDIT) {
+        log_('Permission "editor" for group "' + groupEmail + '" on folder "' + folder.getName() + '" already exists. Skipping.');
+        return;
+    }
+    if (roleLower === 'viewer' && access === DriveApp.Permission.VIEW) {
+        log_('Permission "viewer" for group "' + groupEmail + '" on folder "' + folder.getName() + '" already exists. Skipping.');
+        return;
+    }
+    // getAccess does not support 'commenter' role. So we check it manually.
+    if (roleLower === 'commenter') {
+        const commenters = folder.getCommenters().map(user => user.getEmail().toLowerCase());
+        if (commenters.indexOf(groupEmailLower) !== -1) {
+            // If the user is a commenter, are they also an editor?
+            const editors = folder.getEditors().map(user => user.getEmail().toLowerCase());
+            if(editors.indexOf(groupEmailLower) === -1) {
+                log_('Permission "commenter" for group "' + groupEmail + '" on folder "' + folder.getName() + '" already exists. Skipping.');
+                return;
+            }
+        }
+    }
+
+    // If we are here, we need to set the permission.
+    // The `add` methods handle downgrades, so we don't need to remove.
     switch (roleLower) {
       case 'editor':
         folder.addEditor(groupEmail);
