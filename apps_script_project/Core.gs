@@ -61,6 +61,7 @@ function processRow_(rowIndex, options = {}) {
   const { returnPlanOnly = false, removeOnly = false, silentMode = false } = options;
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
   const statusCell = sheet.getRange(rowIndex, STATUS_COL);
+  const summary = { added: 0, removed: 0, failed: 0 };
 
   try {
     // Handle planning mode separately
@@ -79,9 +80,9 @@ function processRow_(rowIndex, options = {}) {
       const groupEmail = sheet.getRange(rowIndex, GROUP_EMAIL_COL).getValue();
       const userSheetName = sheet.getRange(rowIndex, USER_SHEET_NAME_COL).getValue();
       if (groupEmail && userSheetName && !shouldSkipGroupOps_()) {
-        const summary = syncGroupMembership_(groupEmail, userSheetName, options);
+        const deleteSummary = syncGroupMembership_(groupEmail, userSheetName, options);
         statusCell.setValue('OK (Deletions processed)');
-        return summary;
+        return deleteSummary;
       } else {
         log_('Skipping row ' + rowIndex + ' for deletions: missing group info or Admin SDK.', 'WARN');
         statusCell.setValue('SKIPPED');
@@ -139,7 +140,7 @@ function processRow_(rowIndex, options = {}) {
       log_('Skipping group operations for row ' + rowIndex + ' (Admin SDK not available).', 'WARN');
       sheet.getRange(rowIndex, LAST_SYNCED_COL).setValue(Utilities.formatDate(new Date(), SpreadsheetApp.getActive().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss'));
       statusCell.setValue('SKIPPED (No Admin SDK)');
-      return null;
+      return summary;
     }
 
     const wasGroupNewlyCreated = getOrCreateGroup_(groupEmail, userSheetName);
@@ -153,11 +154,11 @@ function processRow_(rowIndex, options = {}) {
     }
 
     setFolderPermission_(folder.getId(), groupEmail, role);
-    const summary = syncGroupMembership_(groupEmail, userSheetName, options);
+    const syncSummary = syncGroupMembership_(groupEmail, userSheetName, options);
 
     sheet.getRange(rowIndex, LAST_SYNCED_COL).setValue(Utilities.formatDate(new Date(), SpreadsheetApp.getActive().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss'));
     statusCell.setValue('OK');
-    return summary;
+    return syncSummary;
 
   } catch (e) {
     log_('Failed to process row ' + rowIndex + '. Error: ' + e.message + ' Stack: ' + e.stack, 'ERROR');
