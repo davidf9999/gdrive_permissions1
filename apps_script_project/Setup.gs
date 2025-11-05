@@ -166,7 +166,8 @@ function setupControlSheets_() {
     'TestNumFolders': { value: '10', description: 'The number of folders to create during the Stress Test.' },
     'TestNumUsers': { value: '200', description: 'The number of users to create per folder during the Stress Test.' },
     'TestBaseEmail': { value: 'example@gmail.com', description: 'The base email address used to generate unique users for the Stress Test.' },
-    'MaxFileSizeMB': { value: 100, description: 'The maximum file size in MB for the spreadsheet. If exceeded, auto-sync will be aborted and an alert sent. This prevents uncontrolled growth of version history.' }
+    'MaxFileSizeMB': { value: 100, description: 'The maximum file size in MB for the spreadsheet. If exceeded, auto-sync will be aborted and an alert sent. This prevents uncontrolled growth of version history.' },
+    'EnableNamedVersions': { value: true, description: 'Set to TRUE to create a named version of the spreadsheet after each auto-sync for auditing purposes.' }
   };
 
   let configSheet = ss.getSheetByName(CONFIG_SHEET_NAME);

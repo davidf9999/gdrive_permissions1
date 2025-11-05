@@ -120,31 +120,33 @@ function autoSync(e) {
     }
 
     // Send summary email if configured
-    const spreadsheetId = SpreadsheetApp.getActiveSpreadsheet().getId();
-    const now = new Date();
-    const versionName = `AutoSync-${now.toISOString()}`;
     let revisionLink = null;
+    if (getConfigValue_('EnableNamedVersions', true)) {
+      const spreadsheetId = SpreadsheetApp.getActiveSpreadsheet().getId();
+      const now = new Date();
+      const versionName = `AutoSync-${now.toISOString()}`;
 
-    try {
-      // This requires the Drive API advanced service to be enabled.
-      const revisions = Drive.Revisions.list(spreadsheetId);
-      if (revisions.items && revisions.items.length > 0) {
-        const latestRevision = revisions.items[revisions.items.length - 1];
-        const revisionId = latestRevision.id;
+      try {
+        // This requires the Drive API advanced service to be enabled.
+        const revisions = Drive.Revisions.list(spreadsheetId);
+        if (revisions.items && revisions.items.length > 0) {
+          const latestRevision = revisions.items[revisions.items.length - 1];
+          const revisionId = latestRevision.id;
 
-        const revisionResource = {
-          pinned: true,
-          description: versionName
-        };
-        Drive.Revisions.patch(revisionResource, spreadsheetId, revisionId);
+          const revisionResource = {
+            pinned: true,
+            description: versionName
+          };
+          Drive.Revisions.patch(revisionResource, spreadsheetId, revisionId);
 
-        revisionLink = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=0&revision=${revisionId}`;
-        log_(`Successfully created named version: ${versionName}`);
-      } else {
-        log_('Could not find any revisions for this file to create a named version.', 'WARN');
+          revisionLink = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=0&revision=${revisionId}`;
+          log_(`Successfully created named version: ${versionName}`);
+        } else {
+          log_('Could not find any revisions for this file to create a named version.', 'WARN');
+        }
+      } catch (e) {
+        log_(`Failed to create named version: ${e.toString()}. Ensure the advanced Drive API service is enabled.`, 'WARN');
       }
-    } catch (e) {
-      log_(`Failed to create named version: ${e.toString()}. Ensure the advanced Drive API service is enabled.`, 'WARN');
     }
 
     sendAutoSyncSummary_(revisionLink);
