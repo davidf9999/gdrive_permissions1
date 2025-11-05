@@ -227,8 +227,18 @@ function log_(message, severity = 'INFO') {
   const logSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
   if (logSheet) {
     const timestamp = Utilities.formatDate(new Date(), SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss');
-    const lastRow = logSheet.getLastRow();
-    logSheet.getRange(lastRow + 1, 1, 1, 3).setValues([[timestamp, severity.toUpperCase(), messageStr]]);
+    let lastRow = logSheet.getLastRow();
+
+    // Ensure header row exists - check if row 1 is empty or doesn't have the header
+    if (lastRow === 0 || logSheet.getRange('A1').getValue() !== 'Timestamp') {
+      // Create or recreate the header row
+      logSheet.getRange('A1:C1').setValues([['Timestamp', 'Level', 'Message']]).setFontWeight('bold');
+      lastRow = 1;
+    }
+
+    // Always write to at least row 2 (never overwrite the header)
+    const nextRow = Math.max(lastRow + 1, 2);
+    logSheet.getRange(nextRow, 1, 1, 3).setValues([[timestamp, severity.toUpperCase(), messageStr]]);
   }
 }
 
