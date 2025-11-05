@@ -169,27 +169,15 @@ Note: This requires YOU to be logged in (not volunteers).
 
 ## Advanced Configuration
 
-### Customizing What Gets Synced
+### How Auto-Sync Handles Deletions
 
-By default, auto-sync runs `fullSync()` (adds and deletes). To change this:
+By default, auto-sync is designed to be **non-destructive**. This is a critical safety feature to prevent accidental removal of user permissions.
 
-1. Open the Apps Script editor: **Extensions → Apps Script**
-2. Find the file `Triggers.gs`
-3. Locate the `autoSync()` function (around line 68)
-4. Change the sync type:
+-   **Auto-sync only performs additions:** It will process new users added to sheets, but it will **not** remove users.
+-   **Deletions require manual action:** When the script detects that a user should be removed, it does not perform the deletion. Instead, it sends an email notification to the administrator with the subject "⚠️ Manual Action Required: Permission Deletions Pending".
+-   **Manual Deletion Step:** To execute the pending deletions, you must run **Permissions Manager → Sync Deletes** from the menu. This allows you to review and confirm the changes before they are applied.
 
-```javascript
-// Option 1: Full sync (current default)
-fullSync();
-
-// Option 2: Only additions (never removes access)
-syncAdds();
-```
-
-**When to use adds-only:**
-- Your volunteers are less experienced
-- You want to manually review deletions
-- You prefer a more cautious approach
+This "Risk-Based" approach ensures a human is always in the loop for destructive operations, preventing accidental lockouts.
 
 ### Handling Errors
 

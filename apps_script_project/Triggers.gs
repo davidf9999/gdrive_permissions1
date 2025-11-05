@@ -89,15 +89,22 @@ function autoSync(e) {
       return;
     }
 
-    // RISK-BASED AUTO-SYNC IMPLEMENTATION
-    // Auto-sync only performs SAFE operations (all additions including admins)
-    // DESTRUCTIVE operations (deletions) require manual execution
+    const allowDeletions = getConfigValue_('AllowAutosyncDeletion', false);
 
-    log_('Performing SAFE operations (additions only)...');
-    syncAdds({ silentMode: silentMode }); // Includes admin additions, user groups, and folder permissions
+    if (allowDeletions) {
+        log_('Auto-sync with deletions enabled. Performing full sync...');
+        fullSync({ silentMode: true, excludeAdminsFromDeletion: true });
+    } else {
+        // RISK-BASED AUTO-SYNC IMPLEMENTATION
+        // Auto-sync only performs SAFE operations (all additions including admins)
+        // DESTRUCTIVE operations (deletions) require manual execution
 
-    // Check for pending DESTRUCTIVE operations and notify admin
-    checkAndNotifyPendingDeletions_();
+        log_('Performing SAFE operations (additions only)...');
+        syncAdds({ silentMode: silentMode }); // Includes admin additions, user groups, and folder permissions
+
+        // Check for pending DESTRUCTIVE operations and notify admin
+        checkAndNotifyPendingDeletions_();
+    }
 
     // Send summary email if configured
     sendAutoSyncSummary_();

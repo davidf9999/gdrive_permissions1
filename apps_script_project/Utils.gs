@@ -492,3 +492,24 @@ function clearCache() {
     ui.alert('An error occurred while clearing the cache: ' + e.message);
   }
 }
+function getAdminEmails_() {
+  const adminSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(ADMINS_SHEET_NAME);
+  if (!adminSheet) {
+    return [];
+  }
+  const adminData = adminSheet.getRange('A2:D' + adminSheet.getLastRow()).getValues();
+  const adminEmails = adminData.filter(function(row) {
+    const email = row[0].toString().trim().toLowerCase();
+    const isDisabled = row[3];
+    return email && email.length > 0 && !isDisabled;
+  }).map(function(row) {
+    return row[0].toString().trim().toLowerCase();
+  });
+  
+  const owner = SpreadsheetApp.getActiveSpreadsheet().getOwner();
+  if (owner) {
+      adminEmails.push(owner.getEmail().toLowerCase());
+  }
+  
+  return [...new Set(adminEmails)]; // Return unique emails
+}
