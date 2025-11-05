@@ -86,6 +86,8 @@ Add these settings to the **Config sheet**:
 | `NotifyAfterSync` | `TRUE` | Send email summary after each auto-sync completion |
 | `NotifyDeletionsPending` | `TRUE` | Send email when deletions detected (require manual action) |
 | `AutoSyncMaxDeletions` | `10` | Safety limit: if deletions exceed this, notify admin but don't allow manual sync without review |
+| `MaxFileSizeMB` | `100` | Safety limit: if the total spreadsheet file size exceeds this limit in MB, auto-sync is aborted to prevent uncontrolled file history growth. |
+| `EnableNamedVersions` | `TRUE` | Create a named, timestamped version of the sheet after each sync and link to it in the summary email for auditing. |
 
 **No Complex Modes**: Behavior is simple and predictable:
 - ✅ Auto-sync always runs **SAFE** operations (all additions)

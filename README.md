@@ -138,7 +138,7 @@ Now you can complete the connection.
 
 4.  **Enable the Admin SDK API:** In the Google Cloud Console, use the top search bar to find and select **Admin SDK API**. On its page, click the blue **Enable** button. If it already says "Manage", you are all set.
 
-5.  **Enable the Google Drive API:** While still in the Google Cloud Console, use the search bar again to find and select **Google Drive API**. Click the blue **Enable** button. This is required for the script to create and manage folders.
+5.  **Enable the Google Drive API:** While still in the Google Cloud Console, use the search bar again to find and select **Google Drive API**. Click the blue **Enable** button. This is required for the script to create and manage folders and to create named versions for auditing.
 
 ---
 

@@ -179,6 +179,27 @@ By default, auto-sync is designed to be **non-destructive**. This is a critical 
 
 This "Risk-Based" approach ensures a human is always in the loop for destructive operations, preventing accidental lockouts.
 
+### Auditing and File Size Management
+
+To improve auditability and prevent the spreadsheet from growing too large due to version history, two new features have been introduced:
+
+**1. Named Version Linking (for Auditing)**
+
+-   **What it does:** After each successful auto-sync, the script creates a permanent, named snapshot of the spreadsheet in its version history (e.g., `AutoSync-2025-11-05T...`).
+-   **The Benefit:** The summary email you receive will contain a direct link to this immutable, timestamped version. This provides a perfect audit trail, allowing you to see the exact state of the sheets when the sync ran, even if the live sheets have been changed since.
+-   **Configuration:** This feature is controlled by the `EnableNamedVersions` setting in the `Config` sheet and is enabled by default.
+
+**2. File Size Limit (Safety Net)**
+
+-   **The Problem:** Creating named versions causes the file's version history to grow, increasing the total file size.
+-   **The Solution:** A new setting, `MaxFileSizeMB`, has been added to the `Config` sheet (defaulting to 100 MB).
+-   **How it works:** Before each auto-sync, the script checks the spreadsheet's total size. If it exceeds the configured limit, the sync is **aborted**, and an email alert is sent to the administrator. This prevents the file from becoming unusably large and prompts you to perform manual cleanup.
+-   **Manual Cleanup:** You can delete old versions by going to **File → Version history → See version history** in your spreadsheet.
+
+**IMPORTANT: Enabling the Drive API**
+
+For these features to work, you must enable the **Google Drive API** in your Google Cloud Project. Please see the main [README.md](../README.md#step-4-enable-required-apis--configure-consent) for instructions.
+
 ### Handling Errors
 
 If auto-sync encounters an error:
