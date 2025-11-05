@@ -5,10 +5,11 @@ function runManualAccessTest() {
     const startTime = new Date(); // Record start time
     let testFolderName, testRole, testEmail, testRowIndex;
     let userSheetName = null, groupEmail = null, folderId = null; // Initialize to null
+    let success = false;
     try {
         if (shouldSkipGroupOps_()) {
             showTestMessage_('Test Aborted', 'Manual Access Test requires the Admin Directory service (Admin SDK). Please enable it or run on a Google Workspace domain.');
-            return;
+            return false;
         }
         const ui = SpreadsheetApp.getUi();
         const testConfig = getTestConfiguration_();
@@ -16,21 +17,21 @@ function runManualAccessTest() {
         testFolderName = testConfig.folderName;
         if (!testFolderName) {
             const folderNamePrompt = ui.prompt('Test - Step 1/4: Folder Name', 'Enter a name for a new test folder to be created.', ui.ButtonSet.OK_CANCEL);
-            if (folderNamePrompt.getSelectedButton() !== ui.Button.OK || !folderNamePrompt.getResponseText()) return ui.alert('Test cancelled.');
+            if (folderNamePrompt.getSelectedButton() !== ui.Button.OK || !folderNamePrompt.getResponseText()) { ui.alert('Test cancelled.'); return false; }
             testFolderName = folderNamePrompt.getResponseText();
         }
 
         testRole = testConfig.role;
         if (!testRole) {
             const rolePrompt = ui.prompt('Test - Step 2/4: Role', 'Enter the role to test (e.g., Editor, Viewer).', ui.ButtonSet.OK_CANCEL);
-            if (rolePrompt.getSelectedButton() !== ui.Button.OK || !rolePrompt.getResponseText()) return ui.alert('Test cancelled.');
+            if (rolePrompt.getSelectedButton() !== ui.Button.OK || !rolePrompt.getResponseText()) { ui.alert('Test cancelled.'); return false; }
             testRole = rolePrompt.getResponseText();
         }
 
         testEmail = testConfig.email;
         if (!testEmail) {
             const emailPrompt = ui.prompt('Test - Step 3/4: Test Email', 'Enter a REAL email address you can access for testing (e.g., a personal Gmail).', ui.ButtonSet.OK_CANCEL);
-            if (emailPrompt.getSelectedButton() !== ui.Button.OK || !emailPrompt.getResponseText()) return ui.alert('Test cancelled.');
+            if (emailPrompt.getSelectedButton() !== ui.Button.OK || !emailPrompt.getResponseText()) { ui.alert('Test cancelled.'); return false; }
             testEmail = emailPrompt.getResponseText().trim().toLowerCase();
         }
         log_('Using test email: ' + testEmail + '. If this is not a real Google account, a "Resource Not Found" error in the logs is expected.', 'INFO');
@@ -53,7 +54,7 @@ function runManualAccessTest() {
         const userSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(userSheetName);
         if (!userSheet) {
             showTestMessage_('Test Failed', 'Could not find the created user sheet: ' + userSheetName);
-            return;
+            return false;
         }
 
         userSheet.getRange('A2').setValue(testEmail);
@@ -78,7 +79,7 @@ function runManualAccessTest() {
 
         if (verification1 !== ui.Button.YES) {
             ui.alert('Test aborted. Please review the logs and configuration.');
-            return;
+            return false;
         }
 
         userSheet.getRange('A2').clearContent();
@@ -101,11 +102,16 @@ function runManualAccessTest() {
 
         if (verification2 === ui.Button.YES) {
             showTestMessage_('Test Complete: SUCCESS!', 'The user was successfully granted and revoked access.');
+            success = true;
         } else {
             showTestMessage_('Test Complete: FAILURE!', 'Access was not revoked as expected. This may be due to Google Drive permission propagation delays. Please wait a few minutes and check again.');
+            success = false;
         }
-
-        // Record test duration
+    } catch (e) {
+        log_('TEST FAILED: ' + e.toString() + ' Stack: ' + e.stack, 'ERROR');
+        ui.alert('Test FAILED. Check the logs for details. Error: ' + e.message);
+        success = false;
+    } finally {
         const endTime = new Date();
         const durationSeconds = ((endTime.getTime() - startTime.getTime()) / 1000).toFixed(2);
         log_('TEST DURATION: ' + durationSeconds + ' seconds', 'INFO');
@@ -118,14 +124,14 @@ function runManualAccessTest() {
         }
 
         if (cleanup) {
-            groupEmail = managedSheet.getRange(testRowIndex, GROUP_EMAIL_COL).getValue();
+            groupEmail = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME).getRange(testRowIndex, GROUP_EMAIL_COL).getValue();
             cleanupFolderData_(testFolderName, folderId, groupEmail, userSheetName);
-            managedSheet.deleteRow(testRowIndex);
+            SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME).deleteRow(testRowIndex);
             showTestMessage_('Cleanup', 'Cleanup complete.');
         }
-    } finally {
         SCRIPT_EXECUTION_MODE = 'DEFAULT';
     }
+    return success;
 }
 
 /***** STRESS TEST FUNCTIONS *****/
@@ -136,10 +142,11 @@ function runManualAccessTest() {
 function runStressTest() {
     SCRIPT_EXECUTION_MODE = 'TEST';
     const testStartTime = new Date(); // Record overall test start time
+    let success = false;
     try {
         if (shouldSkipGroupOps_()) {
             showTestMessage_('Test Aborted', 'Stress Test requires the Admin Directory service (Admin SDK). Please enable it or run on a Google Workspace domain.');
-            return;
+            return false;
         }
         const ui = SpreadsheetApp.getUi();
         const testConfig = getTestConfiguration_();
@@ -148,25 +155,25 @@ function runStressTest() {
         let numFolders = testConfig.numFolders;
         if (isNaN(numFolders)) {
             const numFoldersStr = ui.prompt('Stress Test - Step 1/4', 'Enter the number of temporary folders to create (e.g., 10).', ui.ButtonSet.OK_CANCEL);
-            if (numFoldersStr.getSelectedButton() !== ui.Button.OK || !numFoldersStr.getResponseText()) return ui.alert('Test cancelled.');
+            if (numFoldersStr.getSelectedButton() !== ui.Button.OK || !numFoldersStr.getResponseText()) { ui.alert('Test cancelled.'); return false; }
             numFolders = parseInt(numFoldersStr.getResponseText(), 10);
         }
 
         let numUsers = testConfig.numUsers;
         if (isNaN(numUsers) || numUsers < 1) {
             const numUsersStr = ui.prompt('Stress Test - Step 2/4', 'Enter the number of test users to create PER FOLDER (e.g., 200).', ui.ButtonSet.OK_CANCEL);
-            if (numUsersStr.getSelectedButton() !== ui.Button.OK || !numUsersStr.getResponseText()) return ui.alert('Test cancelled.');
+            if (numUsersStr.getSelectedButton() !== ui.Button.OK || !numUsersStr.getResponseText()) { ui.alert('Test cancelled.'); return false; }
             numUsers = parseInt(numUsersStr.getResponseText(), 10);
         }
 
         let baseEmail = testConfig.baseEmail;
         if (!baseEmail) {
             const baseEmailStr = ui.prompt('Stress Test - Step 3/4', 'Enter a base email address to generate test users (e.g., your.name@gmail.com).', ui.ButtonSet.OK_CANCEL);
-            if (baseEmailStr.getSelectedButton() !== ui.Button.OK || !baseEmailStr.getResponseText()) return ui.alert('Test cancelled.');
+            if (baseEmailStr.getSelectedButton() !== ui.Button.OK || !baseEmailStr.getResponseText()) { ui.alert('Test cancelled.'); return false; }
             baseEmail = baseEmailStr.getResponseText().trim();
         }
         const emailParts = baseEmail.split('@');
-        if (emailParts.length !== 2) return ui.alert('Invalid email address.');
+        if (emailParts.length !== 2) { ui.alert('Invalid email address.'); return false; }
 
         showTestMessage_(
             'Stress Test - Step 4/4',
@@ -216,8 +223,12 @@ function runStressTest() {
 
         showTestMessage_('Stress Test Complete!', 'The sync process finished in ' + durationSeconds + ' seconds.');
         log_('Stress Test sync duration: ' + durationSeconds + ' seconds', 'INFO');
-
-        // Record overall test duration
+        success = true;
+    } catch (e) {
+        log_('TEST FAILED: ' + e.toString() + ' Stack: ' + e.stack, 'ERROR');
+        ui.alert('Test FAILED. Check the logs for details. Error: ' + e.message);
+        success = false;
+    } finally {
         const testEndTime = new Date();
         const testDurationSeconds = ((testEndTime.getTime() - testStartTime.getTime()) / 1000).toFixed(2);
         log_('TEST DURATION: ' + testDurationSeconds + ' seconds', 'INFO');
@@ -230,9 +241,9 @@ function runStressTest() {
         }
 
         if (cleanup) {
+            const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
             const managedData = managedSheet.getRange(startRow, 1, numFolders, GROUP_EMAIL_COL).getValues();
 
-            // Delete rows from sheet first to prevent re-sync issues
             managedSheet.deleteRows(startRow, numFolders);
 
             showTestMessage_('Cleanup', 'Cleanup in Progress. This may take a few moments.');
@@ -247,9 +258,9 @@ function runStressTest() {
 
             showTestMessage_('Cleanup', 'Cleanup Complete!');
         }
-    } finally {
         SCRIPT_EXECUTION_MODE = 'DEFAULT';
     }
+    return success;
 }
 
 function cleanupStressTestData() {
@@ -451,18 +462,19 @@ function runAddDeleteSeparationTest() {
     let userSheetName = null, groupEmail = null, folderId = null; // Initialize to null
     const startTime = new Date(); // Record start time
     const testConfig = getTestConfiguration_(); // Declare testConfig at top scope
+    let success = false;
 
     try {
         if (shouldSkipGroupOps_()) {
             showTestMessage_('Test Aborted', 'This test requires the Admin Directory service (Admin SDK). Please enable it or run on a Google Workspace domain.');
-            return;
+            return false;
         }
 
         // --- Test Setup ---
         testFolderName = testConfig.folderName;
         if (!testFolderName) {
             const folderNamePrompt = ui.prompt('Add/Delete Test - Step 1/3: Folder Name', 'Enter a unique name for a new test folder.', ui.ButtonSet.OK_CANCEL);
-            if (folderNamePrompt.getSelectedButton() !== ui.Button.OK || !folderNamePrompt.getResponseText()) return ui.alert('Test cancelled.');
+            if (folderNamePrompt.getSelectedButton() !== ui.Button.OK || !folderNamePrompt.getResponseText()) { ui.alert('Test cancelled.'); return false; }
             testFolderName = folderNamePrompt.getResponseText();
         }
         testRole = 'Editor'; // Using a fixed role for simplicity
@@ -470,7 +482,7 @@ function runAddDeleteSeparationTest() {
         testEmail = testConfig.email;
         if (!testEmail) {
             const emailPrompt = ui.prompt('Add/Delete Test - Step 2/3: Test Email', 'Enter a REAL email address you can access for testing.', ui.ButtonSet.OK_CANCEL);
-            if (emailPrompt.getSelectedButton() !== ui.Button.OK || !emailPrompt.getResponseText()) return ui.alert('Test cancelled.');
+            if (emailPrompt.getSelectedButton() !== ui.Button.OK || !emailPrompt.getResponseText()) { ui.alert('Test cancelled.'); return false; }
             testEmail = emailPrompt.getResponseText().trim().toLowerCase();
         }
         log_('Using test email: ' + testEmail + '. If this is not a real Google account, a "Resource Not Found" error in the logs is expected.', 'INFO');
@@ -509,18 +521,14 @@ function runAddDeleteSeparationTest() {
         let members = fetchAllGroupMembers_(groupEmail);
         let isMember = members.some(m => m.email.toLowerCase() === testEmail);
 
-        // Check if the email is invalid (404 error expected for non-existent accounts)
         const testLogSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(TEST_LOG_SHEET_NAME);
         let has404Error = false;
         if (testLogSheet) {
             const logData = testLogSheet.getDataRange().getValues();
-            // Look for recent 404 errors related to this email in the last 50 log entries
             const recentLogs = logData.slice(-50);
             has404Error = recentLogs.some(row => {
                 const logMessage = row[2] ? row[2].toString() : '';
-                return logMessage.includes('404') &&
-                       logMessage.includes('Resource Not Found') &&
-                       logMessage.includes(testEmail);
+                return logMessage.includes('404') && logMessage.includes('Resource Not Found') && logMessage.includes(testEmail);
             });
         }
 
@@ -536,26 +544,19 @@ function runAddDeleteSeparationTest() {
 
         // --- Phase 2: Run Delete (should do nothing) ---
         log_('TEST: No-Op Delete Phase');
-
-        // Skip Phase 2 if the user was never added due to 404 error
         if (has404Error) {
             log_('TEST: Skipping No-Op Delete Phase - user was never added due to 404 error', 'INFO');
         } else {
             let confirmNoOpDelete;
-            log_('testConfig.autoConfirm before No-Op Delete: ' + testConfig.autoConfirm, 'INFO');
             if (testConfig.autoConfirm === true) {
                 confirmNoOpDelete = ui.Button.YES;
                 log_('Auto-confirming No-Op Delete.', 'INFO');
             } else {
                 confirmNoOpDelete = ui.alert('Confirm No-Op Delete', 'The script will now run a delete sync, but no deletions are expected. Continue?', ui.ButtonSet.YES_NO);
             }
-            if (confirmNoOpDelete !== ui.Button.YES) {
-                ui.alert('Test cancelled.');
-                return;
-            }
-            syncDeletes(); // This will prompt for confirmation
+            if (confirmNoOpDelete !== ui.Button.YES) { ui.alert('Test cancelled.'); return false; }
+            syncDeletes();
 
-            // --- Verification 2: User was NOT removed ---
             members = fetchAllGroupMembers_(groupEmail);
             isMember = members.some(m => m.email.toLowerCase() === testEmail);
             if (!isMember) {
@@ -568,33 +569,26 @@ function runAddDeleteSeparationTest() {
         // --- Phase 3: Actual Deletion ---
         log_('TEST: Actual Deletion Phase');
         userSheet.getRange('A2').clearContent();
-
-        // Skip Phase 3 if the user was never added due to 404 error
         if (has404Error) {
             log_('TEST: Skipping Actual Deletion Phase - user was never added due to 404 error', 'INFO');
             log_('VERIFICATION SKIPPED: No deletion verification needed since user was never added.', 'INFO');
             showTestMessage_('Test Complete: SUCCESS (with 404)', 'The test completed successfully. The email address was invalid (404 error), so add/delete operations were skipped as expected. The test infrastructure (folder, group, sheet) was created and will be cleaned up.');
         } else {
             let confirmActualDelete;
-            log_('testConfig.autoConfirm before Actual Deletion: ' + testConfig.autoConfirm, 'INFO');
             if (testConfig.autoConfirm === true) {
                 confirmActualDelete = ui.Button.YES;
                 log_('Auto-confirming Actual Deletion.', 'INFO');
             } else {
                 confirmActualDelete = ui.alert('Confirm Actual Delete', 'The script will now run a delete sync to remove the user. Continue?', ui.ButtonSet.YES_NO);
             }
-            if (confirmActualDelete !== ui.Button.YES) {
-                ui.alert('Test cancelled.');
-                return;
-            }
-            syncDeletes(); // This will prompt for confirmation
+            if (confirmActualDelete !== ui.Button.YES) { ui.alert('Test cancelled.'); return false; }
+            syncDeletes();
             status = managedSheet.getRange(testRowIndex, STATUS_COL).getValue();
             if (status !== 'OK') {
                 throw new Error('Sync failed after deleting user. Status: ' + status);
             }
             log_('Delete user sync complete. Status: OK', 'INFO');
 
-            // --- Verification 3: User was removed ---
             members = fetchAllGroupMembers_(groupEmail);
             isMember = members.some(m => m.email.toLowerCase() === testEmail);
             if (isMember) {
@@ -604,40 +598,33 @@ function runAddDeleteSeparationTest() {
             showTestMessage_('Test Complete: SUCCESS!', 'The user was successfully added and then removed using the separated sync functions.');
         }
 
-        // Record test duration
-        const endTime = new Date();
-        const durationSeconds = ((endTime.getTime() - startTime.getTime()) / 1000).toFixed(2);
-        log_('TEST DURATION: ' + durationSeconds + ' seconds', 'INFO');
-
+        success = true;
     } catch (e) {
         log_('TEST FAILED: ' + e.toString() + ' Stack: ' + e.stack, 'ERROR');
         ui.alert('Test FAILED. Check the logs for details. Error: ' + e.message);
-
-        // Record test duration even on failure
+        success = false;
+    } finally {
         const endTime = new Date();
         const durationSeconds = ((endTime.getTime() - startTime.getTime()) / 1000).toFixed(2);
         log_('TEST DURATION: ' + durationSeconds + ' seconds', 'INFO');
-    } finally {
-        // --- Cleanup ---
+
         let cleanup = testConfig.cleanup === true;
-        log_('testConfig.cleanup before Cleanup: ' + testConfig.cleanup, 'INFO');
         if (!cleanup) {
             const cleanupPrompt = ui.alert('Cleanup', 'Do you want to remove all test data (folder, group, and sheet)?', ui.ButtonSet.YES_NO);
             cleanup = cleanupPrompt === ui.Button.YES;
         }
 
-        if (cleanup) {
-            if (testFolderName) {
-                cleanupFolderData_(testFolderName, folderId, groupEmail, userSheetName);
-                const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
-                if (testRowIndex && managedSheet.getRange(testRowIndex, FOLDER_NAME_COL).getValue() === testFolderName) {
-                    managedSheet.deleteRow(testRowIndex);
-                }
+        if (cleanup && testFolderName) {
+            cleanupFolderData_(testFolderName, folderId, groupEmail, userSheetName);
+            const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+            if (testRowIndex && managedSheet.getRange(testRowIndex, FOLDER_NAME_COL).getValue() === testFolderName) {
+                managedSheet.deleteRow(testRowIndex);
             }
             showTestMessage_('Cleanup', 'Cleanup complete.');
         }
         SCRIPT_EXECUTION_MODE = 'DEFAULT';
     }
+    return success;
 }
 
 /**
@@ -717,37 +704,22 @@ function runAllTests() {
         log_('========================================', 'INFO');
         log_('ALL TESTS: Starting Manual Access Test (1/3)', 'INFO');
         log_('========================================', 'INFO');
-        try {
-            runManualAccessTest();
-            testResults.push('Manual Access Test: COMPLETED');
-        } catch (e) {
-            log_('Manual Access Test failed: ' + e.message, 'ERROR');
-            testResults.push('Manual Access Test: FAILED - ' + e.message);
-        }
+        const manualTestResult = runManualAccessTest();
+        testResults.push('Manual Access Test: ' + (manualTestResult ? 'PASSED' : 'FAILED'));
 
         // Test 2: Stress Test
         log_('========================================', 'INFO');
         log_('ALL TESTS: Starting Stress Test (2/3)', 'INFO');
         log_('========================================', 'INFO');
-        try {
-            runStressTest();
-            testResults.push('Stress Test: COMPLETED');
-        } catch (e) {
-            log_('Stress Test failed: ' + e.message, 'ERROR');
-            testResults.push('Stress Test: FAILED - ' + e.message);
-        }
+        const stressTestResult = runStressTest();
+        testResults.push('Stress Test: ' + (stressTestResult ? 'PASSED' : 'FAILED'));
 
         // Test 3: Add/Delete Separation Test
         log_('========================================', 'INFO');
         log_('ALL TESTS: Starting Add/Delete Separation Test (3/3)', 'INFO');
         log_('========================================', 'INFO');
-        try {
-            runAddDeleteSeparationTest();
-            testResults.push('Add/Delete Separation Test: COMPLETED');
-        } catch (e) {
-            log_('Add/Delete Separation Test failed: ' + e.message, 'ERROR');
-            testResults.push('Add/Delete Separation Test: FAILED - ' + e.message);
-        }
+        const addDeleteTestResult = runAddDeleteSeparationTest();
+        testResults.push('Add/Delete Separation Test: ' + (addDeleteTestResult ? 'PASSED' : 'FAILED'));
 
         // Summary
         const overallEndTime = new Date();
@@ -762,7 +734,7 @@ function runAllTests() {
             log_('  - ' + result, 'INFO');
         });
 
-        showTestMessage_('All Tests Complete', 'All three tests have been executed.\n\nTotal Duration: ' + overallDurationSeconds + ' seconds\n\nCheck the TestLog sheet for detailed results.');
+        showTestMessage_('All Tests Complete', 'All three tests have been executed.\n\n' + testResults.join('\n') + '\n\nTotal Duration: ' + overallDurationSeconds + ' seconds\n\nCheck the TestLog sheet for detailed results.');
 
     } finally {
         SCRIPT_EXECUTION_MODE = 'DEFAULT';
@@ -783,14 +755,33 @@ function clearAllTestsData() {
 
         showTestMessage_('Cleanup', 'Clearing all test data. This may take a moment.');
 
-        // Use existing cleanup function for stress test data
-        cleanupStressTestData();
+        const testConfig = getTestConfiguration_();
+        const manualTestFolderName = testConfig.folderName;
+
+        const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+        if (managedSheet) {
+            const data = managedSheet.getDataRange().getValues();
+            const rowsToDelete = [];
+            for (let i = data.length - 1; i >= 1; i--) {
+                const folderName = data[i][FOLDER_NAME_COL - 1];
+                if (folderName && (folderName === manualTestFolderName || folderName.startsWith('StressTestFolder_'))) {
+                    const folderId = data[i][FOLDER_ID_COL - 1];
+                    const groupEmail = data[i][GROUP_EMAIL_COL - 1];
+                    const userSheetName = data[i][USER_SHEET_NAME_COL - 1];
+                    cleanupFolderData_(folderName, folderId, groupEmail, userSheetName);
+                    rowsToDelete.push(i + 1);
+                }
+            }
+            rowsToDelete.forEach(function (rowIndex) {
+                managedSheet.deleteRow(rowIndex);
+            });
+        }
 
         // Clear the TestLog sheet
         const testLogSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(TEST_LOG_SHEET_NAME);
         if (testLogSheet) {
             testLogSheet.clear();
-            testLogSheet.getRange('A1:B1').setValues([['Timestamp', 'Message']]).setFontWeight('bold');
+            testLogSheet.getRange('A1:C1').setValues([['Timestamp', 'Level', 'Message']]).setFontWeight('bold');
             log_('TestLog sheet has been cleared.');
         }
 
