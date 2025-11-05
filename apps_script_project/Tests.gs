@@ -912,7 +912,11 @@ function runAllTests() {
         log_(allPassed ? '✓✓✓ ALL TESTS PASSED ✓✓✓' : '✗✗✗ SOME TESTS FAILED ✗✗✗', allPassed ? 'INFO' : 'ERROR');
         log_('═══════════════════════════════════════════════════════════════', 'INFO');
 
-        showTestMessage_('All Tests Complete', 'All three tests have been executed.\n\n' + testResults.map(function(r) { return (r.includes('PASSED') ? '✓' : '✗') + ' ' + r; }).join('\n') + '\n\nTotal Duration: ' + overallDurationSeconds + ' seconds\n\nCheck the TestLog sheet for detailed results.');
+        // Brief completion message (detailed results are already in TestLog)
+        showTestMessage_('All Tests Complete',
+                         'All three tests completed in ' + overallDurationSeconds + ' seconds.\n\n' +
+                         (allPassed ? '✓✓✓ ALL TESTS PASSED ✓✓✓' : '✗✗✗ SOME TESTS FAILED ✗✗✗') +
+                         '\n\nCheck the TestLog sheet for detailed results.');
 
     } finally {
         SCRIPT_EXECUTION_MODE = 'DEFAULT';
@@ -939,6 +943,20 @@ function clearAllTestsData(skipConfirmation = false) {
         const testConfig = getTestConfiguration_();
         const manualTestFolderName = testConfig.folderName;
 
+        // Delete all test-related sheets (including orphaned ones)
+        const allSheets = SpreadsheetApp.getActiveSpreadsheet().getSheets();
+        allSheets.forEach(function (sheet) {
+            const sheetName = sheet.getName();
+            if (sheetName.startsWith('StressTestFolder_') || sheetName === manualTestFolderName + '_Viewer' || sheetName === manualTestFolderName + '_Editor' || sheetName === manualTestFolderName + '_Commenter') {
+                try {
+                    SpreadsheetApp.getActiveSpreadsheet().deleteSheet(sheet);
+                    log_('Deleted sheet: ' + sheetName);
+                } catch (e) {
+                    log_('Could not delete sheet ' + sheetName + ': ' + e.message, 'WARN');
+                }
+            }
+        });
+
         const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
         if (managedSheet) {
             const data = managedSheet.getDataRange().getValues();
@@ -949,6 +967,8 @@ function clearAllTestsData(skipConfirmation = false) {
                     const folderId = data[i][FOLDER_ID_COL - 1];
                     const groupEmail = data[i][GROUP_EMAIL_COL - 1];
                     const userSheetName = data[i][USER_SHEET_NAME_COL - 1];
+                    // Note: cleanupFolderData_ will try to delete the sheet, but it's already deleted above
+                    // That's fine - it will log a warning and continue with group/folder cleanup
                     cleanupFolderData_(folderName, folderId, groupEmail, userSheetName);
                     rowsToDelete.push(i + 1);
                 }
