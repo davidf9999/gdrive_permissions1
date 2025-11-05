@@ -77,6 +77,19 @@ function autoSync(e) {
   try {
     log_('*** Starting scheduled auto-sync...');
 
+    // Check file size first
+    const maxFileSizeMB = getConfigValue_('MaxFileSizeMB', 100);
+    const spreadsheetId = SpreadsheetApp.getActiveSpreadsheet().getId();
+    const fileSize = DriveApp.getFileById(spreadsheetId).getSize();
+    const fileSizeMB = fileSize / (1024 * 1024);
+
+    if (fileSizeMB > maxFileSizeMB) {
+      const errorMsg = `CRITICAL: Spreadsheet file size (${fileSizeMB.toFixed(2)} MB) exceeds the configured limit of ${maxFileSizeMB} MB. Auto-sync aborted. Please manually delete old versions from File > Version history.`;
+      log_(errorMsg, 'ERROR');
+      sendAdminNotification_('File Size Limit Exceeded - Manual Action Required', errorMsg);
+      return; // Abort sync
+    }
+
     // Check if in Edit Mode (takes precedence)
     if (isInEditMode_()) {
       log_('Auto-sync skipped: spreadsheet is in Edit Mode.', 'INFO');
@@ -107,7 +120,34 @@ function autoSync(e) {
     }
 
     // Send summary email if configured
-    sendAutoSyncSummary_();
+    const spreadsheetId = SpreadsheetApp.getActiveSpreadsheet().getId();
+    const now = new Date();
+    const versionName = `AutoSync-${now.toISOString()}`;
+    let revisionLink = null;
+
+    try {
+      // This requires the Drive API advanced service to be enabled.
+      const revisions = Drive.Revisions.list(spreadsheetId);
+      if (revisions.items && revisions.items.length > 0) {
+        const latestRevision = revisions.items[revisions.items.length - 1];
+        const revisionId = latestRevision.id;
+
+        const revisionResource = {
+          pinned: true,
+          description: versionName
+        };
+        Drive.Revisions.patch(revisionResource, spreadsheetId, revisionId);
+
+        revisionLink = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=0&revision=${revisionId}`;
+        log_(`Successfully created named version: ${versionName}`);
+      } else {
+        log_('Could not find any revisions for this file to create a named version.', 'WARN');
+      }
+    } catch (e) {
+      log_(`Failed to create named version: ${e.toString()}. Ensure the advanced Drive API service is enabled.`, 'WARN');
+    }
+
+    sendAutoSyncSummary_(revisionLink);
 
     log_('*** Scheduled auto-sync completed successfully.');
 
@@ -341,7 +381,7 @@ function checkAndNotifyPendingDeletions_() {
  * Sends a summary email after auto-sync completion.
  * Includes statistics about what was synced and any pending manual actions.
  */
-function sendAutoSyncSummary_() {
+function sendAutoSyncSummary_(revisionLink) {
   try {
     // Check if notification is enabled
     if (!getConfigValue_('NotifyAfterSync', true)) {
@@ -361,7 +401,11 @@ function sendAutoSyncSummary_() {
     message += 'Check the Log sheet for detailed results.\n\n';
     message += '---\n';
     message += 'Spreadsheet: ' + SpreadsheetApp.getActiveSpreadsheet().getName() + '\n';
-    message += 'URL: ' + SpreadsheetApp.getActiveSpreadsheet().getUrl();
+    if (revisionLink) {
+      message += 'Link to synced version: ' + revisionLink + '\n';
+    } else {
+      message += 'URL: ' + SpreadsheetApp.getActiveSpreadsheet().getUrl() + '\n';
+    }
 
     sendAdminNotification_('✅ Auto-Sync Completed - ' + timestamp, message);
     log_('Auto-sync summary email sent.', 'INFO');
