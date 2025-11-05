@@ -109,25 +109,37 @@ function runManualAccessTest() {
         }
     } catch (e) {
         log_('TEST FAILED: ' + e.toString() + ' Stack: ' + e.stack, 'ERROR');
-        ui.alert('Test FAILED. Check the logs for details. Error: ' + e.message);
+        try {
+            SpreadsheetApp.getUi().alert('Test FAILED. Check the logs for details. Error: ' + e.message);
+        } catch (alertError) {
+            log_('Could not show error alert: ' + alertError.message, 'WARN');
+        }
         success = false;
     } finally {
         const endTime = new Date();
         const durationSeconds = ((endTime.getTime() - startTime.getTime()) / 1000).toFixed(2);
         log_('TEST DURATION: ' + durationSeconds + ' seconds', 'INFO');
 
-        let cleanup = testConfig.cleanup === true;
-        log_('testConfig.cleanup before Cleanup: ' + testConfig.cleanup, 'INFO');
-        if (!cleanup) {
-            const cleanupPrompt = ui.alert('Cleanup', 'Do you want to remove all test data (folder, group, and sheet)?', ui.ButtonSet.YES_NO);
-            cleanup = cleanupPrompt === ui.Button.YES;
-        }
+        // Check if testConfig exists before using it (may be undefined if error occurred early)
+        if (typeof testConfig !== 'undefined') {
+            let cleanup = testConfig.cleanup === true;
+            log_('testConfig.cleanup before Cleanup: ' + testConfig.cleanup, 'INFO');
+            if (!cleanup) {
+                try {
+                    const cleanupPrompt = SpreadsheetApp.getUi().alert('Cleanup', 'Do you want to remove all test data (folder, group, and sheet)?', SpreadsheetApp.getUi().ButtonSet.YES_NO);
+                    cleanup = cleanupPrompt === SpreadsheetApp.getUi().Button.YES;
+                } catch (alertError) {
+                    log_('Could not show cleanup prompt: ' + alertError.message, 'WARN');
+                    cleanup = false;
+                }
+            }
 
-        if (cleanup) {
-            groupEmail = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME).getRange(testRowIndex, GROUP_EMAIL_COL).getValue();
-            cleanupFolderData_(testFolderName, folderId, groupEmail, userSheetName);
-            SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME).deleteRow(testRowIndex);
-            showTestMessage_('Cleanup', 'Cleanup complete.');
+            if (cleanup) {
+                groupEmail = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME).getRange(testRowIndex, GROUP_EMAIL_COL).getValue();
+                cleanupFolderData_(testFolderName, folderId, groupEmail, userSheetName);
+                SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME).deleteRow(testRowIndex);
+                showTestMessage_('Cleanup', 'Cleanup complete.');
+            }
         }
         SCRIPT_EXECUTION_MODE = 'DEFAULT';
     }
@@ -226,7 +238,11 @@ function runStressTest() {
         success = true;
     } catch (e) {
         log_('TEST FAILED: ' + e.toString() + ' Stack: ' + e.stack, 'ERROR');
-        ui.alert('Test FAILED. Check the logs for details. Error: ' + e.message);
+        try {
+            SpreadsheetApp.getUi().alert('Test FAILED. Check the logs for details. Error: ' + e.message);
+        } catch (alertError) {
+            log_('Could not show error alert: ' + alertError.message, 'WARN');
+        }
         success = false;
     } finally {
         const testEndTime = new Date();
@@ -234,29 +250,37 @@ function runStressTest() {
         log_('TEST DURATION: ' + testDurationSeconds + ' seconds', 'INFO');
 
         // --- Step 6: Cleanup ---
-        let cleanup = testConfig.cleanup === true;
-        if (!cleanup) {
-            const cleanupPrompt = ui.alert('Cleanup', 'Do you want to remove all test data (folders, groups, sheets, and configuration rows)?', ui.ButtonSet.YES_NO);
-            cleanup = cleanupPrompt === ui.Button.YES;
-        }
+        // Check if testConfig exists before using it (may be undefined if error occurred early)
+        if (typeof testConfig !== 'undefined') {
+            let cleanup = testConfig.cleanup === true;
+            if (!cleanup) {
+                try {
+                    const cleanupPrompt = SpreadsheetApp.getUi().alert('Cleanup', 'Do you want to remove all test data (folders, groups, sheets, and configuration rows)?', SpreadsheetApp.getUi().ButtonSet.YES_NO);
+                    cleanup = cleanupPrompt === SpreadsheetApp.getUi().Button.YES;
+                } catch (alertError) {
+                    log_('Could not show cleanup prompt: ' + alertError.message, 'WARN');
+                    cleanup = false;
+                }
+            }
 
-        if (cleanup) {
-            const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
-            const managedData = managedSheet.getRange(startRow, 1, numFolders, GROUP_EMAIL_COL).getValues();
+            if (cleanup) {
+                const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+                const managedData = managedSheet.getRange(startRow, 1, numFolders, GROUP_EMAIL_COL).getValues();
 
-            managedSheet.deleteRows(startRow, numFolders);
+                managedSheet.deleteRows(startRow, numFolders);
 
-            showTestMessage_('Cleanup', 'Cleanup in Progress. This may take a few moments.');
+                showTestMessage_('Cleanup', 'Cleanup in Progress. This may take a few moments.');
 
-            managedData.forEach(function (row) {
-                const folderName = row[FOLDER_NAME_COL - 1];
-                const folderId = row[FOLDER_ID_COL - 1];
-                const userSheetName = row[USER_SHEET_NAME_COL - 1];
-                const groupEmail = row[GROUP_EMAIL_COL - 1];
-                cleanupFolderData_(folderName, folderId, groupEmail, userSheetName);
-            });
+                managedData.forEach(function (row) {
+                    const folderName = row[FOLDER_NAME_COL - 1];
+                    const folderId = row[FOLDER_ID_COL - 1];
+                    const userSheetName = row[USER_SHEET_NAME_COL - 1];
+                    const groupEmail = row[GROUP_EMAIL_COL - 1];
+                    cleanupFolderData_(folderName, folderId, groupEmail, userSheetName);
+                });
 
-            showTestMessage_('Cleanup', 'Cleanup Complete!');
+                showTestMessage_('Cleanup', 'Cleanup Complete!');
+            }
         }
         SCRIPT_EXECUTION_MODE = 'DEFAULT';
     }
@@ -601,30 +625,94 @@ function runAddDeleteSeparationTest() {
         success = true;
     } catch (e) {
         log_('TEST FAILED: ' + e.toString() + ' Stack: ' + e.stack, 'ERROR');
-        ui.alert('Test FAILED. Check the logs for details. Error: ' + e.message);
+        try {
+            SpreadsheetApp.getUi().alert('Test FAILED. Check the logs for details. Error: ' + e.message);
+        } catch (alertError) {
+            log_('Could not show error alert: ' + alertError.message, 'WARN');
+        }
         success = false;
     } finally {
         const endTime = new Date();
         const durationSeconds = ((endTime.getTime() - startTime.getTime()) / 1000).toFixed(2);
         log_('TEST DURATION: ' + durationSeconds + ' seconds', 'INFO');
 
-        let cleanup = testConfig.cleanup === true;
-        if (!cleanup) {
-            const cleanupPrompt = ui.alert('Cleanup', 'Do you want to remove all test data (folder, group, and sheet)?', ui.ButtonSet.YES_NO);
-            cleanup = cleanupPrompt === ui.Button.YES;
-        }
-
-        if (cleanup && testFolderName) {
-            cleanupFolderData_(testFolderName, folderId, groupEmail, userSheetName);
-            const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
-            if (testRowIndex && managedSheet.getRange(testRowIndex, FOLDER_NAME_COL).getValue() === testFolderName) {
-                managedSheet.deleteRow(testRowIndex);
+        // Check if testConfig exists before using it (may be undefined if error occurred early)
+        if (typeof testConfig !== 'undefined') {
+            let cleanup = testConfig.cleanup === true;
+            if (!cleanup) {
+                try {
+                    const cleanupPrompt = SpreadsheetApp.getUi().alert('Cleanup', 'Do you want to remove all test data (folder, group, and sheet)?', SpreadsheetApp.getUi().ButtonSet.YES_NO);
+                    cleanup = cleanupPrompt === SpreadsheetApp.getUi().Button.YES;
+                } catch (alertError) {
+                    log_('Could not show cleanup prompt: ' + alertError.message, 'WARN');
+                    cleanup = false;
+                }
             }
-            showTestMessage_('Cleanup', 'Cleanup complete.');
+
+            if (cleanup && testFolderName) {
+                cleanupFolderData_(testFolderName, folderId, groupEmail, userSheetName);
+                const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+                if (testRowIndex && managedSheet.getRange(testRowIndex, FOLDER_NAME_COL).getValue() === testFolderName) {
+                    managedSheet.deleteRow(testRowIndex);
+                }
+                showTestMessage_('Cleanup', 'Cleanup complete.');
+            }
         }
         SCRIPT_EXECUTION_MODE = 'DEFAULT';
     }
     return success;
+}
+
+/**
+ * One-time cleanup for orphaned test data.
+ * This function can be used to clean up specific test data by folder name.
+ */
+function cleanupOrphanedTestData() {
+    SCRIPT_EXECUTION_MODE = 'TEST';
+    try {
+        const ui = SpreadsheetApp.getUi();
+        const folderName = 'Test Folder'; // Change this to match your orphaned folder
+
+        const response = ui.alert(
+            'Clean Up Orphaned Test Data',
+            'This will attempt to clean up the folder "' + folderName + '" and its associated resources.\n\nContinue?',
+            ui.ButtonSet.YES_NO
+        );
+
+        if (response !== ui.Button.YES) {
+            return;
+        }
+
+        const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+        const data = managedSheet.getDataRange().getValues();
+
+        let found = false;
+        for (let i = data.length - 1; i >= 1; i--) {
+            if (data[i][FOLDER_NAME_COL - 1] === folderName) {
+                const folderId = data[i][FOLDER_ID_COL - 1];
+                const groupEmail = data[i][GROUP_EMAIL_COL - 1];
+                const userSheetName = data[i][USER_SHEET_NAME_COL - 1];
+
+                log_('Found orphaned test data for: ' + folderName, 'INFO');
+                cleanupFolderData_(folderName, folderId, groupEmail, userSheetName);
+                managedSheet.deleteRow(i + 1);
+                found = true;
+                break;
+            }
+        }
+
+        if (found) {
+            showTestMessage_('Cleanup Complete', 'Successfully cleaned up orphaned test data for: ' + folderName);
+        } else {
+            showTestMessage_('Not Found', 'Could not find folder "' + folderName + '" in the ManagedFolders sheet.');
+        }
+
+    } catch (e) {
+        log_('Error during orphaned data cleanup: ' + e.toString(), 'ERROR');
+        SpreadsheetApp.getUi().alert('Cleanup failed: ' + e.message);
+    } finally {
+        SCRIPT_EXECUTION_MODE = 'DEFAULT';
+    }
 }
 
 /**
