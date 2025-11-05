@@ -145,29 +145,39 @@ function setupControlSheets_() {
   
   // Check for Config sheet
   const defaultConfig = {
-    'EnableEmailNotifications': { value: 'FALSE', description: 'Set to TRUE to receive emails for errors and other notifications.' },
-    'NotificationEmail': { value: '', description: 'The email address to send notifications to. Defaults to the script owner if left blank.' },
-    'AllowAutosyncDeletion': { value: 'TRUE', description: 'Set to TRUE to allow auto-sync to automatically delete users. WARNING: This is a powerful feature. If a user is accidentally removed from a sheet, their access will be revoked on the next sync.' },
-    'AutoSyncMaxDeletions': { value: 10, description: 'The maximum number of deletions allowed in a single auto-sync run. If exceeded, deletions will be paused and manual intervention required.' },
-    'AdminGroupEmail': { value: '', description: 'The email address for the Google Group containing all Admins (editors of this sheet). Auto-generates if blank.' },
-    'EnableToasts': { value: 'FALSE', description: 'Set to TRUE to show small pop-up progress messages in the corner of the screen during syncs.' },
-    'MaxLogLength': { value: DEFAULT_MAX_LOG_LENGTH, description: 'The maximum number of rows to keep in the Log and TestLog sheets.' },
-    'EnableAutoSync': { value: 'TRUE', description: 'Set to FALSE to temporarily pause the hourly/daily auto-sync trigger without having to delete it.' },
-    'NotifyAfterSync': { value: 'TRUE', description: 'Set to TRUE to receive a summary email after each successful auto-sync.' },
-    'NotifyDeletionsPending': { value: 'TRUE', description: 'Set to TRUE to receive an email alert when an auto-sync detects that a user needs to be manually removed. (This is ignored if AllowAutosyncDeletion is TRUE).' },
-    'GitHubRepoURL': { value: 'https://github.com/davidf9999/gdrive_permissions1', description: 'The URL to the GitHub repository for this project. Used in the Help menu.' },
-    'EnableGCPLogging': { value: 'FALSE', description: 'For advanced users. Set to TRUE to send logs to Google Cloud Logging for better monitoring.' },
-    'ShowTestPrompts': { value: 'FALSE', description: 'For developers. Set to TRUE to show UI alerts during automated testing.' },
-    'TestFolderName': { value: 'Test Folder', description: 'The base name for the folder created during the Manual Access Test.' },
-    'TestRole': { value: 'Viewer', description: 'The permission role to test with during the Manual Access Test.' },
-    'TestEmail': { value: 'example@gmail.com', description: 'A test email address to use for the Manual Access Test.' },
-    'TestCleanup': { value: 'TRUE', description: 'Set to TRUE to automatically clean up resources created during tests.' },
-    'TestAutoConfirm': { value: 'FALSE', description: 'For developers. Set to TRUE to automatically skip confirmation prompts during tests.' },
-    'TestNumFolders': { value: '10', description: 'The number of folders to create during the Stress Test.' },
-    'TestNumUsers': { value: '200', description: 'The number of users to create per folder during the Stress Test.' },
-    'TestBaseEmail': { value: 'example@gmail.com', description: 'The base email address used to generate unique users for the Stress Test.' },
-    'MaxFileSizeMB': { value: 100, description: 'The maximum file size in MB for the spreadsheet. If exceeded, auto-sync will be aborted and an alert sent. This prevents uncontrolled growth of version history.' },
-    'EnableNamedVersions': { value: true, description: 'Set to TRUE to create a named version of the spreadsheet after each auto-sync for auditing purposes.' }
+    '--- Sync Behavior ---': {
+      'EnableAutoSync': { value: 'TRUE', description: 'Set to FALSE to temporarily pause the hourly/daily auto-sync trigger without having to delete it.' },
+      'AllowAutosyncDeletion': { value: 'TRUE', description: 'Set to TRUE to allow auto-sync to automatically delete users. WARNING: This is a powerful feature. If a user is accidentally removed from a sheet, their access will be revoked on the next sync.' },
+      'AutoSyncMaxDeletions': { value: 10, description: 'The maximum number of deletions allowed in a single auto-sync run. If exceeded, deletions will be paused and manual intervention required.' },
+    },
+    '--- Email Notifications ---': {
+      'EnableEmailNotifications': { value: 'FALSE', description: 'Set to TRUE to receive emails for errors and other notifications.' },
+      'NotificationEmail': { value: '', description: 'The email address to send notifications to. Defaults to the script owner if left blank.' },
+      'NotifyAfterSync': { value: 'TRUE', description: 'Set to TRUE to receive a summary email after each successful auto-sync.' },
+      'NotifyDeletionsPending': { value: 'TRUE', description: 'Set to TRUE to receive an email alert when an auto-sync detects that a user needs to be manually removed. (This is ignored if AllowAutosyncDeletion is TRUE).' },
+    },
+    '--- Auditing & Limits ---': {
+        'MaxLogLength': { value: DEFAULT_MAX_LOG_LENGTH, description: 'The maximum number of rows to keep in the Log and TestLog sheets.' },
+        'MaxFileSizeMB': { value: 100, description: 'The maximum file size in MB for the spreadsheet. If exceeded, auto-sync will be aborted and an alert sent. This prevents uncontrolled growth of version history.' },
+        'EnableNamedVersions': { value: true, description: 'Set to TRUE to create a named version of the spreadsheet after each auto-sync for auditing purposes.' },
+        'EnableGCPLogging': { value: 'FALSE', description: 'For advanced users. Set to TRUE to send logs to Google Cloud Logging for better monitoring.' },
+    },
+    '--- General ---': {
+        'AdminGroupEmail': { value: '', description: 'The email address for the Google Group containing all Admins (editors of this sheet). Auto-generates if blank.' },
+        'EnableToasts': { value: 'FALSE', description: 'Set to TRUE to show small pop-up progress messages in the corner of the screen during syncs.' },
+        'GitHubRepoURL': { value: 'https://github.com/davidf9999/gdrive_permissions1', description: 'The URL to the GitHub repository for this project. Used in the Help menu.' },
+    },
+    '--- Testing ---': {
+      'ShowTestPrompts': { value: 'FALSE', description: 'For developers. Set to TRUE to show UI alerts during automated testing.' },
+      'TestFolderName': { value: 'Test Folder', description: 'The base name for the folder created during the Manual Access Test.' },
+      'TestRole': { value: 'Viewer', description: 'The permission role to test with during the Manual Access Test.' },
+      'TestEmail': { value: 'example@gmail.com', description: 'A test email address to use for the Manual Access Test.' },
+      'TestCleanup': { value: 'TRUE', description: 'Set to TRUE to automatically clean up resources created during tests.' },
+      'TestAutoConfirm': { value: 'FALSE', description: 'For developers. Set to TRUE to automatically skip confirmation prompts during tests.' },
+      'TestNumFolders': { value: '10', description: 'The number of folders to create during the Stress Test.' },
+      'TestNumUsers': { value: '200', description: 'The number of users to create per folder during the Stress Test.' },
+      'TestBaseEmail': { value: 'example@gmail.com', description: 'The base email address used to generate unique users for the Stress Test.' },
+    }
   };
 
   let configSheet = ss.getSheetByName(CONFIG_SHEET_NAME);
@@ -175,46 +185,46 @@ function setupControlSheets_() {
     configSheet = ss.insertSheet(CONFIG_SHEET_NAME);
     // Create a new sheet with headers and all default settings
     configSheet.getRange('A1:C1').setValues([['Setting', 'Value', 'Description']]).setFontWeight('bold');
-    const newSettings = Object.entries(defaultConfig).map(([key, config]) => {
-        // Handle dynamic default for NotificationEmail
-        let finalValue = config.value;
-        if (key === 'NotificationEmail' && !finalValue) {
-            finalValue = Session.getEffectiveUser().getEmail();
+    const newSettings = [];
+    for (const groupName in defaultConfig) {
+        newSettings.push([groupName, '', '']);
+        for (const key in defaultConfig[groupName]) {
+            let finalValue = defaultConfig[groupName][key].value;
+            if (key === 'NotificationEmail' && !finalValue) {
+                finalValue = Session.getEffectiveUser().getEmail();
+            }
+            newSettings.push([key, finalValue, defaultConfig[groupName][key].description]);
         }
-        return [key, finalValue, config.description];
-    });
+    }
     configSheet.getRange(2, 1, newSettings.length, 3).setValues(newSettings);
     configSheet.setFrozenRows(1);
     log_('Created "Config" sheet with default settings and descriptions.');
   } else {
-    // Update an existing sheet
-    const headers = configSheet.getRange(1, 1, 1, 3).getValues()[0];
-    if (headers[2] !== 'Description') {
-        configSheet.getRange(1, 3).setValue('Description').setFontWeight('bold');
-    }
-
-    const settingsRange = configSheet.getRange('A:A');
-    const existingSettings = settingsRange.getValues().flat();
-
-    Object.entries(defaultConfig).forEach(([key, config]) => {
-      const rowIndex = existingSettings.indexOf(key);
-      if (rowIndex === -1) {
-        // Setting is missing, add it to the end
-        const lastRow = configSheet.getLastRow() + 1;
-        let finalValue = config.value;
-        if (key === 'NotificationEmail' && !finalValue) {
-          finalValue = Session.getEffectiveUser().getEmail();
+    // Update an existing sheet, preserving values but re-ordering and adding new settings
+    const existingData = configSheet.getDataRange().getValues();
+    const existingSettings = new Map();
+    existingData.forEach(row => {
+        if (row[0] && !row[0].startsWith('---')) {
+            existingSettings.set(row[0], row[1]);
         }
-        configSheet.getRange(lastRow, 1, 1, 3).setValues([[key, finalValue, config.description]]);
-        log_(`Added missing "${key}" setting with default value.`);
-      } else {
-        // Setting exists, just ensure the description is there
-        const descCell = configSheet.getRange(rowIndex + 1, 3);
-        if (!descCell.getValue()) {
-            descCell.setValue(config.description);
-        }
-      }
     });
+
+    // Clear the sheet
+    configSheet.getRange(2, 1, configSheet.getMaxRows() - 1, 3).clearContent();
+
+    const newSettings = [];
+    for (const groupName in defaultConfig) {
+        newSettings.push([groupName, '', '']);
+        for (const key in defaultConfig[groupName]) {
+            let finalValue = existingSettings.has(key) ? existingSettings.get(key) : defaultConfig[groupName][key].value;
+            if (key === 'NotificationEmail' && !finalValue) {
+                finalValue = Session.getEffectiveUser().getEmail();
+            }
+            newSettings.push([key, finalValue, defaultConfig[groupName][key].description]);
+        }
+    }
+    configSheet.getRange(2, 1, newSettings.length, 3).setValues(newSettings);
+    log_('Re-organized and updated "Config" sheet.');
   }
 }
 
