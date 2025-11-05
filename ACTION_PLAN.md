@@ -1,5 +1,12 @@
 # Action Plan - Next Steps
 
+## ⚠️ CRITICAL FIX APPLIED
+
+**Issue**: "Sync failed after initial setup. Status: undefined" error
+**Cause**: Test helper functions were incorrectly reading return values from `processRow_()`
+**Fix**: Now correctly reads status from the sheet cell (commit f899a3b)
+**Status**: ✅ FIXED - Ready to upload and test
+
 ## Summary of Changes
 
 All fixes and optimizations have been implemented in your local code. You now need to upload the updated files to Apps Script and test them.
