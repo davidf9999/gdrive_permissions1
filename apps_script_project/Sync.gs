@@ -195,13 +195,13 @@ function syncUserGroups(options = {}) {
     const userGroupsSheet = ss.getSheetByName(USER_GROUPS_SHEET_NAME);
     if (!userGroupsSheet) {
       if (!returnPlanOnly && !silentMode) SpreadsheetApp.getUi().alert('UserGroups sheet not found.');
-      return returnPlanOnly ? [] : undefined;
+      return returnPlanOnly ? [] : totalSummary;
     }
 
     const lastRow = userGroupsSheet.getLastRow();
     if (lastRow < 2) {
         log_('No data rows to process in UserGroups sheet.');
-        return returnPlanOnly ? [] : undefined;
+        return returnPlanOnly ? [] : totalSummary;
     }
     
     // If Admin SDK is unavailable, we can't create a plan or sync.
@@ -219,7 +219,7 @@ function syncUserGroups(options = {}) {
           }
           if (!silentMode) SpreadsheetApp.getUi().alert('User group sync skipped: Admin Directory service not available.');
       }
-      return returnPlanOnly ? [] : undefined;
+      return returnPlanOnly ? [] : totalSummary;
     }
     
     const dataRange = userGroupsSheet.getRange(2, 1, lastRow - 1, 4);
@@ -310,6 +310,7 @@ function syncUserGroups(options = {}) {
       throw e; // Re-throw for the planner to catch
     }
   }
+  return totalSummary;
 }
 
 function syncAdds(options = {}) {
