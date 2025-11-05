@@ -944,18 +944,31 @@ function clearAllTestsData(skipConfirmation = false) {
         const manualTestFolderName = testConfig.folderName;
 
         // Delete all test-related sheets (including orphaned ones)
+        log_('Starting sheet cleanup - looking for test sheets to delete...');
         const allSheets = SpreadsheetApp.getActiveSpreadsheet().getSheets();
+        log_('Found ' + allSheets.length + ' total sheets in spreadsheet');
+
+        let deletedSheetCount = 0;
         allSheets.forEach(function (sheet) {
             const sheetName = sheet.getName();
-            if (sheetName.startsWith('StressTestFolder_') || sheetName === manualTestFolderName + '_Viewer' || sheetName === manualTestFolderName + '_Editor' || sheetName === manualTestFolderName + '_Commenter') {
+            const isStressTest = sheetName.startsWith('StressTestFolder_');
+            const isManualTestViewer = sheetName === manualTestFolderName + '_Viewer';
+            const isManualTestEditor = sheetName === manualTestFolderName + '_Editor';
+            const isManualTestCommenter = sheetName === manualTestFolderName + '_Commenter';
+            const shouldDelete = isStressTest || isManualTestViewer || isManualTestEditor || isManualTestCommenter;
+
+            if (shouldDelete) {
+                log_('Attempting to delete sheet: ' + sheetName);
                 try {
                     SpreadsheetApp.getActiveSpreadsheet().deleteSheet(sheet);
-                    log_('Deleted sheet: ' + sheetName);
+                    log_('✓ Successfully deleted sheet: ' + sheetName);
+                    deletedSheetCount++;
                 } catch (e) {
-                    log_('Could not delete sheet ' + sheetName + ': ' + e.message, 'WARN');
+                    log_('✗ Could not delete sheet ' + sheetName + ': ' + e.message, 'ERROR');
                 }
             }
         });
+        log_('Sheet cleanup complete. Deleted ' + deletedSheetCount + ' sheets.');
 
         const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
         if (managedSheet) {
