@@ -208,13 +208,13 @@ function syncUserGroups(options = {}) {
     if (shouldSkipGroupOps_()) {
       log_('Admin SDK (Admin Directory) not available. Skipping syncUserGroups.', 'WARN');
       if (!returnPlanOnly) {
-          const dataRange = userGroupsSheet.getRange(2, 1, lastRow - 1, 4); 
+          const dataRange = userGroupsSheet.getRange(2, 1, lastRow - 1, 5); 
           const data = dataRange.getValues();
           for (let i = 0; i < data.length; i++) {
             const rowIndex = i + 2;
             if (data[i][0]) { // If there's a group name
-              userGroupsSheet.getRange(rowIndex, 3).setValue(Utilities.formatDate(new Date(), SpreadsheetApp.getActive().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss'));
-              userGroupsSheet.getRange(rowIndex, 4).setValue('SKIPPED (No Admin SDK)');
+              userGroupsSheet.getRange(rowIndex, 4).setValue(Utilities.formatDate(new Date(), SpreadsheetApp.getActive().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss'));
+              userGroupsSheet.getRange(rowIndex, 5).setValue('SKIPPED (No Admin SDK)');
             }
           }
           if (!silentMode) SpreadsheetApp.getUi().alert('User group sync skipped: Admin Directory service not available.');
@@ -222,7 +222,7 @@ function syncUserGroups(options = {}) {
       return returnPlanOnly ? [] : totalSummary;
     }
     
-    const dataRange = userGroupsSheet.getRange(2, 1, lastRow - 1, 4);
+    const dataRange = userGroupsSheet.getRange(2, 1, lastRow - 1, 5);
     const data = dataRange.getValues();
 
     for (let i = 0; i < data.length; i++) {
@@ -249,9 +249,10 @@ function syncUserGroups(options = {}) {
             deletionPlan.push(plan);
           }
         } else {
-          const statusCell = userGroupsSheet.getRange(rowIndex, 4);
-          const lastSyncedCell = userGroupsSheet.getRange(rowIndex, 3);
           const groupEmailCell = userGroupsSheet.getRange(rowIndex, 2);
+          const groupAdminLinkCell = userGroupsSheet.getRange(rowIndex, 3);
+          const lastSyncedCell = userGroupsSheet.getRange(rowIndex, 4);
+          const statusCell = userGroupsSheet.getRange(rowIndex, 5);
 
           statusCell.setValue('Processing...');
           if (!silentMode) showToast_('Processing user group: ' + groupName + '...', 'Sync Progress', 10);
@@ -262,7 +263,10 @@ function syncUserGroups(options = {}) {
 
           const groupSheetName = groupName + '_G';
           getOrCreateUserSheet_(groupSheetName);
-          getOrCreateGroup_(groupEmail, groupName);
+          const { group } = getOrCreateGroup_(groupEmail, groupName);
+          const adminLink = 'https://admin.google.com/ac/groups/' + group.id + '/members';
+          groupAdminLinkCell.setValue(adminLink);
+
           const summary = syncGroupMembership_(groupEmail, groupSheetName, options);
           if (summary) {
             totalSummary.added += summary.added;
@@ -277,7 +281,7 @@ function syncUserGroups(options = {}) {
 
       } catch (e) {
         if (!returnPlanOnly) {
-          const statusCell = userGroupsSheet.getRange(rowIndex, 4);
+          const statusCell = userGroupsSheet.getRange(rowIndex, 5);
           const errorMessage = 'ERROR: ' + e.message;
           log_('Failed to process user group row ' + rowIndex + '. Error: ' + e.message + ' Stack: ' + e.stack, 'ERROR');
           statusCell.setValue(errorMessage);
@@ -464,6 +468,7 @@ function syncDeletes() {
 
 function fullSync(options = {}) {
   const { silentMode = false } = options;
+  log_('Running script version 2.0');
   setupControlSheets_(); // Ensure control sheets exist
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(15000)) {

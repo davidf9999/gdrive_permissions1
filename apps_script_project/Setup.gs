@@ -138,10 +138,10 @@ function setupControlSheets_() {
   let userGroupsSheet = ss.getSheetByName(USER_GROUPS_SHEET_NAME);
   if (!userGroupsSheet) {
     userGroupsSheet = ss.insertSheet(USER_GROUPS_SHEET_NAME);
-    userGroupsSheet.getRange('A1:D1').setValues([['GroupName', 'GroupEmail', 'Last Synced', 'Status']]).setFontWeight('bold');
-    userGroupsSheet.setFrozenRows(1);
     log_('Created "UserGroups" sheet.');
   }
+  userGroupsSheet.getRange('A1:E1').setValues([['GroupName', 'GroupEmail', 'Group Admin Link', 'Last Synced', 'Status']]).setFontWeight('bold');
+  userGroupsSheet.setFrozenRows(1);
   
   // Check for Config sheet
   const defaultConfig = {

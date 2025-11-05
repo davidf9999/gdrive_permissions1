@@ -143,12 +143,12 @@ function processRow_(rowIndex, options = {}) {
       return summary;
     }
 
-    const wasGroupNewlyCreated = getOrCreateGroup_(groupEmail, userSheetName);
+    const { group, wasNewlyCreated } = getOrCreateGroup_(groupEmail, userSheetName);
 
     // If the group was just created, pause for 60 seconds to allow it to propagate
     // through Google's systems. This prevents a race condition where Drive tries to send
     // a notification to a group email that isn't fully active yet.
-    if (wasGroupNewlyCreated) {
+    if (wasNewlyCreated) {
         log_('Pausing for 60 seconds to allow for new group email propagation...');
         Utilities.sleep(60000);
     }
@@ -295,27 +295,28 @@ function getOrCreateFolder_(folderName, folderId, options = {}) {
 
 function getOrCreateGroup_(groupEmail, groupName) {
   assertAdminDirectoryAvailable_();
+  let group;
+  let wasNewlyCreated = false;
   try {
-    AdminDirectory.Groups.get(groupEmail);
+    group = AdminDirectory.Groups.get(groupEmail);
     log_('Found existing group: ' + groupEmail);
-    return false; // Group already existed
   } catch (e) {
     log_('Group "' + groupEmail + '" not found. Will attempt to create it.');
+    try {
+      const newGroup = {
+        email: groupEmail,
+        name: groupName,
+        description: 'Managed by Google Sheets script. Folder: ' + groupName.split('_')[0]
+      };
+      group = AdminDirectory.Groups.insert(newGroup);
+      wasNewlyCreated = true;
+      log_('Successfully created group: ' + groupEmail);
+    } catch (createError) {
+      log_('Failed to create group ' + groupEmail + '. Error: ' + createError.toString(), 'ERROR');
+      throw new Error('Could not create group: ' + createError.message);
+    }
   }
-
-  try {
-    const newGroup = {
-      email: groupEmail,
-      name: groupName,
-      description: 'Managed by Google Sheets script. Folder: ' + groupName.split('_')[0]
-    };
-    AdminDirectory.Groups.insert(newGroup);
-    log_('Successfully created group: ' + groupEmail);
-    return true; // Group was newly created
-  } catch (e) {
-    log_('Failed to create group ' + groupEmail + '. Error: ' + e.toString(), 'ERROR');
-    throw new Error('Could not create group: ' + e.message);
-  }
+  return { group: group, wasNewlyCreated: wasNewlyCreated };
 }
 
 function getOrCreateUserSheet_(sheetName) {
@@ -765,11 +766,11 @@ function setSheetUiStyles_() {
       });
 
       // Clear old backgrounds
-      const clearBgRange = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 4);
+      const clearBgRange = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 5);
       clearBgRange.setBackground(null);
 
       // Apply new protection and styling
-      const range = userGroupsSheet.getRange(2, 2, userGroupsSheet.getLastRow() - 1, 3);
+      const range = userGroupsSheet.getRange(2, 2, userGroupsSheet.getLastRow() - 1, 4);
       range.setBackground('#f3f3f3');
       const protection = range.protect().setDescription('These columns are managed by the script.');
       protection.setWarningOnly(true);

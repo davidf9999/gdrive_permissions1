@@ -517,7 +517,7 @@ function runAddDeleteSeparationTest() {
             // Look for recent 404 errors related to this email in the last 50 log entries
             const recentLogs = logData.slice(-50);
             has404Error = recentLogs.some(row => {
-                const logMessage = row[1] ? row[1].toString() : '';
+                const logMessage = row[2] ? row[2].toString() : '';
                 return logMessage.includes('404') &&
                        logMessage.includes('Resource Not Found') &&
                        logMessage.includes(testEmail);

@@ -199,8 +199,22 @@ function log_(message, severity = 'INFO') {
   const sheetName = (SCRIPT_EXECUTION_MODE === 'TEST') ? TEST_LOG_SHEET_NAME : LOG_SHEET_NAME;
   const logSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
   if (logSheet) {
+    // Ensure header is correct
+    logSheet.getRange('A1:C1').setValues([['Timestamp', 'Level', 'Message']]).setFontWeight('bold');
+
     const timestamp = Utilities.formatDate(new Date(), SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss');
-    logSheet.appendRow([timestamp, severity.toUpperCase(), message]);
+    
+    let finalMessage = '';
+    if (message === null || message === undefined) {
+      finalMessage = '[NULL OR UNDEFINED LOG MESSAGE]';
+    } else {
+      finalMessage = String(message).trim();
+      if (finalMessage === '') {
+        finalMessage = '[EMPTY LOG MESSAGE]';
+      }
+    }
+
+    logSheet.appendRow([timestamp, severity.toUpperCase(), finalMessage]);
     
     // Trim the log sheet if it's too long
     const maxLength = getMaxLogLength_();
