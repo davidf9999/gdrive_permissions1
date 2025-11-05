@@ -1,11 +1,29 @@
 # Action Plan - Next Steps
 
-## ⚠️ CRITICAL FIX APPLIED
+## ⚠️ CRITICAL FIXES APPLIED (Latest: commit 2f9a5f6)
 
-**Issue**: "Sync failed after initial setup. Status: undefined" error
-**Cause**: Test helper functions were incorrectly reading return values from `processRow_()`
-**Fix**: Now correctly reads status from the sheet cell (commit f899a3b)
-**Status**: ✅ FIXED - Ready to upload and test
+### Fix 1: Variable Scoping (Cleanup Failures)
+**Issue**: "Cleanup skipped (testConfig undefined)"
+**Cause**: `testConfig` declared with `const` inside try block, inaccessible in finally block
+**Fix**: Declare at function scope with `let testConfig`, then assign inside try block
+**Status**: ✅ FIXED
+
+### Fix 2: Test Results Logging to Wrong Sheet
+**Issue**: Test results and summary appearing in Log sheet instead of TestLog
+**Cause**: Each test's finally block sets `SCRIPT_EXECUTION_MODE = 'DEFAULT'`
+**Fix**: Reset `SCRIPT_EXECUTION_MODE = 'TEST'` after each test completes in runAllTests()
+**Status**: ✅ FIXED
+
+### Fix 3: Return Value Handling
+**Issue**: "Sync failed after initial setup. Status: undefined"
+**Cause**: Test helper functions trying to access `result.status` which doesn't exist
+**Fix**: Read status from sheet cell after calling `processRow_()`
+**Status**: ✅ FIXED (commit f899a3b)
+
+### Fix 4: Automatic Pre-Test Cleanup
+**Issue**: Old test data not cleared before running all tests
+**Fix**: `runAllTests()` now calls `clearAllTestsData(true)` automatically
+**Status**: ✅ FIXED
 
 ## Summary of Changes
 
