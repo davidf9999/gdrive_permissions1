@@ -4,6 +4,7 @@ const SINGLE_EMAIL_VALIDATION_REGEX = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i
 function processManagedFolders_(options = {}) {
   const { returnPlanOnly = false, silentMode = false } = options;
   let deletionPlan = [];
+  const totalSummary = { added: 0, removed: 0, failed: 0 };
 
   log_('*** Starting processing of ManagedFolders sheet...');
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -18,7 +19,7 @@ function processManagedFolders_(options = {}) {
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) {
       log_('No data rows to process in ManagedFolders sheet.');
-      return returnPlanOnly ? [] : undefined;
+      return returnPlanOnly ? [] : totalSummary;
   }
 
   const dataRange = sheet.getRange(2, 1, lastRow - 1, 2); // Get only FolderName and FolderID
@@ -36,9 +37,13 @@ function processManagedFolders_(options = {}) {
     const rowIndex = i + 2;
     if (!returnPlanOnly && !silentMode) showToast_('Processing row ' + rowIndex + ' of ' + lastRow + '...', 'Sync Progress', 10);
     try {
-      const plan = processRow_(rowIndex, options);
-      if (plan) {
-        deletionPlan.push(plan);
+      const result = processRow_(rowIndex, options);
+      if (returnPlanOnly && result) {
+        deletionPlan.push(result);
+      } else if (!returnPlanOnly && result) {
+        totalSummary.added += result.added;
+        totalSummary.removed += result.removed;
+        totalSummary.failed += result.failed;
       }
     } catch (e) {
       log_('Error processing row ' + rowIndex + ': ' + e.toString(), 'ERROR');
@@ -49,6 +54,7 @@ function processManagedFolders_(options = {}) {
   if (returnPlanOnly) {
     return deletionPlan;
   }
+  return totalSummary;
 }
 
 function processRow_(rowIndex, options = {}) {
@@ -73,8 +79,9 @@ function processRow_(rowIndex, options = {}) {
       const groupEmail = sheet.getRange(rowIndex, GROUP_EMAIL_COL).getValue();
       const userSheetName = sheet.getRange(rowIndex, USER_SHEET_NAME_COL).getValue();
       if (groupEmail && userSheetName && !shouldSkipGroupOps_()) {
-        syncGroupMembership_(groupEmail, userSheetName, options);
+        const summary = syncGroupMembership_(groupEmail, userSheetName, options);
         statusCell.setValue('OK (Deletions processed)');
+        return summary;
       } else {
         log_('Skipping row ' + rowIndex + ' for deletions: missing group info or Admin SDK.', 'WARN');
         statusCell.setValue('SKIPPED');
@@ -146,17 +153,17 @@ function processRow_(rowIndex, options = {}) {
     }
 
     setFolderPermission_(folder.getId(), groupEmail, role);
-    syncGroupMembership_(groupEmail, userSheetName, options);
+    const summary = syncGroupMembership_(groupEmail, userSheetName, options);
 
     sheet.getRange(rowIndex, LAST_SYNCED_COL).setValue(Utilities.formatDate(new Date(), SpreadsheetApp.getActive().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss'));
     statusCell.setValue('OK');
+    return summary;
 
   } catch (e) {
     log_('Failed to process row ' + rowIndex + '. Error: ' + e.message + ' Stack: ' + e.stack, 'ERROR');
     statusCell.setValue('Error: ' + e.message);
     throw e;
   }
-  return null;
 }
 
 
@@ -436,7 +443,8 @@ function renameSheetIfExists_(oldName, newName) {
 function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
   const { addOnly = false, removeOnly = false, returnPlanOnly = false } = options;
   log_('*** Starting membership sync for group "' + groupEmail + '" from sheet "' + userSheetName + '"');
-  
+  const summary = { added: 0, removed: 0, failed: 0 };
+
   try {
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(userSheetName);
     if (!sheet) {
@@ -526,7 +534,7 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
 
     if (emailsToAdd.length === 0 && emailsToRemove.length === 0) {
       log_('No membership changes required for group "' + groupEmail + '". Sync complete.');
-      return;
+      return summary;
     }
 
     const batchRequests = [];
@@ -535,11 +543,13 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
     // Create requests for adding members
     if (!removeOnly && emailsToAdd.length > 0) {
       emailsToAdd.forEach(function(email) {
+        log_('Adding user "' + email + '" to group "' + groupEmail + '"', 'INFO');
         const payload = { email: email, role: 'MEMBER' };
         batchRequests.push({
           method: 'POST',
           path: '/admin/directory/v1/groups/' + groupEmail + '/members',
-          payload: JSON.stringify(payload)
+          payload: JSON.stringify(payload),
+          operation: 'add'
         });
       });
     }
@@ -547,16 +557,18 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
     // Create requests for removing members
     if (!addOnly && emailsToRemove.length > 0) {
       emailsToRemove.forEach(function(email) {
+        log_('Removing user "' + email + '" from group "' + groupEmail + '"', 'INFO');
         batchRequests.push({
           method: 'DELETE',
-          path: '/admin/directory/v1/groups/' + groupEmail + '/members/' + email
+          path: '/admin/directory/v1/groups/' + groupEmail + '/members/' + email,
+          operation: 'remove'
         });
       });
     }
 
     if (batchRequests.length === 0) {
       log_('No changes to apply in this mode.');
-      return;
+      return summary;
     }
 
     // Build the multipart request body
@@ -599,40 +611,42 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
       const responseBoundary = '--' + contentTypeHeader.split('boundary=')[1];
       const parts = responseBody.split(responseBoundary);
       
-      let successCount = 0;
-      let failureCount = 0;
-
       // Start from index 1, end before the last part which is the closing boundary
       for (let i = 1; i < parts.length - 1; i++) {
         const part = parts[i].trim();
         if (!part) continue;
 
-                const statusMatch = part.match(/^HTTP\/[12]\.[01] (\d{3})/m);
+        const statusMatch = part.match(/^HTTP\/[12]\.[01] (\d{3})/m);
+        const operation = batchRequests[i-1].operation; // Get operation from original request
+
         if (statusMatch) {
             const statusCode = parseInt(statusMatch[1], 10);
             if (statusCode >= 200 && statusCode < 300) {
-                successCount++;
+                if (operation === 'add') summary.added++;
+                if (operation === 'remove') summary.removed++;
             } else {
-                failureCount++;
+                summary.failed++;
                 log_('A batch operation failed for group ' + groupEmail + '. Status: ' + statusCode + '. Details: ' + part, 'ERROR');
             }
         } else {
-            failureCount++;
+            summary.failed++;
             log_('Could not parse status for a batch operation part for group ' + groupEmail + '. Part: ' + part, 'ERROR');
         }
       }
-      log_('Batch processing summary for ' + groupEmail + ': ' + successCount + ' successful, ' + failureCount + ' failed.');
-      if(failureCount > 0) {
-        log_('WARNING: ' + failureCount + ' membership operations failed to sync for group ' + groupEmail + '. See logs for details.', 'WARN');
+      log_('Batch processing summary for ' + groupEmail + ': ' + summary.added + ' added, ' + summary.removed + ' removed, ' + summary.failed + ' failed.');
+      if(summary.failed > 0) {
+        log_('WARNING: ' + summary.failed + ' membership operations failed to sync for group ' + groupEmail + '. See logs for details.', 'WARN');
       }
 
     } else {
+      summary.failed = batchRequests.length;
       log_('ERROR: Batch request failed for group ' + groupEmail + ' with code ' + responseCode, 'ERROR');
       log_('Response body: ' + responseBody, 'ERROR');
       throw new Error('Batch membership update failed with response code ' + responseCode);
     }
 
     log_('Membership sync complete for group "' + groupEmail + '"');
+    return summary;
 
   } catch (e) {
     log_('FATAL ERROR in syncGroupMembership for group ' + groupEmail + '. Error: ' + e.toString() + ' Stack: ' + e.stack, 'ERROR');

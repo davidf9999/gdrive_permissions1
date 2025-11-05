@@ -235,7 +235,7 @@ function setupLogSheets_() {
   let logSheet = ss.getSheetByName(LOG_SHEET_NAME);
   if (!logSheet) {
     logSheet = ss.insertSheet(LOG_SHEET_NAME);
-    logSheet.getRange('A1:B1').setValues([['Timestamp', 'Message']]).setFontWeight('bold');
+    logSheet.getRange('A1:C1').setValues([['Timestamp', 'Level', 'Message']]).setFontWeight('bold');
     logSheet.setFrozenRows(1);
   }
 
@@ -243,7 +243,7 @@ function setupLogSheets_() {
   let testLogSheet = ss.getSheetByName(TEST_LOG_SHEET_NAME);
   if (!testLogSheet) {
     testLogSheet = ss.insertSheet(TEST_LOG_SHEET_NAME);
-    testLogSheet.getRange('A1:B1').setValues([['Timestamp', 'Message']]).setFontWeight('bold');
+    testLogSheet.getRange('A1:C1').setValues([['Timestamp', 'Level', 'Message']]).setFontWeight('bold');
     testLogSheet.setFrozenRows(1);
   }
 

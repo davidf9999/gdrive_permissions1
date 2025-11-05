@@ -200,7 +200,7 @@ function log_(message, severity = 'INFO') {
   const logSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
   if (logSheet) {
     const timestamp = Utilities.formatDate(new Date(), SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss');
-    logSheet.appendRow([timestamp, '[' + severity.toUpperCase() + '] ' + message]);
+    logSheet.appendRow([timestamp, severity.toUpperCase(), message]);
     
     // Trim the log sheet if it's too long
     const maxLength = getMaxLogLength_();
@@ -244,12 +244,12 @@ function clearAllLogs() {
 
   const logSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(LOG_SHEET_NAME);
   if (logSheet) {
-    logSheet.getRange('A2:B').clearContent();
+    logSheet.getRange('A2:C').clearContent();
   }
 
   const testLogSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(TEST_LOG_SHEET_NAME);
   if (testLogSheet) {
-    testLogSheet.getRange('A2:B').clearContent();
+    testLogSheet.getRange('A2:C').clearContent();
   }
 
   const foldersAuditLogSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('FoldersAuditLog');
@@ -280,7 +280,7 @@ function clearAuxiliaryLogs() {
 
   const testLogSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(TEST_LOG_SHEET_NAME);
   if (testLogSheet) {
-    testLogSheet.getRange('A2:B').clearContent();
+    testLogSheet.getRange('A2:C').clearContent();
   }
 
   const foldersAuditLogSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('FoldersAuditLog');

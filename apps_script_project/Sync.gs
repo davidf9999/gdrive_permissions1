@@ -182,6 +182,7 @@ function syncAdminsGroup_(adminSheet, adminGroupEmail, options = {}) {
 function syncUserGroups(options = {}) {
   const { returnPlanOnly = false, silentMode = false } = options;
   let deletionPlan = [];
+  const totalSummary = { added: 0, removed: 0, failed: 0 };
 
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -256,7 +257,12 @@ function syncUserGroups(options = {}) {
           const groupSheetName = groupName + '_G';
           getOrCreateUserSheet_(groupSheetName);
           getOrCreateGroup_(groupEmail, groupName);
-          syncGroupMembership_(groupEmail, groupSheetName, options);
+          const summary = syncGroupMembership_(groupEmail, groupSheetName, options);
+          if (summary) {
+            totalSummary.added += summary.added;
+            totalSummary.removed += summary.removed;
+            totalSummary.failed += summary.failed;
+          }
 
           lastSyncedCell.setValue(Utilities.formatDate(new Date(), SpreadsheetApp.getActive().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss'));
           statusCell.setValue('OK');
@@ -278,11 +284,14 @@ function syncUserGroups(options = {}) {
     if (returnPlanOnly) {
       return deletionPlan;
     }
+
+    const summaryMessage = 'User groups sync complete. Total changes: ' + totalSummary.added + ' added, ' + totalSummary.removed + ' removed, ' + totalSummary.failed + ' failed.';
+    log_(summaryMessage, 'INFO');
     
     if (SCRIPT_EXECUTION_MODE === 'TEST') {
-      showTestMessage_('User Groups Sync', 'User groups sync complete.');
+      showTestMessage_('User Groups Sync', summaryMessage);
     } else if (!silentMode) {
-      SpreadsheetApp.getUi().alert('User groups sync complete.');
+      SpreadsheetApp.getUi().alert(summaryMessage);
     }
 
   } catch (e) {
@@ -306,6 +315,8 @@ function syncAdds(options = {}) {
     return;
   }
 
+  const totalSummary = { added: 0, removed: 0, failed: 0 };
+
   try {
     if (!silentMode) showToast_('Starting non-destructive sync (adds only)...', 'Sync Adds', -1);
     log_('*** Starting non-destructive synchronization (adds only)...');
@@ -314,17 +325,28 @@ function syncAdds(options = {}) {
     syncAdmins({ addOnly: true, silentMode: true });
 
     // 2. Sync User Groups (creates groups, adds members)
-    syncUserGroups({ addOnly: true, silentMode: silentMode });
+    const userGroupsSummary = syncUserGroups({ addOnly: true, silentMode: silentMode });
+    if (userGroupsSummary) {
+      totalSummary.added += userGroupsSummary.added;
+      totalSummary.removed += userGroupsSummary.removed;
+      totalSummary.failed += userGroupsSummary.failed;
+    }
 
     // 3. Process Managed Folders (creates folders, permissions, adds members)
-    processManagedFolders_({ addOnly: true, silentMode: silentMode });
+    const managedFoldersSummary = processManagedFolders_({ addOnly: true, silentMode: silentMode });
+    if (managedFoldersSummary) {
+      totalSummary.added += managedFoldersSummary.added;
+      totalSummary.removed += managedFoldersSummary.removed;
+      totalSummary.failed += managedFoldersSummary.failed;
+    }
 
-    if (!silentMode) showToast_('Add-only sync complete!', 'Sync Adds', 5);
-    log_('Add-only synchronization completed.');
+    const summaryMessage = 'Add-only sync complete. Total changes: ' + totalSummary.added + ' added, ' + totalSummary.failed + ' failed.';
+    log_(summaryMessage, 'INFO');
+
     if (SCRIPT_EXECUTION_MODE === 'TEST') {
-      showTestMessage_('Add-only Sync', 'Non-destructive sync (adds only) is complete.');
+      showTestMessage_('Add-only Sync', summaryMessage);
     } else if (!silentMode) {
-      SpreadsheetApp.getUi().alert('Non-destructive sync (adds only) is complete.\n\nCheck the \'Status\' column in the sheets for details.');
+      SpreadsheetApp.getUi().alert(summaryMessage + '\n\nCheck the \'Status\' column in the sheets for details.');
     }
 
   } catch (e) {
@@ -395,17 +417,32 @@ function syncDeletes() {
     return;
   }
 
+  const totalSummary = { added: 0, removed: 0, failed: 0 };
+
   try {
     showToast_('Starting destructive sync (deletes only)...', 'Sync Deletes', -1);
     log_('*** Starting destructive synchronization (deletes only)...');
 
     const execOptions = { removeOnly: true };
-    syncUserGroups(execOptions);
-    processManagedFolders_(execOptions);
+    const userGroupsSummary = syncUserGroups(execOptions);
+    if (userGroupsSummary) {
+      totalSummary.added += userGroupsSummary.added;
+      totalSummary.removed += userGroupsSummary.removed;
+      totalSummary.failed += userGroupsSummary.failed;
+    }
+
+    const managedFoldersSummary = processManagedFolders_(execOptions);
+    if (managedFoldersSummary) {
+      totalSummary.added += managedFoldersSummary.added;
+      totalSummary.removed += managedFoldersSummary.removed;
+      totalSummary.failed += managedFoldersSummary.failed;
+    }
+
+    const summaryMessage = 'Delete-only sync complete. Total changes: ' + totalSummary.removed + ' removed, ' + totalSummary.failed + ' failed.';
+    log_(summaryMessage, 'INFO');
 
     showToast_('Delete-only sync complete!', 'Sync Deletes', 5);
-    log_('Delete-only synchronization completed.');
-    ui.alert('Destructive sync (deletes only) is complete.\n\nCheck the \'Status\' column in the sheets for details.');
+    ui.alert(summaryMessage + '\n\nCheck the \'Status\' column in the sheets for details.');
 
   } catch (e) {
     const errorMessage = 'FATAL ERROR in syncDeletes: ' + e.toString() + '\n' + e.stack;
@@ -427,6 +464,7 @@ function fullSync(options = {}) {
     return;
   }
 
+  const totalSummary = { added: 0, removed: 0, failed: 0 };
   let summaryMessage = 'Sync process complete.';
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
@@ -449,10 +487,20 @@ function fullSync(options = {}) {
     syncAdmins(options);
 
     // 2. Sync User Groups
-    syncUserGroups(options);
+    const userGroupsSummary = syncUserGroups(options);
+    if (userGroupsSummary) {
+      totalSummary.added += userGroupsSummary.added;
+      totalSummary.removed += userGroupsSummary.removed;
+      totalSummary.failed += userGroupsSummary.failed;
+    }
 
     // 3. Process Managed Folders
-    processManagedFolders_(options);
+    const managedFoldersSummary = processManagedFolders_(options);
+    if (managedFoldersSummary) {
+      totalSummary.added += managedFoldersSummary.added;
+      totalSummary.removed += managedFoldersSummary.removed;
+      totalSummary.failed += managedFoldersSummary.failed;
+    }
 
     // Check for any orphan sheets
     const orphanSheets = checkForOrphanSheets_();
@@ -462,8 +510,9 @@ function fullSync(options = {}) {
       log_(orphanMessage, 'WARN');
     }
 
-    if (!silentMode) showToast_('Full synchronization complete!', 'Full Sync', 5);
-    log_('Full synchronization completed.');
+    summaryMessage = 'Full synchronization completed. Total changes: ' + totalSummary.added + ' added, ' + totalSummary.removed + ' removed, ' + totalSummary.failed + ' failed.';
+    log_(summaryMessage, 'INFO');
+
     if (SCRIPT_EXECUTION_MODE === 'TEST') {
       showTestMessage_('Full Sync', summaryMessage + '\n\nCheck the \'Status\' column in the \'ManagedFolders\' sheet for details.');
     } else if (!silentMode) {
