@@ -1,6 +1,6 @@
 # Action Plan - Next Steps
 
-## ⚠️ CRITICAL FIXES APPLIED (Latest: commit 2f9a5f6)
+## ⚠️ CRITICAL FIXES APPLIED (Latest: commit 77d288e)
 
 ### Fix 1: Variable Scoping (Cleanup Failures)
 **Issue**: "Cleanup skipped (testConfig undefined)"
@@ -25,6 +25,12 @@
 **Fix**: `runAllTests()` now calls `clearAllTestsData(true)` automatically
 **Status**: ✅ FIXED
 
+### Fix 5: Log Header Protection
+**Issue**: Logs written to row 1 (header row) when sheet is empty or header deleted
+**Cause**: `getLastRow()` returns 0 when sheet is empty, so `lastRow + 1 = 1` overwrites header
+**Fix**: Always check if header exists, recreate if missing, and use `Math.max(lastRow + 1, 2)`
+**Status**: ✅ FIXED (commit 77d288e)
+
 ## Summary of Changes
 
 All fixes and optimizations have been implemented in your local code. You now need to upload the updated files to Apps Script and test them.
@@ -33,8 +39,9 @@ All fixes and optimizations have been implemented in your local code. You now ne
 
 ### ✅ Required Files (Upload These First)
 
-1. **Tests.gs** - Enhanced cleanup logging + pytest-style formatting + performance optimizations
+1. **Tests.gs** - Enhanced cleanup logging + pytest-style formatting + performance optimizations + variable scoping fixes
 2. **TestHelpers.gs** - NEW FILE - Test performance optimizations (60% faster tests)
+3. **Utils.gs** - Log header protection (prevents logs from overwriting header row)
 
 ### 💡 Optional File (Upload If You Want Production Optimizations)
 
@@ -52,10 +59,12 @@ All fixes and optimizations have been implemented in your local code. You now ne
 2. Go to **Extensions > Apps Script**
 3. Find and open **Tests.gs** in the editor
 4. Replace the entire content with the content from your local `apps_script_project/Tests.gs`
-5. Click **File > New > Script file**, name it **TestHelpers**
-6. Copy the content from your local `apps_script_project/TestHelpers.gs`
-7. **Optional**: Repeat for **ProductionOptimizations.gs** if you want production speed improvements
-8. Click **Save project** (💾 icon)
+5. Find and open **Utils.gs** in the editor
+6. Replace the entire content with the content from your local `apps_script_project/Utils.gs`
+7. Click **File > New > Script file**, name it **TestHelpers**
+8. Copy the content from your local `apps_script_project/TestHelpers.gs`
+9. **Optional**: Repeat for **ProductionOptimizations.gs** if you want production speed improvements
+10. Click **Save project** (💾 icon)
 
 ### Step 2: Run Tests
 
