@@ -6,13 +6,14 @@ function runManualAccessTest() {
     let testFolderName, testRole, testEmail, testRowIndex;
     let userSheetName = null, groupEmail = null, folderId = null; // Initialize to null
     let success = false;
+    let testConfig; // Declare here so it's accessible in finally block
     try {
         if (shouldSkipGroupOps_()) {
             showTestMessage_('Test Aborted', 'Manual Access Test requires the Admin Directory service (Admin SDK). Please enable it or run on a Google Workspace domain.');
             return false;
         }
         const ui = SpreadsheetApp.getUi();
-        const testConfig = getTestConfiguration_();
+        testConfig = getTestConfiguration_(); // Assign (not declare) here
 
         testFolderName = testConfig.folderName;
         if (!testFolderName) {
@@ -176,16 +177,17 @@ function runStressTest() {
     SCRIPT_EXECUTION_MODE = 'TEST';
     const testStartTime = new Date(); // Record overall test start time
     let success = false;
+    let testConfig, numFolders, startRow; // Declare here so accessible in finally block
     try {
         if (shouldSkipGroupOps_()) {
             showTestMessage_('Test Aborted', 'Stress Test requires the Admin Directory service (Admin SDK). Please enable it or run on a Google Workspace domain.');
             return false;
         }
         const ui = SpreadsheetApp.getUi();
-        const testConfig = getTestConfiguration_();
+        testConfig = getTestConfiguration_(); // Assign (not declare) here
 
         // --- Step 1: Get Test Parameters ---
-        let numFolders = testConfig.numFolders;
+        numFolders = testConfig.numFolders; // Assign (not declare)
         if (isNaN(numFolders)) {
             const numFoldersStr = ui.prompt('Stress Test - Step 1/4', 'Enter the number of temporary folders to create (e.g., 10).', ui.ButtonSet.OK_CANCEL);
             if (numFoldersStr.getSelectedButton() !== ui.Button.OK || !numFoldersStr.getResponseText()) { ui.alert('Test cancelled.'); return false; }
@@ -226,7 +228,7 @@ function runStressTest() {
         }
 
         const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
-        const startRow = managedSheet.getLastRow() + 1;
+        startRow = managedSheet.getLastRow() + 1; // Assign (not declare)
         const newConfig = folderNames.map(name => [name, '', 'Editor']);
         managedSheet.getRange(startRow, 1, newConfig.length, 3).setValues(newConfig);
         SpreadsheetApp.flush();
@@ -843,6 +845,10 @@ function runAllTests() {
             return;
         }
 
+        // Clear all existing test data before starting
+        clearAllTestsData(true); // Skip confirmation since user already confirmed running tests
+        SCRIPT_EXECUTION_MODE = 'TEST'; // Reset mode after clearAllTestsData (it sets to DEFAULT in finally)
+
         const testResults = [];
 
         // Test 1: Manual Access Test
@@ -850,6 +856,7 @@ function runAllTests() {
         log_('║  TEST 1/3: Manual Access Test                                ║', 'INFO');
         log_('╚══════════════════════════════════════════════════════════════╝', 'INFO');
         const manualTestResult = runManualAccessTest();
+        SCRIPT_EXECUTION_MODE = 'TEST'; // Reset after test completes (its finally block sets to DEFAULT)
         const manualStatus = manualTestResult ? '✓ PASSED' : '✗ FAILED';
         log_('>>> TEST RESULT: Manual Access Test ' + manualStatus, manualTestResult ? 'INFO' : 'ERROR');
         log_('', 'INFO');
@@ -860,6 +867,7 @@ function runAllTests() {
         log_('║  TEST 2/3: Stress Test                                       ║', 'INFO');
         log_('╚══════════════════════════════════════════════════════════════╝', 'INFO');
         const stressTestResult = runStressTest();
+        SCRIPT_EXECUTION_MODE = 'TEST'; // Reset after test completes
         const stressStatus = stressTestResult ? '✓ PASSED' : '✗ FAILED';
         log_('>>> TEST RESULT: Stress Test ' + stressStatus, stressTestResult ? 'INFO' : 'ERROR');
         log_('', 'INFO');
@@ -870,6 +878,7 @@ function runAllTests() {
         log_('║  TEST 3/3: Add/Delete Separation Test                        ║', 'INFO');
         log_('╚══════════════════════════════════════════════════════════════╝', 'INFO');
         const addDeleteTestResult = runAddDeleteSeparationTest();
+        SCRIPT_EXECUTION_MODE = 'TEST'; // Reset after test completes
         const addDeleteStatus = addDeleteTestResult ? '✓ PASSED' : '✗ FAILED';
         log_('>>> TEST RESULT: Add/Delete Separation Test ' + addDeleteStatus, addDeleteTestResult ? 'INFO' : 'ERROR');
         log_('', 'INFO');
@@ -912,14 +921,17 @@ function runAllTests() {
 
 /**
  * Clears all test data, including stress test artifacts and the test log.
+ * @param {boolean} skipConfirmation - If true, skip the confirmation prompt
  */
-function clearAllTestsData() {
+function clearAllTestsData(skipConfirmation = false) {
     SCRIPT_EXECUTION_MODE = 'TEST';
     try {
-        const ui = SpreadsheetApp.getUi();
-        const response = ui.alert('Are you sure you want to delete all test data?', 'This will delete all test folders, groups, and sheets, and clear the TestLog.', ui.ButtonSet.YES_NO);
-        if (response !== ui.Button.YES) {
-            return;
+        if (!skipConfirmation) {
+            const ui = SpreadsheetApp.getUi();
+            const response = ui.alert('Are you sure you want to delete all test data?', 'This will delete all test folders, groups, and sheets, and clear the TestLog.', ui.ButtonSet.YES_NO);
+            if (response !== ui.Button.YES) {
+                return;
+            }
         }
 
         showTestMessage_('Cleanup', 'Clearing all test data. This may take a moment.');
