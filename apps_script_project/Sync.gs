@@ -554,11 +554,12 @@ function syncManagedFoldersAdds() {
     showToast_('Starting folder-only sync (adds only)...', 'Sync Folders - Adds', -1);
     log_('*** Starting Managed Folders only synchronization (adds only)...');
 
-    processManagedFolders_({ addOnly: true });
+    const summary = processManagedFolders_({ addOnly: true });
+    const summaryMessage = 'Folder-only sync (adds) complete. Total changes: ' + summary.added + ' added, ' + summary.failed + ' failed.';
+    log_(summaryMessage, 'INFO');
 
     showToast_('Folder-only sync (adds) complete!', 'Sync Folders - Adds', 5);
-    log_('Managed Folders only synchronization (adds) completed.');
-    SpreadsheetApp.getUi().alert('Folder-only sync (adds only) is complete.\n\nCheck the \'Status\' column in the \'ManagedFolders\' sheet for details.');
+    SpreadsheetApp.getUi().alert(summaryMessage + '\n\nCheck the \'Status\' column in the \'ManagedFolders\' sheet for details.');
 
   } catch (e) {
     const errorMessage = 'FATAL ERROR in syncManagedFoldersAdds: ' + e.toString() + '\n' + e.stack;
@@ -630,11 +631,12 @@ function syncManagedFoldersDeletes() {
     showToast_('Starting folder-only sync (deletes only)...', 'Sync Folders - Deletes', -1);
     log_('*** Starting Managed Folders only synchronization (deletes only)...');
 
-    processManagedFolders_({ removeOnly: true });
+    const summary = processManagedFolders_({ removeOnly: true });
+    const summaryMessage = 'Destructive folder-only sync (deletes only) is complete. Total changes: ' + summary.removed + ' removed, ' + summary.failed + ' failed.';
+    log_(summaryMessage, 'INFO');
 
     showToast_('Folder-only sync (deletes) complete!', 'Sync Folders - Deletes', 5);
-    log_('Managed Folders only synchronization (deletes) completed.');
-    ui.alert('Destructive folder-only sync (deletes only) is complete.\n\nCheck the \'Status\' column in the \'ManagedFolders\' sheet for details.');
+    ui.alert(summaryMessage + '\n\nCheck the \'Status\' column in the \'ManagedFolders\' sheet for details.');
 
   } catch (e) {
     const errorMessage = 'FATAL ERROR in syncManagedFoldersDeletes: ' + e.toString() + '\n' + e.stack;
