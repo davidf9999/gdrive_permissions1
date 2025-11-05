@@ -25,6 +25,7 @@ describe('processRow_', () => {
     global.Utilities = { formatDate: jest.fn(date => date.toISOString()) };
     global.Session = { getActiveUser: jest.fn(() => ({ getEmail: jest.fn(() => 'test.user@example.com') })) };
     global.AdminDirectory = { Groups: { get: jest.fn(), insert: jest.fn() }, Members: { list: jest.fn(() => ({ members: [] })) } };
+    global.DriveApp.Permission = { EDIT: 'EDIT', VIEW: 'VIEW', NONE: 'NONE' };
 
     // --- Mock DriveApp ---
     currentFolderName = 'mockFolderName';
@@ -36,6 +37,10 @@ describe('processRow_', () => {
       addViewer: jest.fn(),
       addCommenter: jest.fn(),
       setName: jest.fn(newName => { currentFolderName = newName; }),
+      getAccess: jest.fn(email => DriveApp.Permission.NONE),
+      getEditors: jest.fn(() => []),
+      getViewers: jest.fn(() => []),
+      getCommenters: jest.fn(() => []),
     };
     DriveApp.getFolderById.mockReturnValue(mockFolder);
     DriveApp.getFoldersByName.mockReturnValue({ hasNext: jest.fn(() => false), next: jest.fn() });
