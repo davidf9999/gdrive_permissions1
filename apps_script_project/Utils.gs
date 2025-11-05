@@ -195,54 +195,12 @@ function getMaxLogLength_() {
 }
 
 function log_(message, severity = 'INFO') {
-  // 1. Write to the Google Sheet log
   const sheetName = (SCRIPT_EXECUTION_MODE === 'TEST') ? TEST_LOG_SHEET_NAME : LOG_SHEET_NAME;
   const logSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
   if (logSheet) {
     const timestamp = Utilities.formatDate(new Date(), SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss');
-    
-    let finalMessage = '';
-    if (message === null || message === undefined) {
-      finalMessage = '[NULL OR UNDEFINED LOG MESSAGE]';
-    } else {
-      finalMessage = String(message).trim();
-      if (finalMessage === '') {
-        finalMessage = '[EMPTY LOG MESSAGE]';
-      }
-    }
-
-    logSheet.appendRow([timestamp, severity.toUpperCase(), finalMessage]);
-    
-    // Trim the log sheet if it's too long
-    const maxLength = getMaxLogLength_();
     const lastRow = logSheet.getLastRow();
-    const headerRows = 1;
-    const rowsToDelete = lastRow - headerRows - maxLength;
-    if (rowsToDelete > 0) {
-      logSheet.deleteRows(headerRows + 1, rowsToDelete);
-    }
-  }
-
-  // 2. Write to Google Cloud Logging if enabled
-  const config = getConfiguration_();
-  const gcpLoggingEnabled = config['EnableGCPLogging'];
-
-  if (gcpLoggingEnabled === true || gcpLoggingEnabled === 'TRUE') {
-    const severityUpper = severity.toUpperCase();
-    switch (severityUpper) {
-      case 'ERROR':
-        console.error(message);
-        break;
-      case 'WARN':
-        console.warn(message);
-        break;
-      case 'INFO':
-        console.info(message);
-        break;
-      default:
-        console.log(message);
-        break;
-    }
+    logSheet.getRange(lastRow + 1, 1, 1, 3).setValues([[timestamp, severity.toUpperCase(), message]]);
   }
 }
 

@@ -102,3 +102,32 @@ To improve the traceability and observability of the script's operations, the lo
 *   **Logging Levels:** The script now uses logging levels (e.g., INFO, WARN, ERROR) to provide more granular control over the log output. This allows administrators to easily filter and identify important events, such as errors or warnings, in the log sheets.
 
 *   **Numeric Summary of Changes:** At the end of each synchronization operation, the script logs a numeric summary of the changes made. This summary includes the number of users added, removed, and any failed operations, providing a clear and concise overview of the outcome of the synchronization process.
+
+## Recent Changes and Debugging (November 2025)
+
+This section summarizes a series of recent feature additions, bug fixes, and debugging efforts.
+
+### New Feature: Group Admin Link
+
+A new "Group Admin Link" column has been added to the `UserGroups` sheet. This provides a direct link to the Google Group's membership page in the Google Admin console, making manual verification and auditing much more convenient.
+
+The implementation involved:
+*   Updating the `UserGroups` sheet header in `Setup.gs`.
+*   Refactoring the `getOrCreateGroup_` function in `Core.gs` to return the full group object, including its unique ID.
+*   Updating the `syncUserGroups` function in `Sync.gs` to use the group's ID to construct the correct admin URL (`https://admin.google.com/ac/groups/GROUP_ID/members`).
+
+### Test Suite Refactoring and Bug Fixes
+
+The test suite in `Tests.gs` has been significantly improved:
+
+*   **Per-Test Summary:** The main `runAllTests` function now provides a clear, per-test summary indicating whether each test "PASSED" or "FAILED". This was achieved by refactoring the individual test functions (`runManualAccessTest`, `runStressTest`, `runAddDeleteSeparationTest`) to return a boolean success/failure status instead of throwing errors.
+*   **`runAddDeleteSeparationTest` Fix:** A bug in this test was fixed. The test was incorrectly checking the wrong column in the `TestLog` for a "404 Resource Not Found" error, causing it to fail when it should have passed.
+*   **`clearAllTestsData` Fix:** A bug in the `clearAllTestsData` function was fixed. The function was not comprehensive and failed to delete all test-related data. It has been updated to correctly identify and remove all manual and stress test artifacts.
+
+### Debugging Logging and UI Issues
+
+A persistent and difficult-to-diagnose bug was encountered where the script would fail with an `#ERROR!` in the logs, and UI elements (like confirmation dialogs) would not appear. This was eventually traced to an issue with the `log_` function.
+
+*   **Initial Attempts:** Several attempts were made to fix the issue, including simplifying the `log_` function and temporarily disabling the log trimming feature.
+*   **Final Workaround:** The root cause appears to be related to how the `appendRow` method behaves in the user's specific environment. The final, successful workaround was to replace `logSheet.appendRow(...)` with `logSheet.getRange(...).setValues(...)` in the `log_` function in `Utils.gs`.
+*   **Log Trimming:** As part of the debugging process, the log trimming feature in the `log_` function was temporarily disabled. This feature is important for long-term stability and **needs to be re-implemented** in a more robust and efficient way.
