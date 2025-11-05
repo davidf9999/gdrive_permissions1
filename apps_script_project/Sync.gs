@@ -4,9 +4,11 @@
  * @param {Object} options - Options for sync behavior
  * @param {boolean} options.addOnly - If true, only add admins (SAFE operations for auto-sync)
  * @param {boolean} options.silentMode - If true, skip UI dialogs (for background execution)
+ * @returns {object} A summary of the changes made, with properties for `added` and `removed` counts.
  */
 function syncAdmins(options = {}) {
   const { addOnly = false, silentMode = false } = options;
+  const totalSummary = { added: 0, removed: 0, failed: 0 };
   let adminSheet;
   try {
     log_('Running Admin Sync... (addOnly: ' + addOnly + ', silentMode: ' + silentMode + ')');
@@ -15,7 +17,7 @@ function syncAdmins(options = {}) {
     if (!adminSheet) {
       log_('Admins sheet not found. Skipping admin sync.');
       if (!silentMode) SpreadsheetApp.getUi().alert('Admins sheet not found. Skipping admin sync.');
-      return;
+      return totalSummary;
     }
 
     // Get admin group email from Config sheet
@@ -75,7 +77,7 @@ function syncAdmins(options = {}) {
           SpreadsheetApp.getUi().alert('Admin list is already up to date. No changes were needed.\nAdmins group synced to ' + adminGroupEmail + '.');
         }
       }
-      return;
+      return totalSummary;
     }
 
     // Build confirmation message
@@ -98,7 +100,7 @@ function syncAdmins(options = {}) {
         if (!silentMode) SpreadsheetApp.getUi().alert('Admin sync cancelled.');
         log_('Admin sync cancelled by user.');
         adminSheet.getRange(ADMINS_STATUS_CELL).setValue('CANCELLED');
-        return;
+        return totalSummary;
       }
     } else {
       // Log changes in silent/addOnly mode
@@ -112,6 +114,7 @@ function syncAdmins(options = {}) {
     if (emailsToAdd.length > 0) {
       log_('Adding ' + emailsToAdd.length + ' admin(s): ' + emailsToAdd.join(', '));
       spreadsheet.addEditors(emailsToAdd);
+      totalSummary.added = emailsToAdd.length;
     }
 
     // Perform removals only if not in addOnly mode
@@ -124,6 +127,7 @@ function syncAdmins(options = {}) {
           log_('Failed to remove editor ' + email + ': ' + e.message, 'ERROR');
         }
       });
+      totalSummary.removed = emailsToRemove.length;
     }
 
     syncAdminsGroup_(adminSheet, adminGroupEmail, { addOnly: addOnly });
@@ -146,6 +150,7 @@ function syncAdmins(options = {}) {
     }
     if (!silentMode) SpreadsheetApp.getUi().alert('An error occurred during Admin sync: ' + e.message);
   }
+  return totalSummary;
 }
 
 function syncAdminsGroup_(adminSheet, adminGroupEmail, options = {}) {
@@ -159,18 +164,19 @@ function syncAdminsGroup_(adminSheet, adminGroupEmail, options = {}) {
     log_('Admin Directory service not available. Skipping Admins group sync.', 'WARN');
     statusCell.setValue('SKIPPED (No Admin SDK)');
     lastSyncedCell.setValue(timestamp);
-    return;
+    return null;
   }
 
   try {
     getOrCreateGroup_(adminGroupEmail, ADMINS_GROUP_NAME);
-    syncGroupMembership_(adminGroupEmail, ADMINS_SHEET_NAME, { addOnly: addOnly });
+    const summary = syncGroupMembership_(adminGroupEmail, ADMINS_SHEET_NAME, { addOnly: addOnly });
 
     // Update the Config sheet with the admin group email
     updateConfigSetting_('AdminGroupEmail', adminGroupEmail);
 
     statusCell.setValue('OK');
     lastSyncedCell.setValue(timestamp);
+    return summary;
   } catch (e) {
     statusCell.setValue('ERROR: ' + e.message);
     throw e;
