@@ -26,13 +26,13 @@ function syncSingleFolder_(rowIndex, addOnly = false) {
     log_('Fast sync for single folder: ' + folderName + ' (row ' + rowIndex + ')');
 
     // Process this single row using existing logic
-    const result = processRow_(rowIndex);
+    // processRow_ returns a summary object { added, removed, failed } and writes status to the sheet
+    const result = processRow_(rowIndex, { addOnly: addOnly });
 
-    if (result.status === 'OK') {
-      return 'OK';
-    } else {
-      return result.status;
-    }
+    // Read the status from the sheet (processRow_ writes it there)
+    const status = managedSheet.getRange(rowIndex, STATUS_COL).getValue();
+
+    return status;
 
   } catch (e) {
     log_('Error in syncSingleFolder_ for row ' + rowIndex + ': ' + e.message, 'ERROR');
@@ -72,8 +72,13 @@ function testOnlySync_(testPatterns, addOnly = false) {
       const rowIndex = i + 1; // Convert to 1-based row number
 
       try {
-        const result = processRow_(rowIndex);
-        if (result.status !== 'OK') {
+        // processRow_ returns a summary object { added, removed, failed } and writes status to the sheet
+        const result = processRow_(rowIndex, { addOnly: addOnly });
+
+        // Read the status from the sheet (processRow_ writes it there)
+        const status = managedSheet.getRange(rowIndex, STATUS_COL).getValue();
+
+        if (status !== 'OK' && !status.startsWith('OK')) {
           errorCount++;
         }
         processedCount++;
