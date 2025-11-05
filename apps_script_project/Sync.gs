@@ -418,11 +418,12 @@ function syncDeletes() {
   }
 }
 
-function fullSync() {
+function fullSync(options = {}) {
+  const { silentMode = false } = options;
   setupControlSheets_(); // Ensure control sheets exist
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(15000)) {
-    SpreadsheetApp.getUi().alert('Sync is already in progress. Please wait a few minutes and try again.');
+    if (!silentMode) SpreadsheetApp.getUi().alert('Sync is already in progress. Please wait a few minutes and try again.');
     return;
   }
 
@@ -430,7 +431,7 @@ function fullSync() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
   try {
-    showToast_('Starting full synchronization...', 'Full Sync', -1);
+    if (!silentMode) showToast_('Starting full synchronization...', 'Full Sync', -1);
     log_('*** Starting full synchronization...');
 
     // Validate unique group emails before starting
@@ -440,18 +441,18 @@ function fullSync() {
       const errorMessage = 'VALIDATION ERROR: Duplicate group emails detected!\n\n' + errorDetails +
         '\n\nEach group must have a unique email address. Please fix these duplicates and try again.';
       log_(errorMessage, 'ERROR');
-      SpreadsheetApp.getUi().alert(errorMessage);
+      if (!silentMode) SpreadsheetApp.getUi().alert(errorMessage);
       throw new Error('Duplicate group emails detected. Sync aborted.');
     }
 
     // 1. Sync Admins
-    syncAdmins();
+    syncAdmins(options);
 
     // 2. Sync User Groups
-    syncUserGroups();
+    syncUserGroups(options);
 
     // 3. Process Managed Folders
-    processManagedFolders_();
+    processManagedFolders_(options);
 
     // Check for any orphan sheets
     const orphanSheets = checkForOrphanSheets_();
@@ -461,19 +462,19 @@ function fullSync() {
       log_(orphanMessage, 'WARN');
     }
 
-    showToast_('Full synchronization complete!', 'Full Sync', 5);
+    if (!silentMode) showToast_('Full synchronization complete!', 'Full Sync', 5);
     log_('Full synchronization completed.');
     if (SCRIPT_EXECUTION_MODE === 'TEST') {
       showTestMessage_('Full Sync', summaryMessage + '\n\nCheck the \'Status\' column in the \'ManagedFolders\' sheet for details.');
-    } else {
+    } else if (!silentMode) {
       SpreadsheetApp.getUi().alert(summaryMessage + '\n\nCheck the \'Status\' column in the \'ManagedFolders\' sheet for details.');
     }
 
   } catch (e) {
     const errorMessage = 'FATAL ERROR in fullSync: ' + e.toString() + '\n' + e.stack;
     log_(errorMessage, 'ERROR');
-    showToast_('Full sync failed with a fatal error.', 'Full Sync', 5);
-    SpreadsheetApp.getUi().alert('A fatal error occurred: ' + e.message);
+    if (!silentMode) showToast_('Full sync failed with a fatal error.', 'Full Sync', 5);
+    if (!silentMode) SpreadsheetApp.getUi().alert('A fatal error occurred: ' + e.message);
     sendErrorNotification_(errorMessage);
   } finally {
     lock.releaseLock();
