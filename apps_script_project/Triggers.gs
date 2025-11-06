@@ -166,7 +166,14 @@ function autoSync(e) {
     const durationSeconds = Math.round((endTime - startTime) / 1000);
     logSyncHistory_(revisionId, revisionLink, syncSummary, durationSeconds);
 
-    log_('*** Scheduled auto-sync completed successfully.');
+    // Check if there were any failures during sync
+    if (syncSummary && syncSummary.failed > 0) {
+      const errorMessage = `Auto-sync completed with ${syncSummary.failed} failure(s). Added: ${syncSummary.added}, Removed: ${syncSummary.removed}. Check the Log and ManagedFolders sheets for details.`;
+      log_(errorMessage, 'ERROR');
+      sendErrorNotification_(errorMessage);
+    } else {
+      log_('*** Scheduled auto-sync completed successfully.');
+    }
 
   } catch (e) {
     const errorMessage = 'FATAL ERROR in autoSync: ' + e.toString() + '\n' + e.stack;

@@ -362,6 +362,8 @@ function syncAdds(options = {}) {
       SpreadsheetApp.getUi().alert(summaryMessage + '\n\nCheck the \'Status\' column in the sheets for details.');
     }
 
+    return totalSummary;
+
   } catch (e) {
     const errorMessage = 'FATAL ERROR in syncAdds: ' + e.toString() + '\n' + e.stack;
     log_(errorMessage, 'ERROR');
@@ -535,6 +537,8 @@ function fullSync(options = {}) {
     } else if (!silentMode) {
       SpreadsheetApp.getUi().alert(summaryMessage + '\n\nCheck the \'Status\' column in the \'ManagedFolders\' sheet for details.');
     }
+
+    return totalSummary;
 
   } catch (e) {
     const errorMessage = 'FATAL ERROR in fullSync: ' + e.toString() + '\n' + e.stack;
