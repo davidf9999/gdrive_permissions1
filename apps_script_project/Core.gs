@@ -47,6 +47,7 @@ function processManagedFolders_(options = {}) {
       }
     } catch (e) {
       log_('Error processing row ' + rowIndex + ': ' + e.toString(), 'ERROR');
+      totalSummary.failed++;
     }
   }
   log_('Finished processing all rows.');

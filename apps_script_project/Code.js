@@ -74,6 +74,7 @@ function onOpen() {
             .addItem('Run Manual Access Test', 'runManualAccessTest')
             .addItem('Run Stress Test', 'runStressTest')
             .addItem('Run Add/Delete Separation Test', 'runAddDeleteSeparationTest')
+            .addItem('Run Auto-Sync Error Email Test', 'runAutoSyncErrorEmailTest')
             .addSeparator()
             .addItem('Cleanup Manual Test Data', 'cleanupManualTestData')
             .addItem('Cleanup Stress Test Data', 'cleanupStressTestData')
