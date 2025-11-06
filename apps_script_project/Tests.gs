@@ -295,7 +295,8 @@ function runStressTest() {
                 log_('Starting automatic cleanup for stress test folders', 'INFO');
                 try {
                     const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
-                    const managedData = managedSheet.getRange(startRow, 1, numFolders, GROUP_EMAIL_COL).getValues();
+                    // Read up to STATUS_COL to include USER_SHEET_NAME_COL (column 5)
+                    const managedData = managedSheet.getRange(startRow, 1, numFolders, STATUS_COL).getValues();
 
                     showTestMessage_('Cleanup', 'Cleanup in Progress. This may take a few moments.');
 
@@ -783,18 +784,27 @@ function cleanupOrphanedTestData() {
  */
 function cleanupFolderData_(folderName, folderId, groupEmail, userSheetName) {
     log_('Starting cleanup for test data: ' + folderName);
+    log_('  → userSheetName: "' + userSheetName + '"');
+    log_('  → groupEmail: "' + groupEmail + '"');
+    log_('  → folderId: "' + folderId + '"');
 
     // 1. Delete the user sheet
     if (userSheetName) {
+        log_('  → Attempting to find sheet: ' + userSheetName);
         try {
             const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(userSheetName);
             if (sheet) {
+                log_('  → Sheet found, deleting...');
                 SpreadsheetApp.getActiveSpreadsheet().deleteSheet(sheet);
-                log_('Deleted sheet: ' + userSheetName);
+                log_('✓ Deleted sheet: ' + userSheetName);
+            } else {
+                log_('✗ Sheet not found: ' + userSheetName + ' (getSheetByName returned null)', 'WARN');
             }
         } catch (e) {
-            log_('Could not delete sheet ' + userSheetName + ': ' + e.message, 'WARN');
+            log_('✗ Could not delete sheet ' + userSheetName + ': ' + e.message, 'ERROR');
         }
+    } else {
+        log_('✗ Skipping sheet deletion - userSheetName is empty/null', 'WARN');
     }
 
     // 2. Delete the Google Group
