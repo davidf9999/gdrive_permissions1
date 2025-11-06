@@ -688,55 +688,102 @@ function setFolderPermission_(folderId, groupEmail, role) {
     const roleLower = role.toLowerCase();
     const groupEmailLower = groupEmail.toLowerCase();
 
-    // Map our role names to Drive API role values
-    const driveApiRole = (roleLower === 'editor') ? 'writer' : (roleLower === 'viewer') ? 'reader' : 'commenter';
+    // Check if Drive API v3 is available
+    const driveApiAvailable = typeof Drive !== 'undefined';
 
-    // Check if permission already exists with the correct role using Drive API
-    try {
-      const existingPermissions = Drive.Permissions.list(folderId, {
-        fields: 'permissions(id,emailAddress,role,type)'
-      }).permissions || [];
+    if (driveApiAvailable) {
+      // PREFERRED: Use Drive API v3 with sendNotificationEmail: false
+      const driveApiRole = (roleLower === 'editor') ? 'writer' : (roleLower === 'viewer') ? 'reader' : 'commenter';
 
-      const existingPermission = existingPermissions.find(function(perm) {
-        return perm.emailAddress && perm.emailAddress.toLowerCase() === groupEmailLower && perm.type === 'group';
-      });
+      // Check if permission already exists with the correct role
+      try {
+        const existingPermissions = Drive.Permissions.list(folderId, {
+          fields: 'permissions(id,emailAddress,role,type)'
+        }).permissions || [];
 
-      if (existingPermission) {
-        if (existingPermission.role === driveApiRole) {
-          log_('Permission "' + role + '" for group "' + groupEmail + '" on folder "' + folderName + '" already exists. Skipping.');
-          return;
-        } else {
-          // Permission exists but with different role - update it
-          log_('Updating permission for group "' + groupEmail + '" on folder "' + folderName + '" from "' + existingPermission.role + '" to "' + driveApiRole + '"');
-          Drive.Permissions.update(
-            { role: driveApiRole },
-            folderId,
-            existingPermission.id,
-            { sendNotificationEmail: false, supportsAllDrives: true }
-          );
-          log_('Successfully updated role "' + role + '" for group "' + groupEmail + '" on folder "' + folderName + '"');
-          return;
+        const existingPermission = existingPermissions.find(function(perm) {
+          return perm.emailAddress && perm.emailAddress.toLowerCase() === groupEmailLower && perm.type === 'group';
+        });
+
+        if (existingPermission) {
+          if (existingPermission.role === driveApiRole) {
+            log_('Permission "' + role + '" for group "' + groupEmail + '" on folder "' + folderName + '" already exists. Skipping.');
+            return;
+          } else {
+            // Permission exists but with different role - update it
+            log_('Updating permission for group "' + groupEmail + '" on folder "' + folderName + '" from "' + existingPermission.role + '" to "' + driveApiRole + '"');
+            Drive.Permissions.update(
+              { role: driveApiRole },
+              folderId,
+              existingPermission.id,
+              { sendNotificationEmail: false, supportsAllDrives: true }
+            );
+            log_('Successfully updated role "' + role + '" for group "' + groupEmail + '" on folder "' + folderName + '"');
+            return;
+          }
+        }
+      } catch (checkError) {
+        log_('Could not check existing permissions (will attempt to create): ' + checkError.message, 'WARN');
+      }
+
+      // Permission doesn't exist - create it WITHOUT sending notification email
+      log_('Creating new permission "' + role + '" for group "' + groupEmail + '" on folder "' + folderName + '"');
+      Drive.Permissions.insert(
+        {
+          type: 'group',
+          role: driveApiRole,
+          emailAddress: groupEmail
+        },
+        folderId,
+        {
+          sendNotificationEmail: false,  // KEY: Don't send emails!
+          supportsAllDrives: true
+        }
+      );
+      log_('Successfully set role "' + role + '" for group "' + groupEmail + '" on folder "' + folderName + '"');
+
+    } else {
+      // FALLBACK: Use DriveApp methods (will send notification emails!)
+      log_('⚠️ Drive API v3 not available - using DriveApp (WILL SEND NOTIFICATION EMAILS)', 'WARN');
+      log_('⚠️ To stop email spam: Add Drive API v3 in Apps Script (+ next to Services)', 'WARN');
+
+      const access = folder.getAccess(groupEmail);
+
+      if (roleLower === 'editor' && access === DriveApp.Permission.EDIT) {
+        log_('Permission "editor" for group "' + groupEmail + '" on folder "' + folderName + '" already exists. Skipping.');
+        return;
+      }
+      if (roleLower === 'viewer' && access === DriveApp.Permission.VIEW) {
+        log_('Permission "viewer" for group "' + groupEmail + '" on folder "' + folderName + '" already exists. Skipping.');
+        return;
+      }
+      if (roleLower === 'commenter') {
+        const commenters = folder.getCommenters().map(user => user.getEmail().toLowerCase());
+        if (commenters.indexOf(groupEmailLower) !== -1) {
+          const editors = folder.getEditors().map(user => user.getEmail().toLowerCase());
+          if(editors.indexOf(groupEmailLower) === -1) {
+            log_('Permission "commenter" for group "' + groupEmail + '" on folder "' + folderName + '" already exists. Skipping.');
+            return;
+          }
         }
       }
-    } catch (checkError) {
-      log_('Could not check existing permissions (will attempt to create): ' + checkError.message, 'WARN');
-    }
 
-    // Permission doesn't exist - create it WITHOUT sending notification email
-    log_('Creating new permission "' + role + '" for group "' + groupEmail + '" on folder "' + folderName + '"');
-    Drive.Permissions.insert(
-      {
-        type: 'group',
-        role: driveApiRole,
-        emailAddress: groupEmail
-      },
-      folderId,
-      {
-        sendNotificationEmail: false,  // KEY: Don't send emails!
-        supportsAllDrives: true
+      // Set permission using DriveApp (will send email!)
+      switch (roleLower) {
+        case 'editor':
+          folder.addEditor(groupEmail);
+          break;
+        case 'viewer':
+          folder.addViewer(groupEmail);
+          break;
+        case 'commenter':
+          folder.addCommenter(groupEmail);
+          break;
+        default:
+          throw new Error('Unsupported role: "' + role + '"');
       }
-    );
-    log_('Successfully set role "' + role + '" for group "' + groupEmail + '" on folder "' + folderName + '"');
+      log_('Successfully set role "' + role + '" for group "' + groupEmail + '" on folder "' + folderName + '" (notification email sent)');
+    }
 
   } catch (e) {
     log_('Failed to set permission for group ' + groupEmail + ' on folder ' + folderId + '. Error: ' + e.toString(), 'ERROR');
