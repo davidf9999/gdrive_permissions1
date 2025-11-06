@@ -22,7 +22,7 @@ describe('processRow_', () => {
 
     // --- Mock GAS Global Objects ---
     global.CacheService = { getScriptCache: jest.fn(() => ({ get: jest.fn(), put: jest.fn() })) };
-    global.Utilities = { formatDate: jest.fn(date => date.toISOString()) };
+    global.Utilities = { formatDate: jest.fn(date => date.toISOString()), sleep: jest.fn() };
     global.Session = { getActiveUser: jest.fn(() => ({ getEmail: jest.fn(() => 'test.user@example.com') })) };
     global.AdminDirectory = { Groups: { get: jest.fn(), insert: jest.fn() }, Members: { list: jest.fn(() => ({ members: [] })) } };
     global.DriveApp.Permission = { EDIT: 'EDIT', VIEW: 'VIEW', NONE: 'NONE' };
