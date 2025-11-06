@@ -176,7 +176,10 @@ The system includes comprehensive testing utilities accessible via the "Permissi
 
 ### Required Google APIs (Auto-enabled or Available by Default)
 - **Admin Directory API** (group management) - Core functionality
-- **Drive API** (folder permissions) - Core functionality  
+- **Drive API v3** (folder permissions) - Core functionality
+  - Must be enabled in GCP Console
+  - Must be added as advanced service in Apps Script (+ next to Services)
+  - Required for `sendNotificationEmail: false` to prevent email spam
 - **Sheets API** (spreadsheet access) - Always available in Apps Script
 - **Groups Settings API** (group configuration) - For advanced group settings
 

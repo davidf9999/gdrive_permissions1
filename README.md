@@ -140,9 +140,17 @@ Now you can complete the connection.
 
 5.  **Enable the Google Drive API:** While still in the Google Cloud Console, use the search bar again to find and select **Google Drive API**. Click the blue **Enable** button. This is required for the script to create and manage folders and to create named versions for auditing.
 
+6.  **Add Drive API v3 Advanced Service in Apps Script:** Return to the Apps Script editor tab.
+    *   In the left sidebar, click the **+** (plus sign) next to **Services**.
+    *   In the "Add a service" dialog, find and select **Drive API**.
+    *   Make sure **version v3** is selected in the dropdown.
+    *   Click **Add**.
+    *   You should now see "Drive" listed under Services in the left sidebar.
+    *   **Why this matters:** This step is CRITICAL to prevent email spam. Without it, users receive "Folder shared with you" emails on every sync run, even when permissions haven't changed.
+
 ---
 
-### Step 5: Run the Initial Sync
+### Step 6: Run the Initial Sync
 
 1.  Save the script project by clicking the **Save project** (disk icon 💾) at the top of the Apps Script editor.
 2.  Go back to your Google Sheet tab and **refresh the page**.
