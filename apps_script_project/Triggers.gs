@@ -124,72 +124,37 @@ function autoSync(e) {
         checkAndNotifyPendingDeletions_();
     }
 
-    // Send summary email if configured
+    // Get revision info for sync history tracking
     let revisionLink = null;
     let revisionId = null;
-    if (getConfigValue_('EnableNamedVersions', true)) {
-      const spreadsheetId = SpreadsheetApp.getActiveSpreadsheet().getId();
-      const now = new Date();
-      const versionName = `AutoSync-${now.toISOString()}`;
+    // spreadsheetId is already declared above at line 84
 
-      try {
-        // List all revisions using Drive API v3 REST endpoint
-        const listUrl = `https://www.googleapis.com/drive/v3/files/${spreadsheetId}/revisions`;
-        const listOptions = {
-          method: 'get',
-          headers: {
-            Authorization: 'Bearer ' + ScriptApp.getOAuthToken()
-          },
-          muteHttpExceptions: true
-        };
+    try {
+      // List all revisions using Drive API v3 REST endpoint
+      const listUrl = `https://www.googleapis.com/drive/v3/files/${spreadsheetId}/revisions`;
+      const listOptions = {
+        method: 'get',
+        headers: {
+          Authorization: 'Bearer ' + ScriptApp.getOAuthToken()
+        },
+        muteHttpExceptions: true
+      };
 
-        const listResponse = UrlFetchApp.fetch(listUrl, listOptions);
-        const listData = JSON.parse(listResponse.getContentText());
+      const listResponse = UrlFetchApp.fetch(listUrl, listOptions);
+      const listData = JSON.parse(listResponse.getContentText());
 
-        if (listData.revisions && listData.revisions.length > 0) {
-          const latestRevision = listData.revisions[listData.revisions.length - 1];
-          revisionId = latestRevision.id;
+      if (listData.revisions && listData.revisions.length > 0) {
+        const latestRevision = listData.revisions[listData.revisions.length - 1];
+        revisionId = latestRevision.id;
 
-          // Check if this is a Google Workspace file (Sheets/Docs/Slides cannot be pinned via API)
-          const mimeType = latestRevision.mimeType || '';
-          const isWorkspaceFile = mimeType.includes('vnd.google-apps');
-
-          if (isWorkspaceFile) {
-            // For Google Workspace files, we can't pin revisions via API, but we can create a revision link
-            revisionLink = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=0&revision=${revisionId}`;
-            log_(`Created revision link for version: ${versionName} (revision ${revisionId}). Note: Google Sheets revisions cannot be pinned via API.`, 'INFO');
-          } else {
-            // For non-Workspace files (uploaded files), we can pin revisions
-            const updateUrl = `https://www.googleapis.com/drive/v3/files/${spreadsheetId}/revisions/${revisionId}?fields=id,modifiedTime`;
-            const updateOptions = {
-              method: 'patch',
-              headers: {
-                Authorization: 'Bearer ' + ScriptApp.getOAuthToken(),
-                'Content-Type': 'application/json'
-              },
-              payload: JSON.stringify({
-                keepForever: true,
-                description: versionName
-              }),
-              muteHttpExceptions: true
-            };
-
-            const updateResponse = UrlFetchApp.fetch(updateUrl, updateOptions);
-            const updateResponseCode = updateResponse.getResponseCode();
-
-            if (updateResponseCode >= 200 && updateResponseCode < 300) {
-              revisionLink = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=0&revision=${revisionId}`;
-              log_(`Successfully created named version: ${versionName} (revision ${revisionId})`, 'INFO');
-            } else {
-              log_(`Failed to pin revision. Response code: ${updateResponseCode}, Body: ${updateResponse.getContentText()}`, 'WARN');
-            }
-          }
-        } else {
-          log_('Could not find any revisions for this file to create a named version. This is normal for newly created files or if no changes were made.', 'WARN');
-        }
-      } catch (e) {
-        log_(`Failed to create named version: ${e.toString()}. Ensure you have Drive API access.`, 'WARN');
+        // Link to version history page (Google Sheets doesn't support direct revision links via API)
+        revisionLink = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/revisions`;
+        log_(`Captured revision info for sync history: revision ${revisionId}`, 'INFO');
+      } else {
+        log_('No revisions found for sync history. This is normal for newly created files.', 'INFO');
       }
+    } catch (e) {
+      log_(`Could not retrieve revision info for sync history: ${e.toString()}`, 'WARN');
     }
 
     if (getConfigValue_('NotifyOnSyncSuccess', false)) {

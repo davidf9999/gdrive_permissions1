@@ -87,7 +87,7 @@ Add these settings to the **Config sheet**:
 | `NotifyDeletionsPending` | `TRUE` | Send email when deletions detected (require manual action) |
 | `AutoSyncMaxDeletions` | `10` | Safety limit: if deletions exceed this, notify admin but don't allow manual sync without review |
 | `MaxFileSizeMB` | `100` | Safety limit: if the total spreadsheet file size exceeds this limit in MB, auto-sync is aborted to prevent uncontrolled file history growth. |
-| `EnableNamedVersions` | `TRUE` | Create a named, timestamped version of the sheet after each sync and link to it in the summary email for auditing. |
+| `_SyncHistory` | Always enabled | (Informational only) Sync history is automatically tracked in the SyncHistory sheet with revision links for auditing (30-100 days retention). |
 
 **No Complex Modes**: Behavior is simple and predictable:
 - ✅ Auto-sync always runs **SAFE** operations (all additions)
@@ -132,6 +132,32 @@ Sent when DESTRUCTIVE operations detected:
 - **Subject**: "⚠️ Manual Action Required: Permission Deletions Pending"
 - **Content**: Summary of pending deletions with step-by-step instructions
 - **Action**: Admin must run "Sync Deletes" manually
+
+### Phase 5: Sync History & Audit Trail
+
+**Automatic Audit Trail**: Every auto-sync is automatically logged in the `SyncHistory` sheet.
+
+**What's Tracked**:
+- Timestamp of each sync
+- Revision ID (Google's internal identifier)
+- Clickable link to version history
+- Changes summary (added/removed/failed counts)
+- Sync duration
+
+**How to Use**:
+1. Open the `SyncHistory` sheet
+2. Find the sync you want to review by timestamp
+3. Click "View History" to open Google's version history panel
+4. Match the timestamp to find the exact revision
+5. Click to view the spreadsheet state at that moment
+
+**Retention**: Google automatically keeps revisions for 30-100 days. No manual maintenance required.
+
+**Benefits**:
+- ✅ Complete audit trail of all sync operations
+- ✅ View historical state of permissions at any point
+- ✅ Track changes over time
+- ✅ No configuration needed - always enabled
 
 **That's it.** No pre-execution emails, no cancellation mechanisms, no complexity.
 

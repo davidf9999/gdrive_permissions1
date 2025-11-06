@@ -181,24 +181,34 @@ This "Risk-Based" approach ensures a human is always in the loop for destructive
 
 ### Auditing and File Size Management
 
-To improve auditability and prevent the spreadsheet from growing too large due to version history, two new features have been introduced:
+To improve auditability and prevent the spreadsheet from growing too large, the following features have been implemented:
 
-**1. Named Version Linking (for Auditing)**
+**1. Sync History Sheet (for Auditing)**
 
--   **What it does:** After each successful auto-sync, the script creates a permanent, named snapshot of the spreadsheet in its version history (e.g., `AutoSync-2025-11-05T...`).
--   **The Benefit:** The summary email you receive will contain a direct link to this immutable, timestamped version. This provides a perfect audit trail, allowing you to see the exact state of the sheets when the sync ran, even if the live sheets have been changed since.
--   **Configuration:** This feature is controlled by the `EnableNamedVersions` setting in the `Config` sheet and is enabled by default.
+-   **What it does:** After each successful auto-sync, the script automatically logs the sync details in a dedicated `SyncHistory` sheet.
+-   **What's tracked:**
+    -   Timestamp of the sync
+    -   Revision ID (Google's internal identifier)
+    -   Clickable link to version history
+    -   Changes summary (users/groups added, removed, failed)
+    -   Sync duration in seconds
+-   **The Benefit:** Provides a complete audit trail of all sync operations. You can click "View History" to open Google's version history panel and find the exact state of the spreadsheet at any sync time by matching timestamps.
+-   **Retention:** Google automatically keeps revisions for 30-100 days (depending on file activity). After this period, older revisions are automatically deleted by Google.
+-   **Configuration:** This feature is always enabled - no configuration needed.
+
+**How to view a past version:**
+1. Open the `SyncHistory` sheet
+2. Find the sync you want to review by timestamp
+3. Click the "View History" link in that row
+4. In the version history panel, match the timestamp to find the revision
+5. Click on it to view the spreadsheet state at that moment
 
 **2. File Size Limit (Safety Net)**
 
--   **The Problem:** Creating named versions causes the file's version history to grow, increasing the total file size.
--   **The Solution:** A new setting, `MaxFileSizeMB`, has been added to the `Config` sheet (defaulting to 100 MB).
+-   **The Problem:** Google Sheets automatically saves version history, which can cause the file to grow over time.
+-   **The Solution:** A `MaxFileSizeMB` setting in the `Config` sheet (defaulting to 100 MB) acts as a safeguard.
 -   **How it works:** Before each auto-sync, the script checks the spreadsheet's total size. If it exceeds the configured limit, the sync is **aborted**, and an email alert is sent to the administrator. This prevents the file from becoming unusably large and prompts you to perform manual cleanup.
 -   **Manual Cleanup:** You can delete old versions by going to **File → Version history → See version history** in your spreadsheet.
-
-**IMPORTANT: Enabling the Drive API**
-
-For these features to work, you must enable the **Google Drive API** in your Google Cloud Project. Please see the main [README.md](../README.md#step-4-enable-required-apis--configure-consent) for instructions.
 
 ### Handling Errors
 

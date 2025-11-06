@@ -159,7 +159,7 @@ function setupControlSheets_() {
     '--- Auditing & Limits ---': {
         'MaxLogLength': { value: DEFAULT_MAX_LOG_LENGTH, description: 'The maximum number of rows to keep in the Log and TestLog sheets.' },
         'MaxFileSizeMB': { value: 100, description: 'The maximum file size in MB for the spreadsheet. If exceeded, auto-sync will be aborted and an alert sent. This prevents uncontrolled growth of version history.' },
-        'EnableNamedVersions': { value: true, description: 'Set to TRUE to create a named version of the spreadsheet after each auto-sync for auditing purposes.' },
+        '_SyncHistory': { value: 'Always enabled', description: 'Sync history is automatically tracked in the SyncHistory sheet with revision links (30-100 days retention).' },
         'EnableGCPLogging': { value: 'FALSE', description: 'For advanced users. Set to TRUE to send logs to Google Cloud Logging for better monitoring.' },
     },
     '--- General ---': {
@@ -275,10 +275,10 @@ function setupSyncHistorySheet_() {
     const logSheet = ss.getSheetByName(LOG_SHEET_NAME);
     const index = logSheet ? logSheet.getIndex() + 1 : ss.getSheets().length + 1;
     sheet = ss.insertSheet(SYNC_HISTORY_SHEET_NAME, index);
-    const headers = ['Timestamp', 'Revision ID', 'Revision Link', 'Added', 'Removed', 'Failed', 'Duration (seconds)'];
+    const headers = ['Timestamp', 'Revision ID', 'How to View', 'Added', 'Removed', 'Failed', 'Duration (seconds)'];
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
     sheet.setFrozenRows(1);
-    sheet.setColumnWidth(3, 400); // Make Revision Link column wider
+    sheet.setColumnWidth(3, 400); // Make "How to View" column wider
     log_('Created "' + SYNC_HISTORY_SHEET_NAME + '" sheet.');
   }
   return sheet;

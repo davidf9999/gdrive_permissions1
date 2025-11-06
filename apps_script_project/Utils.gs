@@ -276,18 +276,26 @@ function logSyncHistory_(revisionId, revisionLink, summary, durationSeconds) {
 
   const nextRow = Math.max(lastRow + 1, 2);
 
-  // Create a formula for the revision link
-  const linkFormula = revisionLink ? '=HYPERLINK("' + revisionLink + '", "View Revision")' : '';
+  // Create instructions for viewing revision history
+  // Note: Google Sheets doesn't provide direct URLs to specific revisions
+  const instructions = 'File > Version history > See version history (match timestamp)';
 
   syncHistorySheet.getRange(nextRow, 1, 1, 7).setValues([[
     timestamp,
     revisionId || 'N/A',
-    linkFormula,
+    instructions,
     added,
     removed,
     failed,
     durationSeconds || 0
   ]]);
+
+  // Add helpful notes on the headers
+  if (nextRow === 2) {
+    syncHistorySheet.getRange('A1').setNote('Timestamp when the sync completed. Use this to find the corresponding revision in version history.');
+    syncHistorySheet.getRange('B1').setNote('Google\'s internal revision ID (for reference only - cannot be used to link directly).');
+    syncHistorySheet.getRange('C1').setNote('To view this version: Open the spreadsheet, go to File > Version history > See version history, then find the revision matching the timestamp in column A. Google keeps revisions for 30-100 days.');
+  }
 
   log_('Logged sync history: Revision ' + (revisionId || 'N/A') + ', Changes: +' + added + ' -' + removed + ' !' + failed, 'INFO');
 }
