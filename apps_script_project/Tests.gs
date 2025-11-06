@@ -866,6 +866,57 @@ function cleanupFolderData_(folderName, folderId, groupEmail, userSheetName) {
     log_('Cleanup finished for: ' + folderName);
 }
 
+function runAutoSyncErrorEmailTest() {
+    SCRIPT_EXECUTION_MODE = 'TEST';
+    let success = false;
+    const mailAppSpy = createSpy_(MailApp, 'sendEmail');
+    const originalEmailNotificationSetting = getConfigValue_('EnableEmailNotifications', false);
+
+    try {
+        log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
+        log_('║  Auto-Sync Error Email Test                                ║', 'INFO');
+        log_('╚══════════════════════════════════════════════════════════════╝', 'INFO');
+
+        // Temporarily enable email notifications for the test
+        updateConfigSetting_('EnableEmailNotifications', true);
+
+        // Simulate an error by providing an invalid folder ID
+        const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+        const testRowIndex = managedSheet.getLastRow() + 1;
+        managedSheet.getRange(testRowIndex, FOLDER_NAME_COL).setValue('Invalid Folder');
+        managedSheet.getRange(testRowIndex, FOLDER_ID_COL).setValue('invalid_folder_id');
+
+        // Run auto-sync, which should fail
+        try {
+            autoSync({ silentMode: true });
+        } catch (e) {
+            // Error is expected
+        }
+
+        // Check if the email spy was called
+        if (mailAppSpy.wasCalled) {
+            log_('VERIFICATION PASSED: MailApp.sendEmail was called after auto-sync error.', 'INFO');
+            success = true;
+        } else {
+            throw new Error('VERIFICATION FAILED: MailApp.sendEmail was not called after auto-sync error.');
+        }
+
+    } catch (e) {
+        log_('TEST FAILED: ' + e.toString() + ' Stack: ' + e.stack, 'ERROR');
+        success = false;
+    } finally {
+        mailAppSpy.restore();
+        updateConfigSetting_('EnableEmailNotifications', originalEmailNotificationSetting);
+        const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+        managedSheet.deleteRow(managedSheet.getLastRow());
+        const testStatus = success ? '✓ PASSED' : '✗ FAILED';
+        log_('>>> TEST RESULT: Auto-Sync Error Email Test ' + testStatus, success ? 'INFO' : 'ERROR');
+        log_('', 'INFO');
+        SCRIPT_EXECUTION_MODE = 'DEFAULT';
+    }
+    return success;
+}
+
 /**
  * Runs all three test functions in sequence.
  * Tests run: Manual Access Test, Stress Test, Add/Delete Separation Test
@@ -884,7 +935,7 @@ function runAllTests() {
 
         let response = ui.Button.YES;
         if (testConfig.autoConfirm !== true) {
-            response = ui.alert('Run All Tests', 'This will run all three tests sequentially:\n\n1. Manual Access Test\n2. Stress Test\n3. Add/Delete Separation Test\n\nThis may take several minutes. Continue?', ui.ButtonSet.YES_NO);
+            response = ui.alert('Run All Tests', 'This will run all tests sequentially. This may take several minutes. Continue?', ui.ButtonSet.YES_NO);
         }
         if (response !== ui.Button.YES) {
             ui.alert('All Tests cancelled.');
@@ -895,54 +946,41 @@ function runAllTests() {
         clearAllTestsData(true); // Skip confirmation since user already confirmed running tests
         SCRIPT_EXECUTION_MODE = 'TEST'; // Reset mode after clearAllTestsData (it sets to DEFAULT in finally)
 
+        const tests = [
+            { name: 'Manual Access Test', func: runManualAccessTest },
+            { name: 'Stress Test', func: runStressTest },
+            { name: 'Add/Delete Separation Test', func: runAddDeleteSeparationTest },
+            { name: 'Auto-Sync Error Email Test', func: runAutoSyncErrorEmailTest }
+        ];
+
         const testResults = [];
+        const totalTests = tests.length;
 
-        // Test 1: Manual Access Test
-        log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
-        log_('║  TEST 1/3: Manual Access Test                                ║', 'INFO');
-        log_('╚══════════════════════════════════════════════════════════════╝', 'INFO');
-        const manualTestResult = runManualAccessTest();
-        SCRIPT_EXECUTION_MODE = 'TEST'; // Reset after test completes (its finally block sets to DEFAULT)
-        const manualStatus = manualTestResult ? '✓ PASSED' : '✗ FAILED';
-        log_('>>> TEST RESULT: Manual Access Test ' + manualStatus, manualTestResult ? 'INFO' : 'ERROR');
-        log_('', 'INFO');
-        testResults.push('Manual Access Test: ' + (manualTestResult ? 'PASSED' : 'FAILED'));
-
-        // Test 2: Stress Test
-        log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
-        log_('║  TEST 2/3: Stress Test                                       ║', 'INFO');
-        log_('╚══════════════════════════════════════════════════════════════╝', 'INFO');
-        const stressTestResult = runStressTest();
-        SCRIPT_EXECUTION_MODE = 'TEST'; // Reset after test completes
-        const stressStatus = stressTestResult ? '✓ PASSED' : '✗ FAILED';
-        log_('>>> TEST RESULT: Stress Test ' + stressStatus, stressTestResult ? 'INFO' : 'ERROR');
-        log_('', 'INFO');
-        testResults.push('Stress Test: ' + (stressTestResult ? 'PASSED' : 'FAILED'));
-
-        // Test 3: Add/Delete Separation Test
-        log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
-        log_('║  TEST 3/3: Add/Delete Separation Test                        ║', 'INFO');
-        log_('╚══════════════════════════════════════════════════════════════╝', 'INFO');
-        const addDeleteTestResult = runAddDeleteSeparationTest();
-        SCRIPT_EXECUTION_MODE = 'TEST'; // Reset after test completes
-        const addDeleteStatus = addDeleteTestResult ? '✓ PASSED' : '✗ FAILED';
-        log_('>>> TEST RESULT: Add/Delete Separation Test ' + addDeleteStatus, addDeleteTestResult ? 'INFO' : 'ERROR');
-        log_('', 'INFO');
-        testResults.push('Add/Delete Separation Test: ' + (addDeleteTestResult ? 'PASSED' : 'FAILED'));
+        tests.forEach(function(test, index) {
+            log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
+            log_('║  TEST ' + (index + 1) + '/' + totalTests + ': ' + test.name + ' ║', 'INFO');
+            log_('╚══════════════════════════════════════════════════════════════╝', 'INFO');
+            const testResult = test.func();
+            SCRIPT_EXECUTION_MODE = 'TEST'; // Reset after test completes
+            const testStatus = testResult ? '✓ PASSED' : '✗ FAILED';
+            log_('>>> TEST RESULT: ' + test.name + ' ' + testStatus, testResult ? 'INFO' : 'ERROR');
+            log_('', 'INFO');
+            testResults.push(test.name + ': ' + (testResult ? 'PASSED' : 'FAILED'));
+        });
 
         // Summary
         const overallEndTime = new Date();
         const overallDurationSeconds = ((overallEndTime.getTime() - overallStartTime.getTime()) / 1000).toFixed(2);
 
-        const passedCount = testResults.filter(r => r.includes('PASSED')).length;
-        const failedCount = testResults.filter(r => r.includes('FAILED')).length;
+        const passedCount = testResults.filter(function(r) { return r.includes('PASSED'); }).length;
+        const failedCount = testResults.filter(function(r) { return r.includes('FAILED'); }).length;
         const allPassed = failedCount === 0;
 
         log_('', 'INFO');
         log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
         log_('║                    TEST SUMMARY                              ║', 'INFO');
         log_('╚══════════════════════════════════════════════════════════════╝', 'INFO');
-        log_('Total Tests Run: 3', 'INFO');
+        log_('Total Tests Run: ' + totalTests, 'INFO');
         log_('Tests Passed: ' + passedCount + ' ✓', 'INFO');
         log_('Tests Failed: ' + failedCount + (failedCount > 0 ? ' ✗' : ''), failedCount > 0 ? 'ERROR' : 'INFO');
         log_('Overall Duration: ' + overallDurationSeconds + ' seconds', 'INFO');
@@ -960,7 +998,7 @@ function runAllTests() {
 
         // Brief completion message (detailed results are already in TestLog)
         showTestMessage_('All Tests Complete',
-                         'All three tests completed in ' + overallDurationSeconds + ' seconds.\n\n' +
+                         'All ' + totalTests + ' tests completed in ' + overallDurationSeconds + ' seconds.\n\n' +
                          (allPassed ? '✓✓✓ ALL TESTS PASSED ✓✓✓' : '✗✗✗ SOME TESTS FAILED ✗✗✗') +
                          '\n\nCheck the TestLog sheet for detailed results.');
 
@@ -1053,4 +1091,42 @@ function clearAllTestsData(skipConfirmation = false) {
     } finally {
         SCRIPT_EXECUTION_MODE = 'DEFAULT';
     }
+}
+
+/**
+ * Syncs a single folder from the ManagedFolders sheet.
+ * @param {number} rowIndex The row number of the folder to sync.
+ * @param {boolean} addOnly - If true, only perform add operations.
+ * @returns {string} The status of the sync.
+ */
+function syncSingleFolder_(rowIndex, addOnly = false) {
+  log_('Fast sync for single folder: ' + SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME).getRange(rowIndex, 1).getValue() + ' (row ' + rowIndex + ')');
+  try {
+    processRow_(rowIndex, { addOnly: addOnly, silentMode: true });
+    return 'OK';
+  } catch (e) {
+    const errorMessage = 'Error in syncSingleFolder_ for row ' + rowIndex + ': ' + e.message;
+    log_(errorMessage, 'ERROR');
+    return errorMessage;
+  }
+}
+
+/**
+ * Syncs only the folders that match the given prefixes.
+ * @param {Array<string>} prefixes - An array of folder name prefixes to sync.
+ * @param {boolean} addOnly - If true, only perform add operations.
+ */
+function testOnlySync_(prefixes, addOnly = false) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    const folderName = data[i][FOLDER_NAME_COL - 1];
+    if (prefixes.some(function(prefix) { return folderName.startsWith(prefix); })) {
+      try {
+        processRow_(i + 1, { addOnly: addOnly, silentMode: true });
+      } catch (e) {
+        log_('Error in testOnlySync_ for row ' + (i + 1) + ': ' + e.message, 'ERROR');
+      }
+    }
+  }
 }

@@ -236,6 +236,11 @@ function log_(message, severity = 'INFO') {
       lastRow = 1;
     }
 
+    // Check if row 2 is empty (log was cleared) - if so, reset to row 1
+    if (lastRow > 1 && !logSheet.getRange('A2').getValue()) {
+      lastRow = 1;
+    }
+
     // Always write to at least row 2 (never overwrite the header)
     const nextRow = Math.max(lastRow + 1, 2);
     logSheet.getRange(nextRow, 1, 1, 3).setValues([[timestamp, severity.toUpperCase(), messageStr]]);
@@ -262,7 +267,7 @@ function clearAllLogs() {
   const foldersAuditLogSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('FoldersAuditLog');
   if (foldersAuditLogSheet) {
     foldersAuditLogSheet.clear();
-    setupDryRunAuditLogSheet_(foldersAuditLogSheet);
+    setupFolderAuditLogSheet_(foldersAuditLogSheet);
   }
 
   const deepFolderAuditLogSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('DeepFolderAuditLog');
@@ -293,7 +298,7 @@ function clearAuxiliaryLogs() {
   const foldersAuditLogSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('FoldersAuditLog');
   if (foldersAuditLogSheet) {
     foldersAuditLogSheet.clear();
-    setupDryRunAuditLogSheet_(foldersAuditLogSheet);
+    setupFolderAuditLogSheet_(foldersAuditLogSheet);
   }
 
   const deepFolderAuditLogSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('DeepFolderAuditLog');
@@ -419,43 +424,45 @@ function validateUserSheetEmails_(sheetName) {
   return { valid: true, duplicates: [], error: null };
 }
 
-function getDirectFolderUsers_(folder) {
+function getDirectFolderUsers_(folder, groupEmailToExclude) {
   const users = [];
   const owner = folder.getOwner() ? folder.getOwner().getEmail().toLowerCase() : null;
+  const groupEmailToExcludeLower = groupEmailToExclude ? groupEmailToExclude.toLowerCase() : null;
 
   folder.getViewers().forEach(u => {
     const email = u.getEmail().toLowerCase();
-    if (email !== owner) users.push({ email: email, role: 'Viewer' });
+    if (email !== owner && email !== groupEmailToExcludeLower) users.push({ email: email, role: 'Viewer' });
   });
 
   folder.getEditors().forEach(u => {
     const email = u.getEmail().toLowerCase();
-    if (email !== owner) users.push({ email: email, role: 'Editor' });
+    if (email !== owner && email !== groupEmailToExcludeLower) users.push({ email: email, role: 'Editor' });
   });
 
   return users;
 }
 
-function getDirectFileUsers_(file) {
+function getDirectFileUsers_(file, groupEmailToExclude) {
   const users = [];
   const owner = file.getOwner() ? file.getOwner().getEmail().toLowerCase() : null;
+  const groupEmailToExcludeLower = groupEmailToExclude ? groupEmailToExclude.toLowerCase() : null;
 
   file.getViewers().forEach(u => {
     const email = u.getEmail().toLowerCase();
-    if (email !== owner) users.push({ email: email, role: 'Viewer' });
+    if (email !== owner && email !== groupEmailToExcludeLower) users.push({ email: email, role: 'Viewer' });
   });
 
   // The getCommenters() method only exists on the File object, not the Folder object.
   if (file.getMimeType() !== MimeType.GOOGLE_DRIVE_FOLDER && typeof file.getCommenters === 'function') {
     file.getCommenters().forEach(u => {
       const email = u.getEmail().toLowerCase();
-      if (email !== owner) users.push({ email: email, role: 'Commenter' });
+      if (email !== owner && email !== groupEmailToExcludeLower) users.push({ email: email, role: 'Commenter' });
     });
   }
 
   file.getEditors().forEach(u => {
     const email = u.getEmail().toLowerCase();
-    if (email !== owner) users.push({ email: email, role: 'Editor' });
+    if (email !== owner && email !== groupEmailToExcludeLower) users.push({ email: email, role: 'Editor' });
   });
 
   return users;
@@ -519,4 +526,13 @@ function getAdminEmails_() {
   }
   
   return [...new Set(adminEmails)]; // Return unique emails
+}
+
+function isGroup_(email) {
+  try {
+    AdminDirectory.Groups.get(email);
+    return true;
+  } catch (e) {
+    return false;
+  }
 }

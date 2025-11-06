@@ -69,15 +69,13 @@ function validateUserSheets_() {
 /**
  * Performs a dry run audit by discovering all manual additions and logging them.
  */
-function dryRunAudit() {
+function folderAudit() {
   const ui = SpreadsheetApp.getUi();
   try {
     log_('*** Starting Dry Run Audit...');
-    showToast_('Starting Dry Run Audit...', 'Audit', 10);
-
-    const auditSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(DRY_RUN_AUDIT_LOG_SHEET_NAME);
+const auditSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(FOLDER_AUDIT_LOG_SHEET_NAME);
     if (!auditSheet) {
-      throw new Error('DryRunAuditLog sheet not found. Please run the setup again.');
+      throw new Error('FolderAuditLog sheet not found. Please run the setup again.');
     }
     auditSheet.getRange(2, 1, auditSheet.getMaxRows() - 1, 5).clearContent();
 
@@ -109,10 +107,10 @@ function dryRunAudit() {
 
     log_('*** Dry Run Audit Complete.');
     showToast_('Dry Run Audit Complete.', 'Audit', 5);
-    ui.alert('Dry Run Audit is complete. See the \'DryRunAuditLog\' sheet for details.');
+    ui.alert('Folder Audit is complete. See the \'FolderAuditLog\' sheet for details.');
 
   } catch (e) {
-    log_('FATAL ERROR in dryRunAudit: ' + e.toString() + '\n' + e.stack, 'ERROR');
+    log_('FATAL ERROR in folderAudit: ' + e.toString() + '\n' + e.stack, 'ERROR');
     showToast_('Audit failed with a fatal error.', 'Audit', 5);
     ui.alert('A fatal error occurred during the audit: ' + e.message);
     sendErrorNotification_(e.toString());
@@ -241,13 +239,13 @@ function deepAuditFolder() {
       // 1. Check for unauthorized direct access
       let directUsers;
       if (typeof item.item.getMimeType === 'function') {
-        directUsers = getDirectFileUsers_(item.item);
+        directUsers = getDirectFileUsers_(item.item, groupEmail);
       } else {
-        directUsers = getDirectFolderUsers_(item.item);
+        directUsers = getDirectFolderUsers_(item.item, groupEmail);
       }
 
       directUsers.forEach(user => {
-        if (user.email !== groupEmail && !groupMembers.has(user.email)) {
+        if (!isGroup_(user.email) && !groupMembers.has(user.email)) {
           logToDeepAudit_('Direct File Access', item.path, 'User has direct access but is not in group', `Email: ${user.email}, Role: ${user.role}`);
         }
       });
@@ -329,28 +327,28 @@ function getManagedFolderInfoById_(folderId) {
 
 function logAndAudit_(type, identifier, issue, details) {
   const timestamp = Utilities.formatDate(new Date(), SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss');
-  const auditSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(DRY_RUN_AUDIT_LOG_SHEET_NAME);
+  const auditSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(FOLDER_AUDIT_LOG_SHEET_NAME);
   auditSheet.appendRow([timestamp, type, identifier, issue, details]);
   log_('AUDIT [' + type + ' | ' + identifier + ']: ' + issue + ' - ' + details, 'WARN');
 }
 
 /**
- * Clears all content from the DryRunAuditLog sheet.
+ * Clears all content from the FolderAuditLog sheet.
  */
-function clearDryRunAuditLog() {
+function clearFolderAuditLog() {
   const ui = SpreadsheetApp.getUi();
   try {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(DRY_RUN_AUDIT_LOG_SHEET_NAME);
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(FOLDER_AUDIT_LOG_SHEET_NAME);
     if (sheet) {
       sheet.clear();
-      setupDryRunAuditLogSheet_(sheet); // Re-add header
-      log_('DryRunAuditLog sheet has been cleared.');
+      setupFolderAuditLogSheet_(sheet); // Re-add header
+      log_('FolderAuditLog sheet has been cleared.');
       ui.alert('The Dry Run Audit Log has been cleared.');
     } else {
-      ui.alert('DryRunAuditLog sheet not found.');
+      ui.alert('FolderAuditLog sheet not found.');
     }
   } catch (e) {
-    log_('Error clearing DryRunAuditLog sheet: ' + e.toString(), 'ERROR');
+    log_('Error clearing FolderAuditLog sheet: ' + e.toString(), 'ERROR');
     ui.alert('An error occurred while clearing the audit log: ' + e.message);
   }
 }

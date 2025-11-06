@@ -153,7 +153,7 @@ function setupControlSheets_() {
     '--- Email Notifications ---': {
       'EnableEmailNotifications': { value: 'FALSE', description: 'Set to TRUE to receive emails for errors and other notifications.' },
       'NotificationEmail': { value: '', description: 'The email address to send notifications to. Defaults to the script owner if left blank.' },
-      'NotifyAfterSync': { value: 'TRUE', description: 'Set to TRUE to receive a summary email after each successful auto-sync.' },
+      'NotifyOnSyncSuccess': { value: 'FALSE', description: 'Set to TRUE to receive a summary email after each successful auto-sync.' },
       'NotifyDeletionsPending': { value: 'TRUE', description: 'Set to TRUE to receive an email alert when an auto-sync detects that a user needs to be manually removed. (This is ignored if AllowAutosyncDeletion is TRUE).' },
     },
     '--- Auditing & Limits ---': {
@@ -254,11 +254,11 @@ function setupLogSheets_() {
     testLogSheet.setFrozenRows(1);
   }
 
-  // Check for DryRunAuditLog sheet
-  let auditLogSheet = ss.getSheetByName(DRY_RUN_AUDIT_LOG_SHEET_NAME);
+  // Check for FolderAuditLog sheet
+  let auditLogSheet = ss.getSheetByName(FOLDER_AUDIT_LOG_SHEET_NAME);
   if (!auditLogSheet) {
-    auditLogSheet = ss.insertSheet(DRY_RUN_AUDIT_LOG_SHEET_NAME);
-    setupDryRunAuditLogSheet_(auditLogSheet);
+    auditLogSheet = ss.insertSheet(FOLDER_AUDIT_LOG_SHEET_NAME);
+    setupFolderAuditLogSheet_(auditLogSheet);
   }
 
   // Check for DeepAuditLog sheet
@@ -269,8 +269,8 @@ function setupDeepAuditLogSheet_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName('DeepFolderAuditLog');
   if (!sheet) {
-    const dryRunAuditSheet = ss.getSheetByName(DRY_RUN_AUDIT_LOG_SHEET_NAME);
-    const index = dryRunAuditSheet ? dryRunAuditSheet.getIndex() + 1 : ss.getSheets().length + 1;
+    const folderAuditSheet = ss.getSheetByName(FOLDER_AUDIT_LOG_SHEET_NAME);
+    const index = folderAuditSheet ? folderAuditSheet.getIndex() + 1 : ss.getSheets().length + 1;
     sheet = ss.insertSheet('DeepFolderAuditLog', index);
     const headers = ['Timestamp', 'Type', 'Identifier', 'Issue', 'Details'];
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
@@ -280,7 +280,7 @@ function setupDeepAuditLogSheet_() {
   return sheet;
 }
 
-function setupDryRunAuditLogSheet_(sheet) {
+function setupFolderAuditLogSheet_(sheet) {
     const headers = ['Timestamp', 'Type', 'Identifier', 'Issue', 'Details'];
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
     sheet.setFrozenRows(1);

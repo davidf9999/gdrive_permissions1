@@ -20,6 +20,7 @@ function setupAutoSync() {
   ScriptApp.newTrigger('autoSync')
     .timeBased()
     .everyHours(1) // Change this to suit your needs
+    .nearMinute(0)
     .create();
 
   log_('Auto-sync trigger installed. Will run every hour.', 'INFO');
@@ -127,29 +128,68 @@ function autoSync(e) {
       const versionName = `AutoSync-${now.toISOString()}`;
 
       try {
-        // This requires the Drive API advanced service to be enabled.
-        const revisions = Drive.Revisions.list(spreadsheetId);
-        if (revisions.items && revisions.items.length > 0) {
-          const latestRevision = revisions.items[revisions.items.length - 1];
+        // List all revisions using Drive API v3 REST endpoint
+        const listUrl = `https://www.googleapis.com/drive/v3/files/${spreadsheetId}/revisions`;
+        const listOptions = {
+          method: 'get',
+          headers: {
+            Authorization: 'Bearer ' + ScriptApp.getOAuthToken()
+          },
+          muteHttpExceptions: true
+        };
+
+        const listResponse = UrlFetchApp.fetch(listUrl, listOptions);
+        const listData = JSON.parse(listResponse.getContentText());
+
+        if (listData.revisions && listData.revisions.length > 0) {
+          const latestRevision = listData.revisions[listData.revisions.length - 1];
           const revisionId = latestRevision.id;
 
-          const revisionResource = {
-            pinned: true,
-            description: versionName
-          };
-          Drive.Revisions.patch(revisionResource, spreadsheetId, revisionId);
+          // Check if this is a Google Workspace file (Sheets/Docs/Slides cannot be pinned via API)
+          const mimeType = latestRevision.mimeType || '';
+          const isWorkspaceFile = mimeType.includes('vnd.google-apps');
 
-          revisionLink = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=0&revision=${revisionId}`;
-          log_(`Successfully created named version: ${versionName}`);
+          if (isWorkspaceFile) {
+            // For Google Workspace files, we can't pin revisions via API, but we can create a revision link
+            revisionLink = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=0&revision=${revisionId}`;
+            log_(`Created revision link for version: ${versionName} (revision ${revisionId}). Note: Google Sheets revisions cannot be pinned via API.`, 'INFO');
+          } else {
+            // For non-Workspace files (uploaded files), we can pin revisions
+            const updateUrl = `https://www.googleapis.com/drive/v3/files/${spreadsheetId}/revisions/${revisionId}?fields=id,modifiedTime`;
+            const updateOptions = {
+              method: 'patch',
+              headers: {
+                Authorization: 'Bearer ' + ScriptApp.getOAuthToken(),
+                'Content-Type': 'application/json'
+              },
+              payload: JSON.stringify({
+                keepForever: true,
+                description: versionName
+              }),
+              muteHttpExceptions: true
+            };
+
+            const updateResponse = UrlFetchApp.fetch(updateUrl, updateOptions);
+            const updateResponseCode = updateResponse.getResponseCode();
+
+            if (updateResponseCode >= 200 && updateResponseCode < 300) {
+              revisionLink = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=0&revision=${revisionId}`;
+              log_(`Successfully created named version: ${versionName} (revision ${revisionId})`, 'INFO');
+            } else {
+              log_(`Failed to pin revision. Response code: ${updateResponseCode}, Body: ${updateResponse.getContentText()}`, 'WARN');
+            }
+          }
         } else {
-          log_('Could not find any revisions for this file to create a named version.', 'WARN');
+          log_('Could not find any revisions for this file to create a named version. This is normal for newly created files or if no changes were made.', 'WARN');
         }
       } catch (e) {
-        log_(`Failed to create named version: ${e.toString()}. Ensure the advanced Drive API service is enabled.`, 'WARN');
+        log_(`Failed to create named version: ${e.toString()}. Ensure you have Drive API access.`, 'WARN');
       }
     }
 
-    sendAutoSyncSummary_(revisionLink);
+    if (getConfigValue_('NotifyOnSyncSuccess', false)) {
+      sendAutoSyncSummary_(revisionLink);
+    }
 
     log_('*** Scheduled auto-sync completed successfully.');
 

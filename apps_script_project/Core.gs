@@ -11,7 +11,7 @@ function processManagedFolders_(options = {}) {
   const sheet = ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
   if (!sheet) {
     if (!returnPlanOnly && !silentMode) SpreadsheetApp.getUi().alert('CRITICAL: Configuration sheet named "' + MANAGED_FOLDERS_SHEET_NAME + '" not found. Aborting.');
-    return returnPlanOnly ? [] : totalSummary;
+    return returnPlanOnly ? [] : undefined;
   }
 
   if (!returnPlanOnly && !silentMode) setSheetUiStyles_();
@@ -135,7 +135,7 @@ function processRow_(rowIndex, options = {}) {
     groupEmailCell.setValue(groupEmail);
 
     getOrCreateUserSheet_(userSheetName);
-    
+
     if (shouldSkipGroupOps_()) {
       log_('Skipping group operations for row ' + rowIndex + ' (Admin SDK not available).', 'WARN');
       sheet.getRange(rowIndex, LAST_SYNCED_COL).setValue(Utilities.formatDate(new Date(), SpreadsheetApp.getActive().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss'));
@@ -167,11 +167,6 @@ function processRow_(rowIndex, options = {}) {
   }
 }
 
-
-/**
- * Checks for sheets that are not part of the main configuration.
- * @return {Array<string>} A list of orphan sheet names.
- */
 function checkForOrphanSheets_() {
   try {
     log_('Checking for orphan sheets...');
@@ -186,7 +181,7 @@ function checkForOrphanSheets_() {
     requiredSheetNames.add(CONFIG_SHEET_NAME);
     requiredSheetNames.add(LOG_SHEET_NAME);
     requiredSheetNames.add(TEST_LOG_SHEET_NAME);
-    requiredSheetNames.add(DRY_RUN_AUDIT_LOG_SHEET_NAME);
+    requiredSheetNames.add(FOLDER_AUDIT_LOG_SHEET_NAME);
     requiredSheetNames.add('DeepFolderAuditLog');
 
     const managedSheet = spreadsheet.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
@@ -198,7 +193,7 @@ function checkForOrphanSheets_() {
           });
       }
     }
-    
+
     const userGroupsSheet = spreadsheet.getSheetByName(USER_GROUPS_SHEET_NAME);
     if (userGroupsSheet && userGroupsSheet.getLastRow() > 1) {
         const groupSheetNames = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 1).getValues();
@@ -297,11 +292,14 @@ function getOrCreateGroup_(groupEmail, groupName) {
   assertAdminDirectoryAvailable_();
   let group;
   let wasNewlyCreated = false;
+
   try {
     group = AdminDirectory.Groups.get(groupEmail);
     log_('Found existing group: ' + groupEmail);
+    wasNewlyCreated = false;
   } catch (e) {
     log_('Group "' + groupEmail + '" not found. Will attempt to create it.');
+
     try {
       const newGroup = {
         email: groupEmail,
@@ -309,13 +307,14 @@ function getOrCreateGroup_(groupEmail, groupName) {
         description: 'Managed by Google Sheets script. Folder: ' + groupName.split('_')[0]
       };
       group = AdminDirectory.Groups.insert(newGroup);
-      wasNewlyCreated = true;
       log_('Successfully created group: ' + groupEmail);
+      wasNewlyCreated = true;
     } catch (createError) {
       log_('Failed to create group ' + groupEmail + '. Error: ' + createError.toString(), 'ERROR');
       throw new Error('Could not create group: ' + createError.message);
     }
   }
+
   return { group: group, wasNewlyCreated: wasNewlyCreated };
 }
 
@@ -526,7 +525,7 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
     if (returnPlanOnly && removeOnly && emailsToRemove.length > 0) {
       return {
         groupEmail: groupEmail,
-        groupName: userSheetName, 
+        groupName: userSheetName,
         usersToRemove: emailsToRemove
       };
     }
@@ -612,7 +611,7 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
       }
       const responseBoundary = '--' + contentTypeHeader.split('boundary=')[1];
       const parts = responseBody.split(responseBoundary);
-      
+
       // Start from index 1, end before the last part which is the closing boundary
       for (let i = 1; i < parts.length - 1; i++) {
         const part = parts[i].trim();
@@ -662,9 +661,9 @@ function fetchAllGroupMembers_(groupEmail) {
   let pageToken;
   try {
       do {
-        const resp = AdminDirectory.Members.list(groupEmail, { 
+        const resp = AdminDirectory.Members.list(groupEmail, {
           maxResults: 200,
-          pageToken: pageToken 
+          pageToken: pageToken
         });
         if (resp && resp.members) {
           members.push.apply(members, resp.members);
@@ -682,112 +681,123 @@ function fetchAllGroupMembers_(groupEmail) {
 }
 
 function setFolderPermission_(folderId, groupEmail, role) {
-  try {
-    const folder = DriveApp.getFolderById(folderId);
-    const folderName = folder.getName();
-    const roleLower = role.toLowerCase();
-    const groupEmailLower = groupEmail.toLowerCase();
+  const MAX_RETRIES = 5;
+  const INITIAL_DELAY_MS = 5000; // 5 seconds
 
-    // Check if Drive API v3 is available
-    const driveApiAvailable = typeof Drive !== 'undefined';
+  for (let i = 0; i < MAX_RETRIES; i++) {
+    try {
+      const folder = DriveApp.getFolderById(folderId);
+      const folderName = folder.getName();
+      const roleLower = role.toLowerCase();
+      const groupEmailLower = groupEmail.toLowerCase();
 
-    if (driveApiAvailable) {
-      // PREFERRED: Use Drive API v3 with sendNotificationEmail: false
-      const driveApiRole = (roleLower === 'editor') ? 'writer' : (roleLower === 'viewer') ? 'reader' : 'commenter';
+      // Check if Drive API v3 is available
+      const driveApiAvailable = typeof Drive !== 'undefined';
 
-      // Check if permission already exists with the correct role
-      try {
-        const existingPermissions = Drive.Permissions.list(folderId, {
-          fields: 'permissions(id,emailAddress,role,type)'
-        }).permissions || [];
+      if (driveApiAvailable) {
+        // PREFERRED: Use Drive API v3 with sendNotificationEmail: false
+        const driveApiRole = (roleLower === 'editor') ? 'writer' : (roleLower === 'viewer') ? 'reader' : 'commenter';
 
-        const existingPermission = existingPermissions.find(function(perm) {
-          return perm.emailAddress && perm.emailAddress.toLowerCase() === groupEmailLower && perm.type === 'group';
-        });
+        // Check if permission already exists with the correct role
+        try {
+          const existingPermissions = Drive.Permissions.list(folderId, {
+            fields: 'permissions(id,emailAddress,role,type)'
+          }).permissions || [];
 
-        if (existingPermission) {
-          if (existingPermission.role === driveApiRole) {
-            log_('Permission "' + role + '" for group "' + groupEmail + '" on folder "' + folderName + '" already exists. Skipping.');
-            return;
-          } else {
-            // Permission exists but with different role - update it
-            log_('Updating permission for group "' + groupEmail + '" on folder "' + folderName + '" from "' + existingPermission.role + '" to "' + driveApiRole + '"');
-            Drive.Permissions.update(
-              { role: driveApiRole },
-              folderId,
-              existingPermission.id,
-              { sendNotificationEmail: false, supportsAllDrives: true }
-            );
-            log_('Successfully updated role "' + role + '" for group "' + groupEmail + '" on folder "' + folderName + '"');
-            return;
+          const existingPermission = existingPermissions.find(function(perm) {
+            return perm.emailAddress && perm.emailAddress.toLowerCase() === groupEmailLower && perm.type === 'group';
+          });
+
+          if (existingPermission) {
+            if (existingPermission.role === driveApiRole) {
+              log_('Permission "' + role + '" for group "' + groupEmail + '" on folder "' + folderName + '" already exists. Skipping.');
+              return;
+            } else {
+              // Permission exists but with different role - update it
+              log_('Updating permission for group "' + groupEmail + '" on folder "' + folderName + '" from "' + existingPermission.role + '" to "' + driveApiRole + '"');
+              Drive.Permissions.update(
+                { role: driveApiRole },
+                folderId,
+                existingPermission.id,
+                { sendNotificationEmail: false, supportsAllDrives: true }
+              );
+              log_('Successfully updated role "' + role + '" for group "' + groupEmail + '" on folder "' + folderName + '"');
+              return;
+            }
+          }
+        } catch (checkError) {
+          log_('Could not check existing permissions (will attempt to create): ' + checkError.message, 'WARN');
+        }
+
+        // Permission doesn't exist - create it WITHOUT sending notification email
+        log_('Creating new permission "' + role + '" for group "' + groupEmail + '" on folder "' + folderName + '"');
+        Drive.Permissions.create(
+          {
+            type: 'group',
+            role: driveApiRole,
+            emailAddress: groupEmail
+          },
+          folderId,
+          {
+            sendNotificationEmail: false,  // KEY: Don't send emails!
+            supportsAllDrives: true
+          }
+        );
+        log_('Successfully set role "' + role + '" for group "' + groupEmail + '" on folder "' + folderName + '"');
+
+      } else {
+        // FALLBACK: Use DriveApp methods (will send notification emails!)
+        log_('⚠️ Drive API v3 not available - using DriveApp (WILL SEND NOTIFICATION EMAILS)', 'WARN');
+        log_('⚠️ To stop email spam: Add Drive API v3 in Apps Script (+ next to Services)', 'WARN');
+
+        const access = folder.getAccess(groupEmail);
+
+        if (roleLower === 'editor' && access === DriveApp.Permission.EDIT) {
+          log_('Permission "editor" for group "' + groupEmail + '" on folder "' + folderName + '" already exists. Skipping.');
+          return;
+        }
+        if (roleLower === 'viewer' && access === DriveApp.Permission.VIEW) {
+          log_('Permission "viewer" for group "' + groupEmail + '" on folder "' + folderName + '" already exists. Skipping.');
+          return;
+        }
+        if (roleLower === 'commenter') {
+          const commenters = folder.getCommenters().map(user => user.getEmail().toLowerCase());
+          if (commenters.indexOf(groupEmailLower) !== -1) {
+            const editors = folder.getEditors().map(user => user.getEmail().toLowerCase());
+            if(editors.indexOf(groupEmailLower) === -1) {
+              log_('Permission "commenter" for group "' + groupEmail + '" on folder "' + folderName + '" already exists. Skipping.');
+              return;
+            }
           }
         }
-      } catch (checkError) {
-        log_('Could not check existing permissions (will attempt to create): ' + checkError.message, 'WARN');
-      }
 
-      // Permission doesn't exist - create it WITHOUT sending notification email
-      log_('Creating new permission "' + role + '" for group "' + groupEmail + '" on folder "' + folderName + '"');
-      Drive.Permissions.insert(
-        {
-          type: 'group',
-          role: driveApiRole,
-          emailAddress: groupEmail
-        },
-        folderId,
-        {
-          sendNotificationEmail: false,  // KEY: Don't send emails!
-          supportsAllDrives: true
+        // Set permission using DriveApp (will send email!)
+        switch (roleLower) {
+          case 'editor':
+            folder.addEditor(groupEmail);
+            break;
+          case 'viewer':
+            folder.addViewer(groupEmail);
+            break;
+          case 'commenter':
+            folder.addCommenter(groupEmail);
+            break;
+          default:
+            throw new Error('Unsupported role: "' + role + '"');
         }
-      );
-      log_('Successfully set role "' + role + '" for group "' + groupEmail + '" on folder "' + folderName + '"');
-
-    } else {
-      // FALLBACK: Use DriveApp methods (will send notification emails!)
-      log_('⚠️ Drive API v3 not available - using DriveApp (WILL SEND NOTIFICATION EMAILS)', 'WARN');
-      log_('⚠️ To stop email spam: Add Drive API v3 in Apps Script (+ next to Services)', 'WARN');
-
-      const access = folder.getAccess(groupEmail);
-
-      if (roleLower === 'editor' && access === DriveApp.Permission.EDIT) {
-        log_('Permission "editor" for group "' + groupEmail + '" on folder "' + folderName + '" already exists. Skipping.');
-        return;
+        log_('Successfully set role "' + role + '" for group "' + groupEmail + '" on folder "' + folderName + '" (notification email sent)');
       }
-      if (roleLower === 'viewer' && access === DriveApp.Permission.VIEW) {
-        log_('Permission "viewer" for group "' + groupEmail + '" on folder "' + folderName + '" already exists. Skipping.');
-        return;
+      return; // Success, exit the loop
+    } catch (e) {
+      if (i < MAX_RETRIES - 1) {
+        const delay = INITIAL_DELAY_MS * Math.pow(2, i);
+        log_(`Failed to set permission for group ${groupEmail} on folder ${folderId}. Retrying in ${delay / 1000} seconds... (Attempt ${i + 1}/${MAX_RETRIES})`, 'WARN');
+        Utilities.sleep(delay);
+      } else {
+        log_(`Failed to set permission for group ${groupEmail} on folder ${folderId} after ${MAX_RETRIES} attempts. Error: ${e.toString()}`, 'ERROR');
+        throw new Error(`Could not set folder permission: ${e.message}`);
       }
-      if (roleLower === 'commenter') {
-        const commenters = folder.getCommenters().map(user => user.getEmail().toLowerCase());
-        if (commenters.indexOf(groupEmailLower) !== -1) {
-          const editors = folder.getEditors().map(user => user.getEmail().toLowerCase());
-          if(editors.indexOf(groupEmailLower) === -1) {
-            log_('Permission "commenter" for group "' + groupEmail + '" on folder "' + folderName + '" already exists. Skipping.');
-            return;
-          }
-        }
-      }
-
-      // Set permission using DriveApp (will send email!)
-      switch (roleLower) {
-        case 'editor':
-          folder.addEditor(groupEmail);
-          break;
-        case 'viewer':
-          folder.addViewer(groupEmail);
-          break;
-        case 'commenter':
-          folder.addCommenter(groupEmail);
-          break;
-        default:
-          throw new Error('Unsupported role: "' + role + '"');
-      }
-      log_('Successfully set role "' + role + '" for group "' + groupEmail + '" on folder "' + folderName + '" (notification email sent)');
     }
-
-  } catch (e) {
-    log_('Failed to set permission for group ' + groupEmail + ' on folder ' + folderId + '. Error: ' + e.toString(), 'ERROR');
-    throw new Error('Could not set folder permission: ' + e.message);
   }
 }
 
@@ -825,11 +835,11 @@ function setSheetUiStyles_() {
       });
 
       // Clear old backgrounds
-      const clearBgRange = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 5);
+      const clearBgRange = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 4);
       clearBgRange.setBackground(null);
 
       // Apply new protection and styling
-      const range = userGroupsSheet.getRange(2, 2, userGroupsSheet.getLastRow() - 1, 4);
+      const range = userGroupsSheet.getRange(2, 2, userGroupsSheet.getLastRow() - 1, 3);
       range.setBackground('#f3f3f3');
       const protection = range.protect().setDescription('These columns are managed by the script.');
       protection.setWarningOnly(true);
@@ -871,9 +881,6 @@ function getAllManagedSheetNames_() {
   return managedSheetNames;
 }
 
-/**
- * Ensures the "Disabled" column with checkbox validation exists on all user sheets.
- */
 function updateUserSheetHeaders_() {
   try {
     const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
@@ -890,7 +897,7 @@ function updateUserSheetHeaders_() {
           sheetName !== CONFIG_SHEET_NAME &&
           sheetName !== LOG_SHEET_NAME &&
           sheetName !== TEST_LOG_SHEET_NAME &&
-          sheetName !== DRY_RUN_AUDIT_LOG_SHEET_NAME &&
+          sheetName !== FOLDER_AUDIT_LOG_SHEET_NAME &&
           sheetName !== 'DeepFolderAuditLog') {
 
         ensureUserSheetHeaders_(sheet);
@@ -899,9 +906,4 @@ function updateUserSheetHeaders_() {
   } catch (e) {
     log_('Could not update user sheet headers. Error: ' + e.message, 'WARN');
   }
-}
-
-// Export for testing
-if (typeof module !== 'undefined') {
-  module.exports = { fetchAllGroupMembers_ };
 }
