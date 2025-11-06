@@ -2,6 +2,12 @@
 
 function runManualAccessTest() {
     SCRIPT_EXECUTION_MODE = 'TEST';
+
+    // Test header
+    log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
+    log_('║  Manual Access Test                                          ║', 'INFO');
+    log_('╚══════════════════════════════════════════════════════════════╝', 'INFO');
+
     const startTime = new Date(); // Record start time
     let testFolderName, testRole, testEmail, testRowIndex;
     let userSheetName = null, groupEmail = null, folderId = null; // Initialize to null
@@ -163,6 +169,12 @@ function runManualAccessTest() {
         } else {
             log_('Cleanup skipped (testConfig undefined)', 'WARN');
         }
+
+        // Test result
+        const testStatus = success ? '✓ PASSED' : '✗ FAILED';
+        log_('>>> TEST RESULT: Manual Access Test ' + testStatus, success ? 'INFO' : 'ERROR');
+        log_('', 'INFO');
+
         SCRIPT_EXECUTION_MODE = 'DEFAULT';
     }
     return success;
@@ -175,6 +187,12 @@ function runManualAccessTest() {
  */
 function runStressTest() {
     SCRIPT_EXECUTION_MODE = 'TEST';
+
+    // Test header
+    log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
+    log_('║  Stress Test                                                 ║', 'INFO');
+    log_('╚══════════════════════════════════════════════════════════════╝', 'INFO');
+
     const testStartTime = new Date(); // Record overall test start time
     let success = false;
     let testConfig, numFolders, startRow; // Declare here so accessible in finally block
@@ -324,6 +342,12 @@ function runStressTest() {
         } else {
             log_('Cleanup skipped (required variables undefined)', 'WARN');
         }
+
+        // Test result
+        const testStatus = success ? '✓ PASSED' : '✗ FAILED';
+        log_('>>> TEST RESULT: Stress Test ' + testStatus, success ? 'INFO' : 'ERROR');
+        log_('', 'INFO');
+
         SCRIPT_EXECUTION_MODE = 'DEFAULT';
     }
     return success;
@@ -523,6 +547,12 @@ function cleanupAddDeleteSeparationTestData() {
 
 function runAddDeleteSeparationTest() {
     SCRIPT_EXECUTION_MODE = 'TEST';
+
+    // Test header
+    log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
+    log_('║  Add/Delete Separation Test                                  ║', 'INFO');
+    log_('╚══════════════════════════════════════════════════════════════╝', 'INFO');
+
     const ui = SpreadsheetApp.getUi();
     let testFolderName, testEmail, testRole, testRowIndex;
     let userSheetName = null, groupEmail = null, folderId = null; // Initialize to null
@@ -718,6 +748,12 @@ function runAddDeleteSeparationTest() {
         } else {
             log_('Cleanup skipped (testConfig undefined)', 'WARN');
         }
+
+        // Test result
+        const testStatus = success ? '✓ PASSED' : '✗ FAILED';
+        log_('>>> TEST RESULT: Add/Delete Separation Test ' + testStatus, success ? 'INFO' : 'ERROR');
+        log_('', 'INFO');
+
         SCRIPT_EXECUTION_MODE = 'DEFAULT';
     }
     return success;
