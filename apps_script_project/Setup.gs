@@ -263,6 +263,25 @@ function setupLogSheets_() {
 
   // Check for DeepAuditLog sheet
   setupDeepAuditLogSheet_();
+
+  // Check for SyncHistory sheet
+  setupSyncHistorySheet_();
+}
+
+function setupSyncHistorySheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(SYNC_HISTORY_SHEET_NAME);
+  if (!sheet) {
+    const logSheet = ss.getSheetByName(LOG_SHEET_NAME);
+    const index = logSheet ? logSheet.getIndex() + 1 : ss.getSheets().length + 1;
+    sheet = ss.insertSheet(SYNC_HISTORY_SHEET_NAME, index);
+    const headers = ['Timestamp', 'Revision ID', 'Revision Link', 'Added', 'Removed', 'Failed', 'Duration (seconds)'];
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
+    sheet.setFrozenRows(1);
+    sheet.setColumnWidth(3, 400); // Make Revision Link column wider
+    log_('Created "' + SYNC_HISTORY_SHEET_NAME + '" sheet.');
+  }
+  return sheet;
 }
 
 function setupDeepAuditLogSheet_() {

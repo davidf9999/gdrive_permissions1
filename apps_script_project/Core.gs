@@ -182,6 +182,7 @@ function checkForOrphanSheets_() {
     requiredSheetNames.add(LOG_SHEET_NAME);
     requiredSheetNames.add(TEST_LOG_SHEET_NAME);
     requiredSheetNames.add(FOLDER_AUDIT_LOG_SHEET_NAME);
+    requiredSheetNames.add(SYNC_HISTORY_SHEET_NAME);
     requiredSheetNames.add('DeepFolderAuditLog');
 
     const managedSheet = spreadsheet.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
@@ -898,6 +899,7 @@ function updateUserSheetHeaders_() {
           sheetName !== LOG_SHEET_NAME &&
           sheetName !== TEST_LOG_SHEET_NAME &&
           sheetName !== FOLDER_AUDIT_LOG_SHEET_NAME &&
+          sheetName !== SYNC_HISTORY_SHEET_NAME &&
           sheetName !== 'DeepFolderAuditLog') {
 
         ensureUserSheetHeaders_(sheet);

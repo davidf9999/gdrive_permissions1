@@ -247,6 +247,51 @@ function log_(message, severity = 'INFO') {
   }
 }
 
+function logSyncHistory_(revisionId, revisionLink, summary, durationSeconds) {
+  const syncHistorySheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SYNC_HISTORY_SHEET_NAME);
+  if (!syncHistorySheet) {
+    log_('SyncHistory sheet not found. Skipping sync history logging.', 'WARN');
+    return;
+  }
+
+  const timestamp = Utilities.formatDate(new Date(), SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+  const added = summary ? summary.added || 0 : 0;
+  const removed = summary ? summary.removed || 0 : 0;
+  const failed = summary ? summary.failed || 0 : 0;
+
+  let lastRow = syncHistorySheet.getLastRow();
+
+  // Ensure header row exists
+  if (lastRow === 0 || syncHistorySheet.getRange('A1').getValue() !== 'Timestamp') {
+    const headers = ['Timestamp', 'Revision ID', 'Revision Link', 'Added', 'Removed', 'Failed', 'Duration (seconds)'];
+    syncHistorySheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
+    syncHistorySheet.setFrozenRows(1);
+    lastRow = 1;
+  }
+
+  // Check if row 2 is empty (history was cleared) - if so, reset to row 1
+  if (lastRow > 1 && !syncHistorySheet.getRange('A2').getValue()) {
+    lastRow = 1;
+  }
+
+  const nextRow = Math.max(lastRow + 1, 2);
+
+  // Create a formula for the revision link
+  const linkFormula = revisionLink ? '=HYPERLINK("' + revisionLink + '", "View Revision")' : '';
+
+  syncHistorySheet.getRange(nextRow, 1, 1, 7).setValues([[
+    timestamp,
+    revisionId || 'N/A',
+    linkFormula,
+    added,
+    removed,
+    failed,
+    durationSeconds || 0
+  ]]);
+
+  log_('Logged sync history: Revision ' + (revisionId || 'N/A') + ', Changes: +' + added + ' -' + removed + ' !' + failed, 'INFO');
+}
+
 function clearAllLogs() {
   const ui = SpreadsheetApp.getUi();
   const response = ui.alert('Are you sure you want to clear all logs?', 'This will delete all data in the "Log", "TestLog", "FoldersAuditLog", and "DeepFolderAuditLog" sheets.', ui.ButtonSet.YES_NO);

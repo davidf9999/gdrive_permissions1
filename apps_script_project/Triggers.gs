@@ -76,6 +76,7 @@ function autoSync(e) {
   }
 
   try {
+    const startTime = new Date();
     log_('*** Starting scheduled auto-sync...');
 
     // Check file size first
@@ -104,17 +105,20 @@ function autoSync(e) {
     }
 
     const allowDeletions = getConfigValue_('AllowAutosyncDeletion', false);
+    let syncSummary = { added: 0, removed: 0, failed: 0 };
 
     if (allowDeletions) {
         log_('Auto-sync with deletions enabled. Performing full sync...');
-        fullSync({ silentMode: true, excludeAdminsFromDeletion: true });
+        const result = fullSync({ silentMode: true, excludeAdminsFromDeletion: true });
+        if (result) syncSummary = result;
     } else {
         // RISK-BASED AUTO-SYNC IMPLEMENTATION
         // Auto-sync only performs SAFE operations (all additions including admins)
         // DESTRUCTIVE operations (deletions) require manual execution
 
         log_('Performing SAFE operations (additions only)...');
-        syncAdds({ silentMode: silentMode }); // Includes admin additions, user groups, and folder permissions
+        const result = syncAdds({ silentMode: silentMode }); // Includes admin additions, user groups, and folder permissions
+        if (result) syncSummary = result;
 
         // Check for pending DESTRUCTIVE operations and notify admin
         checkAndNotifyPendingDeletions_();
@@ -122,6 +126,7 @@ function autoSync(e) {
 
     // Send summary email if configured
     let revisionLink = null;
+    let revisionId = null;
     if (getConfigValue_('EnableNamedVersions', true)) {
       const spreadsheetId = SpreadsheetApp.getActiveSpreadsheet().getId();
       const now = new Date();
@@ -143,7 +148,7 @@ function autoSync(e) {
 
         if (listData.revisions && listData.revisions.length > 0) {
           const latestRevision = listData.revisions[listData.revisions.length - 1];
-          const revisionId = latestRevision.id;
+          revisionId = latestRevision.id;
 
           // Check if this is a Google Workspace file (Sheets/Docs/Slides cannot be pinned via API)
           const mimeType = latestRevision.mimeType || '';
@@ -190,6 +195,11 @@ function autoSync(e) {
     if (getConfigValue_('NotifyOnSyncSuccess', false)) {
       sendAutoSyncSummary_(revisionLink);
     }
+
+    // Log sync history
+    const endTime = new Date();
+    const durationSeconds = Math.round((endTime - startTime) / 1000);
+    logSyncHistory_(revisionId, revisionLink, syncSummary, durationSeconds);
 
     log_('*** Scheduled auto-sync completed successfully.');
 

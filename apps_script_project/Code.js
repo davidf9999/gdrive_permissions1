@@ -6,6 +6,7 @@ const TEST_LOG_SHEET_NAME = 'TestLog';
 const USER_GROUPS_SHEET_NAME = 'UserGroups';
 const CONFIG_SHEET_NAME = 'Config';
 const FOLDER_AUDIT_LOG_SHEET_NAME = 'FoldersAuditLog';
+const SYNC_HISTORY_SHEET_NAME = 'SyncHistory';
 const DEFAULT_MAX_LOG_LENGTH = 10000;
 
 // Column mapping for the ManagedFolders sheet
