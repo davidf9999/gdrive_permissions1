@@ -1,6 +1,14 @@
 # Action Plan - Next Steps
 
-## ⚠️ CRITICAL FIXES APPLIED (Latest: commit 77d288e)
+## ⚠️ CRITICAL FIXES APPLIED (Latest: commit a94fd4d)
+
+### 🔥 MOST CRITICAL: Stop Notification Email Spam (commit a94fd4d)
+**Issue**: "Folder shared with you" emails sent on EVERY autosync run
+**Cause**: `folder.addEditor/addViewer()` always send emails, even when permission unchanged
+**Fix**: Use Drive API v3 with `sendNotificationEmail: false`
+- Check if permission exists with correct role → skip
+- Update/create permissions with `sendNotificationEmail: false`
+**Status**: ✅ FIXED - **REQUIRES Drive API v3 to be enabled** (see below)
 
 ### Fix 1: Variable Scoping (Cleanup Failures)
 **Issue**: "Cleanup skipped (testConfig undefined)"
@@ -39,40 +47,53 @@ All fixes and optimizations have been implemented in your local code. You now ne
 
 ### ✅ Required Files (Upload These First)
 
-1. **Tests.gs** - Enhanced cleanup logging + pytest-style formatting + performance optimizations + variable scoping fixes
-2. **TestHelpers.gs** - NEW FILE - Test performance optimizations (60% faster tests)
-3. **Utils.gs** - Log header protection (prevents logs from overwriting header row)
+1. **Core.gs** - 🔥 CRITICAL: Stop notification email spam (sendNotificationEmail: false)
+2. **Tests.gs** - Enhanced cleanup logging + pytest-style formatting + performance optimizations + variable scoping fixes
+3. **TestHelpers.gs** - NEW FILE - Test performance optimizations (60% faster tests)
+4. **Utils.gs** - Log header protection (prevents logs from overwriting header row)
 
 ### 💡 Optional File (Upload If You Want Production Optimizations)
 
-3. **ProductionOptimizations.gs** - NEW FILE - Production speed improvements (~50% faster syncs)
+5. **ProductionOptimizations.gs** - NEW FILE - Production speed improvements (~50% faster syncs)
 
 ### ✅ Keep (Already in Apps Script)
 
-4. **ConfigDiagnostic.gs** - Useful debugging tool, no performance impact
+6. **ConfigDiagnostic.gs** - Useful debugging tool, no performance impact
 
 ## Step-by-Step Instructions
 
-### Step 1: Upload Files to Apps Script
+### Step 1: Enable Drive API v3 (REQUIRED for notification email fix)
+
+**CRITICAL**: The notification email fix requires Drive API v3 advanced service
+
+1. In Apps Script editor, click on the **+** next to "Services" in left sidebar
+2. Find **"Drive API"** in the list
+3. Select **version v3**
+4. Click **Add**
+5. You should now see "Drive" under Services in the sidebar
+
+### Step 2: Upload Files to Apps Script
 
 1. Open your Google Sheet
 2. Go to **Extensions > Apps Script**
-3. Find and open **Tests.gs** in the editor
-4. Replace the entire content with the content from your local `apps_script_project/Tests.gs`
-5. Find and open **Utils.gs** in the editor
-6. Replace the entire content with the content from your local `apps_script_project/Utils.gs`
-7. Click **File > New > Script file**, name it **TestHelpers**
-8. Copy the content from your local `apps_script_project/TestHelpers.gs`
-9. **Optional**: Repeat for **ProductionOptimizations.gs** if you want production speed improvements
-10. Click **Save project** (💾 icon)
+3. Find and open **Core.gs** in the editor
+4. Replace the entire content with the content from your local `apps_script_project/Core.gs`
+5. Find and open **Tests.gs** in the editor
+6. Replace the entire content with the content from your local `apps_script_project/Tests.gs`
+7. Find and open **Utils.gs** in the editor
+8. Replace the entire content with the content from your local `apps_script_project/Utils.gs`
+9. Click **File > New > Script file**, name it **TestHelpers**
+10. Copy the content from your local `apps_script_project/TestHelpers.gs`
+11. **Optional**: Repeat for **ProductionOptimizations.gs** if you want production speed improvements
+12. Click **Save project** (💾 icon)
 
-### Step 2: Run Tests
+### Step 3: Run Tests
 
 1. Go back to your Google Sheet
 2. Click **Permissions Manager > Run All Tests**
 3. Wait for tests to complete (~5 minutes instead of ~13 minutes)
 
-### Step 3: Check Results
+### Step 4: Check Results
 
 Look in the **TestLog** sheet for:
 
