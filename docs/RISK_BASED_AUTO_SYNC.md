@@ -28,7 +28,7 @@ The system uses **three risk levels** based on consequence of error and reversib
 
 | Risk Level | Operations | Impact if Wrong | Auto-Sync Treatment | Admin Action |
 |:-----------|:-----------|:----------------|:--------------------|:-------------|
-| **SAFE**<br>*(Additive)* | • Add users to groups<br>• Create folders & share with groups<br>• Add spreadsheet editors<br>• Create Google Groups<br>• All `syncAdds()` operations including admins | Users get unintended access (easily reverted and detected) | ✅ **Automatic**<br>Runs hourly with post-notification email | Review summary email; revert if needed |
+| **SAFE**<br>*(Additive)* | • Add users to groups<br>• Create folders & share with groups<br>• Add spreadsheet editors<br>• Create Google Groups<br>• All `syncAdds()` operations including admins | Users get unintended access (easily reverted and detected) | ✅ **Automatic**<br>Runs every 5 minutes with post-notification email | Review summary email; revert if needed |
 | **DESTRUCTIVE**<br>*(Reversible Removals)* | • Remove users from groups<br>• Remove spreadsheet editors<br>• Revoke folder permissions<br>• All `syncDeletes()` operations | Users lose access they need, work blocked, requires restoration | 🛑 **Manual Only**<br>Notifies admin, does NOT execute | Run "Sync Deletes" manually after review |
 | **CRITICAL**<br>*(Irreversible)* | • `mergeSync()` - Approve manual changes<br>• Delete Google Groups (permanent)<br>• Delete Drive folders (data loss)<br>• Domain-wide bulk changes | Permanent data loss or inadvertent approval of unauthorized access | 🚫 **Always Manual**<br>Never automated, requires human judgment | Run manually with full context |
 
@@ -168,7 +168,7 @@ Sent when DESTRUCTIVE operations detected:
 ### Workflow for Volunteers (Non-Admin Users)
 
 1. **Add users**: Edit permission sheets, add email addresses to group sheets
-   - **Result**: Auto-sync grants access within 1 hour (no admin action needed)
+   - **Result**: Auto-sync grants access within 5 minutes (no admin action needed)
 
 2. **Remove users**: Delete email addresses from group sheets
    - **Result**: Auto-sync detects change, notifies admin (admin must approve deletion)
@@ -181,7 +181,7 @@ Sent when DESTRUCTIVE operations detected:
 
 | Scenario | What Happens Automatically | Admin Action Required |
 |:---------|:---------------------------|:---------------------|
-| **Users added to sheets** | Auto-sync grants access within 1 hour | ✅ None (review summary email periodically) |
+| **Users added to sheets** | Auto-sync grants access within 5 minutes | ✅ None (review summary email periodically) |
 | **Users removed from sheets** | Auto-sync detects, sends "Action Required" email | ⚠️ Check email → Run "Sync Deletes" manually → Review → Confirm |
 | **Admin list changed in Admins sheet** | Auto-sync detects, sends "Action Required" email | ⚠️ Check email → Run "Sync Admins" manually → Review → Confirm |
 | **Manual changes in Google Groups** | Auto-sync continues normal operations | ⚠️ Run "Merge & Reconcile" to document manual changes |
@@ -272,7 +272,7 @@ Note: Deletions will NOT execute automatically.
 | **Wrong admin added to control sheet** | Admin must remember to run sync | Automatic execution with notification | SAFE: Post-notification + easy reversal |
 | **Mass deletion due to sheet corruption** | Admin would catch during manual review | Safety limit prevents execution | `AutoSyncMaxDeletions` threshold blocks sync |
 | **Auto-sync runs during bulk editing** | N/A | Edit Mode suspends auto-sync | Edit Mode detection |
-| **Forgetting to grant access to new users** | Users must request access | Auto-sync grants within 1 hour | SAFE: Automatic execution |
+| **Forgetting to grant access to new users** | Users must request access | Auto-sync grants within 5 minutes | SAFE: Automatic execution |
 
 ---
 

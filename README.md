@@ -166,16 +166,16 @@ Your setup is now complete! The script will have automatically created the neces
 
 If you want volunteers to edit sheets without manually triggering syncs:
 
-1. Go to **Permissions Manager → Auto-Sync → ⚡ Setup Auto-Sync (Hourly)**
+1. Go to **Permissions Manager → Auto-Sync → ⚡ Setup Auto-Sync (Every 5 Minutes)**
 2. Click OK to install the trigger
 
-Now the script runs automatically every hour! Volunteers can simply edit sheets, and changes are applied automatically.
+Now the script runs automatically every five minutes! Volunteers can simply edit sheets, and changes are applied automatically.
 
 **Benefits:**
 - ✅ Volunteers don't need to run menu items
 - ✅ Works with free Gmail accounts (volunteers don't need Workspace)
 - ✅ No OAuth issues for non-admin users
-- ✅ Changes applied within 1 hour automatically
+- ✅ Changes applied within 5 minutes automatically
 
 See the **[Auto-Sync Guide](./docs/AUTO_SYNC_GUIDE.md)** for full details.
 

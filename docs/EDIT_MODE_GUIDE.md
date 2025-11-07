@@ -353,7 +353,7 @@ Check the **Log** sheet for entries:
 
 These show the complete history of Edit Mode usage.
 
-### What if I'm in Edit Mode and the hourly trigger fires?
+### What if I'm in Edit Mode and the 5-minute trigger fires?
 
 The trigger will:
 1. Check Edit Mode status

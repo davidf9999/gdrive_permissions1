@@ -8,6 +8,7 @@ const CONFIG_SHEET_NAME = 'Config';
 const FOLDER_AUDIT_LOG_SHEET_NAME = 'FoldersAuditLog';
 const SYNC_HISTORY_SHEET_NAME = 'SyncHistory';
 const DEFAULT_MAX_LOG_LENGTH = 10000;
+const AUTO_SYNC_CHANGE_SIGNATURE_KEY = 'AutoSyncChangeSignature';
 
 // Column mapping for the ManagedFolders sheet
 const FOLDER_NAME_COL = 1;
@@ -50,7 +51,7 @@ function onOpen() {
                 .addItem('Sync All Folders - Deletes Only', 'syncManagedFoldersDeletes')))
         .addSeparator()
         .addSubMenu(ui.createMenu('Auto-Sync')
-            .addItem('⚡ Setup Auto-Sync (Hourly)', 'setupAutoSync')
+            .addItem('⚡ Setup Auto-Sync (Every 5 Minutes)', 'setupAutoSync')
             .addItem('📅 Setup Daily Sync', 'setupDailySync')
             .addItem('⚙️ Setup Custom Interval', 'setupCustomIntervalSync')
             .addSeparator()

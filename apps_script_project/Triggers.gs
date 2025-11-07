@@ -6,7 +6,7 @@
  */
 
 /**
- * Sets up an hourly trigger for automatic synchronization.
+ * Sets up a 5-minute trigger for automatic synchronization.
  * Run this function ONCE from the menu to install the trigger.
  *
  * The trigger will run with the script owner's permissions, so volunteers
@@ -16,17 +16,16 @@ function setupAutoSync() {
   // First, remove any existing triggers to avoid duplicates
   removeAutoSync();
 
-  // Create a new time-based trigger that runs every hour
+  // Create a new time-based trigger that runs every 5 minutes
   ScriptApp.newTrigger('autoSync')
     .timeBased()
-    .everyHours(1) // Change this to suit your needs
-    .nearMinute(0)
+    .everyMinutes(5)
     .create();
 
-  log_('Auto-sync trigger installed. Will run every hour.', 'INFO');
+  log_('Auto-sync trigger installed. Will run every 5 minutes.', 'INFO');
   SpreadsheetApp.getUi().alert(
     'Auto-Sync Enabled',
-    'The script will now automatically sync every hour. ' +
+    'The script will now automatically sync every 5 minutes. ' +
     'Volunteers can edit the sheets, and changes will be applied automatically.',
     SpreadsheetApp.getUi().ButtonSet.OK
   );
@@ -75,23 +74,10 @@ function autoSync(e) {
     return;
   }
 
+  let changeDetection = null;
+  let snapshotShouldUpdate = false;
+
   try {
-    const startTime = new Date();
-    log_('*** Starting scheduled auto-sync...');
-
-    // Check file size first
-    const maxFileSizeMB = getConfigValue_('MaxFileSizeMB', 100);
-    const spreadsheetId = SpreadsheetApp.getActiveSpreadsheet().getId();
-    const fileSize = DriveApp.getFileById(spreadsheetId).getSize();
-    const fileSizeMB = fileSize / (1024 * 1024);
-
-    if (fileSizeMB > maxFileSizeMB) {
-      const errorMsg = `CRITICAL: Spreadsheet file size (${fileSizeMB.toFixed(2)} MB) exceeds the configured limit of ${maxFileSizeMB} MB. Auto-sync aborted. Please manually delete old versions from File > Version history.`;
-      log_(errorMsg, 'ERROR');
-      sendAdminNotification_('File Size Limit Exceeded - Manual Action Required', errorMsg);
-      return; // Abort sync
-    }
-
     // Check if in Edit Mode (takes precedence)
     if (isInEditMode_()) {
       log_('Auto-sync skipped: spreadsheet is in Edit Mode.', 'INFO');
@@ -102,6 +88,47 @@ function autoSync(e) {
     if (!isAutoSyncEnabled_()) {
       log_('Auto-sync is disabled in Config sheet. Skipping.', 'INFO');
       return;
+    }
+
+    try {
+      changeDetection = detectAutoSyncChanges_();
+    } catch (detectionError) {
+      log_('Auto-sync change detection failed: ' + detectionError.message, 'WARN');
+      changeDetection = null; // Fallback to always run
+    }
+
+    if (silentMode && changeDetection && !changeDetection.shouldRun) {
+      const lastRecordedUpdate = changeDetection.snapshot && changeDetection.snapshot.spreadsheetLastUpdated
+        ? new Date(changeDetection.snapshot.spreadsheetLastUpdated).toISOString()
+        : 'unknown';
+      log_('Auto-sync skipped: no relevant changes detected since last run. Last recorded update: ' + lastRecordedUpdate + '.', 'INFO');
+      return;
+    }
+
+    if (!silentMode && changeDetection && !changeDetection.shouldRun) {
+      log_('Manual sync requested — proceeding even though no changes were detected.', 'INFO');
+    }
+
+    if (changeDetection && changeDetection.reasons && changeDetection.reasons.length > 0) {
+      log_('Auto-sync proceeding due to detected changes: ' + changeDetection.reasons.join('; '), 'INFO');
+    }
+
+    const startTime = new Date();
+    log_('*** Starting scheduled auto-sync...');
+
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    const spreadsheetId = spreadsheet.getId();
+
+    // Check file size first
+    const maxFileSizeMB = getConfigValue_('MaxFileSizeMB', 100);
+    const fileSize = DriveApp.getFileById(spreadsheetId).getSize();
+    const fileSizeMB = fileSize / (1024 * 1024);
+
+    if (fileSizeMB > maxFileSizeMB) {
+      const errorMsg = `CRITICAL: Spreadsheet file size (${fileSizeMB.toFixed(2)} MB) exceeds the configured limit of ${maxFileSizeMB} MB. Auto-sync aborted. Please manually delete old versions from File > Version history.`;
+      log_(errorMsg, 'ERROR');
+      sendAdminNotification_('File Size Limit Exceeded - Manual Action Required', errorMsg);
+      return; // Abort sync
     }
 
     const allowDeletions = getConfigValue_('AllowAutosyncDeletion', false);
@@ -165,6 +192,7 @@ function autoSync(e) {
     const endTime = new Date();
     const durationSeconds = Math.round((endTime - startTime) / 1000);
     logSyncHistory_(revisionId, revisionLink, syncSummary, durationSeconds);
+    snapshotShouldUpdate = true;
 
     // Check if there were any failures during sync
     if (syncSummary && syncSummary.failed > 0) {
@@ -180,6 +208,21 @@ function autoSync(e) {
     log_(errorMessage, 'ERROR');
     sendErrorNotification_(errorMessage);
   } finally {
+    if (snapshotShouldUpdate) {
+      let snapshotToPersist = changeDetection && changeDetection.snapshot ? changeDetection.snapshot : null;
+      if (!snapshotToPersist) {
+        try {
+          const fallbackDetection = detectAutoSyncChanges_();
+          snapshotToPersist = fallbackDetection && fallbackDetection.snapshot ? fallbackDetection.snapshot : null;
+        } catch (fallbackError) {
+          log_('Auto-sync snapshot fallback failed: ' + fallbackError.message, 'WARN');
+        }
+      }
+
+      if (snapshotToPersist) {
+        recordAutoSyncSnapshot_(snapshotToPersist);
+      }
+    }
     lock.releaseLock();
   }
 }
@@ -210,6 +253,143 @@ function isAutoSyncEnabled_() {
   } catch (e) {
     log_('Error checking auto-sync status: ' + e.message, 'ERROR');
     return false;
+  }
+}
+
+function detectAutoSyncChanges_() {
+  const props = PropertiesService.getDocumentProperties();
+  let previousSnapshot = null;
+
+  try {
+    const rawSnapshot = props.getProperty(AUTO_SYNC_CHANGE_SIGNATURE_KEY);
+    if (rawSnapshot) {
+      previousSnapshot = JSON.parse(rawSnapshot);
+    }
+  } catch (e) {
+    log_('Failed to parse previous auto-sync snapshot: ' + e.message, 'WARN');
+  }
+
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const spreadsheetLastUpdated = spreadsheet.getLastUpdated();
+
+  const folderStates = {};
+  const folderIds = new Set();
+  let hadFolderErrors = false;
+
+  const managedSheet = spreadsheet.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+  if (managedSheet && managedSheet.getLastRow() > 1) {
+    const idValues = managedSheet.getRange(2, FOLDER_ID_COL, managedSheet.getLastRow() - 1, 1).getValues();
+    idValues.forEach(row => {
+      if (row && row[0]) {
+        const id = row[0].toString().trim();
+        if (id) {
+          folderIds.add(id);
+        }
+      }
+    });
+  }
+
+  folderIds.forEach(id => {
+    try {
+      const folder = DriveApp.getFolderById(id);
+      const lastUpdated = folder.getLastUpdated();
+      folderStates[id] = lastUpdated ? lastUpdated.getTime() : null;
+    } catch (e) {
+      hadFolderErrors = true;
+      folderStates[id] = previousSnapshot && previousSnapshot.folderStates && previousSnapshot.folderStates.hasOwnProperty(id)
+        ? previousSnapshot.folderStates[id]
+        : null;
+      log_('Change detection: unable to read folder ' + id + ': ' + e.message, 'WARN');
+    }
+  });
+
+  let shouldRun = false;
+  const reasons = [];
+
+  if (!previousSnapshot) {
+    shouldRun = true;
+    reasons.push('No previous auto-sync snapshot was found.');
+  }
+
+  const previousSpreadsheetTimestamp = previousSnapshot && typeof previousSnapshot.spreadsheetLastUpdated === 'number'
+    ? previousSnapshot.spreadsheetLastUpdated
+    : null;
+
+  if (spreadsheetLastUpdated) {
+    const currentSpreadsheetTimestamp = spreadsheetLastUpdated.getTime();
+    if (!previousSpreadsheetTimestamp || currentSpreadsheetTimestamp > previousSpreadsheetTimestamp) {
+      shouldRun = true;
+      reasons.push('Control spreadsheet updated at ' + spreadsheetLastUpdated.toISOString() + '.');
+    }
+  }
+
+  folderIds.forEach(id => {
+    const currentTimestamp = folderStates[id];
+    const previousTimestamp = previousSnapshot && previousSnapshot.folderStates
+      ? previousSnapshot.folderStates[id]
+      : undefined;
+
+    if (typeof previousTimestamp === 'undefined') {
+      shouldRun = true;
+      reasons.push('New managed folder detected (' + id + ').');
+      return;
+    }
+
+    if (currentTimestamp === null && previousTimestamp !== null) {
+      shouldRun = true;
+      reasons.push('Folder ' + id + ' is no longer accessible.');
+      return;
+    }
+
+    if (currentTimestamp !== null && previousTimestamp === null) {
+      shouldRun = true;
+      reasons.push('Folder ' + id + ' became accessible again.');
+      return;
+    }
+
+    if (typeof currentTimestamp === 'number' && typeof previousTimestamp === 'number' && currentTimestamp > previousTimestamp) {
+      shouldRun = true;
+      reasons.push('Folder ' + id + ' modified at ' + new Date(currentTimestamp).toISOString() + '.');
+    }
+  });
+
+  if (previousSnapshot && previousSnapshot.folderStates) {
+    Object.keys(previousSnapshot.folderStates).forEach(id => {
+      if (!folderIds.has(id)) {
+        shouldRun = true;
+        reasons.push('Managed folder removed from sheet (' + id + ').');
+      }
+    });
+  }
+
+  if (hadFolderErrors) {
+    shouldRun = true;
+    reasons.push('Encountered errors while inspecting managed folders.');
+  }
+
+  const snapshot = {
+    spreadsheetLastUpdated: spreadsheetLastUpdated ? spreadsheetLastUpdated.getTime() : null,
+    folderStates: folderStates,
+    capturedAt: new Date().toISOString()
+  };
+
+  return {
+    shouldRun,
+    reasons,
+    snapshot
+  };
+}
+
+function recordAutoSyncSnapshot_(snapshot) {
+  if (!snapshot) {
+    return;
+  }
+
+  try {
+    const props = PropertiesService.getDocumentProperties();
+    props.setProperty(AUTO_SYNC_CHANGE_SIGNATURE_KEY, JSON.stringify(snapshot));
+  } catch (e) {
+    log_('Failed to persist auto-sync snapshot: ' + e.message, 'WARN');
   }
 }
 
