@@ -75,6 +75,7 @@ function autoSync(e) {
   }
 
   let changeDetection = null;
+  let detectionSnapshot = null;
   let snapshotShouldUpdate = false;
 
   try {
@@ -92,6 +93,9 @@ function autoSync(e) {
 
     try {
       changeDetection = detectAutoSyncChanges_();
+      if (changeDetection && changeDetection.snapshot) {
+        detectionSnapshot = changeDetection.snapshot;
+      }
     } catch (detectionError) {
       log_('Auto-sync change detection failed: ' + detectionError.message, 'WARN');
       changeDetection = null; // Fallback to always run
@@ -114,6 +118,7 @@ function autoSync(e) {
     }
 
     const startTime = new Date();
+    snapshotShouldUpdate = true;
     log_('*** Starting scheduled auto-sync...');
 
     const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
@@ -192,7 +197,18 @@ function autoSync(e) {
     const endTime = new Date();
     const durationSeconds = Math.round((endTime - startTime) / 1000);
     logSyncHistory_(revisionId, revisionLink, syncSummary, durationSeconds);
-    snapshotShouldUpdate = true;
+
+    if (detectionSnapshot) {
+      try {
+        const finalLastUpdated = spreadsheet.getLastUpdated();
+        if (finalLastUpdated) {
+          detectionSnapshot.spreadsheetLastUpdated = finalLastUpdated.getTime();
+        }
+      } catch (snapshotUpdateError) {
+        log_('Auto-sync snapshot timestamp refresh failed: ' + snapshotUpdateError.message, 'WARN');
+      }
+      detectionSnapshot.capturedAt = new Date().toISOString();
+    }
 
     // Check if there were any failures during sync
     if (syncSummary && syncSummary.failed > 0) {
@@ -209,7 +225,7 @@ function autoSync(e) {
     sendErrorNotification_(errorMessage);
   } finally {
     if (snapshotShouldUpdate) {
-      let snapshotToPersist = changeDetection && changeDetection.snapshot ? changeDetection.snapshot : null;
+      let snapshotToPersist = detectionSnapshot ? detectionSnapshot : null;
       if (!snapshotToPersist) {
         try {
           const fallbackDetection = detectAutoSyncChanges_();

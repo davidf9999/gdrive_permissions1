@@ -112,3 +112,128 @@ describe('generateGroupEmail_', () => {
     expect(result).toBe('team@example.com');
   });
 });
+
+describe('logSyncHistory_', () => {
+  let originalSpreadsheetApp;
+  let originalUtilities;
+  let originalLog;
+  let originalSyncHistorySheetName;
+
+  const buildSyncHistorySheet = ({ lastRow = 0, headerValues = null } = {}) => {
+    const headerGetValues = jest.fn(() => headerValues || ['Timestamp', 'Revision ID', 'Added', 'Removed', 'Failed', 'Duration (seconds)', 'Revision Link']);
+    const headerSetFontWeight = jest.fn();
+    const rowSetValues = jest.fn();
+    const clearNoteMock = jest.fn();
+    const setNoteMock = jest.fn();
+
+    const headerRange = {
+      setValues: jest.fn(() => headerRange),
+      getValues: headerGetValues,
+      setFontWeight: headerSetFontWeight
+    };
+
+    const sheet = {
+      getLastRow: jest.fn(() => lastRow),
+      setFrozenRows: jest.fn(),
+      getFrozenRows: jest.fn(() => 0),
+      getRange: jest.fn((a, b, c, d) => {
+        if (typeof a === 'string') {
+          if (a === 'A1:G1') {
+            return { clearNote: clearNoteMock };
+          }
+          if (a === 'A1' || a === 'B1' || a === 'G1') {
+            return { setNote: setNoteMock };
+          }
+          if (a === 'A2') {
+            return { getValue: jest.fn(() => 'filled') };
+          }
+          throw new Error('Unexpected A1 range: ' + a);
+        }
+
+        if (a === 1 && b === 1 && c === 1 && d === 7) {
+          return headerRange;
+        }
+
+        if (a === 2 && b === 1 && c === 1 && d === 7) {
+          return {
+            setValues: rowSetValues
+          };
+        }
+
+        throw new Error(`Unexpected range ${[a, b, c, d].join(',')}`);
+      })
+    };
+
+    return { sheet, headerRange, rowSetValues, clearNoteMock, setNoteMock };
+  };
+
+  beforeEach(() => {
+    originalSpreadsheetApp = global.SpreadsheetApp;
+    originalUtilities = global.Utilities;
+    originalLog = global.log_;
+    originalSyncHistorySheetName = global.SYNC_HISTORY_SHEET_NAME;
+    global.SYNC_HISTORY_SHEET_NAME = 'SyncHistory';
+    global.log_ = jest.fn();
+    // Ensure the Apps Script binding also points to our stubbed logger
+    try {
+      log_ = global.log_;
+    } catch (e) {
+      // Ignore if reassignment is not allowed in this environment
+    }
+  });
+
+  afterEach(() => {
+    global.SpreadsheetApp = originalSpreadsheetApp;
+    global.Utilities = originalUtilities;
+    global.log_ = originalLog;
+    if (typeof originalSyncHistorySheetName === 'undefined') {
+      delete global.SYNC_HISTORY_SHEET_NAME;
+    } else {
+      global.SYNC_HISTORY_SHEET_NAME = originalSyncHistorySheetName;
+    }
+  });
+
+  it('skips logging when no permission changes occurred', () => {
+    const { sheet } = buildSyncHistorySheet();
+
+    global.SpreadsheetApp = {
+      getActiveSpreadsheet: jest.fn(() => ({
+        getSpreadsheetTimeZone: jest.fn(() => 'UTC'),
+        getSheetByName: jest.fn(() => sheet)
+      }))
+    };
+
+    global.Utilities = { formatDate: jest.fn(() => '2024-01-01 00:00:00') };
+
+    logSyncHistory_('rev-0', 'ignored', { added: 0, removed: 0, failed: 0 }, 12);
+
+    expect(sheet.getLastRow).not.toHaveBeenCalled();
+    expect(global.log_).toHaveBeenCalledWith('No permission changes detected. Skipping SyncHistory entry.', 'INFO');
+  });
+
+  it('appends rows with revision link column last and empty', () => {
+    const { sheet, headerRange, rowSetValues, clearNoteMock, setNoteMock } = buildSyncHistorySheet({ lastRow: 0 });
+
+    global.SpreadsheetApp = {
+      getActiveSpreadsheet: jest.fn(() => ({
+        getSpreadsheetTimeZone: jest.fn(() => 'UTC'),
+        getSheetByName: jest.fn(() => sheet)
+      }))
+    };
+
+    global.Utilities = { formatDate: jest.fn(() => '2024-01-01 00:00:00') };
+    logSyncHistory_('rev-123', 'https://docs.example.com', { added: 2, removed: 1, failed: 0 }, 45);
+
+    expect(headerRange.setValues).toHaveBeenCalledWith([
+      ['Timestamp', 'Revision ID', 'Added', 'Removed', 'Failed', 'Duration (seconds)', 'Revision Link']
+    ]);
+    expect(rowSetValues).toHaveBeenCalledWith([
+      ['2024-01-01 00:00:00', 'rev-123', 2, 1, 0, 45, '']
+    ]);
+    expect(clearNoteMock).toHaveBeenCalledTimes(1);
+    expect(setNoteMock).toHaveBeenCalledTimes(3);
+    expect(setNoteMock.mock.calls[0][0]).toContain('Timestamp');
+    expect(setNoteMock.mock.calls[1][0]).toContain('internal revision ID');
+    expect(setNoteMock.mock.calls[2][0]).toContain('Version history');
+  });
+});
