@@ -477,23 +477,7 @@ function validateUserSheetEmails_(sheetName) {
   return { valid: true, duplicates: [], error: null };
 }
 
-function getDirectFolderUsers_(folder, groupEmailToExclude) {
-  const users = [];
-  const owner = folder.getOwner() ? folder.getOwner().getEmail().toLowerCase() : null;
-  const groupEmailToExcludeLower = groupEmailToExclude ? groupEmailToExclude.toLowerCase() : null;
 
-  folder.getViewers().forEach(u => {
-    const email = u.getEmail().toLowerCase();
-    if (email !== owner && email !== groupEmailToExcludeLower) users.push({ email: email, role: 'Viewer' });
-  });
-
-  folder.getEditors().forEach(u => {
-    const email = u.getEmail().toLowerCase();
-    if (email !== owner && email !== groupEmailToExcludeLower) users.push({ email: email, role: 'Editor' });
-  });
-
-  return users;
-}
 
 function getDirectFileUsers_(file, groupEmailToExclude) {
   const users = [];
@@ -522,10 +506,14 @@ function getDirectFileUsers_(file, groupEmailToExclude) {
 }
 
 function getActualMembers_(groupEmail) {
-  assertAdminDirectoryAvailable_();
-  const members = [];
-  let pageToken;
+  if (shouldSkipGroupOps_()) {
+    log_('Admin SDK not available, cannot get actual group members for ' + groupEmail, 'WARN');
+    return [];
+  }
+  
   try {
+    const members = [];
+    let pageToken;
     do {
       const resp = AdminDirectory.Members.list(groupEmail, {
         maxResults: 200,
@@ -536,13 +524,15 @@ function getActualMembers_(groupEmail) {
       }
       pageToken = resp ? resp.nextPageToken : null;
     } while (pageToken);
+    return members;
   } catch (e) {
     if (e.message.includes('Resource Not Found: groupKey')) {
-      throw new Error('Group ' + groupEmail + ' does not exist.');
+      log_('Group ' + groupEmail + ' does not exist. Returning empty list of members.', 'WARN');
+    } else {
+      log_('Could not retrieve members for group ' + groupEmail + '. Error: ' + e.message, 'WARN');
     }
-    throw e;
+    return [];
   }
-  return members;
 }
 
 /**
