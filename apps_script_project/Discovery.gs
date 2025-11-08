@@ -17,7 +17,10 @@ function discoverManualAdditions_() {
   if (userGroupsSheet && userGroupsSheet.getLastRow() > 1) {
     const userGroupsData = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 2).getValues();
     userGroupsData.forEach(row => {
-      if (row[0] && row[1]) allGroups.set(row[0], { email: row[1], folderId: null });
+      if (row[0] && row[1]) {
+        const sheetName = row[0] + '_G';
+        allGroups.set(sheetName, { email: row[1], folderId: null });
+      }
     });
   }
 
@@ -33,7 +36,7 @@ function discoverManualAdditions_() {
 
   // 2. Iterate through each group and create a discovery report
   allGroups.forEach((groupInfo, sheetName) => {
-    const membersToAdd = new Map(); // Use a map to avoid duplicate members
+    const discrepancies = new Map(); // Use a map to avoid duplicate members
 
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
     if (!sheet) {
@@ -41,34 +44,48 @@ function discoverManualAdditions_() {
       return;
     }
 
-    const sheetMembers = new Set(
-      sheet.getLastRow() > 1
-        ? sheet.getRange('A2:A' + sheet.getLastRow()).getValues().map(r => r[0].toString().trim().toLowerCase()).filter(e => e)
-        : []
-    );
+    const sheetMembers = new Set();
+    if (sheet.getLastRow() > 1) {
+      const rawValues = sheet.getRange(2, 1, sheet.getLastRow() - 1, 2).getValues(); // Read columns A and B
+      rawValues.forEach(row => {
+        const email = row[0];
+        const isDisabled = row[1];
+        if (email && !isUserRowDisabled_(isDisabled)) { // Use isUserRowDisabled_ from Utils.gs
+          sheetMembers.add(email.toString().trim().toLowerCase());
+        }
+      });
+    }
 
     try {
-      // A. Discover from Google Group members
       const groupMembers = new Set(getActualMembers_(groupInfo.email).map(m => m.toLowerCase()));
+
+      // A. Discover members in the group but not in the sheet (Manual Additions)
       groupMembers.forEach(member => {
         if (!sheetMembers.has(member)) {
-          membersToAdd.set(member, { email: member, source: 'Google Group' });
+          discrepancies.set(member, { email: member, source: 'Google Group', issue: 'Manual Addition' });
         }
       });
 
-      // B. Discover from direct folder permissions (if applicable)
+      // B. Discover members in the sheet but not in the group (Missing Members)
+      sheetMembers.forEach(member => {
+        if (!groupMembers.has(member)) {
+          discrepancies.set(member, { email: member, source: 'Sheet', issue: 'Missing Member' });
+        }
+      });
+
+      // C. Discover from direct folder permissions (if applicable)
       if (groupInfo.folderId) {
         const folder = DriveApp.getFolderById(groupInfo.folderId);
         const directUsers = getDirectFolderUsers_(folder);
         directUsers.forEach(user => {
           if (user.email !== groupInfo.email && !sheetMembers.has(user.email) && !groupMembers.has(user.email)) {
-            membersToAdd.set(user.email, { email: user.email, source: 'Direct Folder Access' });
+            discrepancies.set(user.email, { email: user.email, source: 'Direct Folder Access', issue: 'Manual Addition' });
           }
         });
       }
 
-      if (membersToAdd.size > 0) {
-        report.push({ sheetName: sheetName, membersToAdd: Array.from(membersToAdd.values()) });
+      if (discrepancies.size > 0) {
+        report.push({ sheetName: sheetName, discrepancies: Array.from(discrepancies.values()) });
       }
 
     } catch (e) {

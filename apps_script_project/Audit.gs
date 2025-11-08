@@ -93,8 +93,8 @@ const auditSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(FOLDER_A
     // 3. Discover users who should be in groups but aren't
     const discoveryReport = discoverManualAdditions_();
     discoveryReport.forEach(item => {
-      item.membersToAdd.forEach(member => {
-        logAndAudit_('Manual Addition', item.sheetName, 'User is in Google Group but not in sheet', `Email: ${member.email}, Source: ${member.source}`);
+      item.discrepancies.forEach(member => {
+        logAndAudit_(member.issue, item.sheetName, `User is in ${member.source} but not in the other`, `Email: ${member.email}`);
       });
     });
 
@@ -137,18 +137,18 @@ function auditMemberRolesOnFolders_() {
 
     if (!folderId || !groupEmail || !expectedRole || !userSheetName) return;
 
-    const userSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(userSheetName);
-    if (!userSheet) return;
-
-    const sheetMembers = new Set(
-      userSheet.getLastRow() > 1
-        ? userSheet.getRange('A2:A' + userSheet.getLastRow()).getValues().map(r => r[0].toString().trim().toLowerCase()).filter(e => e)
-        : []
-    );
-
-    if (sheetMembers.size === 0) return; // Skip if sheet is empty
-
     try {
+      const userSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(userSheetName);
+      if (!userSheet) return;
+
+      const sheetMembers = new Set(
+        userSheet.getLastRow() > 1
+          ? userSheet.getRange('A2:A' + userSheet.getLastRow()).getValues().map(r => r[0].toString().trim().toLowerCase()).filter(e => e)
+          : []
+      );
+
+      if (sheetMembers.size === 0) return; // Skip if sheet is empty
+
       const folder = DriveApp.getFolderById(folderId);
       const viewers = folder.getViewers().map(u => u.getEmail().toLowerCase());
       const editors = folder.getEditors().map(u => u.getEmail().toLowerCase());
