@@ -244,6 +244,16 @@ function log_(message, severity = 'INFO') {
     // Always write to at least row 2 (never overwrite the header)
     const nextRow = Math.max(lastRow + 1, 2);
     logSheet.getRange(nextRow, 1, 1, 3).setValues([[timestamp, severity.toUpperCase(), messageStr]]);
+
+    // --- Log Trimming Logic ---
+    const maxLogLength = getMaxLogLength_();
+    const currentRowCount = logSheet.getLastRow();
+    // Subtract 1 to account for the header row
+    if ((currentRowCount - 1) > maxLogLength) {
+      const rowsToDelete = (currentRowCount - 1) - maxLogLength;
+      // Delete old rows from the top (starting from row 2)
+      logSheet.deleteRows(2, rowsToDelete);
+    }
   }
 }
 
