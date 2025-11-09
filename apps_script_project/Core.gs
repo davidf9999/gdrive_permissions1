@@ -22,19 +22,9 @@ function processManagedFolders_(options = {}) {
       return returnPlanOnly ? [] : totalSummary;
   }
 
-  const dataRange = sheet.getRange(2, 1, lastRow - 1, 2); // Get only FolderName and FolderID
-  const folderData = dataRange.getValues();
-
-  for (let i = 0; i < folderData.length; i++) {
-    const row = folderData[i];
-    const folderName = row[0];
-    const folderId = row[1];
-
-    if (!folderName && !folderId) {
-      continue; // Skip empty rows
-    }
-
-    const rowIndex = i + 2;
+  // Iterate through all possible rows, processRow_ will handle skipping empty ones.
+  for (let i = 2; i <= lastRow; i++) {
+    const rowIndex = i;
     if (!returnPlanOnly && !silentMode) showToast_('Processing row ' + rowIndex + ' of ' + lastRow + '...', 'Sync Progress', 10);
     try {
       const result = processRow_(rowIndex, options);
@@ -61,6 +51,16 @@ function processManagedFolders_(options = {}) {
 function processRow_(rowIndex, options = {}) {
   const { returnPlanOnly = false, removeOnly = false, silentMode = false } = options;
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+
+  // Gracefully skip empty rows
+  const checkRange = sheet.getRange(rowIndex, 1, 1, 2).getValues()[0];
+  const folderNameCheck = checkRange[0];
+  const folderIdCheck = checkRange[1];
+  if (!folderNameCheck && !folderIdCheck) {
+    log_('Skipping empty row ' + rowIndex + ' in ManagedFolders sheet.', 'INFO');
+    return null;
+  }
+
   const statusCell = sheet.getRange(rowIndex, STATUS_COL);
   const summary = { added: 0, removed: 0, failed: 0 };
 

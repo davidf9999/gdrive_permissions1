@@ -479,12 +479,24 @@ function fullSync(options = {}) {
   }
 
   const totalSummary = { added: 0, removed: 0, failed: 0 };
-  let summaryMessage = 'Sync process complete.';
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
   try {
     if (!silentMode) showToast_('Starting full synchronization...', 'Full Sync', -1);
     log_('*** Starting full synchronization...');
+
+    // --- PRE-SYNC CHECKS ---
+    const orphanSheets = checkForOrphanSheets_();
+    if (orphanSheets && orphanSheets.length > 0) {
+      const errorMessage = 'SYNC ABORTED: Found orphan sheets that are not in the configuration: ' +
+                           orphanSheets.join(', ') +
+                           '. Please either delete these sheets or add them to the ManagedFolders/UserGroups sheets to resolve the conflict.';
+      log_(errorMessage, 'ERROR');
+      if (!silentMode) {
+        SpreadsheetApp.getUi().alert(errorMessage);
+      }
+      throw new Error('Orphan sheets found. Sync aborted.');
+    }
 
     // Validate unique group emails before starting
     const validation = validateUniqueGroupEmails_();
@@ -521,15 +533,7 @@ function fullSync(options = {}) {
       totalSummary.failed += managedFoldersSummary.failed;
     }
 
-    // Check for any orphan sheets
-    const orphanSheets = checkForOrphanSheets_();
-    if (orphanSheets && orphanSheets.length > 0) {
-      const orphanMessage = 'Warning: Found orphan sheets that are not in the configuration: ' + orphanSheets.join(', ');
-      summaryMessage += '\n\n' + orphanMessage;
-      log_(orphanMessage, 'WARN');
-    }
-
-    summaryMessage = 'Full synchronization completed. Total changes: ' + totalSummary.added + ' added, ' + totalSummary.removed + ' removed, ' + totalSummary.failed + ' failed.';
+    const summaryMessage = 'Full synchronization completed. Total changes: ' + totalSummary.added + ' added, ' + totalSummary.removed + ' removed, ' + totalSummary.failed + ' failed.';
     log_(summaryMessage, 'INFO');
 
     if (SCRIPT_EXECUTION_MODE === 'TEST') {
