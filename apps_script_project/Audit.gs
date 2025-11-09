@@ -102,7 +102,7 @@ function foldersAudit() {
     auditMemberRolesOnFolders_();
 
     if (discoveryReport.length === 0) {
-      log_('Folders Audit found no manual additions to groups or folders.');
+      log_('Folders Audit found no manual changes to groups or folders.');
     }
 
     log_('*** Folders Audit Complete.');
