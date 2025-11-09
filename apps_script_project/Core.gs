@@ -161,14 +161,6 @@ function processRow_(rowIndex, options = {}) {
 
     const { group, wasNewlyCreated } = getOrCreateGroup_(groupEmail, userSheetName);
 
-    // If the group was just created, pause for 60 seconds to allow it to propagate
-    // through Google's systems. This prevents a race condition where Drive tries to send
-    // a notification to a group email that isn't fully active yet.
-    if (wasNewlyCreated) {
-        log_('Pausing for 60 seconds to allow for new group email propagation...');
-        Utilities.sleep(60000);
-    }
-
     setFolderPermission_(folder.getId(), groupEmail, role);
     const syncSummary = syncGroupMembership_(groupEmail, userSheetName, options);
 
