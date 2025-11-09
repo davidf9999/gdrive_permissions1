@@ -102,10 +102,10 @@ function autoSync(e) {
     }
 
     if (silentMode && changeDetection && !changeDetection.shouldRun) {
-      const lastRecordedUpdate = changeDetection.snapshot && changeDetection.snapshot.spreadsheetLastUpdated
-        ? new Date(changeDetection.snapshot.spreadsheetLastUpdated).toISOString()
+      const lastRecordedHash = changeDetection.snapshot && changeDetection.snapshot.dataHash
+        ? changeDetection.snapshot.dataHash.substring(0, 10)
         : 'unknown';
-      log_('Auto-sync skipped: no relevant changes detected since last run. Last recorded update: ' + lastRecordedUpdate + '.', 'INFO');
+      log_('Auto-sync skipped: no relevant changes detected since last run. Last data hash: ' + lastRecordedHash + '...', 'INFO');
       return;
     }
 
@@ -200,14 +200,6 @@ function autoSync(e) {
     logSyncHistory_(revisionId, revisionLink, syncSummary, durationSeconds);
 
     if (detectionSnapshot) {
-      try {
-        const finalLastUpdated = spreadsheetFile.getLastUpdated();
-        if (finalLastUpdated) {
-          detectionSnapshot.spreadsheetLastUpdated = finalLastUpdated.getTime();
-        }
-      } catch (snapshotUpdateError) {
-        log_('Auto-sync snapshot timestamp refresh failed: ' + snapshotUpdateError.message, 'WARN');
-      }
       detectionSnapshot.capturedAt = new Date().toISOString();
     }
 
@@ -273,6 +265,76 @@ function isAutoSyncEnabled_() {
   }
 }
 
+function calculateDataHash_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let content = '';
+
+  // 1. Get all managed sheet names
+  const managedSheetNames = getAllManagedSheetNames_(); // From Core.gs
+  managedSheetNames.add(ADMINS_SHEET_NAME);
+  managedSheetNames.add(USER_GROUPS_SHEET_NAME);
+  managedSheetNames.add(MANAGED_FOLDERS_SHEET_NAME);
+
+  const sheetNamesToHash = Array.from(managedSheetNames);
+  sheetNamesToHash.sort(); // Sort for consistent order
+
+  // 2. Read content from each sheet, being specific about columns
+  for (const sheetName of sheetNamesToHash) {
+    const sheet = ss.getSheetByName(sheetName);
+    if (sheet && sheet.getLastRow() > 0) {
+      let data;
+      // Be specific about which columns to hash to avoid script-modified columns
+      if (sheetName === MANAGED_FOLDERS_SHEET_NAME) {
+        // Hash FolderName, FolderID, Role, and user-set GroupEmail (Cols A-D)
+        const lastRow = sheet.getLastRow();
+        if (lastRow > 0) {
+          data = sheet.getRange(1, 1, lastRow, 4).getValues();
+        } else {
+          data = [];
+        }
+      } else if (sheetName === USER_GROUPS_SHEET_NAME) {
+        // Hash GroupName and user-set GroupEmail (Cols A-B)
+        const lastRow = sheet.getLastRow();
+        if (lastRow > 0) {
+          data = sheet.getRange(1, 1, lastRow, 2).getValues();
+        } else {
+          data = [];
+        }
+      } else if (sheetName === ADMINS_SHEET_NAME) {
+        // Hash only User Email and Disabled columns (A and D)
+        const lastRow = sheet.getLastRow();
+        if (lastRow > 0) {
+            const allData = sheet.getRange(1, 1, lastRow, 4).getValues();
+            data = allData.map(row => [row[0], row[3]]); // New array with just cols A and D
+        } else {
+            data = [];
+        }
+      } else {
+        // For all other (user permission) sheets, the whole content is user-managed
+        data = sheet.getDataRange().getValues();
+      }
+
+      // Normalize checkbox values (true/false) to string representations
+      const normalizedData = data.map(row =>
+        row.map(cell => {
+          if (cell === true) return 'TRUE';
+          if (cell === false) return 'FALSE';
+          return cell;
+        })
+      );
+      content += sheetName + '::' + JSON.stringify(normalizedData) + '||';
+    }
+  }
+
+  // 3. Compute hash
+  if (content) {
+    const hash = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, content);
+    return Utilities.base64Encode(hash);
+  }
+
+  return null;
+}
+
 function detectAutoSyncChanges_() {
   const props = PropertiesService.getDocumentProperties();
   let previousSnapshot = null;
@@ -287,16 +349,7 @@ function detectAutoSyncChanges_() {
   }
 
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  let spreadsheetLastUpdated = null;
-  try {
-    const spreadsheetFile = DriveApp.getFileById(spreadsheet.getId());
-    const lastUpdated = spreadsheetFile && spreadsheetFile.getLastUpdated ? spreadsheetFile.getLastUpdated() : null;
-    if (lastUpdated instanceof Date) {
-      spreadsheetLastUpdated = lastUpdated;
-    }
-  } catch (e) {
-    log_('Change detection: unable to read spreadsheet last updated timestamp: ' + e.message, 'WARN');
-  }
+  const currentDataHash = calculateDataHash_();
 
   const folderStates = {};
   const folderIds = new Set();
@@ -337,21 +390,17 @@ function detectAutoSyncChanges_() {
     reasons.push('No previous auto-sync snapshot was found.');
   }
 
-  const previousSpreadsheetTimestamp = previousSnapshot && typeof previousSnapshot.spreadsheetLastUpdated === 'number'
-    ? previousSnapshot.spreadsheetLastUpdated
-    : null;
-
-  if (spreadsheetLastUpdated) {
-    const currentSpreadsheetTimestamp = spreadsheetLastUpdated.getTime();
-    if (!previousSpreadsheetTimestamp || currentSpreadsheetTimestamp > previousSpreadsheetTimestamp) {
-      shouldRun = true;
-      reasons.push('Control spreadsheet updated at ' + spreadsheetLastUpdated.toISOString() + '.');
-    }
-  } else if (previousSnapshot) {
+  // Reason 1: Data in sheets has changed
+  const previousDataHash = previousSnapshot ? previousSnapshot.dataHash : null;
+  if (currentDataHash !== previousDataHash) {
     shouldRun = true;
-    reasons.push('Unable to confirm control spreadsheet last-updated timestamp.');
+    reasons.push('Sheet data has changed.');
+    if (previousDataHash) {
+        log_(`Data hash mismatch. Previous: ${previousDataHash}, Current: ${currentDataHash}`, 'INFO');
+    }
   }
 
+  // Reason 2: Managed folders have been modified
   folderIds.forEach(id => {
     const currentTimestamp = folderStates[id];
     const previousTimestamp = previousSnapshot && previousSnapshot.folderStates
@@ -382,6 +431,7 @@ function detectAutoSyncChanges_() {
     }
   });
 
+  // Reason 3: List of managed folders has changed
   if (previousSnapshot && previousSnapshot.folderStates) {
     Object.keys(previousSnapshot.folderStates).forEach(id => {
       if (!folderIds.has(id)) {
@@ -391,13 +441,14 @@ function detectAutoSyncChanges_() {
     });
   }
 
+  // Reason 4: Errors during folder inspection
   if (hadFolderErrors) {
     shouldRun = true;
     reasons.push('Encountered errors while inspecting managed folders.');
   }
 
   const snapshot = {
-    spreadsheetLastUpdated: spreadsheetLastUpdated ? spreadsheetLastUpdated.getTime() : null,
+    dataHash: currentDataHash,
     folderStates: folderStates,
     capturedAt: new Date().toISOString()
   };
