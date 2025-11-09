@@ -154,6 +154,9 @@ function setupControlSheets_() {
   
   // Check for Config sheet
   const defaultConfig = {
+    '--- Status ---': {
+      'AutoSyncStatus': { value: 'N/A', description: 'A visual indicator of the auto-sync trigger status. Updated automatically on open. (Read-only)' },
+    },
     '--- Sync Behavior ---': {
       'EnableAutoSync': { value: 'TRUE', description: 'Set to FALSE to temporarily pause the hourly/daily auto-sync trigger without having to delete it.' },
       'AllowAutosyncDeletion': { value: 'TRUE', description: 'Set to TRUE to allow auto-sync to automatically delete users. WARNING: This is a powerful feature. If a user is accidentally removed from a sheet, their access will be revoked on the next sync.' },
