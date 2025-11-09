@@ -246,6 +246,8 @@ function log_(message, severity = 'INFO') {
     logSheet.getRange(nextRow, 1, 1, 3).setValues([[timestamp, severity.toUpperCase(), messageStr]]);
 
     // --- Log Trimming Logic ---
+    // Clear the cache for 'config' to ensure getMaxLogLength_ reads the latest value
+    CacheService.getScriptCache().remove('config');
     const maxLogLength = getMaxLogLength_();
     const currentRowCount = logSheet.getLastRow();
     // Subtract 1 to account for the header row
@@ -256,6 +258,7 @@ function log_(message, severity = 'INFO') {
     }
   }
 }
+
 
 function logSyncHistory_(revisionId, revisionLink, summary, durationSeconds) {
   const syncHistorySheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SYNC_HISTORY_SHEET_NAME);
@@ -522,6 +525,24 @@ function getDirectFileUsers_(file, groupEmailToExclude) {
   }
 
   file.getEditors().forEach(u => {
+    const email = u.getEmail().toLowerCase();
+    if (email !== owner && email !== groupEmailToExcludeLower) users.push({ email: email, role: 'Editor' });
+  });
+
+  return users;
+}
+
+function getDirectFolderUsers_(folder, groupEmailToExclude) {
+  const users = [];
+  const owner = folder.getOwner() ? folder.getOwner().getEmail().toLowerCase() : null;
+  const groupEmailToExcludeLower = groupEmailToExclude ? groupEmailToExclude.toLowerCase() : null;
+
+  folder.getViewers().forEach(u => {
+    const email = u.getEmail().toLowerCase();
+    if (email !== owner && email !== groupEmailToExcludeLower) users.push({ email: email, role: 'Viewer' });
+  });
+
+  folder.getEditors().forEach(u => {
     const email = u.getEmail().toLowerCase();
     if (email !== owner && email !== groupEmailToExcludeLower) users.push({ email: email, role: 'Editor' });
   });
