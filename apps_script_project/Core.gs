@@ -108,6 +108,7 @@ function processRow_(rowIndex, options = {}) {
     const folder = getOrCreateFolder_(folderName, folderId, { silentMode });
     sheet.getRange(rowIndex, FOLDER_ID_COL).setValue(folder.getId());
     sheet.getRange(rowIndex, FOLDER_NAME_COL).setValue(folder.getName());
+    sheet.getRange(rowIndex, URL_COL).setValue(folder.getUrl());
 
     let userSheetName = folder.getName() + '_' + role;
     const renameSucceeded = renameSheetIfExists_(existingUserSheetName, userSheetName);
@@ -816,11 +817,11 @@ function setSheetUiStyles_() {
         });
 
         // Clear old background colors from columns that might have been protected before
-        const clearBgRange = managedSheet.getRange(2, 1, managedSheet.getLastRow() - 1, 7);
+        const clearBgRange = managedSheet.getRange(2, 1, managedSheet.getLastRow() - 1, 8);
         clearBgRange.setBackground(null);
 
-        // Now apply new protection and styling to columns 5-7 only
-        const range = managedSheet.getRange(2, USER_SHEET_NAME_COL, managedSheet.getLastRow() - 1, 3);
+        // Now apply new protection and styling to columns 5-8 only
+        const range = managedSheet.getRange(2, USER_SHEET_NAME_COL, managedSheet.getLastRow() - 1, 4);
         range.setBackground('#f3f3f3');
         const protection = range.protect().setDescription('These columns are managed by the script.');
         protection.setWarningOnly(true);

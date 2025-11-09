@@ -18,6 +18,7 @@ const GROUP_EMAIL_COL = 4;        // User-editable: manually specify for Hebrew 
 const USER_SHEET_NAME_COL = 5;    // Managed by script
 const LAST_SYNCED_COL = 6;         // Managed by script
 const STATUS_COL = 7;              // Managed by script
+const URL_COL = 8;                 // Managed by script
 
 const ADMINS_LAST_SYNC_CELL = 'B2';
 const ADMINS_STATUS_CELL = 'C2';
