@@ -133,6 +133,7 @@ describe('processRow_', () => {
   });
 
   it('should call DriveApp.addViewer for viewer role', () => {
+    mockGetValues.mockReturnValueOnce([['mockFolderName', 'folder-id']]); // Mock for the initial empty row check
     mockGetValue
       .mockReturnValueOnce('mockFolderName')
       .mockReturnValueOnce('folder-id')
@@ -146,6 +147,7 @@ describe('processRow_', () => {
   });
 
   it('should call DriveApp.addEditor for editor role', () => {
+    mockGetValues.mockReturnValueOnce([['mockFolderName', 'folder-id']]); // Mock for the initial empty row check
     mockGetValue
       .mockReturnValueOnce('mockFolderName')
       .mockReturnValueOnce('folder-id')
@@ -163,6 +165,7 @@ describe('processRow_', () => {
     currentUserSheetName = 'LegacySheet_viewer';
     sheetRegistry.set(currentUserSheetName, mockUserSheet);
 
+    mockGetValues.mockReturnValueOnce([['New Folder Name', 'folder-id']]); // Mock for the initial empty row check
     mockGetValue
       .mockReturnValueOnce('New Folder Name')
       .mockReturnValueOnce('folder-id')
@@ -183,6 +186,7 @@ describe('processRow_', () => {
   });
 
   it('should throw an error for an unsupported role', () => {
+    mockGetValues.mockReturnValueOnce([['mockFolderName', 'folder-id']]); // Mock for the initial empty row check
     mockGetValue
       .mockReturnValueOnce('mockFolderName')
       .mockReturnValueOnce('folder-id')

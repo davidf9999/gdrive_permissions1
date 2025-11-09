@@ -9,13 +9,20 @@ describe('detectAutoSyncChanges_', () => {
   let spreadsheetLastUpdated;
 
   beforeAll(() => {
-    let codeJsContent = fs.readFileSync(path.resolve(__dirname, '../apps_script_project/Code.js'), 'utf8');
-    codeJsContent = codeJsContent.replace(/const /g, 'global.');
-    eval(codeJsContent);
-    let triggersCode = fs.readFileSync(path.resolve(__dirname, '../apps_script_project/Triggers.gs'), 'utf8');
-    triggersCode = triggersCode.replace('function detectAutoSyncChanges_(', 'global.detectAutoSyncChanges_ = function detectAutoSyncChanges_(');
-    triggersCode = triggersCode.replace('function recordAutoSyncSnapshot_(', 'global.recordAutoSyncSnapshot_ = function recordAutoSyncSnapshot_(');
-    eval(triggersCode);
+    const loadGasFileAsGlobal = (filePath) => {
+      let content = fs.readFileSync(path.resolve(__dirname, filePath), 'utf8');
+      // Expose all functions in the file to the global scope for Jest
+      content = content.replace(/function\s+([a-zA-Z0-9_]+)\s*\(/g, 'global.$1 = function $1(');
+      // Expose all consts in the file to the global scope for Jest
+      content = content.replace(/const\s+([a-zA-Z0-9_]+)\s*=/g, 'global.$1 =');
+      eval(content);
+    };
+
+    // Load all necessary script files into the test's scope, in dependency order.
+    loadGasFileAsGlobal('../apps_script_project/Code.js');
+    loadGasFileAsGlobal('../apps_script_project/Utils.gs');
+    loadGasFileAsGlobal('../apps_script_project/Core.gs');
+    loadGasFileAsGlobal('../apps_script_project/Triggers.gs');
   });
 
   beforeEach(() => {
@@ -32,7 +39,12 @@ describe('detectAutoSyncChanges_', () => {
 
     spreadsheet = {
       getLastUpdated: jest.fn(() => new Date('2024-01-01T00:00:00Z')),
-      getSheetByName: jest.fn(name => (name === MANAGED_FOLDERS_SHEET_NAME ? managedSheet : null)),
+      getSheetByName: jest.fn(name => {
+        if (name === global.MANAGED_FOLDERS_SHEET_NAME) return managedSheet;
+        if (name === global.USER_GROUPS_SHEET_NAME) return { getLastRow: () => 0, getRange: () => ({ getValues: () => [] }) }; // Mock empty sheet
+        if (name === global.ADMINS_SHEET_NAME) return { getLastRow: () => 0, getRange: () => ({ getValues: () => [] }) }; // Mock empty sheet
+        return null;
+      }),
       getId: jest.fn(() => 'spreadsheet-id')
     };
 
@@ -57,11 +69,21 @@ describe('detectAutoSyncChanges_', () => {
       getDocumentProperties: jest.fn(() => ({
         getProperty: jest.fn(() => storedSnapshot),
         setProperty: jest.fn((key, value) => {
-          if (key === AUTO_SYNC_CHANGE_SIGNATURE_KEY) {
+          if (key === global.AUTO_SYNC_CHANGE_SIGNATURE_KEY) {
             storedSnapshot = value;
           }
         })
       }))
+    };
+
+    global.Utilities = {
+      DigestAlgorithm: {
+        SHA_256: 'SHA-256'
+      },
+      computeDigest: jest.fn(() => 'mock-hash-bytes'),
+      base64Encode: jest.fn(bytes => 'mock-hash-string'),
+      formatDate: jest.fn(date => date.toISOString()),
+      sleep: jest.fn()
     };
 
     jest.clearAllMocks();
@@ -79,7 +101,7 @@ describe('detectAutoSyncChanges_', () => {
 
   it('skips when spreadsheet and folders match the previous snapshot', () => {
     const previousSnapshot = {
-      spreadsheetLastUpdated: new Date('2024-01-01T00:00:00Z').getTime(),
+      dataHash: 'mock-hash-string',
       folderStates: { 'folder-1': new Date('2024-01-01T00:00:00Z').getTime() },
       capturedAt: '2024-01-01T00:00:00Z'
     };
@@ -109,25 +131,5 @@ describe('detectAutoSyncChanges_', () => {
       ])
     );
   });
-  it('forces a run when spreadsheet last updated timestamp cannot be retrieved', () => {
-    const previousSnapshot = {
-      spreadsheetLastUpdated: new Date('2024-01-01T00:00:00Z').getTime(),
-      folderStates: { 'folder-1': new Date('2024-01-01T00:00:00Z').getTime() },
-      capturedAt: '2024-01-01T00:00:00Z'
-    };
-    storedSnapshot = JSON.stringify(previousSnapshot);
 
-    DriveApp.getFileById.mockImplementation(() => ({
-      getLastUpdated: jest.fn(() => {
-        throw new Error('boom');
-      })
-    }));
-
-    const result = detectAutoSyncChanges_();
-
-    expect(result.shouldRun).toBe(true);
-    expect(result.reasons).toEqual(
-      expect.arrayContaining(['Unable to confirm control spreadsheet last-updated timestamp.'])
-    );
-  });
 });
