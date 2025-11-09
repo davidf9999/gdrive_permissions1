@@ -78,9 +78,22 @@ Each sync also keeps a dedicated Google Group in sync with this list. The admin 
 
 ### 5. `Config`
 
-This sheet allows you to configure advanced settings, such as enabling email notifications for script errors. It also displays important system information:
+This sheet allows you to configure advanced settings for the script. It also displays important, read-only information that is updated by the script.
 
-- **AdminGroupEmail**: Shows the email address of the administrators' Google Group (e.g., `admins-control-panel@yourdomain.com`). This is automatically updated when you run "Sync Admins" and can be used to grant admin access to any managed folder by adding this group email to the folder's user sheet.
+**Key Configuration Settings:**
+
+| Setting | Description | Default |
+| :--- | :--- | :--- |
+| **`AutoSyncStatus`** | *(Read-Only)* A visual indicator showing the current status of the auto-sync trigger. Updated automatically when the sheet is opened or when triggers are changed. | `DISABLED ❌` |
+| `EnableAutoSync` | Set to `TRUE` to allow the time-based trigger to run. Set to `FALSE` to pause all automatic syncing without deleting the trigger. | `TRUE` |
+| `AllowAutosyncDeletion` | A critical safety switch. If `FALSE` (the default), auto-sync will only add permissions. If `TRUE`, auto-sync will also remove permissions, which is a destructive action. | `FALSE` |
+| `NotificationEmail` | The email address where important notifications (like errors or pending deletions) will be sent. | The script owner's email |
+| `MaxFileSizeMB` | A safeguard to prevent the spreadsheet from becoming too large. If the file size exceeds this limit, auto-sync is aborted and an admin is notified. | `100` |
+| `EnableGCPLogging` | Set to `TRUE` to send detailed logs to Google Cloud Logging (requires a linked GCP project). | `FALSE` |
+
+**System Information (Read-Only):**
+
+- **`AdminGroupEmail`**: Shows the email address of the administrators' Google Group (e.g., `admins-control-panel@yourdomain.com`). This is automatically updated when you run "Sync Admins" and can be used to grant admin access to any managed folder by adding this group email to the folder's user sheet.
 
 ### 6. `Log` & `TestLog`
 

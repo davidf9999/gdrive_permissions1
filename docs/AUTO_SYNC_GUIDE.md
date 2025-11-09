@@ -23,7 +23,7 @@ The Auto-Sync feature allows the Permission Manager to run automatically on a sc
 
 **With Auto-Sync:**
 1. Volunteer edits sheet (adds user email)
-2. **That's it!** The change is automatically applied within 1 hour (or your chosen interval)
+2. **That's it!** The change is automatically applied within 5 minutes (or your chosen interval)
 3. No authentication required from volunteer
 4. Script runs with the owner's (your) permissions
 
@@ -34,10 +34,10 @@ The Auto-Sync feature allows the Permission Manager to run automatically on a sc
 ### Step 1: Enable Auto-Sync
 
 1. Open your Permission Manager spreadsheet
-2. Go to **Permissions Manager → Auto-Sync → ⚡ Setup Auto-Sync (Hourly)**
+2. Go to **Permissions Manager → Auto-Sync → ⚡ Setup Auto-Sync (Every 5 Minutes)**
 3. Click "OK" when prompted
 
-That's it! The script will now run automatically every hour.
+That's it! The script will now run automatically every five minutes.
 
 ### Step 2: Verify It's Running
 
@@ -52,9 +52,9 @@ To confirm auto-sync is active:
 
 ### Choose Your Sync Frequency
 
-**Hourly Sync (Recommended)**
-- Menu: `Auto-Sync → ⚡ Setup Auto-Sync (Hourly)`
-- Runs every 60 minutes
+**5-Minute Sync (Recommended)**
+- Menu: `Auto-Sync → ⚡ Setup Auto-Sync (Every 5 Minutes)`
+- Runs roughly every five minutes
 - Good for: Active NGOs with frequent changes
 
 **Daily Sync**
@@ -140,7 +140,7 @@ These operations are performed either through the Google Workspace Admin Console
 
 1. **You (the admin) set up auto-sync ONCE:**
    - Install the script (see main README)
-   - Run `Setup Auto-Sync (Hourly)` from the menu
+   - Run `Setup Auto-Sync (Every 5 Minutes)` from the menu
    - This creates a time-based trigger
 
 2. **Volunteers can now:**
@@ -151,7 +151,7 @@ These operations are performed either through the Google Workspace Admin Console
    - ❌ Don't need to authenticate
 
 3. **How volunteers see changes:**
-   - Changes appear within 1 hour (or your chosen interval)
+   - Changes appear within 5 minutes (or your chosen interval)
    - Check the `Last Synced` column to see when it ran
    - Check the `Status` column for any errors
 
@@ -270,7 +270,7 @@ If auto-sync encounters an error:
 
 4. **Re-install trigger:**
    - Menu: `Auto-Sync → Disable Auto-Sync`
-   - Menu: `Auto-Sync → Setup Auto-Sync (Hourly)`
+   - Menu: `Auto-Sync → Setup Auto-Sync (Every 5 Minutes)`
 
 ---
 
@@ -290,12 +290,12 @@ Yes, but Google's quotas are generous:
 - **Trigger quota:** 90 minutes of runtime per day
 - **API quotas:** Admin SDK has daily limits
 
-For most NGOs, hourly sync is well within limits. If you hit limits, switch to less frequent syncs (every 4-6 hours).
+For most NGOs, a 5-minute sync cadence is well within limits. If you hit limits, switch to less frequent syncs (every 4-6 hours).
 
 ### Can I see when the next sync will run?
 
 Unfortunately, Google Apps Script doesn't expose this via the UI. But:
-- **Hourly triggers:** Run at the top of each hour
+- **5-minute trigger:** Runs approximately every five minutes
 - **Daily triggers:** Run at your specified time
 - Check the `Last Synced` column to estimate
 
@@ -326,10 +326,10 @@ You can always re-enable it later using Setup Auto-Sync.
 
 ### For NGOs with Volunteers:
 
-1. ✅ **Use hourly sync** - Volunteers see changes quickly
+1. ✅ **Use 5-minute sync** - Volunteers see changes quickly
 2. ✅ **Enable email notifications** - You get alerts on errors
 3. ✅ **Train volunteers:**
-   - "Edit the sheet, changes apply within an hour"
+   - "Edit the sheet, changes apply within 5 minutes"
    - "Check Status column if unsure"
 4. ✅ **Run Dry Run Audit weekly** - Verify everything is correct
 

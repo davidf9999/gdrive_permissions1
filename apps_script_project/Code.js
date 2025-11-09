@@ -8,6 +8,7 @@ const CONFIG_SHEET_NAME = 'Config';
 const FOLDER_AUDIT_LOG_SHEET_NAME = 'FoldersAuditLog';
 const SYNC_HISTORY_SHEET_NAME = 'SyncHistory';
 const DEFAULT_MAX_LOG_LENGTH = 10000;
+const AUTO_SYNC_CHANGE_SIGNATURE_KEY = 'AutoSyncChangeSignature';
 
 // Column mapping for the ManagedFolders sheet
 const FOLDER_NAME_COL = 1;
@@ -17,6 +18,7 @@ const GROUP_EMAIL_COL = 4;        // User-editable: manually specify for Hebrew 
 const USER_SHEET_NAME_COL = 5;    // Managed by script
 const LAST_SYNCED_COL = 6;         // Managed by script
 const STATUS_COL = 7;              // Managed by script
+const URL_COL = 8;                 // Managed by script
 
 const ADMINS_LAST_SYNC_CELL = 'B2';
 const ADMINS_STATUS_CELL = 'C2';
@@ -50,7 +52,7 @@ function onOpen() {
                 .addItem('Sync All Folders - Deletes Only', 'syncManagedFoldersDeletes')))
         .addSeparator()
         .addSubMenu(ui.createMenu('Auto-Sync')
-            .addItem('⚡ Setup Auto-Sync (Hourly)', 'setupAutoSync')
+            .addItem('⚡ Setup Auto-Sync (Every 5 Minutes)', 'setupAutoSync')
             .addItem('📅 Setup Daily Sync', 'setupDailySync')
             .addItem('⚙️ Setup Custom Interval', 'setupCustomIntervalSync')
             .addSeparator()
@@ -104,4 +106,5 @@ function onOpen() {
 
     setupControlSheets_();
     setupLogSheets_();
+    updateAutoSyncStatusIndicator_(); // Update visual indicator on open
 }

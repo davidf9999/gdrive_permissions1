@@ -85,13 +85,22 @@ function setupControlSheets_() {
   let managedSheet = ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
   if (!managedSheet) {
     managedSheet = ss.insertSheet(MANAGED_FOLDERS_SHEET_NAME, 0);
-    const headers = ['FolderName', 'FolderID', 'Role', 'GroupEmail', 'UserSheetName', 'Last Synced', 'Status'];
+    const headers = ['FolderName', 'FolderID', 'Role', 'GroupEmail', 'UserSheetName', 'Last Synced', 'Status', 'URL'];
     managedSheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
     managedSheet.setFrozenRows(1);
     log_('Created "ManagedFolders" sheet.');
   } else {
     // Migrate old column order if needed
     migrateManagedFoldersColumns_(managedSheet);
+    
+    // Ensure the URL column exists for older setups
+    const headerRange = managedSheet.getRange(1, 1, 1, managedSheet.getLastColumn());
+    const headers = headerRange.getValues()[0];
+    if (headers.indexOf('URL') === -1) {
+      const newHeaderCol = headers.length + 1;
+      managedSheet.getRange(1, newHeaderCol).setValue('URL').setFontWeight('bold');
+      log_('Added missing "URL" column to ManagedFolders sheet.');
+    }
   }
 
   // Add data validation for the Role column
