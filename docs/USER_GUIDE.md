@@ -93,7 +93,7 @@ This sheet allows you to configure advanced settings for the script. It also dis
 
 **System Information (Read-Only):**
 
-- **`AdminGroupEmail`**: Shows the email address of the administrators' Google Group (e.g., `admins-control-panel@yourdomain.com`). This is automatically updated when you run "Sync Admins" and can be used to grant admin access to any managed folder by adding this group email to the folder's user sheet.
+- **`AdminGroupEmail`**: Shows the email address of the administrators' Google Group (e.g., `admins-control-panel@yourdomain.com`). This is automatically updated when you run "Sync Admins" and can be used to grant admin access to any managed folder by adding it to that folder's user sheet.
 
 ### 6. `Log` & `TestLog`
 
@@ -112,19 +112,19 @@ Once enabled, you can view the logs in the [Google Cloud Logs Explorer](https://
 
 ---
 
-## Verifying Permissions with the Dry Run Audit
+## Verifying Permissions with the Folders Audit
 
-The script includes a powerful, read-only **Dry Run Audit** feature that lets you check for any issues or discrepancies without making any changes. It's highly recommended to run this periodically to ensure the integrity of your permissions setup.
+The script includes a powerful, read-only **Folders Audit** feature that lets you check for any issues or discrepancies without making any changes. It's highly recommended to run this periodically to ensure the integrity of your permissions setup.
 
 ### How to Run the Audit
 
-From the spreadsheet menu, select **Permissions Manager > Dry Run Audit**.
+From the spreadsheet menu, select **Permissions Manager > Folders Audit**.
 
 The script will run in the background and post its findings to a dedicated log sheet.
 
-### Understanding the `DryRunAuditLog` Sheet
+### Understanding the `FoldersAuditLog` Sheet
 
-After the audit runs, check the **`DryRunAuditLog`** sheet.
+After the audit runs, check the **`FoldersAuditLog`** sheet.
 
 *   **If the sheet is empty:** Congratulations! The audit found no problems. Your configured permissions match the actual state in Google Drive and Google Groups.
 *   **If the sheet has entries:** Each row represents a discrepancy that the audit found. Here are the common issues it can detect:
@@ -150,7 +150,7 @@ To maintain data integrity and prevent sync errors, the system automatically val
 
 Duplicate email validation happens automatically in these scenarios:
 - **During sync operations**: Before processing any folder, the script validates its user sheet
-- **During dry run audit**: Each user sheet is validated before checking group membership
+- **During folders audit**: Each user sheet is validated before checking group membership
 - **When accessing existing sheets**: If a user sheet already exists with data, it's validated before use
 
 If duplicates are found, the script will:
@@ -220,9 +220,9 @@ When you create groups or folders with non-ASCII names, you must **manually spec
 
 | Column A (GroupName) | Column B (GroupEmail) ← **Manual for Hebrew** | Column C | Column D |
 |---------------------|-----------------------------------------------|----------|----------|
-| Marketing Team      | (leave empty - auto-generates)                |          |          |
-| מתאמים              | `coordinators@jvact.org`                      |          |          |
-| פעילים              | `activists@jvact.org`                         |          |          |
+| Marketing Team      | (leave empty - auto-generates)                |          |           |
+| מתאמים              | `coordinators@jvact.org`                      |          |           |
+| פעילים              | `activists@jvact.org`                         |          |           |
 
 #### Example 2: ManagedFolders Sheet
 
@@ -275,7 +275,7 @@ Simply fill in the appropriate column with an ASCII email address and run the sy
 **When duplicates are found:**
 - Sync is blocked before any changes are made
 - Clear error message shows all duplicate locations
-- Dry Run Audit reports duplicates in the audit log
+- Folders Audit reports duplicates in the audit log
 
 **Example error:**
 ```
@@ -291,7 +291,7 @@ Each group must have a unique email address. Please fix these duplicates and try
 **How to fix:**
 1. Review the error message to see which groups/folders share the same email
 2. Update one or more of the duplicate emails to be unique
-3. Run the sync again
+3. Re-run the sync again
 
 **Note:** This validation prevents a common mistake where manually specifying the same email for multiple groups would silently cause them to share members.
 
@@ -343,7 +343,7 @@ When you no longer need to manage a folder or a group, you might remove its corr
 
 **The script does not automatically delete any resources.**
 
-Removing a row from a control sheet simply tells the script to *stop managing* that resource. The actual Google Drive folder, the Google Group, and the associated user sheet in your spreadsheet will **not** be deleted automatically. This is a critical safety feature to prevent accidental deletion of important data.
+Removing a row from a control sheet simply tells the script to *stop managing* that resource. The actual Google Drive folder, the Google Group, and the associated user sheet from your spreadsheet will **not** be deleted automatically. This is a critical safety feature to prevent accidental deletion of important data.
 
 After you have removed a folder or group from your control sheets and run a sync, you will need to manually clean up the obsolete resources if you wish to remove them completely.
 

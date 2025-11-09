@@ -35,7 +35,7 @@ The project follows a **"Stateless Enforcer"** model:
 *   **The Sheet is the Single Source of Truth:** The Google Sheet is considered the definitive record of who *should* have access.
 *   **The Script is a State Enforcer:** The script's primary role is to make the actual state of permissions in Google Drive and Google Groups match the desired state defined in the sheet. It does not have a memory of past states.
 *   **Handling Manual Changes ("Configuration Drift"):** Any manual change is considered "configuration drift." The script does not try to preserve or merge these changes. Instead, it provides tools for the administrator to detect and manage them.
-    *   **Detection:** The **`Dry Run Audit`** feature is the primary tool for detecting drift. It compares the sheet (desired state) with the live environment (actual state) and logs any discrepancies, such as `Extra Members` (manual additions) or `Missing Members` (manual removals), in the `DryRunAuditLog` sheet.
+    *   **Detection:** The **`Folders Audit`** feature is the primary tool for detecting drift. It compares the sheet (desired state) with the live environment (actual state) and logs any discrepancies, such as `Extra Members` (manual additions) or `Missing Members` (manual removals), in the `FoldersAuditLog` sheet.
     *   **Correction:** The **`Full Sync (Add & Delete)`** function acts as the correction mechanism. It will overwrite any manual changes to enforce the state defined in the sheet. For example, an "Extra Member" will be removed from the group, and a "Missing Member" will be added back.
 
 This approach prioritizes simplicity, predictability, and maintainability. The administrator is the "state interpreter" who uses the audit tool to understand drift, while the script is the simple, reliable "state enforcer."
@@ -45,20 +45,20 @@ This approach prioritizes simplicity, predictability, and maintainability. The a
 To address the limitation of the original "Stateless Enforcer" model, which was blind to permissions granted directly to folders and files (bypassing the managed Google Groups), new auditing features have been introduced.
 
 1.  **Manual Addition Auditing:**
-    *   The main **`Dry Run Audit`** function has been enhanced to discover users who have been manually added to the system, either by being added to a Google Group directly or by being granted direct access to a folder.
-    *   If it finds a user who should be in a sheet but isn't, it will log this finding in the `DryRunAuditLog` sheet with the issue type **`Manual Addition`**.
+    *   The main **`Folders Audit`** function has been enhanced to discover users who have been manually added to the system, either by being added to a Google Group directly or by being granted direct access to a folder.
+    *   If it finds a user who should be in a sheet but isn't, it will log this finding in the `FoldersAuditLog` sheet with the issue type **`Manual Addition`**.
     *   The **`Merge & Reconcile`** feature uses this exact same discovery logic to propose adding these users to the correct sheet.
 
 2.  **Role Mismatch Auditing:**
-    *   The `Dry Run Audit` now performs an additional check. For every member of a managed group, it verifies their specific permission on the associated folder.
-    *   If a user's actual permission (e.g., `Editor`) does not match the permission they are supposed to have based on the `ManagedFolders` sheet (e.g., `Viewer`), it will log this in the `DryRunAuditLog` with the issue type **`Role Mismatch`**.
+    *   The `Folders Audit` now performs an additional check. For every member of a managed group, it verifies their specific permission on the associated folder.
+    *   If a user's actual permission (e.g., `Editor`) does not match the permission they are supposed to have based on the `ManagedFolders` sheet (e.g., `Viewer`), it will log this in the `FoldersAuditLog` sheet with the issue type **`Role Mismatch`**.
     *   **Important:** This is a detection-only feature. The `Merge & Reconcile` function will **not** attempt to fix these mismatches. Correcting a role mismatch is a manual administrative task, as automatically downgrading a permission could be disruptive.
 
 3.  **Deep Audit (Files & Sub-folders):**
     *   A new, separate function called **`Deep Audit a Folder...`** has been added to the **`Advanced`** menu.
     *   This function prompts the user for the ID of a specific managed folder.
     *   It then performs a **recursive** audit of **every file and sub-folder** within that managed folder.
-    *   Any user found to have direct access to any of these items (and who is not in the official Google Group) will be logged in the `DryRunAuditLog` sheet with the issue type **`Direct File Access`**.
+    *   Any user found to have direct access to any of these items (and who is not in the official Google Group) will be logged in the `FoldersAuditLog` sheet with the issue type **`Direct File Access`**.
     *   **Performance Warning:** This is a powerful but potentially slow and API-intensive operation. It should be used sparingly and is intended for in-depth investigations of specific folders where permission drift is suspected, not for regular, broad audits.
 
 ## Refactoring Sync Logic (Add/Delete Separation)
@@ -90,7 +90,7 @@ To improve maintainability and scalability, the monolithic `Code.js` file was re
     *   `Core.gs`: The core logic for interacting with Google Drive and Google Groups.
     *   `Utils.gs`: Helper functions for logging, configuration, and other utilities.
     *   `Help.gs`: Functions for the "Help" menu.
-    *   `Audit.gs`: Contains the logic for the new Dry Run Audit feature.
+    *   `Audit.gs`: Contains the logic for the new Folders Audit feature.
     *   `Tests.gs`: All test-related functions.
 
 *   **`clasp` for Deployment:** Due to the new multi-file structure, using the `clasp` command-line tool is now the **required method** for deploying the script. The old manual copy-paste method is no longer feasible. The `README.md` has been updated with detailed instructions on how to configure and use `clasp`, including setting the `rootDir` in a `.clasp.json` file.

@@ -1,6 +1,6 @@
 /**
  * @file Audit.gs
- * @description Contains the logic for the Dry Run Audit and Deep Audit features.
+ * @description Contains the logic for the Folders Audit and Deep Audit features.
  */
 
 /**
@@ -67,15 +67,15 @@ function validateUserSheets_() {
 }
 
 /**
- * Performs a dry run audit by discovering all manual additions and logging them.
+ * Performs a folders audit by discovering all manual additions and logging them.
  */
-function folderAudit() {
+function foldersAudit() {
   const ui = SpreadsheetApp.getUi();
   try {
-    log_('*** Starting Dry Run Audit...');
-const auditSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(FOLDER_AUDIT_LOG_SHEET_NAME);
+    log_('*** Starting Folders Audit...');
+    const auditSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(FOLDER_AUDIT_LOG_SHEET_NAME);
     if (!auditSheet) {
-      throw new Error('FolderAuditLog sheet not found. Please run the setup again.');
+      throw new Error('FoldersAuditLog sheet not found. Please run the setup again.');
     }
     auditSheet.getRange(2, 1, auditSheet.getMaxRows() - 1, 5).clearContent();
 
@@ -102,15 +102,15 @@ const auditSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(FOLDER_A
     auditMemberRolesOnFolders_();
 
     if (discoveryReport.length === 0) {
-      log_('Dry Run Audit found no manual additions to groups or folders.');
+      log_('Folders Audit found no manual additions to groups or folders.');
     }
 
-    log_('*** Dry Run Audit Complete.');
-    showToast_('Dry Run Audit Complete.', 'Audit', 5);
-    ui.alert('Folder Audit is complete. See the \'FolderAuditLog\' sheet for details.');
+    log_('*** Folders Audit Complete.');
+    showToast_('Folders Audit Complete.', 'Audit', 5);
+    ui.alert('Folders Audit is complete. See the \'FoldersAuditLog\' sheet for details.');
 
   } catch (e) {
-    log_('FATAL ERROR in folderAudit: ' + e.toString() + '\n' + e.stack, 'ERROR');
+    log_('FATAL ERROR in foldersAudit: ' + e.toString() + '\n' + e.stack, 'ERROR');
     showToast_('Audit failed with a fatal error.', 'Audit', 5);
     ui.alert('A fatal error occurred during the audit: ' + e.message);
     sendErrorNotification_(e.toString());
@@ -168,7 +168,7 @@ function auditMemberRolesOnFolders_() {
       });
 
     } catch (e) {
-      logAndAudit_('Folder Audit', folderName, 'Folder Not Found or Access Error', 'Could not access folder with ID: ' + folderId + ' or its members. Error: ' + e.message);
+      logAndAudit_('Folders Audit', folderName, 'Folder Not Found or Access Error', 'Could not access folder with ID: ' + folderId + ' or its members. Error: ' + e.message);
     }
   });
 }
@@ -335,20 +335,20 @@ function logAndAudit_(type, identifier, issue, details) {
 /**
  * Clears all content from the FolderAuditLog sheet.
  */
-function clearFolderAuditLog() {
+function clearFoldersAuditLog() {
   const ui = SpreadsheetApp.getUi();
   try {
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(FOLDER_AUDIT_LOG_SHEET_NAME);
     if (sheet) {
       sheet.clear();
       setupFolderAuditLogSheet_(sheet); // Re-add header
-      log_('FolderAuditLog sheet has been cleared.');
-      ui.alert('The Dry Run Audit Log has been cleared.');
+      log_('FoldersAuditLog sheet has been cleared.');
+      ui.alert('The Folders Audit Log has been cleared.');
     } else {
-      ui.alert('FolderAuditLog sheet not found.');
+      ui.alert('FoldersAuditLog sheet not found.');
     }
   } catch (e) {
-    log_('Error clearing FolderAuditLog sheet: ' + e.toString(), 'ERROR');
+    log_('Error clearing FoldersAuditLog sheet: ' + e.toString(), 'ERROR');
     ui.alert('An error occurred while clearing the audit log: ' + e.message);
   }
 }

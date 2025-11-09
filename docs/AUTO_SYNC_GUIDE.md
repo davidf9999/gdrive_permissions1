@@ -331,7 +331,7 @@ You can always re-enable it later using Setup Auto-Sync.
 3. ✅ **Train volunteers:**
    - "Edit the sheet, changes apply within 5 minutes"
    - "Check Status column if unsure"
-4. ✅ **Run Dry Run Audit weekly** - Verify everything is correct
+4. ✅ **Run Folders Audit weekly** - Verify everything is correct
 
 ### For Production Use:
 

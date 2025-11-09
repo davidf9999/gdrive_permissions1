@@ -68,7 +68,7 @@ function onOpen() {
                 .addItem('📊 View Edit Mode Status', 'viewEditModeStatus')))
         .addSeparator()
         .addSubMenu(ui.createMenu('Audits')
-            .addItem('Folder Audit', 'folderAudit').addItem('Deep Folder Audit', 'deepAuditFolder'))
+            .addItem('Folders Audit', 'foldersAudit').addItem('Deep Folder Audit', 'deepAuditFolder'))
         .addSeparator()
         .addSubMenu(ui.createMenu('Testing') // Use ui here
             .addItem('Run All Tests', 'runAllTests')

@@ -198,7 +198,7 @@ Edit Mode uses **Document Properties** to store state:
 
 3. Review your changes:
    └─> Read through everything
-   └─> Run Dry Run Audit if desired
+   └─> Run Folders Audit if desired
    └─> Maybe test with manual sync on one folder
 
 4. Exit Edit Mode
