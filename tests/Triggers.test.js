@@ -6,6 +6,7 @@ describe('detectAutoSyncChanges_', () => {
   let spreadsheet;
   let managedSheet;
   let folderUpdates;
+  let spreadsheetLastUpdated;
 
   beforeAll(() => {
     let codeJsContent = fs.readFileSync(path.resolve(__dirname, '../apps_script_project/Code.js'), 'utf8');
@@ -20,6 +21,7 @@ describe('detectAutoSyncChanges_', () => {
   beforeEach(() => {
     storedSnapshot = null;
     folderUpdates = {};
+    spreadsheetLastUpdated = new Date('2024-01-01T00:00:00Z');
 
     managedSheet = {
       getLastRow: jest.fn(() => 2),
@@ -30,17 +32,25 @@ describe('detectAutoSyncChanges_', () => {
 
     spreadsheet = {
       getLastUpdated: jest.fn(() => new Date('2024-01-01T00:00:00Z')),
-      getSheetByName: jest.fn(name => (name === MANAGED_FOLDERS_SHEET_NAME ? managedSheet : null))
+      getSheetByName: jest.fn(name => (name === MANAGED_FOLDERS_SHEET_NAME ? managedSheet : null)),
+      getId: jest.fn(() => 'spreadsheet-id')
     };
 
     global.SpreadsheetApp = {
       getActiveSpreadsheet: jest.fn(() => spreadsheet)
     };
 
+    global.log_ = jest.fn();
+
+    const spreadsheetFile = {
+      getLastUpdated: jest.fn(() => spreadsheetLastUpdated)
+    };
+
     global.DriveApp = {
       getFolderById: jest.fn(id => ({
         getLastUpdated: jest.fn(() => new Date(folderUpdates[id] || '2024-01-01T00:00:00Z'))
-      }))
+      })),
+      getFileById: jest.fn(() => spreadsheetFile)
     };
 
     global.PropertiesService = {
@@ -97,6 +107,27 @@ describe('detectAutoSyncChanges_', () => {
       expect.arrayContaining([
         'Folder folder-1 modified at 2024-01-01T00:05:00.000Z.'
       ])
+    );
+  });
+  it('forces a run when spreadsheet last updated timestamp cannot be retrieved', () => {
+    const previousSnapshot = {
+      spreadsheetLastUpdated: new Date('2024-01-01T00:00:00Z').getTime(),
+      folderStates: { 'folder-1': new Date('2024-01-01T00:00:00Z').getTime() },
+      capturedAt: '2024-01-01T00:00:00Z'
+    };
+    storedSnapshot = JSON.stringify(previousSnapshot);
+
+    DriveApp.getFileById.mockImplementation(() => ({
+      getLastUpdated: jest.fn(() => {
+        throw new Error('boom');
+      })
+    }));
+
+    const result = detectAutoSyncChanges_();
+
+    expect(result.shouldRun).toBe(true);
+    expect(result.reasons).toEqual(
+      expect.arrayContaining(['Unable to confirm control spreadsheet last-updated timestamp.'])
     );
   });
 });

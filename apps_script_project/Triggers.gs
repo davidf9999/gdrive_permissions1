@@ -123,10 +123,11 @@ function autoSync(e) {
 
     const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
     const spreadsheetId = spreadsheet.getId();
+    const spreadsheetFile = DriveApp.getFileById(spreadsheetId);
 
     // Check file size first
     const maxFileSizeMB = getConfigValue_('MaxFileSizeMB', 100);
-    const fileSize = DriveApp.getFileById(spreadsheetId).getSize();
+    const fileSize = spreadsheetFile.getSize();
     const fileSizeMB = fileSize / (1024 * 1024);
 
     if (fileSizeMB > maxFileSizeMB) {
@@ -200,7 +201,7 @@ function autoSync(e) {
 
     if (detectionSnapshot) {
       try {
-        const finalLastUpdated = spreadsheet.getLastUpdated();
+        const finalLastUpdated = spreadsheetFile.getLastUpdated();
         if (finalLastUpdated) {
           detectionSnapshot.spreadsheetLastUpdated = finalLastUpdated.getTime();
         }
@@ -286,7 +287,16 @@ function detectAutoSyncChanges_() {
   }
 
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  const spreadsheetLastUpdated = spreadsheet.getLastUpdated();
+  let spreadsheetLastUpdated = null;
+  try {
+    const spreadsheetFile = DriveApp.getFileById(spreadsheet.getId());
+    const lastUpdated = spreadsheetFile && spreadsheetFile.getLastUpdated ? spreadsheetFile.getLastUpdated() : null;
+    if (lastUpdated instanceof Date) {
+      spreadsheetLastUpdated = lastUpdated;
+    }
+  } catch (e) {
+    log_('Change detection: unable to read spreadsheet last updated timestamp: ' + e.message, 'WARN');
+  }
 
   const folderStates = {};
   const folderIds = new Set();
@@ -337,6 +347,9 @@ function detectAutoSyncChanges_() {
       shouldRun = true;
       reasons.push('Control spreadsheet updated at ' + spreadsheetLastUpdated.toISOString() + '.');
     }
+  } else if (previousSnapshot) {
+    shouldRun = true;
+    reasons.push('Unable to confirm control spreadsheet last-updated timestamp.');
   }
 
   folderIds.forEach(id => {
