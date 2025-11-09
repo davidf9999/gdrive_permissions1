@@ -22,9 +22,23 @@ function processManagedFolders_(options = {}) {
       return returnPlanOnly ? [] : totalSummary;
   }
 
-  // Iterate through all possible rows, processRow_ will handle skipping empty ones.
-  for (let i = 2; i <= lastRow; i++) {
-    const rowIndex = i;
+  // Get all folder data at once
+  const allFolderData = sheet.getRange(2, 1, lastRow - 1, FOLDER_NAME_COL).getValues();
+
+  for (let i = 0; i < allFolderData.length; i++) {
+    const rowIndex = i + 2;
+    const folderName = allFolderData[i][FOLDER_NAME_COL - 1];
+
+    // If running in silent mode (auto-sync), skip test folders.
+    if (silentMode) {
+      const testConfig = getTestConfiguration_();
+      const manualTestFolderName = testConfig.folderName;
+      if (folderName.startsWith('StressTestFolder_') || folderName === manualTestFolderName) {
+        log_(`Auto-sync skipping test folder: "${folderName}"`, 'INFO');
+        continue; // Skip this row entirely
+      }
+    }
+
     if (!returnPlanOnly && !silentMode) showToast_('Processing row ' + rowIndex + ' of ' + lastRow + '...', 'Sync Progress', 10);
     try {
       const result = processRow_(rowIndex, options);
