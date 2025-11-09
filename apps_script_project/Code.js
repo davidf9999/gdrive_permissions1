@@ -56,7 +56,7 @@ function onOpen() {
             .addItem('📅 Setup Daily Sync', 'setupDailySync')
             .addItem('⚙️ Setup Custom Interval', 'setupCustomIntervalSync')
             .addSeparator()
-            .addItem('▶️ Run Manual Sync Now', 'manualSync')
+            .addItem('▶️ Run Auto-Sync Now', 'runAutoSyncNow')
             .addSeparator()
             .addItem('📊 View Trigger Status', 'viewTriggerStatus')
             .addItem('🛑 Disable Auto-Sync', 'removeAutoSync')

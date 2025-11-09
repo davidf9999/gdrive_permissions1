@@ -547,7 +547,7 @@ function setupCustomIntervalSync() {
 /**
  * Menu item for admins to manually trigger a sync (still useful for immediate updates)
  */
-function manualSync() {
+function runAutoSyncNow() {
   const ui = SpreadsheetApp.getUi();
   const response = ui.alert(
     'Manual Sync',
