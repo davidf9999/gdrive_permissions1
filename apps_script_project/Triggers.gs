@@ -23,6 +23,7 @@ function setupAutoSync() {
     .create();
 
   log_('Auto-sync trigger installed. Will run every 5 minutes.', 'INFO');
+  updateAutoSyncStatusIndicator_(); // Update visual indicator
   SpreadsheetApp.getUi().alert(
     'Auto-Sync Enabled',
     'The script will now automatically sync every 5 minutes. ' +
@@ -48,8 +49,10 @@ function removeAutoSync() {
 
   if (removedCount > 0) {
     log_('Removed ' + removedCount + ' auto-sync trigger(s).', 'INFO');
+    updateAutoSyncStatusIndicator_(); // Update visual indicator
     SpreadsheetApp.getUi().alert('Auto-sync triggers removed.');
   } else {
+    updateAutoSyncStatusIndicator_(); // Ensure status is correct even if no triggers were found
     SpreadsheetApp.getUi().alert('No auto-sync triggers were found.');
   }
 }
@@ -102,10 +105,6 @@ function autoSync(e) {
     }
 
     if (silentMode && changeDetection && !changeDetection.shouldRun) {
-      const lastRecordedHash = changeDetection.snapshot && changeDetection.snapshot.dataHash
-        ? changeDetection.snapshot.dataHash.substring(0, 10)
-        : 'unknown';
-      log_('Auto-sync skipped: no relevant changes detected since last run. Last data hash: ' + lastRecordedHash + '...', 'INFO');
       return;
     }
 
@@ -785,5 +784,36 @@ function onEdit(e) {
       const disabledColumnRange = sheet.getRange(2, disabledCol, lastRow - 1, 1);
       disabledColumnRange.setValue(headerCheckboxValue);
     }
+  }
+}
+
+/**
+ * Gets the current status of the auto-sync feature.
+ * @returns {{isEnabled: boolean, status: string}} An object with the enabled status and a descriptive string.
+ */
+function getAutoSyncStatus_() {
+  const triggers = ScriptApp.getProjectTriggers();
+  const hasTrigger = triggers.some(t => t.getHandlerFunction() === 'autoSync');
+  const isEnabledInConfig = isAutoSyncEnabled_();
+
+  if (hasTrigger && isEnabledInConfig) {
+    return { isEnabled: true, status: 'ENABLED ✅' };
+  } else if (hasTrigger && !isEnabledInConfig) {
+    return { isEnabled: false, status: 'PAUSED (Enabled in script, but disabled in Config sheet) ⏸️' };
+  } else {
+    return { isEnabled: false, status: 'DISABLED ❌' };
+  }
+}
+
+/**
+ * Updates the visual auto-sync status indicator in the Config sheet.
+ */
+function updateAutoSyncStatusIndicator_() {
+  try {
+    const status = getAutoSyncStatus_();
+    updateConfigSetting_('AutoSyncStatus', status.status);
+  } catch (e) {
+    // This is a non-critical UI feature, so don't throw an error, just log it.
+    log_('Could not update Auto-Sync status indicator: ' + e.message, 'WARN');
   }
 }

@@ -105,4 +105,5 @@ function onOpen() {
 
     setupControlSheets_();
     setupLogSheets_();
+    updateAutoSyncStatusIndicator_(); // Update visual indicator on open
 }
