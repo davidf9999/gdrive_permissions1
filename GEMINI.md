@@ -179,3 +179,11 @@ To eliminate confusion and provide a more intuitive user experience, the control
     *   **Default State:** The default value for `EnableAutoSync` in the `Config` sheet has been changed to `FALSE`. This means auto-sync is now off by default, requiring explicit user action to enable it, which is a safer initial state.
 
 This change makes the `EnableAutoSync` setting in the `Config` sheet the single, clear source of truth for whether the auto-sync is active, removing any ambiguity.
+
+### Bulk User Enable/Disable with Confirmation
+
+To improve usability and prevent accidental bulk changes, a confirmation dialog has been added to the bulk enable/disable feature.
+
+*   **How it works:** In any user sheet (any sheet ending in `_G`) or in the `Admins` sheet, clicking the checkbox in the header row of the "Disabled" column will now trigger a pop-up confirmation dialog.
+*   **Confirmation:** The dialog will ask you to confirm that you want to enable or disable all users in that sheet.
+*   **Safety:** If you confirm, the bulk update will proceed. If you cancel, the header checkbox will be reverted to its original state, and no changes will be made. This provides a crucial safety check against accidental clicks.

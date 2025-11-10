@@ -789,8 +789,21 @@ function onEdit(e) {
     const headerCheckboxValue = range.getValue();
     const lastRow = sheet.getLastRow();
     if (lastRow > 1) {
-      const disabledColumnRange = sheet.getRange(2, disabledCol, lastRow - 1, 1);
-      disabledColumnRange.setValue(headerCheckboxValue);
+      const ui = SpreadsheetApp.getUi();
+      const action = headerCheckboxValue ? 'disable' : 'enable';
+      const response = ui.alert(
+        `Confirm Bulk Update`,
+        `Are you sure you want to ${action} all users in the "${sheetName}" sheet?`,
+        ui.ButtonSet.YES_NO
+      );
+
+      if (response === ui.Button.YES) {
+        const disabledColumnRange = sheet.getRange(2, disabledCol, lastRow - 1, 1);
+        disabledColumnRange.setValue(headerCheckboxValue);
+      } else {
+        // If user cancels, revert the checkbox
+        range.setValue(!headerCheckboxValue);
+      }
     }
   }
 }
