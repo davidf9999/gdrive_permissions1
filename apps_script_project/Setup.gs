@@ -244,7 +244,6 @@ function setupControlSheets_() {
         }
     }
     configSheet.getRange(2, 1, newSettings.length, 3).setValues(newSettings);
-    log_('Re-organized and updated "Config" sheet.');
   }
 }
 
