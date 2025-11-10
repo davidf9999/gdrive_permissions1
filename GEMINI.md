@@ -1,5 +1,7 @@
 # Project Evolution Summary
 
+**Guideline:** If you apply any code change, first create a dedicated branch for it.
+
 This document summarizes the debugging process and final architecture of the Google Drive Permission Manager project.
 
 ## Initial Problem
