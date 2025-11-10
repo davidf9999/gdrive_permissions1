@@ -131,3 +131,18 @@ A persistent and difficult-to-diagnose bug was encountered where the script woul
 *   **Initial Attempts:** Several attempts were made to fix the issue, including simplifying the `log_` function and temporarily disabling the log trimming feature.
 *   **Final Workaround:** The root cause appears to be related to how the `appendRow` method behaves in the user's specific environment. The final, successful workaround was to replace `logSheet.appendRow(...)` with `logSheet.getRange(...).setValues(...)` in the `log_` function in `Utils.gs`.
 *   **Log Trimming:** As part of the debugging process, the log trimming feature in the `log_` function was temporarily disabled. This feature is important for long-term stability and **needs to be re-implemented** in a more robust and efficient way.
+
+### Jest Test Suite Repair (November 2025)
+
+A series of failures in the `npm test` command, which runs the Jest test suite, were diagnosed and fixed. The root cause was a fragile test environment setup where test files were not loading all their required dependencies from other `.gs` files, leading to `ReferenceError`s.
+
+*   **The Fix:** The test setup for `Triggers.test.js` was refactored to load all required code files (`Code.js`, `Utils.gs`, `Core.gs`, `Triggers.gs`) into the global scope before the tests run. This involved creating a helper function to correctly transform Apps Script `function` and `const` declarations into properties of the `global` object for the Node.js environment.
+*   **Mocking Updates:** Mocks for the `Utilities` service and for sheet data access (`getValues`) were updated to match the current state of the code, resolving assertion failures.
+
+### Auto-Sync and Performance Improvements
+
+Several improvements were made to the auto-sync feature and overall script performance.
+
+*   **Auto-Sync Robustness:** The auto-sync feature was failing when it encountered test data (e.g., folders named `StressTestFolder_...`). The core sync logic in `Core.gs` was updated to detect when it's running in auto-sync mode and to automatically skip any rows in `ManagedFolders` that correspond to test data, preventing errors.
+*   **Adaptive Group Propagation Wait:** A fixed 60-second `Utilities.sleep()` was removed from the group creation logic. The script now relies on the existing exponential backoff retry loop in the `setFolderPermission_` function. This makes the sync process more efficient, as it only waits as long as necessary for a new Google Group's email to become active, rather than always waiting a full minute.
+*   **UI and Naming Standardization:** The "Dry Run Audit" feature was renamed to "Folders Audit" across the entire codebase, including all UI text, log messages, and documentation, to improve clarity and consistency.
