@@ -132,7 +132,7 @@ function setupControlSheets_() {
 
     // Set the new headers
     adminSheet.getRange(1, 1, 1, adminHeaders.length).setValues([adminHeaders]).setFontWeight('bold');
-    adminSheet.getRange('D1').clearDataValidations();
+    adminSheet.getRange('D1').clearDataValidations().clearNote();
     adminSheet.setFrozenRows(1);
   }
   
