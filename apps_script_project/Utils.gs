@@ -616,6 +616,37 @@ function getAdminEmails_() {
   return [...new Set(adminEmails)]; // Return unique emails
 }
 
+function lockSheetForEdits_(sheet) {
+  if (!sheet) return;
+  try {
+    const protection = sheet.protect().setDescription('Locked for script execution');
+    const me = Session.getEffectiveUser();
+    protection.addEditor(me);
+    protection.removeEditors(protection.getEditors().filter(editor => editor.getEmail() !== me.getEmail()));
+    if (protection.canDomainEdit()) {
+      protection.setDomainEdit(false);
+    }
+    log_(`Sheet "${sheet.getName()}" locked for sync.`, 'INFO');
+  } catch (e) {
+    log_(`Could not lock sheet "${sheet.getName()}": ${e.message}`, 'WARN');
+  }
+}
+
+function unlockSheetForEdits_(sheet) {
+  if (!sheet) return;
+  try {
+    const protections = sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET);
+    protections.forEach(protection => {
+      if (protection.getDescription() === 'Locked for script execution') {
+        protection.remove();
+        log_(`Sheet "${sheet.getName()}" unlocked.`, 'INFO');
+      }
+    });
+  } catch (e) {
+    log_(`Could not unlock sheet "${sheet.getName()}": ${e.message}`, 'WARN');
+  }
+}
+
 function isGroup_(email) {
   try {
     AdminDirectory.Groups.get(email);

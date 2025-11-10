@@ -327,8 +327,10 @@ function syncAdds(options = {}) {
   }
 
   const totalSummary = { added: 0, removed: 0, failed: 0 };
+  const allManagedSheets = getAllManagedSheets_();
 
   try {
+    allManagedSheets.forEach(sheet => lockSheetForEdits_(sheet));
     if (!silentMode) showToast_('Starting non-destructive sync (adds only)...', 'Sync Adds', -1);
     showSyncInProgress_();
     log_('*** Starting non-destructive synchronization (adds only)...');
@@ -372,6 +374,7 @@ function syncAdds(options = {}) {
     if (!silentMode) SpreadsheetApp.getUi().alert('A fatal error occurred during add-only sync: ' + e.message);
     sendErrorNotification_(errorMessage);
   } finally {
+    allManagedSheets.forEach(sheet => unlockSheetForEdits_(sheet));
     lock.releaseLock();
     hideSyncInProgress_();
   }
@@ -456,8 +459,10 @@ function syncDeletes() {
   }
 
   const totalSummary = { added: 0, removed: 0, failed: 0 };
+  const allManagedSheets = getAllManagedSheets_();
 
   try {
+    allManagedSheets.forEach(sheet => lockSheetForEdits_(sheet));
     showToast_('Starting destructive sync (deletes only)...', 'Sync Deletes', -1);
     showSyncInProgress_();
     log_('*** Starting destructive synchronization (deletes only)...');
@@ -488,6 +493,7 @@ function syncDeletes() {
     ui.alert('A fatal error occurred during delete-only sync: ' + e.message);
     sendErrorNotification_(errorMessage);
   } finally {
+    allManagedSheets.forEach(sheet => unlockSheetForEdits_(sheet));
     lock.releaseLock();
     hideSyncInProgress_();
   }
@@ -505,8 +511,10 @@ function fullSync(options = {}) {
 
   const totalSummary = { added: 0, removed: 0, failed: 0 };
   const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const allManagedSheets = getAllManagedSheets_();
 
   try {
+    allManagedSheets.forEach(sheet => lockSheetForEdits_(sheet));
     if (!silentMode) showToast_('Starting full synchronization...', 'Full Sync', -1);
     showSyncInProgress_();
     log_('*** Starting full synchronization...');
@@ -577,6 +585,7 @@ function fullSync(options = {}) {
     if (!silentMode) SpreadsheetApp.getUi().alert('A fatal error occurred: ' + e.message);
     sendErrorNotification_(errorMessage);
   } finally {
+    allManagedSheets.forEach(sheet => unlockSheetForEdits_(sheet));
     lock.releaseLock();
     hideSyncInProgress_();
   }
@@ -590,7 +599,10 @@ function syncManagedFoldersAdds() {
     return;
   }
 
+  const allManagedSheets = getAllManagedSheets_();
+
   try {
+    allManagedSheets.forEach(sheet => lockSheetForEdits_(sheet));
     showToast_('Starting folder-only sync (adds only)...', 'Sync Folders - Adds', -1);
     showSyncInProgress_();
     log_('*** Starting Managed Folders only synchronization (adds only)...');
@@ -609,6 +621,7 @@ function syncManagedFoldersAdds() {
     SpreadsheetApp.getUi().alert('A fatal error occurred during folder-only sync (adds): ' + e.message);
     sendErrorNotification_(errorMessage);
   } finally {
+    allManagedSheets.forEach(sheet => unlockSheetForEdits_(sheet));
     lock.releaseLock();
     hideSyncInProgress_();
   }
@@ -694,7 +707,10 @@ function syncManagedFoldersDeletes() {
     return;
   }
 
+  const allManagedSheets = getAllManagedSheets_();
+
   try {
+    allManagedSheets.forEach(sheet => lockSheetForEdits_(sheet));
     showToast_('Starting folder-only sync (deletes only)...', 'Sync Folders - Deletes', -1);
     showSyncInProgress_();
     log_('*** Starting Managed Folders only synchronization (deletes only)...');
@@ -713,7 +729,38 @@ function syncManagedFoldersDeletes() {
     ui.alert('A fatal error occurred during folder-only sync (deletes): ' + e.message);
     sendErrorNotification_(errorMessage);
   } finally {
+    allManagedSheets.forEach(sheet => unlockSheetForEdits_(sheet));
     lock.releaseLock();
     hideSyncInProgress_();
   }
+}
+
+function getAllManagedSheets_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheets = new Set();
+
+  // Add main control sheets
+  sheets.add(ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME));
+  sheets.add(ss.getSheetByName(USER_GROUPS_SHEET_NAME));
+  sheets.add(ss.getSheetByName(ADMINS_SHEET_NAME));
+
+  // Add user sheets from ManagedFolders
+  const managedFoldersSheet = ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+  if (managedFoldersSheet && managedFoldersSheet.getLastRow() > 1) {
+    const userSheetNames = managedFoldersSheet.getRange(2, USER_SHEET_NAME_COL, managedFoldersSheet.getLastRow() - 1, 1).getValues().flat();
+    userSheetNames.forEach(name => {
+      if (name) sheets.add(ss.getSheetByName(name));
+    });
+  }
+
+  // Add user sheets from UserGroups
+  const userGroupsSheet = ss.getSheetByName(USER_GROUPS_SHEET_NAME);
+  if (userGroupsSheet && userGroupsSheet.getLastRow() > 1) {
+    const groupNames = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 1).getValues().flat();
+    groupNames.forEach(name => {
+      if (name) sheets.add(ss.getSheetByName(name + '_G'));
+    });
+  }
+
+  return Array.from(sheets).filter(Boolean); // Return a filtered array of sheet objects
 }
