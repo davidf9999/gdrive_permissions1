@@ -362,6 +362,14 @@ function getOrCreateUserSheet_(sheetName) {
       .build();
     disabledRange.setDataValidation(rule);
 
+    // Add checkbox to the header as well
+    const headerDisabledCell = sheet.getRange('B1');
+    const headerRule = headerDisabledCell.getDataValidation();
+    if (!headerRule || headerRule.getCriteriaType() !== SpreadsheetApp.DataValidationCriteria.CHECKBOX) {
+        const rule = SpreadsheetApp.newDataValidation().requireCheckbox().build();
+        headerDisabledCell.setDataValidation(rule);
+    }
+
     log_('Successfully created user sheet: "' + sheetName + '"');
     return sheet;
   }
@@ -399,6 +407,13 @@ function ensureUserSheetHeaders_(sheet) {
         .requireCheckbox()
         .build();
       disabledRange.setDataValidation(rule);
+    }
+    // Add checkbox to the header as well
+    const headerDisabledCell = sheet.getRange('B1');
+    const headerRule = headerDisabledCell.getDataValidation();
+    if (!headerRule || headerRule.getCriteriaType() !== SpreadsheetApp.DataValidationCriteria.CHECKBOX) {
+        const rule = SpreadsheetApp.newDataValidation().requireCheckbox().build();
+        headerDisabledCell.setDataValidation(rule);
     }
   } catch (e) {
     log_('Failed to ensure headers for sheet "' + sheet.getName() + '": ' + e.toString(), 'WARN');
