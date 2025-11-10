@@ -176,5 +176,6 @@ To eliminate confusion and provide a more intuitive user experience, the control
 *   **The Solution:** The menu items and the `Config` sheet setting are now synchronized.
     *   Running **"Setup Auto-Sync"** from the menu will now automatically set `EnableAutoSync` to `TRUE` in the `Config` sheet, in addition to creating the time-based trigger.
     *   Running **"Disable Auto-Sync"** from the menu will now automatically set `EnableAutoSync` to `FALSE` in the `Config` sheet, in addition to deleting the time-based trigger.
+    *   **Default State:** The default value for `EnableAutoSync` in the `Config` sheet has been changed to `FALSE`. This means auto-sync is now off by default, requiring explicit user action to enable it, which is a safer initial state.
 
 This change makes the `EnableAutoSync` setting in the `Config` sheet the single, clear source of truth for whether the auto-sync is active, removing any ambiguity.
