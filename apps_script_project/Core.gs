@@ -364,6 +364,7 @@ function getOrCreateUserSheet_(sheetName) {
 
     // Add checkbox to the header as well
     const headerDisabledCell = sheet.getRange('B1');
+    headerDisabledCell.clearContent();
     const headerRule = headerDisabledCell.getDataValidation();
     if (!headerRule || headerRule.getCriteriaType() !== SpreadsheetApp.DataValidationCriteria.CHECKBOX) {
         const rule = SpreadsheetApp.newDataValidation().requireCheckbox().build();
@@ -410,6 +411,7 @@ function ensureUserSheetHeaders_(sheet) {
     }
     // Add checkbox to the header as well
     const headerDisabledCell = sheet.getRange('B1');
+    headerDisabledCell.clearContent();
     const headerRule = headerDisabledCell.getDataValidation();
     if (!headerRule || headerRule.getCriteriaType() !== SpreadsheetApp.DataValidationCriteria.CHECKBOX) {
         const rule = SpreadsheetApp.newDataValidation().requireCheckbox().build();

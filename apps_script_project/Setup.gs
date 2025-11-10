@@ -144,6 +144,7 @@ function setupControlSheets_() {
   }
   // Add checkbox to the header as well
   const adminHeaderDisabledCell = adminSheet.getRange('D1');
+  adminHeaderDisabledCell.clearContent();
   const adminHeaderRule = adminHeaderDisabledCell.getDataValidation();
   if (!adminHeaderRule || adminHeaderRule.getCriteriaType() !== SpreadsheetApp.DataValidationCriteria.CHECKBOX) {
     const rule = SpreadsheetApp.newDataValidation().requireCheckbox().build();

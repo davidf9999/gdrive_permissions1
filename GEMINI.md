@@ -186,5 +186,6 @@ To improve usability and prevent accidental bulk changes, a confirmation dialog 
 
 *   **How it works:** In any user sheet (any sheet ending in `_G`) or in the `Admins` sheet, clicking the checkbox in the header row of the "Disabled" column will now trigger a pop-up confirmation dialog.
 *   **Header Checkbox:** The script now programmatically adds a checkbox to the header of the "Disabled" column in both the `Admins` sheet and all user group sheets (`_G` sheets). This ensures the UI for this feature is always present.
+*   **Validation Fix:** A bug was fixed where applying the checkbox validation to a header cell that already contained the text "Disabled" would cause an "Invalid" error. The script now clears the header cell's content *before* applying the checkbox rule, which prevents this conflict and ensures the checkbox appears correctly.
 *   **Confirmation:** The dialog will ask you to confirm that you want to enable or disable all users in that sheet.
 *   **Safety:** If you confirm, the bulk update will proceed. If you cancel, the header checkbox will be reverted to its original state, and no changes will be made. This provides a crucial safety check against accidental clicks.
