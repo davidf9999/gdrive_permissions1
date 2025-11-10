@@ -142,15 +142,6 @@ function setupControlSheets_() {
     const rule = SpreadsheetApp.newDataValidation().requireCheckbox().build();
     adminDisabledRange.setDataValidation(rule);
   }
-  // Add checkbox to the header as well
-  const adminHeaderDisabledCell = adminSheet.getRange('D1');
-  adminHeaderDisabledCell.clearContent();
-  const adminHeaderRule = adminHeaderDisabledCell.getDataValidation();
-  if (!adminHeaderRule || adminHeaderRule.getCriteriaType() !== SpreadsheetApp.DataValidationCriteria.CHECKBOX) {
-    const rule = SpreadsheetApp.newDataValidation().requireCheckbox().build();
-    adminHeaderDisabledCell.setDataValidation(rule);
-  }
-  adminHeaderDisabledCell.setNote('Click to bulk enable/disable all admins.');
 
     // Check for UserGroups sheet
   let userGroupsSheet = ss.getSheetByName(USER_GROUPS_SHEET_NAME);

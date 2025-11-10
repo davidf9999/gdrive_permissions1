@@ -362,16 +362,6 @@ function getOrCreateUserSheet_(sheetName) {
       .build();
     disabledRange.setDataValidation(rule);
 
-    // Add checkbox to the header as well
-    const headerDisabledCell = sheet.getRange('B1');
-    headerDisabledCell.clearContent();
-    const headerRule = headerDisabledCell.getDataValidation();
-    if (!headerRule || headerRule.getCriteriaType() !== SpreadsheetApp.DataValidationCriteria.CHECKBOX) {
-        const rule = SpreadsheetApp.newDataValidation().requireCheckbox().build();
-        headerDisabledCell.setDataValidation(rule);
-    }
-    headerDisabledCell.setNote('Click to bulk enable/disable all users.');
-
     log_('Successfully created user sheet: "' + sheetName + '"');
     return sheet;
   }
@@ -410,15 +400,6 @@ function ensureUserSheetHeaders_(sheet) {
         .build();
       disabledRange.setDataValidation(rule);
     }
-    // Add checkbox to the header as well
-    const headerDisabledCell = sheet.getRange('B1');
-    headerDisabledCell.clearContent();
-    const headerRule = headerDisabledCell.getDataValidation();
-    if (!headerRule || headerRule.getCriteriaType() !== SpreadsheetApp.DataValidationCriteria.CHECKBOX) {
-        const rule = SpreadsheetApp.newDataValidation().requireCheckbox().build();
-        headerDisabledCell.setDataValidation(rule);
-    }
-    headerDisabledCell.setNote('Click to bulk enable/disable all users.');
   } catch (e) {
     log_('Failed to ensure headers for sheet "' + sheet.getName() + '": ' + e.toString(), 'WARN');
   }

@@ -768,48 +768,7 @@ function getConfigValue_(key, defaultValue) {
   }
 }
 
-function onEdit(e) {
-  const range = e.range;
-  const sheet = range.getSheet();
-  const sheetName = sheet.getName();
-  const row = range.getRow();
-  const col = range.getColumn();
 
-  let disabledCol;
-  const allManagedSheetNames = getAllManagedSheetNames_();
-
-  if (sheetName === ADMINS_SHEET_NAME) {
-    disabledCol = 4;
-  } else if (allManagedSheetNames.has(sheetName)) {
-    disabledCol = 2;
-  }
-  else {
-    return; // Not a sheet we care about
-  }
-
-  // Check if the edited cell is the header of the "Disabled" column
-  if (row === 1 && col === disabledCol) {
-    const headerCheckboxValue = range.getValue();
-    const lastRow = sheet.getLastRow();
-    if (lastRow > 1) {
-      const ui = SpreadsheetApp.getUi();
-      const action = headerCheckboxValue ? 'disable' : 'enable';
-      const response = ui.alert(
-        `Confirm Bulk Update`,
-        `Are you sure you want to ${action} all users in the "${sheetName}" sheet?`,
-        ui.ButtonSet.YES_NO
-      );
-
-      if (response === ui.Button.YES) {
-        const disabledColumnRange = sheet.getRange(2, disabledCol, lastRow - 1, 1);
-        disabledColumnRange.setValue(headerCheckboxValue);
-      } else {
-        // If user cancels, revert the checkbox
-        range.setValue(!headerCheckboxValue);
-      }
-    }
-  }
-}
 
 function updateAutoSyncStatusIndicator_() {
   try {
