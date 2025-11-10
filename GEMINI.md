@@ -166,3 +166,15 @@ To provide the highest level of data integrity and prevent race conditions betwe
 *   **User Experience:** While a sync is in progress, users will find that they are temporarily unable to edit the managed sheets. This is a deliberate trade-off to guarantee data consistency. The "Sync in Progress" toast message has been enhanced to explicitly state that the sheet is locked to prevent data corruption and that this state is temporary, providing clearer communication to the user.
 
 *   **Testing:** A new test function, `runSheetLockingTest_`, has been added to `Tests.gs` to verify that the locking and unlocking mechanism works as expected. This test is included in the `runAllTests` suite.
+
+### Simplified Auto-Sync Controls
+
+To eliminate confusion and provide a more intuitive user experience, the controls for the auto-sync feature have been refactored.
+
+*   **The Problem:** Previously, the "Setup Auto-Sync" / "Disable Auto-Sync" menu items operated independently of the `EnableAutoSync` setting in the `Config` sheet. This created a confusing "paused" state where a trigger could be installed but the sync would not run if the `Config` setting was `FALSE`.
+
+*   **The Solution:** The menu items and the `Config` sheet setting are now synchronized.
+    *   Running **"Setup Auto-Sync"** from the menu will now automatically set `EnableAutoSync` to `TRUE` in the `Config` sheet, in addition to creating the time-based trigger.
+    *   Running **"Disable Auto-Sync"** from the menu will now automatically set `EnableAutoSync` to `FALSE` in the `Config` sheet, in addition to deleting the time-based trigger.
+
+This change makes the `EnableAutoSync` setting in the `Config` sheet the single, clear source of truth for whether the auto-sync is active, removing any ambiguity.

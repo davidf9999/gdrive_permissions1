@@ -24,6 +24,7 @@ function setupAutoSync() {
 
   log_('Auto-sync trigger installed. Will run every 5 minutes.', 'INFO');
   updateConfigSetting_('AutoSyncStatus', 'ENABLED ✅'); // Update visual indicator directly
+  updateConfigSetting_('EnableAutoSync', true);
   SpreadsheetApp.getUi().alert(
     'Auto-Sync Enabled',
     'The script will now automatically sync every 5 minutes. ' +
@@ -50,11 +51,13 @@ function removeAutoSync() {
   if (removedCount > 0) {
     log_('Removed ' + removedCount + ' auto-sync trigger(s).', 'INFO');
     updateConfigSetting_('AutoSyncStatus', 'DISABLED ❌'); // Update visual indicator directly
+    updateConfigSetting_('EnableAutoSync', false);
     SpreadsheetApp.getUi().alert('Auto-sync triggers removed.');
   } else {
     // If no triggers were found, but the Config says it's enabled, we should probably set it to DISABLED.
     // However, the new updateAutoSyncStatusIndicator_ will handle the PAUSED state based on EnableAutoSync.
     updateConfigSetting_('AutoSyncStatus', 'DISABLED ❌'); // Ensure status is correct even if no triggers were found
+    updateConfigSetting_('EnableAutoSync', false);
     SpreadsheetApp.getUi().alert('No auto-sync triggers were found.');
   }
 }
