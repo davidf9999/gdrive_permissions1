@@ -389,6 +389,7 @@ function ensureUserSheetHeaders_(sheet) {
     }
 
     headerRange.setFontWeight('bold');
+    sheet.getRange('B1').clearDataValidations();
     sheet.setFrozenRows(1);
 
     // Ensure data validation on Disabled column (checkbox)
