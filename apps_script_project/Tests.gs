@@ -917,6 +917,96 @@ function runAutoSyncErrorEmailTest() {
     return success;
 }
 
+function runSheetLockingTest_() {
+    SCRIPT_EXECUTION_MODE = 'TEST';
+    log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
+    log_('║  Sheet Locking Test                                          ║', 'INFO');
+    log_('╚══════════════════════════════════════════════════════════════╝', 'INFO');
+
+    const startTime = new Date();
+    let success = false;
+    const testSheetName = 'SheetLockingTestSheet_' + new Date().getTime();
+    let sheet;
+
+    try {
+        // 1. Create a temporary sheet
+        sheet = SpreadsheetApp.getActiveSpreadsheet().insertSheet(testSheetName);
+        log_('Created temporary sheet: ' + testSheetName, 'INFO');
+
+        // 2. Lock the sheet
+        lockSheetForEdits_(sheet);
+
+        // 3. Verify protection is on
+        let protections = sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET);
+        if (protections.length !== 1 || protections[0].getDescription() !== 'Locked for script execution') {
+            throw new Error('VERIFICATION FAILED: Sheet was not locked correctly.');
+        }
+        log_('VERIFICATION PASSED: Sheet is locked.', 'INFO');
+
+        // 4. Attempt to edit (should fail)
+        try {
+            sheet.getRange('A1').setValue('This should fail');
+            // If this line is reached, the test fails because the edit was not blocked
+            throw new Error('VERIFICATION FAILED: Edit was not blocked on a protected sheet.');
+        } catch (e) {
+            if (e.message.includes('You are trying to edit a protected cell or object.')) {
+                log_('VERIFICATION PASSED: Edit was correctly blocked on protected sheet.', 'INFO');
+            } else {
+                // Re-throw if it's a different error
+                throw e;
+            }
+        }
+
+        // 5. Unlock the sheet
+        unlockSheetForEdits_(sheet);
+
+        // 6. Verify protection is off
+        protections = sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET);
+        if (protections.length > 0) {
+            throw new Error('VERIFICATION FAILED: Sheet was not unlocked correctly.');
+        }
+        log_('VERIFICATION PASSED: Sheet is unlocked.', 'INFO');
+
+        // 7. Attempt to edit (should succeed)
+        try {
+            sheet.getRange('A1').setValue('This should succeed');
+            const value = sheet.getRange('A1').getValue();
+            if (value !== 'This should succeed') {
+                throw new Error('VERIFICATION FAILED: Value was not set correctly after unlocking.');
+            }
+            log_('VERIFICATION PASSED: Edit succeeded on unlocked sheet.', 'INFO');
+        } catch (e) {
+            throw new Error('VERIFICATION FAILED: Edit failed on an unlocked sheet. Error: ' + e.message);
+        }
+
+        success = true;
+
+    } catch (e) {
+        log_('TEST FAILED: ' + e.toString() + ' Stack: ' + e.stack, 'ERROR');
+        success = false;
+    } finally {
+        // 8. Cleanup
+        if (sheet) {
+            try {
+                SpreadsheetApp.getActiveSpreadsheet().deleteSheet(sheet);
+                log_('Cleaned up temporary sheet: ' + testSheetName, 'INFO');
+            } catch (e) {
+                log_('Error during cleanup: ' + e.message, 'ERROR');
+            }
+        }
+
+        const endTime = new Date();
+        const durationSeconds = ((endTime.getTime() - startTime.getTime()) / 1000).toFixed(2);
+        log_('TEST DURATION: ' + durationSeconds + ' seconds', 'INFO');
+        const testStatus = success ? '✓ PASSED' : '✗ FAILED';
+        log_('>>> TEST RESULT: Sheet Locking Test ' + testStatus, success ? 'INFO' : 'ERROR');
+        log_('', 'INFO');
+        SCRIPT_EXECUTION_MODE = 'DEFAULT';
+    }
+    return success;
+}
+
+
 /**
  * Runs all three test functions in sequence.
  * Tests run: Manual Access Test, Stress Test, Add/Delete Separation Test
@@ -950,7 +1040,8 @@ function runAllTests() {
             { name: 'Manual Access Test', func: runManualAccessTest },
             { name: 'Stress Test', func: runStressTest },
             { name: 'Add/Delete Separation Test', func: runAddDeleteSeparationTest },
-            { name: 'Auto-Sync Error Email Test', func: runAutoSyncErrorEmailTest }
+            { name: 'Auto-Sync Error Email Test', func: runAutoSyncErrorEmailTest },
+            { name: 'Sheet Locking Test', func: runSheetLockingTest_ }
         ];
 
         const testResults = [];

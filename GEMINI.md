@@ -146,3 +146,20 @@ Several improvements were made to the auto-sync feature and overall script perfo
 *   **Auto-Sync Robustness:** The auto-sync feature was failing when it encountered test data (e.g., folders named `StressTestFolder_...`). The core sync logic in `Core.gs` was updated to detect when it's running in auto-sync mode and to automatically skip any rows in `ManagedFolders` that correspond to test data, preventing errors.
 *   **Adaptive Group Propagation Wait:** A fixed 60-second `Utilities.sleep()` was removed from the group creation logic. The script now relies on the existing exponential backoff retry loop in the `setFolderPermission_` function. This makes the sync process more efficient, as it only waits as long as necessary for a new Google Group's email to become active, rather than always waiting a full minute.
 *   **UI and Naming Standardization:** The "Dry Run Audit" feature was renamed to "Folders Audit" across the entire codebase, including all UI text, log messages, and documentation, to improve clarity and consistency.
+
+### Stricter Concurrency Control: Sheet Locking
+
+To provide the highest level of data integrity and prevent race conditions between a running script and a user editing the spreadsheet, a stricter concurrency control mechanism has been implemented.
+
+*   **The Problem:** A user could edit a sheet after a sync script has started reading from it, but before it has finished writing the permissions to Google Drive. This would result in the script operating on stale data, leading to incorrect permissions.
+
+*   **The Solution:** The script now programmatically locks all relevant sheets (`ManagedFolders`, `UserGroups`, and all user permission sheets) at the beginning of any synchronization operation (`fullSync`, `syncAdds`, `syncDeletes`, etc.).
+
+*   **How It Works:**
+    *   New functions, `lockSheetForEdits_` and `unlockSheetForEdits_`, have been added to `Utils.gs`.
+    *   These functions use Google Apps Script's `Range.protect()` method to make sheets read-only for all users except the script owner.
+    *   The locking is implemented within a `try...finally` block in all sync functions. This ensures that the sheets are **always** unlocked after the operation completes, even if the script encounters an error.
+
+*   **User Experience:** While a sync is in progress, users will find that they are temporarily unable to edit the managed sheets. This is a deliberate trade-off to guarantee data consistency. A "Sync in Progress" toast message will still appear to inform users of the script's activity.
+
+*   **Testing:** A new test function, `runSheetLockingTest_`, has been added to `Tests.gs` to verify that the locking and unlocking mechanism works as expected. This test is included in the `runAllTests` suite.
