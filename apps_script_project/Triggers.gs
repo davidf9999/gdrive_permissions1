@@ -85,6 +85,7 @@ function autoSync(e) {
   let snapshotShouldUpdate = false;
 
   try {
+    showSyncInProgress_();
     // Check if in Edit Mode (takes precedence)
     if (isInEditMode_()) {
       log_('Auto-sync skipped: spreadsheet is in Edit Mode.', 'INFO');
@@ -235,6 +236,7 @@ function autoSync(e) {
       }
     }
     lock.releaseLock();
+    hideSyncInProgress_();
   }
 }
 

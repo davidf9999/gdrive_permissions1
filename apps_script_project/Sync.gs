@@ -330,6 +330,7 @@ function syncAdds(options = {}) {
 
   try {
     if (!silentMode) showToast_('Starting non-destructive sync (adds only)...', 'Sync Adds', -1);
+    showSyncInProgress_();
     log_('*** Starting non-destructive synchronization (adds only)...');
 
     // 1. Sync Admins (SAFE mode: additions only, silent for auto-sync)
@@ -372,6 +373,7 @@ function syncAdds(options = {}) {
     sendErrorNotification_(errorMessage);
   } finally {
     lock.releaseLock();
+    hideSyncInProgress_();
   }
 }
 
@@ -413,14 +415,35 @@ function syncDeletes() {
   });
   confirmationMessage += '\nAre you sure you want to continue?';
 
-  const response = ui.alert(
-    'Confirm Destructive Sync',
-    confirmationMessage,
-    ui.ButtonSet.YES_NO
-  );
-
   if (response !== ui.Button.YES) {
     ui.alert('Delete sync cancelled.');
+    return;
+  }
+
+  // --- Re-run Phase 1: Planning (after user confirmation) ---
+  // This ensures the deletion plan is based on the most up-to-date sheet data
+  // in case the user made changes during the confirmation dialog.
+  log_('*** Re-running deletion planning phase after user confirmation...');
+  showToast_('Re-planning deletions...', 'Sync Deletes', 10);
+  
+  deletionPlan = []; // Clear previous plan
+  try {
+    const planOptions = { removeOnly: true, returnPlanOnly: true };
+    const groupDeletions = syncUserGroups(planOptions);
+    const folderDeletions = processManagedFolders_(planOptions);
+    deletionPlan = (groupDeletions || []).concat(folderDeletions || []);
+  } catch (e) {
+    const errorMessage = 'FATAL ERROR during re-planning deletion after confirmation: ' + e.toString() + '\n' + e.stack;
+    log_(errorMessage, 'ERROR');
+    showToast_('Deletion re-planning failed with a fatal error.', 'Sync Deletes', 5);
+    ui.alert('A fatal error occurred during the deletion re-planning phase: ' + e.message);
+    sendErrorNotification_(errorMessage);
+    return;
+  }
+
+  if (deletionPlan.length === 0) {
+    log_('No deletions are pending after re-planning. This might happen if changes were reverted.');
+    ui.alert('No pending deletions found after re-planning. Sync cancelled.');
     return;
   }
 
@@ -436,6 +459,7 @@ function syncDeletes() {
 
   try {
     showToast_('Starting destructive sync (deletes only)...', 'Sync Deletes', -1);
+    showSyncInProgress_();
     log_('*** Starting destructive synchronization (deletes only)...');
 
     const execOptions = { removeOnly: true };
@@ -465,6 +489,7 @@ function syncDeletes() {
     sendErrorNotification_(errorMessage);
   } finally {
     lock.releaseLock();
+    hideSyncInProgress_();
   }
 }
 
@@ -483,6 +508,7 @@ function fullSync(options = {}) {
 
   try {
     if (!silentMode) showToast_('Starting full synchronization...', 'Full Sync', -1);
+    showSyncInProgress_();
     log_('*** Starting full synchronization...');
 
     // --- PRE-SYNC CHECKS ---
@@ -552,6 +578,7 @@ function fullSync(options = {}) {
     sendErrorNotification_(errorMessage);
   } finally {
     lock.releaseLock();
+    hideSyncInProgress_();
   }
 }
 
@@ -565,6 +592,7 @@ function syncManagedFoldersAdds() {
 
   try {
     showToast_('Starting folder-only sync (adds only)...', 'Sync Folders - Adds', -1);
+    showSyncInProgress_();
     log_('*** Starting Managed Folders only synchronization (adds only)...');
 
     const summary = processManagedFolders_({ addOnly: true });
@@ -582,6 +610,7 @@ function syncManagedFoldersAdds() {
     sendErrorNotification_(errorMessage);
   } finally {
     lock.releaseLock();
+    hideSyncInProgress_();
   }
 }
 
@@ -632,6 +661,31 @@ function syncManagedFoldersDeletes() {
     return;
   }
 
+  // --- Re-run Phase 1: Planning (after user confirmation) ---
+  // This ensures the deletion plan is based on the most up-to-date sheet data
+  // in case the user made changes during the confirmation dialog.
+  log_('*** Re-running folder deletion planning phase after user confirmation...');
+  showToast_('Re-planning folder deletions...', 'Sync Deletes', 10);
+  
+  deletionPlan = []; // Clear previous plan
+  try {
+    const planOptions = { removeOnly: true, returnPlanOnly: true };
+    deletionPlan = processManagedFolders_(planOptions) || [];
+  } catch (e) {
+    const errorMessage = 'FATAL ERROR during re-planning folder deletion after confirmation: ' + e.toString() + '\n' + e.stack;
+    log_(errorMessage, 'ERROR');
+    showToast_('Folder deletion re-planning failed with a fatal error.', 'Sync Deletes', 5);
+    ui.alert('A fatal error occurred during the folder deletion re-planning phase: ' + e.message);
+    sendErrorNotification_(errorMessage);
+    return;
+  }
+
+  if (deletionPlan.length === 0) {
+    log_('No folder deletions are pending after re-planning. This might happen if changes were reverted.');
+    ui.alert('No pending folder deletions found after re-planning. Sync cancelled.');
+    return;
+  }
+
   // --- Phase 3: Execution ---
   setupControlSheets_();
   const lock = LockService.getScriptLock();
@@ -642,6 +696,7 @@ function syncManagedFoldersDeletes() {
 
   try {
     showToast_('Starting folder-only sync (deletes only)...', 'Sync Folders - Deletes', -1);
+    showSyncInProgress_();
     log_('*** Starting Managed Folders only synchronization (deletes only)...');
 
     const summary = processManagedFolders_({ removeOnly: true });
@@ -659,5 +714,6 @@ function syncManagedFoldersDeletes() {
     sendErrorNotification_(errorMessage);
   } finally {
     lock.releaseLock();
+    hideSyncInProgress_();
   }
 }

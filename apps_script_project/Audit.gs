@@ -71,6 +71,11 @@ function validateUserSheets_() {
  */
 function foldersAudit() {
   const ui = SpreadsheetApp.getUi();
+  ui.alert(
+    'Folders Audit Warning',
+    'The Folders Audit will now run. Please avoid making changes to the spreadsheet while the audit is in progress, as concurrent edits may lead to inaccuracies in the audit report.',
+    ui.ButtonSet.OK
+  );
   try {
     log_('*** Starting Folders Audit...');
     const auditSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(FOLDER_AUDIT_LOG_SHEET_NAME);
@@ -199,6 +204,11 @@ function auditGroupRoleOnFolder_(folder, folderName, expectedRole, groupEmail) {
 
 function deepAuditFolder() {
   const ui = SpreadsheetApp.getUi();
+  ui.alert(
+    'Deep Audit Warning',
+    'The Deep Audit will now run. This is a potentially slow and API-intensive operation. Please avoid making changes to the spreadsheet while the audit is in progress, as concurrent edits may lead to inaccuracies in the audit report.',
+    ui.ButtonSet.OK
+  );
   const response = ui.prompt('Enter the ID of the managed folder to deep audit:', ui.ButtonSet.OK_CANCEL);
 
   if (response.getSelectedButton() !== ui.Button.OK || !response.getResponseText()) {

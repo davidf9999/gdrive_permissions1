@@ -624,3 +624,12 @@ function isGroup_(email) {
     return false;
   }
 }
+
+function showSyncInProgress_() {
+  SpreadsheetApp.getActiveSpreadsheet().toast('A synchronization script is running. Please avoid making changes to the sheet.', 'Sync in Progress', 10);
+}
+
+function hideSyncInProgress_() {
+  // A simple toast to indicate completion, or just let the next UI action override it.
+  // For now, we'll just let it disappear or be replaced.
+}
