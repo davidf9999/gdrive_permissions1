@@ -939,23 +939,22 @@ function runSheetLockingTest_() {
         // 3. Verify protection is on
         let protections = sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET);
         if (protections.length !== 1 || protections[0].getDescription() !== 'Locked for script execution') {
-            throw new Error('VERIFICATION FAILED: Sheet was not locked correctly.');
+            throw new Error('VERIFICATION FAILED: Sheet was not locked correctly or description is wrong.');
         }
-        log_('VERIFICATION PASSED: Sheet is locked.', 'INFO');
+        log_('VERIFICATION PASSED: Sheet protection is applied.', 'INFO');
 
-        // 4. Attempt to edit (should fail)
-        try {
-            sheet.getRange('A1').setValue('This should fail');
-            // If this line is reached, the test fails because the edit was not blocked
-            throw new Error('VERIFICATION FAILED: Edit was not blocked on a protected sheet.');
-        } catch (e) {
-            if (e.message.includes('You are trying to edit a protected cell or object.')) {
-                log_('VERIFICATION PASSED: Edit was correctly blocked on protected sheet.', 'INFO');
-            } else {
-                // Re-throw if it's a different error
-                throw e;
-            }
+        // 4. Verify the editor is correct
+        const editors = protections[0].getEditors();
+        const me = Session.getEffectiveUser().getEmail();
+        if (editors.length !== 1 || editors[0].getEmail() !== me) {
+            throw new Error('VERIFICATION FAILED: Protection should only have one editor: the script owner.');
         }
+        log_('VERIFICATION PASSED: Protection has the correct editor.', 'INFO');
+
+        // NOTE: We cannot test that an edit fails from within the script, because a script
+        // running as the owner will always have permission to edit a protected range.
+        // The protection is for other users in the UI. This test verifies the protection is
+        // set up correctly, which is the most we can do in an automated test.
 
         // 5. Unlock the sheet
         unlockSheetForEdits_(sheet);
