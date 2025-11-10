@@ -1,6 +1,31 @@
 const EMAIL_EXTRACTION_REGEX = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 const SINGLE_EMAIL_VALIDATION_REGEX = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
 
+function createSheetLockManager_(enableSheetLocking) {
+  const lockingEnabled = enableSheetLocking !== undefined
+    ? enableSheetLocking
+    : (typeof getConfigValue_ === 'function' ? getConfigValue_('EnableSheetLocking', true) : true);
+  const lockedSheets = new Set();
+
+  return {
+    isEnabled: lockingEnabled,
+    lock(sheet) {
+      if (!lockingEnabled || !sheet || lockedSheets.has(sheet)) {
+        return;
+      }
+      lockSheetForEdits_(sheet);
+      lockedSheets.add(sheet);
+    },
+    unlockAll() {
+      if (!lockingEnabled) {
+        return;
+      }
+      lockedSheets.forEach(sheet => unlockSheetForEdits_(sheet));
+      lockedSheets.clear();
+    }
+  };
+}
+
 function processManagedFolders_(options = {}) {
   const { returnPlanOnly = false, silentMode = false } = options;
   let deletionPlan = [];
@@ -22,6 +47,10 @@ function processManagedFolders_(options = {}) {
       return returnPlanOnly ? [] : totalSummary;
   }
 
+  const enableSheetLocking = options.enableSheetLocking !== undefined
+    ? options.enableSheetLocking
+    : (typeof getConfigValue_ === 'function' ? getConfigValue_('EnableSheetLocking', true) : true);
+
   // Get all folder data at once
   const allFolderData = sheet.getRange(2, 1, lastRow - 1, FOLDER_NAME_COL).getValues();
 
@@ -41,7 +70,8 @@ function processManagedFolders_(options = {}) {
 
     if (!returnPlanOnly && !silentMode) showToast_('Processing row ' + rowIndex + ' of ' + lastRow + '...', 'Sync Progress', 10);
     try {
-      const result = processRow_(rowIndex, options);
+      const rowOptions = Object.assign({}, options, { enableSheetLocking: enableSheetLocking });
+      const result = processRow_(rowIndex, rowOptions);
       if (returnPlanOnly && result) {
         deletionPlan.push(result);
       } else if (!returnPlanOnly && result) {
@@ -64,7 +94,8 @@ function processManagedFolders_(options = {}) {
 
 function processRow_(rowIndex, options = {}) {
   const { returnPlanOnly = false, removeOnly = false, silentMode = false } = options;
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = spreadsheet.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
 
   // Gracefully skip empty rows
   const checkRange = sheet.getRange(rowIndex, 1, 1, 2).getValues()[0];
@@ -76,24 +107,40 @@ function processRow_(rowIndex, options = {}) {
   }
 
   const statusCell = sheet.getRange(rowIndex, STATUS_COL);
+  const userSheetCell = sheet.getRange(rowIndex, USER_SHEET_NAME_COL);
+  const groupEmailCell = sheet.getRange(rowIndex, GROUP_EMAIL_COL);
+  let existingUserSheetName = userSheetCell.getValue();
+  let existingGroupEmail = groupEmailCell.getValue();
   const summary = { added: 0, removed: 0, failed: 0 };
+
+  const lockManager = createSheetLockManager_(options.enableSheetLocking);
 
   try {
     // Handle planning mode separately
     if (returnPlanOnly) {
-      const groupEmail = sheet.getRange(rowIndex, GROUP_EMAIL_COL).getValue();
-      const userSheetName = sheet.getRange(rowIndex, USER_SHEET_NAME_COL).getValue();
-      if (groupEmail && userSheetName && !shouldSkipGroupOps_()) {
-        return syncGroupMembership_(groupEmail, userSheetName, options);
+      if (existingGroupEmail && existingUserSheetName && !shouldSkipGroupOps_()) {
+        return syncGroupMembership_(existingGroupEmail, existingUserSheetName, options);
       }
       return null; // Cannot create a plan if group info isn't already populated.
+    }
+
+    if (lockManager.isEnabled) {
+      lockManager.lock(sheet);
+      if (existingUserSheetName) {
+        const existingSheet = spreadsheet.getSheetByName(existingUserSheetName);
+        lockManager.lock(existingSheet);
+      }
     }
 
     // Handle delete-only execution mode
     if (removeOnly) {
       statusCell.setValue('Processing Deletions...');
-      const groupEmail = sheet.getRange(rowIndex, GROUP_EMAIL_COL).getValue();
-      const userSheetName = sheet.getRange(rowIndex, USER_SHEET_NAME_COL).getValue();
+      const groupEmail = groupEmailCell.getValue();
+      const userSheetName = userSheetCell.getValue();
+      if (lockManager.isEnabled && userSheetName) {
+        const userSheet = spreadsheet.getSheetByName(userSheetName);
+        lockManager.lock(userSheet);
+      }
       if (groupEmail && userSheetName && !shouldSkipGroupOps_()) {
         const deleteSummary = syncGroupMembership_(groupEmail, userSheetName, options);
         statusCell.setValue('OK (Deletions processed)');
@@ -111,10 +158,6 @@ function processRow_(rowIndex, options = {}) {
     let folderName = sheet.getRange(rowIndex, FOLDER_NAME_COL).getValue();
     let folderId = sheet.getRange(rowIndex, FOLDER_ID_COL).getValue();
     let role = sheet.getRange(rowIndex, ROLE_COL).getValue();
-    const userSheetCell = sheet.getRange(rowIndex, USER_SHEET_NAME_COL);
-    const groupEmailCell = sheet.getRange(rowIndex, GROUP_EMAIL_COL);
-    const existingUserSheetName = userSheetCell.getValue();
-    let existingGroupEmail = groupEmailCell.getValue();
 
     if (!folderName && !folderId) throw new Error('Both FolderName and FolderID are blank.');
     if (!role) throw new Error('Role is not specified.');
@@ -150,11 +193,14 @@ function processRow_(rowIndex, options = {}) {
     }
     groupEmailCell.setValue(groupEmail);
 
-    getOrCreateUserSheet_(userSheetName);
+    const userSheet = getOrCreateUserSheet_(userSheetName);
+    if (lockManager.isEnabled) {
+      lockManager.lock(userSheet);
+    }
 
     if (shouldSkipGroupOps_()) {
       log_('Skipping group operations for row ' + rowIndex + ' (Admin SDK not available).', 'WARN');
-      sheet.getRange(rowIndex, LAST_SYNCED_COL).setValue(Utilities.formatDate(new Date(), SpreadsheetApp.getActive().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss'));
+      sheet.getRange(rowIndex, LAST_SYNCED_COL).setValue(Utilities.formatDate(new Date(), spreadsheet.getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss'));
       statusCell.setValue('SKIPPED (No Admin SDK)');
       return summary;
     }
@@ -164,7 +210,7 @@ function processRow_(rowIndex, options = {}) {
     setFolderPermission_(folder.getId(), groupEmail, role);
     const syncSummary = syncGroupMembership_(groupEmail, userSheetName, options);
 
-    sheet.getRange(rowIndex, LAST_SYNCED_COL).setValue(Utilities.formatDate(new Date(), SpreadsheetApp.getActive().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss'));
+    sheet.getRange(rowIndex, LAST_SYNCED_COL).setValue(Utilities.formatDate(new Date(), spreadsheet.getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss'));
     statusCell.setValue('OK');
     return syncSummary;
 
@@ -172,6 +218,8 @@ function processRow_(rowIndex, options = {}) {
     log_('Failed to process row ' + rowIndex + '. Error: ' + e.message + ' Stack: ' + e.stack, 'ERROR');
     statusCell.setValue('Error: ' + e.message);
     throw e;
+  } finally {
+    lockManager.unlockAll();
   }
 }
 

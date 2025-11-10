@@ -24,6 +24,9 @@ describe('processRow_', () => {
     global.CacheService = { getScriptCache: jest.fn(() => ({ get: jest.fn(), put: jest.fn() })) };
     global.Utilities = { formatDate: jest.fn(date => date.toISOString()), sleep: jest.fn() };
     global.Session = { getActiveUser: jest.fn(() => ({ getEmail: jest.fn(() => 'test.user@example.com') })) };
+    global.getConfigValue_ = jest.fn(() => false);
+    global.lockSheetForEdits_ = jest.fn();
+    global.unlockSheetForEdits_ = jest.fn();
     global.AdminDirectory = { Groups: { get: jest.fn(), insert: jest.fn() }, Members: { list: jest.fn(() => ({ members: [] })) } };
     global.DriveApp.Permission = { EDIT: 'EDIT', VIEW: 'VIEW', NONE: 'NONE' };
 
@@ -158,6 +161,30 @@ describe('processRow_', () => {
     processRow_(2, {});
 
     expect(mockFolder.addEditor).toHaveBeenCalledWith('mockfoldernameeditor@example.com');
+  });
+
+  it('locks and unlocks only the relevant sheets when locking is enabled', () => {
+    global.getConfigValue_.mockReturnValue(true);
+
+    mockGetValues.mockReturnValueOnce([['mockFolderName', 'folder-id']]);
+    mockGetValue
+      .mockReturnValueOnce('mockFolderName')
+      .mockReturnValueOnce('folder-id')
+      .mockReturnValueOnce('viewer')
+      .mockReturnValueOnce('mockFolderName_viewer')
+      .mockReturnValueOnce('');
+
+    processRow_(2, {});
+
+    expect(global.lockSheetForEdits_).toHaveBeenCalledTimes(2);
+    expect(global.lockSheetForEdits_.mock.calls).toEqual([
+      [mockManagedSheet],
+      [mockUserSheet],
+    ]);
+
+    expect(global.unlockSheetForEdits_).toHaveBeenCalledTimes(2);
+    const unlockedSheets = global.unlockSheetForEdits_.mock.calls.map(call => call[0]);
+    expect(unlockedSheets).toEqual(expect.arrayContaining([mockManagedSheet, mockUserSheet]));
   });
 
   it('renames the folder and existing user sheet when the configured name changes', () => {
