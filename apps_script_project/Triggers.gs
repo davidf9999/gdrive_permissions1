@@ -776,11 +776,14 @@ function onEdit(e) {
   const col = range.getColumn();
 
   let disabledCol;
+  const allManagedSheetNames = getAllManagedSheetNames_();
+
   if (sheetName === ADMINS_SHEET_NAME) {
     disabledCol = 4;
-  } else if (sheetName.endsWith('_G')) {
+  } else if (allManagedSheetNames.has(sheetName)) {
     disabledCol = 2;
-  } else {
+  }
+  else {
     return; // Not a sheet we care about
   }
 

@@ -370,6 +370,7 @@ function getOrCreateUserSheet_(sheetName) {
         const rule = SpreadsheetApp.newDataValidation().requireCheckbox().build();
         headerDisabledCell.setDataValidation(rule);
     }
+    headerDisabledCell.setNote('Click to bulk enable/disable all users.');
 
     log_('Successfully created user sheet: "' + sheetName + '"');
     return sheet;
@@ -417,6 +418,7 @@ function ensureUserSheetHeaders_(sheet) {
         const rule = SpreadsheetApp.newDataValidation().requireCheckbox().build();
         headerDisabledCell.setDataValidation(rule);
     }
+    headerDisabledCell.setNote('Click to bulk enable/disable all users.');
   } catch (e) {
     log_('Failed to ensure headers for sheet "' + sheet.getName() + '": ' + e.toString(), 'WARN');
   }

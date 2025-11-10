@@ -164,6 +164,7 @@ To provide the highest level of data integrity and prevent race conditions betwe
     *   **Configuration:** This feature can be disabled by setting `EnableSheetLocking` to `FALSE` in the `Config` sheet. This provides an escape hatch for administrators who find the locking too intrusive or encounter issues with sheet protections.
 
 *   **User Experience:** While a sync is in progress, users will find that they are temporarily unable to edit the managed sheets. This is a deliberate trade-off to guarantee data consistency. The "Sync in Progress" toast message has been enhanced to explicitly state that the sheet is locked to prevent data corruption and that this state is temporary, providing clearer communication to the user.
+    *   **Note on Owner Permissions:** A key behavior of Google Sheets is that **the script owner can always edit a protected range**. Therefore, if you are the owner, you will not be visually prevented from editing the sheet during a sync. The lock is, however, fully effective for all other users with editor permissions, preventing them from making changes and ensuring data integrity.
 
 *   **Testing:** A new test function, `runSheetLockingTest_`, has been added to `Tests.gs` to verify that the locking and unlocking mechanism works as expected. This test is included in the `runAllTests` suite.
 
