@@ -657,7 +657,12 @@ function isGroup_(email) {
 }
 
 function showSyncInProgress_() {
-  SpreadsheetApp.getActiveSpreadsheet().toast('A synchronization script is running. Please avoid making changes to the sheet.', 'Sync in Progress', 10);
+  const enableSheetLocking = getConfigValue_('EnableSheetLocking', true);
+  let message = 'A synchronization script is running. Please avoid making changes to the sheet.';
+  if (enableSheetLocking) {
+    message = 'A synchronization script is running. The sheet is temporarily locked to prevent data corruption. Please wait a moment.';
+  }
+  showToast_(message, 'Sync in Progress', 30); // Increase duration to 30 seconds
 }
 
 function hideSyncInProgress_() {

@@ -161,6 +161,6 @@ To provide the highest level of data integrity and prevent race conditions betwe
     *   The locking is implemented within a `try...finally` block in all sync functions. This ensures that the sheets are **always** unlocked after the operation completes, even if the script encounters an error.
     *   **Configuration:** This feature can be disabled by setting `EnableSheetLocking` to `FALSE` in the `Config` sheet. This provides an escape hatch for administrators who find the locking too intrusive or encounter issues with sheet protections.
 
-*   **User Experience:** While a sync is in progress, users will find that they are temporarily unable to edit the managed sheets. This is a deliberate trade-off to guarantee data consistency. A "Sync in Progress" toast message will still appear to inform users of the script's activity.
+*   **User Experience:** While a sync is in progress, users will find that they are temporarily unable to edit the managed sheets. This is a deliberate trade-off to guarantee data consistency. The "Sync in Progress" toast message has been enhanced to explicitly state that the sheet is locked to prevent data corruption and that this state is temporary, providing clearer communication to the user.
 
 *   **Testing:** A new test function, `runSheetLockingTest_`, has been added to `Tests.gs` to verify that the locking and unlocking mechanism works as expected. This test is included in the `runAllTests` suite.
