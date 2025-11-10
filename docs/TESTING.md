@@ -25,6 +25,21 @@ Because they don't use live Google services (they use mock data), they can run i
     ```
     Jest will discover and run all test files (ending in `.test.js`) located in the `tests/` directory.
 
+### Optional: Real Email Capability Test
+
+If you want to verify that your SMTP credentials can deliver a real email, an optional integration test is available. It is excluded from the default `npm test` run so that CI pipelines are not blocked by external network calls.
+
+1.  Provide the following environment variables (for example in a one-off command line invocation):
+    *   `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE` (`true`/`false`), `SMTP_USER`, `SMTP_PASS`
+    *   `EMAIL_FROM`, `EMAIL_TO`
+2.  Run the email test command:
+    ```bash
+    npm run test:email
+    ```
+    The script sets `RUN_EMAIL_TEST=1` and runs Jest against `tests/manual/EmailCapability.test.js`, which sends a short test email using `nodemailer`.
+
+If the environment variables are missing, the test is skipped automatically.
+
 ### How it Works: Mocking Apps Script Services
 
 A major challenge of testing Apps Script code locally is that the global Google services (e.g., `SpreadsheetApp`, `DriveApp`, `Session`) are not available.
