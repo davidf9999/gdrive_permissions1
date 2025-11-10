@@ -917,6 +917,71 @@ function runAutoSyncErrorEmailTest() {
     return success;
 }
 
+function runEmailCapabilityTest() {
+    SCRIPT_EXECUTION_MODE = 'TEST';
+    let success = false;
+    const startTime = new Date();
+    const ui = SpreadsheetApp.getUi();
+    const defaultRecipient = getConfigValue_('NotificationEmail', Session.getEffectiveUser().getEmail());
+
+    try {
+        log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
+        log_('║  Email Capability Test                                       ║', 'INFO');
+        log_('╚══════════════════════════════════════════════════════════════╝', 'INFO');
+
+        const promptMessage = 'Enter the email address that should receive the test message.' +
+            (defaultRecipient ? '\n\nLeave blank to send it to the configured NotificationEmail (' + defaultRecipient + ').' : '');
+        const prompt = ui.prompt('Email Capability Test', promptMessage, ui.ButtonSet.OK_CANCEL);
+
+        if (prompt.getSelectedButton() !== ui.Button.OK) {
+            ui.alert('Email Capability Test cancelled.');
+            return false;
+        }
+
+        let recipient = prompt.getResponseText().trim();
+        if (!recipient && defaultRecipient) {
+            recipient = defaultRecipient;
+        }
+
+        if (!recipient) {
+            throw new Error('No recipient email provided. Please configure NotificationEmail in the Config sheet or enter an address.');
+        }
+
+        const subjectSuffix = new Date().toISOString();
+        const subject = '[Drive Permission Manager] Email Capability Test - ' + subjectSuffix;
+        const bodyLines = [
+            'This is a live email triggered by the "Email Capability Test" from the Permissions Manager Testing menu.',
+            '',
+            'Receiving this message confirms that Apps Script can send outbound email as configured.',
+            '',
+            'Timestamp: ' + subjectSuffix,
+            'Sheet URL: ' + SpreadsheetApp.getActive().getUrl()
+        ];
+
+        MailApp.sendEmail({
+            to: recipient,
+            subject: subject,
+            body: bodyLines.join('\n')
+        });
+
+        log_('VERIFICATION PASSED: Test email sent to ' + recipient + '.', 'INFO');
+        showTestMessage_('Email Sent', 'A test email was sent to ' + recipient + '. Please confirm it arrived.');
+        success = true;
+    } catch (e) {
+        log_('TEST FAILED: ' + e.toString() + ' Stack: ' + e.stack, 'ERROR');
+        showTestMessage_('Test Failed', 'The email could not be sent. Check the TestLog for details. Error: ' + e.message);
+    } finally {
+        const durationSeconds = ((new Date().getTime() - startTime.getTime()) / 1000).toFixed(2);
+        log_('TEST DURATION: ' + durationSeconds + ' seconds', 'INFO');
+        const testStatus = success ? '✓ PASSED' : '✗ FAILED';
+        log_('>>> TEST RESULT: Email Capability Test ' + testStatus, success ? 'INFO' : 'ERROR');
+        log_('', 'INFO');
+        SCRIPT_EXECUTION_MODE = 'DEFAULT';
+    }
+
+    return success;
+}
+
 function runSheetLockingTest_() {
     SCRIPT_EXECUTION_MODE = 'TEST';
     log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');

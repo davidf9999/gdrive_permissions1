@@ -40,6 +40,17 @@ If you want to verify that your SMTP credentials can deliver a real email, an op
 
 If the environment variables are missing, the test is skipped automatically.
 
+### Optional: Email Capability Test from Google Sheets
+
+To trigger a live email using the Apps Script runtime (no local tooling required), run the menu action:
+
+*   **Menu:** `Permissions Manager > Testing > Run Email Capability Test`
+*   **Purpose:** Confirms that the sheet can send outbound notification email via `MailApp.sendEmail` using the configured `NotificationEmail` (or an address you enter on the prompt).
+*   **Process:**
+    1.  You will be asked which email address should receive the message. Leave the prompt blank to use the `NotificationEmail` value from the `Config` sheet (or your account email if that cell is empty).
+    2.  The script sends an email with the subject `Email Capability Test` and logs the outcome to the `TestLog` sheet.
+    3.  Verify that the email arrives in the recipient's inbox.
+
 ### How it Works: Mocking Apps Script Services
 
 A major challenge of testing Apps Script code locally is that the global Google services (e.g., `SpreadsheetApp`, `DriveApp`, `Session`) are not available.
