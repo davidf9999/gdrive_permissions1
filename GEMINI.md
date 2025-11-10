@@ -159,6 +159,7 @@ To provide the highest level of data integrity and prevent race conditions betwe
     *   New functions, `lockSheetForEdits_` and `unlockSheetForEdits_`, have been added to `Utils.gs`.
     *   These functions use Google Apps Script's `Range.protect()` method to make sheets read-only for all users except the script owner.
     *   The locking is implemented within a `try...finally` block in all sync functions. This ensures that the sheets are **always** unlocked after the operation completes, even if the script encounters an error.
+    *   **Configuration:** This feature can be disabled by setting `EnableSheetLocking` to `FALSE` in the `Config` sheet. This provides an escape hatch for administrators who find the locking too intrusive or encounter issues with sheet protections.
 
 *   **User Experience:** While a sync is in progress, users will find that they are temporarily unable to edit the managed sheets. This is a deliberate trade-off to guarantee data consistency. A "Sync in Progress" toast message will still appear to inform users of the script's activity.
 
