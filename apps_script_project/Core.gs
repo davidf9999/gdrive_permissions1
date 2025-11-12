@@ -27,7 +27,8 @@ function createSheetLockManager_(enableSheetLocking) {
 }
 
 function processManagedFolders_(options = {}) {
-  const { returnPlanOnly = false, silentMode = false } = options;
+  const returnPlanOnly = options && options.returnPlanOnly !== undefined ? options.returnPlanOnly : false;
+  const silentMode = options && options.silentMode !== undefined ? options.silentMode : false;
   let deletionPlan = [];
   const totalSummary = { added: 0, removed: 0, failed: 0 };
 
@@ -221,7 +222,7 @@ function executeFullSyncForRow_(context, options, lockManager) {
     return { added: 0, removed: 0, failed: 0 };
   }
 
-  const { group, wasNewlyCreated } = getOrCreateGroup_(groupEmail, userSheetName);
+  getOrCreateGroup_(groupEmail, userSheetName);
   setFolderPermission_(folder.getId(), groupEmail, role);
   const syncSummary = syncGroupMembership_(groupEmail, userSheetName, options);
 
@@ -235,7 +236,8 @@ function formatSpreadsheetTimestamp_(spreadsheet) {
 }
 
 function processRow_(rowIndex, options = {}) {
-  const { returnPlanOnly = false, removeOnly = false } = options;
+  const returnPlanOnly = options && options.returnPlanOnly !== undefined ? options.returnPlanOnly : false;
+  const removeOnly = options && options.removeOnly !== undefined ? options.removeOnly : false;
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = spreadsheet.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
 
@@ -323,7 +325,7 @@ function checkForOrphanSheets_() {
 }
 
 function getOrCreateFolder_(folderName, folderId, options = {}) {
-  const { silentMode = false } = options;
+  const silentMode = options && options.silentMode !== undefined ? options.silentMode : false;
   if (folderId) {
     try {
       const folder = DriveApp.getFolderById(folderId);
@@ -553,7 +555,9 @@ function renameSheetIfExists_(oldName, newName) {
 }
 
 function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
-  const { addOnly = false, removeOnly = false, returnPlanOnly = false } = options;
+  const addOnly = options && options.addOnly !== undefined ? options.addOnly : false;
+  const removeOnly = options && options.removeOnly !== undefined ? options.removeOnly : false;
+  const returnPlanOnly = options && options.returnPlanOnly !== undefined ? options.returnPlanOnly : false;
   log_('*** Starting membership sync for group "' + groupEmail + '" from sheet "' + userSheetName + '"');
   const summary = { added: 0, removed: 0, failed: 0 };
 
