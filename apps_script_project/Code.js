@@ -94,8 +94,6 @@ function onOpen() {
     advancedMenu.addSeparator();
     advancedMenu.addItem('Clean up folder...', 'cleanupFolderByName');
     advancedMenu.addItem('Remove Blank Rows', 'removeBlankRows');
-    advancedMenu.addSeparator();
-    advancedMenu.addItem('Re-apply Config Validation', 'applyConfigValidation_');
 
     const helpMenu = ui.createMenu('Help');
     helpMenu.addItem('User Guide', 'openUserGuide');

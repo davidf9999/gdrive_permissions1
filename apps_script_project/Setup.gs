@@ -161,7 +161,7 @@ function setupControlSheets_() {
     '--- Sync Behavior ---': {
       'EnableSheetLocking': { value: 'ENABLED', description: 'Set to DISABLED to disable the sheet locking mechanism during sync operations. This is not recommended as it can lead to data inconsistencies if sheets are edited during a sync.' },
       'EnableAutoSync': { value: 'DISABLED', description: 'Set to DISABLED to temporarily pause the hourly/daily auto-sync trigger without having to delete it.' },
-      'SyncInterval': { value: 5, description: 'The interval in minutes for the auto-sync trigger. Minimum is 5 minutes.' },
+      'SyncInterval': { value: 5, description: 'The interval in minutes for the auto-sync trigger. Minimum is 5 minutes. After changing this value, you must run "Permissions Manager" -> "Auto-Sync" -> "⚡ Setup Auto-Sync" to apply the new interval.' },
       'AllowAutosyncDeletion': { value: 'ENABLED', description: 'Set to ENABLED to allow auto-sync to automatically delete users. WARNING: This is a powerful feature. If a user is accidentally removed from a sheet, their access will be revoked on the next sync.' },
       'AutoSyncMaxDeletions': { value: 10, description: 'The maximum number of deletions allowed in a single auto-sync run. If exceeded, deletions will be paused and manual intervention required.' },
     },
@@ -254,42 +254,6 @@ function setupControlSheets_() {
     }
     configSheet.getRange(2, 1, newSettings.length, 3).setValues(newSettings);
   }
-  applyConfigValidation_();
-}
-
-function applyConfigValidation_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const configSheet = ss.getSheetByName(CONFIG_SHEET_NAME);
-  if (!configSheet) return;
-
-  const booleanSettings = [
-    'EnableSheetLocking',
-    'EnableAutoSync',
-    'AllowAutosyncDeletion',
-    'EnableEmailNotifications',
-    'NotifyOnSyncSuccess',
-    'NotifyDeletionsPending',
-    'EnableGCPLogging',
-    'EnableToasts',
-    'ShowTestPrompts',
-    'TestCleanup',
-    'TestAutoConfirm'
-  ];
-
-  const rule = SpreadsheetApp.newDataValidation()
-    .requireValueInList(['ENABLED', 'DISABLED'], true)
-    .setAllowInvalid(false)
-    .build();
-
-  const data = configSheet.getDataRange().getValues();
-  for (let i = 1; i < data.length; i++) {
-    const key = data[i][0];
-    if (booleanSettings.includes(key)) {
-      const cell = configSheet.getRange(i + 1, 2);
-      cell.setDataValidation(rule);
-    }
-  }
-  log_('Applied ENABLED/DISABLED validation rules to Config sheet.');
 }
 
 
