@@ -154,9 +154,20 @@ function setupControlSheets_() {
   userGroupsSheet.setFrozenRows(1);
   
   // Check for Config sheet
+  let currentUserEmail = '';
+  try {
+    currentUserEmail = Session.getEffectiveUser().getEmail();
+  } catch (e) {
+    currentUserEmail = '';
+  }
+
   const defaultConfig = {
     '--- Status ---': {
       'AutoSyncStatus': { value: 'N/A', description: 'A visual indicator of the auto-sync trigger status. Updated automatically on open. (Read-only)' },
+      'ControlSheetMode': { value: currentUserEmail ? 'FULL - ' + currentUserEmail : 'FULL', description: 'Indicates whether the last viewer had full or restricted access. Automatically updated on open.' }
+    },
+    '--- Access Control ---': {
+      'SuperAdminEmails': { value: currentUserEmail, description: 'Comma-separated list of super admin email addresses. Super admins see the full menu and test sheets.' }
     },
     '--- Sync Behavior ---': {
       'EnableSheetLocking': { value: 'ENABLED', description: 'Set to DISABLED to disable the sheet locking mechanism during sync operations. This is not recommended as it can lead to data inconsistencies if sheets are edited during a sync.' },
