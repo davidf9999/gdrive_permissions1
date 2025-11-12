@@ -16,14 +16,15 @@ optional infrastructure tooling that power that workflow.
 
 1. [Key features](#key-features)
 2. [Architecture overview](#architecture-overview)
-3. [Before you begin](#before-you-begin)
-4. [Manual setup with clasp](#manual-setup-with-clasp)
-5. [Daily usage](#daily-usage)
-6. [Automation & production deployment](#automation--production-deployment)
-7. [Documentation map](#documentation-map)
-8. [Testing](#testing)
-9. [Tearing down the project](#tearing-down-the-project)
-10. [Community](#community)
+3. [First-time Google Workspace setup](#first-time-google-workspace-setup)
+4. [Before you begin](#before-you-begin)
+5. [Manual setup with clasp](#manual-setup-with-clasp)
+6. [Daily usage](#daily-usage)
+7. [Automation & production deployment](#automation--production-deployment)
+8. [Documentation map](#documentation-map)
+9. [Testing](#testing)
+10. [Tearing down the project](#tearing-down-the-project)
+11. [Community](#community)
 
 ---
 
@@ -58,6 +59,24 @@ the spreadsheet:
 
 A deeper architectural walkthrough is available in
 [`gdrive_permissions1.md`](gdrive_permissions1.md).
+
+---
+
+## First-time Google Workspace setup
+
+If you are starting from a brand-new Google Workspace tenant, follow the
+step-by-step guide in [`docs/WORKSPACE_SETUP.md`](docs/WORKSPACE_SETUP.md). It
+walks through:
+
+1. Creating (or reusing) a Workspace tenant and initial Super Admin account.
+2. Turning on Google Groups for Business and confirming Super Admin privileges.
+3. Creating the control spreadsheet and binding an Apps Script project.
+4. Installing this repository with [`clasp`](https://github.com/google/clasp).
+5. Enabling the Admin SDK and Drive APIs, granting OAuth consent, and running the
+   first sync.
+
+Keep that guide open alongside this README when onboarding new administrators—it
+captures every click needed for the initial deployment.
 
 ---
 
@@ -189,6 +208,7 @@ when multiple administrators collaborate on the same control sheet.
 | Edit-only mode walkthrough | [`docs/EDIT_MODE_GUIDE.md`](docs/EDIT_MODE_GUIDE.md) |
 | Auto-sync options & safety levers | [`docs/AUTO_SYNC_GUIDE.md`](docs/AUTO_SYNC_GUIDE.md) & [`docs/RISK_BASED_AUTO_SYNC.md`](docs/RISK_BASED_AUTO_SYNC.md) |
 | Stopping or pausing scripts | [`docs/STOP_SCRIPTS.md`](docs/STOP_SCRIPTS.md) |
+| Workspace + script installation walkthrough | [`docs/WORKSPACE_SETUP.md`](docs/WORKSPACE_SETUP.md) |
 | Spreadsheet and script onboarding checklist | [`docs/ONBOARDING.md`](docs/ONBOARDING.md) |
 | Architecture deep dive | [`gdrive_permissions1.md`](gdrive_permissions1.md) |
 | Historical decisions & debugging notes | [`GEMINI.md`](GEMINI.md) |

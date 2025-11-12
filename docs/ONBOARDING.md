@@ -1,8 +1,9 @@
 # Onboarding checklist
 
 Use this quick reference while following the main setup instructions in the
-[README](../README.md). It highlights the prerequisites you must satisfy before
-running the Apps Script for the first time.
+[README](../README.md) and the detailed
+[Workspace setup guide](WORKSPACE_SETUP.md). It highlights the prerequisites you
+must satisfy before running the Apps Script for the first time.
 
 ## Workspace prerequisites
 

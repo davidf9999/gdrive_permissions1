@@ -7,6 +7,7 @@ keep the content current.
 | ---- | ------- | -------- | ----- |
 | [`README.md`](../README.md) | Front door for the project, covering prerequisites, manual setup, and the documentation map. | New administrators & contributors | Keep in sync with the supported deployment path (`clasp`) and update when APIs or menus change. |
 | [`gdrive_permissions1.md`](../gdrive_permissions1.md) | Architectural walkthrough of the Apps Script modules and spreadsheet layout. | Developers & reviewers | Update when new modules are added or the execution flow changes. |
+| [`docs/WORKSPACE_SETUP.md`](WORKSPACE_SETUP.md) | Linear walkthrough for creating the Workspace admin and installing the script. | First-time Workspace admins | Update when Google Cloud or Admin Console UI flows change. |
 | [`docs/ONBOARDING.md`](ONBOARDING.md) | Checklist that complements the README setup section. | Workspace admins | Use during training sessions; revise if prerequisites shift. |
 | [`docs/USER_GUIDE.md`](USER_GUIDE.md) | Day-to-day usage guide for the spreadsheet menu. | Spreadsheet operators | Align with the in-sheet menu names and supported workflows. |
 | [`docs/USER_GUIDE_he.md`](USER_GUIDE_he.md) | Hebrew translation of the user guide. | Hebrew-speaking operators | Keep translation in sync with `USER_GUIDE.md`. |
