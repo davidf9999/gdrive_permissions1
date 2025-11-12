@@ -77,6 +77,7 @@ function onOpen() {
             .addItem('Run Auto-Sync Error Email Test', 'runAutoSyncErrorEmailTest')
             .addItem('Run Email Capability Test', 'runEmailCapabilityTest')
             .addItem('Run Sheet Locking Test', 'runSheetLockingTest_')
+            .addItem('Run Circular Dependency Test', 'runCircularDependencyTest_')
             .addSeparator()
             .addItem('Cleanup Manual Test Data', 'cleanupManualTestData')
             .addItem('Cleanup Stress Test Data', 'cleanupStressTestData')

@@ -407,9 +407,20 @@ You can also grant script administration rights to an existing Google Group (e.g
 
 On the next sync, the script will add your IT department group as a member of the script's admin group. All members of the IT department will now be able to edit the control spreadsheet.
 
+### How the "Disabled" Status Works with Nested Groups
+
+The `Disabled` column in a user sheet **only applies to the direct members listed in that sheet**. It does not propagate down into nested groups.
+
+When you add a group as a member, it is treated as a single entity. The `Disabled` checkbox in that row controls whether the *entire nested group* is a member or not. It does not affect the individual membership status of users inside the nested group.
+
+**Example:**
+*   `user@example.com` is an active member of `Group B`.
+*   `Group B` is added as a member of `Group A`.
+*   Even if you add `user@example.com` to the `Group A` sheet and mark them as `Disabled`, they will **still** have the permissions of `Group A` because they are an active member of `Group B`.
+
 > **⚠️ Caution: Avoid Circular Dependencies**
 >
-> Be careful not to create circular dependencies (e.g., Group A contains Group B, and Group B contains Group A). This can lead to unpredictable behavior and sync failures.
+> Be careful not to create circular dependencies (e.g., Group A contains Group B, and Group B contains Group A). This can lead to unpredictable behavior and sync failures. The script includes a validation check to detect and prevent this.
 
 ---
 

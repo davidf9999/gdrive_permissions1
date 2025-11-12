@@ -512,6 +512,8 @@ function fullSync(options = {}) {
     log_('*** Starting full synchronization...');
 
     // --- PRE-SYNC CHECKS ---
+    validateGroupNesting_(); // Check for circular dependencies
+
     const orphanSheets = checkForOrphanSheets_();
     if (orphanSheets && orphanSheets.length > 0) {
       const errorMessage = 'SYNC ABORTED: Found orphan sheets that are not in the configuration: ' +

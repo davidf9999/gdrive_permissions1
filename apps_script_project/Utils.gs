@@ -667,3 +667,118 @@ function hideSyncInProgress_() {
   // A simple toast to indicate completion, or just let the next UI action override it.
   // For now, we'll just let it disappear or be replaced.
 }
+
+function validateGroupNesting_() {
+  log_('Validating group nesting for circular dependencies...');
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const groupSheets = spreadsheet.getSheets().filter(s => s.getName().endsWith('_G'));
+  const adminSheet = spreadsheet.getSheetByName(ADMINS_SHEET_NAME);
+  if (adminSheet) {
+    groupSheets.push(adminSheet);
+  }
+
+  const allGroupEmails = new Set();
+  const dependencyGraph = new Map();
+
+  // --- 1. Build the dependency graph ---
+  groupSheets.forEach(sheet => {
+    const sheetName = sheet.getName();
+    let parentGroupEmail;
+
+    // Determine the parent group's email
+    if (sheetName === ADMINS_SHEET_NAME) {
+      parentGroupEmail = getConfigValue_('AdminGroupEmail');
+    } else {
+      const groupName = sheetName.slice(0, -2); // Remove '_G'
+      // Find this group's email in UserGroups or ManagedFolders
+      parentGroupEmail = findGroupEmailByName_(groupName);
+    }
+
+    if (!parentGroupEmail) {
+      log_(`Could not determine parent group email for sheet "${sheetName}". Skipping for cycle detection.`, 'WARN');
+      return;
+    }
+    
+    parentGroupEmail = parentGroupEmail.toLowerCase();
+    allGroupEmails.add(parentGroupEmail);
+
+    if (!dependencyGraph.has(parentGroupEmail)) {
+      dependencyGraph.set(parentGroupEmail, []);
+    }
+
+    // Find child groups within this sheet
+    const memberEmails = sheet.getRange('A2:A').getValues().flat().filter(String);
+    memberEmails.forEach(email => {
+      const childEmail = email.toString().trim().toLowerCase();
+      if (childEmail && childEmail.includes('@')) {
+        // For simplicity, we'll consider any valid email a potential group.
+        // A more robust check could use AdminDirectory.Groups.get, but that's slow.
+        dependencyGraph.get(parentGroupEmail).push(childEmail);
+      }
+    });
+  });
+
+  // --- 2. Perform DFS to detect cycles ---
+  const whiteSet = new Set(allGroupEmails); // Nodes not yet visited
+  const graySet = new Set();  // Nodes currently in recursion stack
+  const blackSet = new Set(); // Nodes completely visited
+
+  function dfs(node, path) {
+    whiteSet.delete(node);
+    graySet.add(node);
+    path.push(node);
+
+    const children = dependencyGraph.get(node) || [];
+    for (const child of children) {
+      if (graySet.has(child)) {
+        // Cycle detected
+        path.push(child);
+        throw new Error('Circular dependency detected! Sync aborted. Cycle: ' + path.join(' -> '));
+      }
+      if (whiteSet.has(child)) {
+        dfs(child, path);
+      }
+    }
+
+    graySet.delete(node);
+    blackSet.add(node);
+    path.pop();
+  }
+
+  while (whiteSet.size > 0) {
+    const startNode = whiteSet.values().next().value;
+    dfs(startNode, []);
+  }
+
+  log_('Group nesting validation passed. No circular dependencies found.');
+  return true;
+}
+
+function findGroupEmailByName_(groupName) {
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    
+    // Check UserGroups sheet
+    const userGroupsSheet = spreadsheet.getSheetByName(USER_GROUPS_SHEET_NAME);
+    if (userGroupsSheet) {
+        const data = userGroupsSheet.getDataRange().getValues();
+        for (let i = 1; i < data.length; i++) {
+            if (data[i][0] === groupName && data[i][1]) {
+                return data[i][1];
+            }
+        }
+    }
+
+    // Check ManagedFolders sheet
+    const managedFoldersSheet = spreadsheet.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+    if (managedFoldersSheet) {
+        const data = managedFoldersSheet.getDataRange().getValues();
+        for (let i = 1; i < data.length; i++) {
+            const currentSheetName = data[i][USER_SHEET_NAME_COL - 1];
+            if (currentSheetName && currentSheetName.slice(0, -2) === groupName && data[i][GROUP_EMAIL_COL - 1]) {
+                 return data[i][GROUP_EMAIL_COL - 1];
+            }
+        }
+    }
+    
+    return null;
+}

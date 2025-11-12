@@ -1105,7 +1105,8 @@ function runAllTests() {
             { name: 'Stress Test', func: runStressTest },
             { name: 'Add/Delete Separation Test', func: runAddDeleteSeparationTest },
             { name: 'Auto-Sync Error Email Test', func: runAutoSyncErrorEmailTest },
-            { name: 'Sheet Locking Test', func: runSheetLockingTest_ }
+            { name: 'Sheet Locking Test', func: runSheetLockingTest_ },
+            { name: 'Circular Dependency Test', func: runCircularDependencyTest_ }
         ];
 
         const testResults = [];
@@ -1363,4 +1364,72 @@ function removeBlankRows() {
     } else {
         SpreadsheetApp.getUi().alert('No blank rows found.');
     }
+}
+
+function runCircularDependencyTest_() {
+    SCRIPT_EXECUTION_MODE = 'TEST';
+    log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
+    log_('║  Circular Dependency Test                                    ║', 'INFO');
+    log_('╚══════════════════════════════════════════════════════════════╝', 'INFO');
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const userGroupsSheet = ss.getSheetByName(USER_GROUPS_SHEET_NAME);
+    const sheetA = ss.insertSheet('TestCycleA_G');
+    const sheetB = ss.insertSheet('TestCycleB_G');
+    let success = false;
+
+    try {
+        // 1. Setup the circular dependency
+        const groupA_Name = 'TestCycleA';
+        const groupA_Email = 'test-cycle-a@' + Session.getActiveUser().getEmail().split('@')[1];
+        const groupB_Name = 'TestCycleB';
+        const groupB_Email = 'test-cycle-b@' + Session.getActiveUser().getEmail().split('@')[1];
+
+        // Add Group B to Group A's sheet
+        sheetA.getRange('A2').setValue(groupB_Email);
+        // Add Group A to Group B's sheet
+        sheetB.getRange('A2').setValue(groupA_Email);
+
+        // Add entries to UserGroups sheet
+        userGroupsSheet.appendRow([groupA_Name, groupA_Email]);
+        userGroupsSheet.appendRow([groupB_Name, groupB_Email]);
+
+        log_('Created circular dependency: TestCycleA -> TestCycleB -> TestCycleA', 'INFO');
+
+        // 2. Run the validation
+        try {
+            validateGroupNesting_();
+            // If it reaches here, the test failed because no error was thrown
+            throw new Error('VERIFICATION FAILED: validateGroupNesting_ did not throw an error for a circular dependency.');
+        } catch (e) {
+            if (e.message.includes('Circular dependency detected')) {
+                log_('VERIFICATION PASSED: Correctly detected circular dependency. Error: ' + e.message, 'INFO');
+                success = true;
+            } else {
+                // Re-throw if it's an unexpected error
+                throw e;
+            }
+        }
+    } catch (e) {
+        log_('TEST FAILED: ' + e.toString() + ' Stack: ' + e.stack, 'ERROR');
+        success = false;
+    } finally {
+        // 3. Cleanup
+        ss.deleteSheet(sheetA);
+        ss.deleteSheet(sheetB);
+
+        const data = userGroupsSheet.getDataRange().getValues();
+        for (let i = data.length - 1; i >= 1; i--) {
+            if (data[i][0] === 'TestCycleA' || data[i][0] === 'TestCycleB') {
+                userGroupsSheet.deleteRow(i + 1);
+            }
+        }
+        log_('Cleaned up circular dependency test data.');
+        
+        const testStatus = success ? '✓ PASSED' : '✗ FAILED';
+        log_('>>> TEST RESULT: Circular Dependency Test ' + testStatus, success ? 'INFO' : 'ERROR');
+        log_('', 'INFO');
+        SCRIPT_EXECUTION_MODE = 'DEFAULT';
+    }
+    return success;
 }
