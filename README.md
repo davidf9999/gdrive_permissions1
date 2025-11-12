@@ -1,501 +1,236 @@
 # Google Drive Permission Manager
 
-> **Project Status: Beta**
->
-> This project is currently in Beta. It is feature-complete and has been tested, but it is still under active development. Please use it with the understanding that there may be bugs or changes to the functionality. Feedback and contributions are welcome!
+> **Project status:** Beta — feature complete but still evolving. Expect minor
+> breaking changes while we continue to refine the onboarding flow and tooling.
 
-This repository contains a powerful solution for managing access to a large number of Google Drive folders using a central Google Sheet. It uses Google Groups to provide a scalable and auditable permissions system, all managed from a familiar spreadsheet interface.
-
-The recommended setup uses the `clasp` command-line tool to deploy the script, which handles the multi-file project structure automatically. An optional, more advanced setup is available for production environments that require higher API quotas.
-
----
-
-## Table of Contents
-
-- [How it Works](#how-it-works)
-- [Setup Guide (Recommended Manual Setup)](#setup-guide-recommended-manual-setup)
-- [Usage Guide](#usage-guide)
-- [Upgrading to a Production Environment](#upgrading-to-a-production-environment)
-- [Tearing Down the Project](#tearing-down-the-project)
- - [Admin Directory Prerequisites](#admin-directory-prerequisites)
- - [First Run & Testing Notes](#first-run--testing-notes)
+The Google Drive Permission Manager keeps hundreds of Drive folders in sync with
+Google Groups using a central Google Sheet. Non-technical administrators can
+paste user email addresses into dedicated tabs, run a sync from the custom menu,
+and the script ensures that Google Group membership and folder permissions stay
+correct. This repository contains the Apps Script source, automated tests, and
+optional infrastructure tooling that power that workflow.
 
 ---
 
-## The Solution: Google Groups and Automation
+## Table of contents
 
-This project solves the problem of managing Drive access at scale by using **Google Groups** as the access control mechanism. Instead of sharing a folder with many individual users (which can hit Google Drive's sharing limits), you share it with a single Google Group. This allows you to manage hundreds (or even thousands) of members by simply adding or removing them from that group.
-
-This solution automates the entire lifecycle of this approach:
-
-1.  You define which folders to manage in a central Google Sheet.
-2.  The script automatically creates dedicated Google Groups for different roles (e.g., `project-x-editors@your-domain.com`).
-3.  You manage the membership of these groups simply by adding or removing emails from other sheets.
-4.  The script runs automatically to sync the group memberships, effectively granting or revoking access to the Drive folders.
-
----
-
-## Setup Guide
-
-This guide will walk you through setting up the project for the first time. Because the script is now split into multiple files for better organization, the installation process uses a command-line tool called `clasp`.
-
-### Step 1: Prerequisites
-
-*   A **Google Workspace** account (a standard `@gmail.com` account is not sufficient).
-*   You must be a **Super Admin** for your Google Workspace domain to have the necessary permissions.
-*   **Node.js and npm:** You must have Node.js and npm installed on your computer. You can download them from [https://nodejs.org/](https://nodejs.org/).
-*   **Clasp:** Install Google's command-line tool for Apps Script by running this command in your terminal:
-    ```bash
-    npm install -g @google/clasp
-    ```
-
-### Step 2: Create the Google Sheet & Apps Script Project
-
-1.  **Create the Sheet:** Go to [Google Sheets](https://sheets.google.com) and create a new, blank spreadsheet. Give it a descriptive name (e.g., `Drive Permissions Control`).
-2.  **Open the Script Editor:** In your new sheet, click on **Extensions > Apps Script**. This creates a new, empty Apps Script project that is bound to your sheet.
-3.  **Get the Script ID:** In the Apps Script editor, click on **Project Settings** (the gear icon ⚙️). Copy the **Script ID** from the "IDs" section. You will need this in the next step.
-
-### Step 3: Configure and Deploy the Script with `clasp`
-
-1.  **Clone this Repository:** If you haven't already, clone this project repository to your local machine.
-2.  **Log in to `clasp`:** In your terminal, run `clasp login` and follow the prompts to authorize it with your Google account.
-3.  **Configure the Project:** In the root directory of this repository, create a file named `.clasp.json` and add the following content, pasting the Script ID you copied in the previous step:
-    ```json
-    {
-      "scriptId": "YOUR_SCRIPT_ID_HERE",
-      "rootDir": "apps_script_project"
-    }
-    ```
-    The `rootDir` property is essential, as it tells `clasp` that our script files are located in the `apps_script_project` folder.
-4.  **Fetch the Manifest:** Before you can push the code, you need the project's manifest file. Run the following command to pull it from the empty project you just created:
-    ```bash
-    clasp pull
-    ```
-    This will create an `appsscript.json` file inside the `apps_script_project` directory.
-5.  **Deploy the Code:** Now, push all the local script files to your Apps Script project by running:
-    ```bash
-    clasp push
-    ```
-    This will upload all the `.js` and `.gs` files from the `apps_script_project` directory.
-
-### Step 4: Enable Required APIs & Configure Consent
-
-This is the most technical step, but it's a one-time setup. It involves enabling the correct API in Apps Script, creating a consent screen in Google Cloud, and then linking the two.
-
-**Important:** This part is only possible with a **Google Workspace** account (e.g., `you@yourcompany.com`). It will not work with a personal `@gmail.com` account. You also need to be a **Super Admin** of your Workspace.
+1. [Key features](#key-features)
+2. [Architecture overview](#architecture-overview)
+3. [Before you begin](#before-you-begin)
+4. [Manual setup with clasp](#manual-setup-with-clasp)
+5. [Daily usage](#daily-usage)
+6. [Automation & production deployment](#automation--production-deployment)
+7. [Documentation map](#documentation-map)
+8. [Testing](#testing)
+9. [Tearing down the project](#tearing-down-the-project)
+10. [Community](#community)
 
 ---
 
-#### **Part A: Enable the Admin SDK API in Apps Script**
+## Key features
 
-This makes the necessary services available to your script's code.
-
-1.  **Select the Editor:** In the Apps Script interface, make sure you are in the **Editor** view by clicking the `<>` icon in the left-hand navigation panel.
-
-2.  **Add a Service:** In the "Editor" pane where files like `Code.js` are listed, find the **Services** section. Click the **plus icon (+)** next to the "Services" title. A dialog box titled "Add a service" will appear.
-
-3.  **Select the API:** Scroll through the list of available Google APIs until you find **Admin SDK API**. Click on it.
-
-4.  **Confirm:** Click the blue **Add** button. The dialog will close, and you will now see `AdminDirectory` listed under the "Services" section. (Note: Selecting "Admin SDK API" is what adds the `AdminDirectory` service that the code uses.)
-
----
-
-#### **Part B: Configure the OAuth Consent Screen in Google Cloud**
-
-Before your script can ask for permissions, you must configure a consent screen. This tells Google what to show users when the script asks for authorization.
-
-1.  **Go to Project Settings:** In the Apps Script editor, click on the **Project Settings** icon (a gear ⚙️) in the left-hand navigation panel.
-
-2.  **Get Project Number:** In the "Google Cloud Platform (GCP) Project" section, a GCP project is associated with your script. It will have a Project ID and a Project Number. **Copy the Project Number.** (If you have previously linked other projects, ensure you are using the default project for this script).
-
-3.  **Check for Existing Consent Screen:** Click the **Change Project** button, paste the copied Project Number into the text box, and click **Set Project**.
-    *   **If it succeeds without error:** The consent screen is already configured. You can skip the rest of Part B and proceed directly to **Part C: Link the Project and Enable APIs**.
-    *   **If you see an error:** You will see an error stating that the OAuth consent screen needs to be configured. This is expected if it's your first time. The error message should contain a blue link to "configure the consent screen". **Click that link to proceed to the next step.**
-
-4.  **Configure Consent Screen (if required):** The link will take you to the Google Cloud Console.
-    *   You may be asked to choose a **User Type** (Internal vs. External). Select **Internal** and click **Create**.
-    *   **App name:** Enter a descriptive name, like `Drive Permissions Manager`.
-    *   **User support email:** Select your email from the dropdown.
-    *   **Developer contact information:** Enter your email address.
-    *   Click **Save and Continue**.
-
-5.  **Scopes & Test Users:**
-    *   On the "Scopes" page, click **Save and Continue** to skip it.
-    *   If your app is "External", you will be on the "Test users" page. Click **+ Add Users**, type in your own Google Workspace email address, and click **Add**.
-    *   Click **Save and Continue** to finish.
+- **Spreadsheet-first workflow** – Manage Drive access using Google Sheets that
+  anyone in the organisation can edit.
+- **Google Group indirection** – Each folder/role combination receives its own
+  Google Group so Drive never hits the per-folder sharing limit.
+- **Safety-first syncs** – Separate menu items for "Sync Adds", "Sync Deletes",
+  and "Full Sync" help administrators preview destructive operations.
+- **Comprehensive logging** – Operational logs, test logs, and optional email
+  notifications make auditing straightforward.
+- **Extensive test helpers** – Built-in stress tests and manual access tests are
+  available directly from the sheet UI.
 
 ---
 
-#### **Part C: Link the Project and Enable APIs**
+## Architecture overview
 
-Now you can complete the connection.
+The Apps Script project is split into focused modules (`Core.gs`, `Sync.gs`,
+`Audit.gs`, etc.) which are orchestrated by `Code.js`. Configuration lives in
+the spreadsheet:
 
-1.  **Return to Apps Script:** Go back to the Apps Script browser tab.
+- **ManagedFolders** — master list of folders, their Drive IDs, and the role to
+  enforce.
+- **Admins** — spreadsheet editors managed automatically by the script.
+- **User group tabs** — one sheet per folder-role or named user group containing
+  email addresses to sync.
+- **Config** — advanced settings such as notification options and logging.
+- **Log/TestLog** — operational output for day-to-day monitoring.
 
-2.  **Set the Project (for real this time):** Go to **Project Settings** > **Change Project** again. Paste the same Project Number in. This time, it will succeed.
-
-3.  **Open Google Cloud Console:** The settings page will now show a blue, clickable link with your Project ID. Click this link to go to the Google Cloud Console.
-
-4.  **Enable the Admin SDK API:** In the Google Cloud Console, use the top search bar to find and select **Admin SDK API**. On its page, click the blue **Enable** button. If it already says "Manage", you are all set.
-
-5.  **Enable the Google Drive API:** While still in the Google Cloud Console, use the search bar again to find and select **Google Drive API**. Click the blue **Enable** button. This is required for the script to create and manage folders and to create named versions for auditing.
-
-6.  **Add Drive API v3 Advanced Service in Apps Script:** Return to the Apps Script editor tab.
-    *   In the left sidebar, click the **+** (plus sign) next to **Services**.
-    *   In the "Add a service" dialog, find and select **Drive API**.
-    *   Make sure **version v3** is selected in the dropdown.
-    *   Click **Add**.
-    *   You should now see "Drive" listed under Services in the left sidebar.
-    *   **Why this matters:** This step is CRITICAL to prevent email spam. Without it, users receive "Folder shared with you" emails on every sync run, even when permissions haven't changed.
+A deeper architectural walkthrough is available in
+[`gdrive_permissions1.md`](gdrive_permissions1.md).
 
 ---
 
-### Step 6: Run the Initial Sync
+## Before you begin
 
-1.  Save the script project by clicking the **Save project** (disk icon 💾) at the top of the Apps Script editor.
-2.  Go back to your Google Sheet tab and **refresh the page**.
-3.  A new menu named **Permissions Manager** should appear in the Google Sheets menu bar.
-4.  Click **Permissions Manager > Full Sync (Add & Delete)**.
-5.  The first time you run this, Google will ask you to authorize the script. Follow the on-screen prompts to grant the necessary permissions.
+These prerequisites must be in place before you deploy the script:
 
-Your setup is now complete! The script will have automatically created the necessary control sheets (`ManagedFolders`, `Admins`, etc.) for you.
+1. **Google Workspace domain** — personal @gmail accounts cannot access the
+   Admin SDK or Drive API required for automation.
+2. **Super Admin privileges** — the user performing the setup must be able to
+   manage Google Groups and enable Google Cloud APIs.
+3. **Registered domain name** — needed for Google Workspace. You can purchase a
+   domain during Workspace sign-up if necessary.
+4. **Google Cloud billing account** — Apps Script links to a Google Cloud
+   project. Enable billing for that project to unlock Admin SDK quota. You can
+   create or reuse a billing account from the
+   [Cloud Console](https://console.cloud.google.com/billing).
 
----
-
-## Optional: Enable Auto-Sync (Recommended for NGOs)
-
-If you want volunteers to edit sheets without manually triggering syncs:
-
-1. Go to **Permissions Manager → Auto-Sync → ⚡ Setup Auto-Sync (Every 5 Minutes)**
-2. Click OK to install the trigger
-
-Now the script runs automatically every five minutes! Volunteers can simply edit sheets, and changes are applied automatically.
-
-**Benefits:**
-- ✅ Volunteers don't need to run menu items
-- ✅ Works with free Gmail accounts (volunteers don't need Workspace)
-- ✅ No OAuth issues for non-admin users
-- ✅ Changes applied within 5 minutes automatically
-
-See the **[Auto-Sync Guide](./docs/AUTO_SYNC_GUIDE.md)** for full details.
-
-### 💡 Pro Tip: Edit Mode
-
-When making bulk changes to the control sheets, use **Edit Mode** to temporarily suspend auto-sync:
-
-1. **Permissions Manager → Edit Mode → 🔒 Enter Edit Mode**
-2. Make your changes freely
-3. **Permissions Manager → Edit Mode → 🔓 Exit Edit Mode** when done
-
-This prevents partial syncs while you're reorganizing sheets or making bulk edits. See **[Edit Mode Guide](./docs/EDIT_MODE_GUIDE.md)** for details.
+Once these are ready, clone this repository locally and continue with the manual
+setup.
 
 ---
 
-## Usage Guide
+## Manual setup with clasp
 
-For a detailed tutorial on how to use the spreadsheet, what each sheet and column means, and common workflows, please see the dedicated **[User Guide](./docs/USER_GUIDE.md)**.
+The canonical deployment flow uses [`clasp`](https://github.com/google/clasp) to
+push the multi-file Apps Script project to your spreadsheet.
 
-**Quick Tip:** The `Admins` sheet controls who can **edit** the control spreadsheet. To grant **view-only** access to the control sheets, simply use the standard Google Sheets "Share" button (no script configuration needed).
+### 1. Install tooling
 
-For details on how to handle manual permission changes, see the section on [Handling Manual Permission Changes (Reconciliation)](#handling-manual-permission-changes-reconciliation).
+- Install Node.js 18+ and npm.
+- Install clasp globally:
+  ```bash
+  npm install -g @google/clasp
+  ```
 
----
+### 2. Create the control spreadsheet
 
-## Folders Audit
+1. Create a new Google Sheet named something descriptive (e.g., `Drive
+   Permissions Control`).
+2. Open **Extensions → Apps Script** to create the bound script project.
+3. Copy the **Script ID** from **Project Settings → IDs** — you need it shortly.
 
-This project includes a powerful, read-only audit feature to help you verify your permissions configuration.
+### 3. Configure clasp locally
 
----
+1. Log into clasp:
+   ```bash
+   clasp login
+   ```
+2. At the repository root, create `.clasp.json` pointing at the bound project:
+   ```json
+   {
+     "scriptId": "YOUR_SCRIPT_ID",
+     "rootDir": "apps_script_project"
+   }
+   ```
+3. Pull the remote manifest so the local project matches the Apps Script
+   project:
+   ```bash
+   clasp pull
+   ```
 
-## Handling Manual Permission Changes (Reconciliation)
+### 4. Push the source files
 
-This project operates on a **"Stateless Enforcer"** model. This means the Google Sheet is treated as the single source of truth, and the script's main job is to enforce the permissions defined in it. The script has no memory of past changes.
-
-What happens when an admin makes a change manually (e.g., adds a user directly to a Google Group)?
-
-1.  **Detection**: The **`Permissions Manager > Folders Audit`** function will detect this change. It will report the manually added user as an `Extra Member` in the `FoldersAuditLog` sheet.
-2.  **Correction**: The **`Permissions Manager > Full Sync (Add & Delete)`** function will see this user as an "Extra Member" and **remove them** from the group to bring the system back in line with the sheet.
-
-### Approving Manual Changes with Merge & Reconcile
-
-There are legitimate cases where a manual addition should be kept. To handle this, the script provides a special tool to approve and import these manual changes into the official record (the Google Sheet).
-
-*   **What it does:** The **`Permissions Manager > Advanced > Merge & Reconcile Permissions`** function is designed specifically for this purpose. It performs a one-way merge:
-    1.  It scans every managed Google Group.
-    2.  It compares the list of members in the group with the list of members in the corresponding sheet.
-    3.  If it finds a member in the group who is **not** in the sheet (i.e., a manually added user), it **adds that user to the sheet**.
-*   **Why use it:** Run this function after you have manually added users to groups and you want to officially approve and document their membership. This updates your "source of truth" to reflect the reality you want to keep.
-*   **What it does NOT do:** It does not remove users from the sheet if they have been manually removed from a group. It is a non-destructive operation focused on importing new members.
-
-
-*   **What it does:** The audit checks for discrepancies between your configuration in the sheets and the actual permissions in Google Drive and Google Groups. It does **not** make any changes.
-*   **How to run it:** From the spreadsheet menu, select **Permissions Manager > Folders Audit**.
-*   **How to read the results:** All findings are logged in the **`FoldersAuditLog`** sheet. If this sheet is empty after a run, it means no problems were found.
-
-For a detailed explanation of the different issues the audit can find, please see the **[User Guide](./docs/USER_GUIDE.md)**.
-
----
-
-## Upgrading to a Production Environment
-
-If you find that your script is running into API quota limits or timing out, you can upgrade to a dedicated, billable Google Cloud project for higher performance.
-
-This hybrid approach allows you to start simple and scale up later without losing any of your work.
-
-### Step 1: Provision the GCP Infrastructure
-
-At any time, you can run the automated provisioning tool. This is an **advanced** procedure.
-
-1.  **Prerequisites:**
-    *   **Google Cloud SDK (`gcloud`):** [Installation Guide](https://cloud.google.com/sdk/docs/install)
-    *   **Docker and Docker Compose:** [Installation Guide](https://docs.docker.com/get-docker/)
-    *   An active **Google Cloud Billing Account**.
-2.  **Configure:** Copy `setup.conf.example` to `setup.conf` and fill in your details (GCP Billing ID, domain, etc.).
-3.  **Authenticate:** Run `gcloud auth login` and `gcloud auth application-default login` from your terminal.
-4.  **Run:** Execute `docker compose up --build` from the project root.
-
-This command will create a new, dedicated GCP project and output its **Project Number**. Copy this number.
-
-### Step 2: Link Your Script to the New Project
-
-1.  Open your existing Apps Script project.
-2.  Click the **Project Settings** (gear icon ⚙️) on the left.
-3.  Under the **Google Cloud Platform (GCP) Project** section, click **Change Project**.
-4.  Paste the **Project Number** you copied from the provisioning step and click **Set Project**.
-
-Your script is now linked to the high-performance GCP project. You don't need to change anything else.
-
----
-
-## Advanced: Managing Multiple Environments
-
-If you need to manage multiple deployments of this project (e.g., one for testing and one for production) with different Google Workspace users, you can use a single local codebase with a helper script to switch between them.
-
-This workflow allows you to seamlessly push code to the correct environment with the correct user account.
-
-### Step 1: One-Time Setup to Save Credentials
-
-First, you must save the authentication credentials for each of your admin users.
-
-1.  **Log in as the TESTING user:**
-    *   Run `clasp login` and authenticate as your **testing** administrator.
-    *   Save a copy of the credentials file:
-        ```bash
-        cp ~/.clasprc.json ~/.clasprc.test.json
-        ```
-
-2.  **Log in as the PRODUCTION user:**
-    *   Run `clasp login` again and authenticate as your **production** administrator.
-    *   Save a copy of those credentials:
-        ```bash
-        cp ~/.clasprc.json ~/.clasprc.prod.json
-        ```
-
-### Step 2: Create Environment-Specific Configs
-
-In the root of your project, create two files:
-
-1.  `.clasp.test.json`:
-    ```json
-    {
-      "scriptId": "YOUR_TESTING_SCRIPT_ID_HERE",
-      "rootDir": "apps_script_project"
-    }
-    ```
-
-2.  `.clasp.prod.json`:
-    ```json
-    {
-      "scriptId": "YOUR_PRODUCTION_SCRIPT_ID_HERE",
-      "rootDir": "apps_script_project"
-    }
-    ```
-
-### Step 3: Create the Switch Script
-
-Create a file named `switch_env.sh` in the root of your project with the following content:
+Deploy all `.gs` and `.js` files to Apps Script:
 
 ```bash
-#!/bin/bash
-
-# Exit immediately if a command exits with a non-zero status.
-set -e
-
-# Check if an environment was provided
-if [ -z "$1" ]; then
-  echo "Error: No environment specified."
-  echo "Usage: ./switch_env.sh [test|prod]"
-  exit 1
-fi
-
-ENV=$1
-
-# Check for valid environment names
-if [ "$ENV" != "test" ] && [ "$ENV" != "prod" ]; then
-  echo "Error: Invalid environment '$ENV'."
-  echo "Usage: ./switch_env.sh [test|prod]"
-  exit 1
-fi
-
-echo "Switching to $ENV environment..."
-
-# Define the source files
-PROJECT_CONFIG_SRC=".clasp.${ENV}.json"
-USER_CREDS_SRC="$HOME/.clasprc.${ENV}.json"
-
-# Define the destination files
-PROJECT_CONFIG_DEST=".clasp.json"
-USER_CREDS_DEST="$HOME/.clasprc.json"
-
-# Check if the source files exist
-if [ ! -f "$PROJECT_CONFIG_SRC" ]; then
-  echo "Error: Project config for '$ENV' not found at $PROJECT_CONFIG_SRC"
-  exit 1
-fi
-
-if [ ! -f "$USER_CREDS_SRC" ]; then
-  echo "Error: User credentials for '$ENV' not found at $USER_CREDS_SRC"
-  echo "Please make sure you have run 'clasp login' for this user and saved the credentials."
-  exit 1
-fi
-
-# Copy the files to activate the environment
-cp "$PROJECT_CONFIG_SRC" "$PROJECT_CONFIG_DEST"
-cp "$USER_CREDS_SRC" "$USER_CREDS_DEST"
-
-echo "Successfully switched to $ENV environment."
+clasp push
 ```
 
-Finally, make the script executable: `chmod +x switch_env.sh`
+Refreshing the spreadsheet should now reveal a **Permissions Manager** menu.
 
-### Step 4: Usage
+### 5. Enable required APIs and consent screen
 
-Before pushing to an environment, run the switch script:
+1. In the Apps Script editor, open **Services** and add the following advanced
+   services:
+   - `AdminDirectory`
+   - `Drive` (API v3)
+2. From **Project Settings**, follow the link to the attached Google Cloud
+   project and ensure the **Admin SDK API** and **Google Drive API** are both
+   enabled.
+3. Configure the OAuth consent screen if prompted:
+   - User type: **Internal** (recommended for Workspace domains)
+   - Populate the required contact details and add yourself as a test user.
 
-*   **To deploy to testing:**
-    ```bash
-    ./switch_env.sh test
-    clasp push
-    ```
-
-*   **To deploy to production:**
-    ```bash
-    ./switch_env.sh prod
-    clasp push
-    ```
-
----
-
-## Advanced Feature: Nested Groups
-
-This script supports nested Google Groups, which allows you to build powerful, hierarchical permission structures. You can add a Google Group as a member of another group simply by adding its email address to the relevant user sheet.
-
-### Example 1: Making Admins Members of Another Group
-
-You can grant all script administrators access to a specific folder by nesting the `Admins` group.
-
-1.  **Find the Admins Group Email:** Look in the `Config` sheet to find the email address of the automatically generated `Admins` group (the `AdminGroupEmail` setting).
-2.  **Add it to a User Sheet:** Add this group email as a new row in any of your user sheets (e.g., `Project_X_Editors`).
-
-On the next sync, the script will add the entire `Admins` group as a member of the `Project_X_Editors` group. All administrators will now automatically have editor access to that folder.
-
-### Example 2: Using Other Groups to Define Admins
-
-You can also grant script administration rights to an existing Google Group (e.g., `it-department@your-domain.com`).
-
-1.  **Add the Group Email:** Add the email address of your existing group (`it-department@your-domain.com`) as a new row in the `Admins` sheet.
-
-On the next sync, the script will add your IT department group as a member of the script's admin group. All members of the IT department will now be able to edit the control spreadsheet.
-
-### How the "Disabled" Status Works with Nested Groups
-
-The `Disabled` column in a user sheet **only applies to the direct members listed in that sheet**. It does not propagate down into nested groups.
-
-When you add a group as a member, it is treated as a single entity. The `Disabled` checkbox in that row controls whether the *entire nested group* is a member or not. It does not affect the individual membership status of users inside the nested group.
-
-**Example:**
-*   `user@example.com` is an active member of `Group B`.
-*   `Group B` is added as a member of `Group A`.
-*   Even if you add `user@example.com` to the `Group A` sheet and mark them as `Disabled`, they will **still** have the permissions of `Group A` because they are an active member of `Group B`.
-
-> **⚠️ Caution: Avoid Circular Dependencies**
->
-> Be careful not to create circular dependencies (e.g., Group A contains Group B, and Group B contains Group A). This can lead to unpredictable behavior and sync failures. The script includes a validation check to detect and prevent this.
+With APIs enabled, you can return to the sheet and run the initial sync.
 
 ---
 
-## Tearing Down the Project
+## Daily usage
 
-### Manual Setup
+1. Refresh the spreadsheet and open **Permissions Manager** from the menu bar.
+2. Run **Full Sync (Add & Delete)** for the first execution so all folders,
+   groups, and tabs are provisioned.
+3. Populate the generated user tabs with email addresses. Removing an email (or
+   marking it disabled) followed by **Sync Deletes** revokes access.
+4. Review the `Log` sheet after each sync for status messages. Errors contain
+   actionable guidance.
 
-To remove the project, simply delete the Google Sheet you created. You may also want to manually delete the Google Groups that were created by the script from the [Google Workspace Admin Console](https://admin.google.com).
-
-### Production Environment
-
-If you used the automated provisioning tool, a `teardown.sh` script is provided to delete all the Google Cloud resources.
-
-1.  Make sure the `gcp_project_id` in your `setup.conf` file points to the project you want to delete.
-2.  Run the script from your terminal: `./teardown.sh`
-
----
-
-## Advanced Features
-
-This project also includes features for testing and logging, which are explained in more detail in [User Guide](./docs/USER_GUIDE.md) and [Testing](./docs/TESTING.md).
-
-### Logging and Auditing
-
-To improve the traceability and observability of the script's operations, the logging and auditing capabilities have been enhanced.
-
-*   **Logging Levels:** The script now uses logging levels (e.g., INFO, WARN, ERROR) to provide more granular control over the log output. This allows administrators to easily filter and identify important events, such as errors or warnings, in the log sheets.
-
-*   **Numeric Summary of Changes:** At the end of each synchronization operation, the script logs a numeric summary of the changes made. This summary includes the number of users added, removed, and any failed operations, providing a clear and concise overview of the outcome of the synchronization process.
-
-For a more detailed explanation of these features, please see the [Project Evolution Summary](./GEMINI.md).
-
-### Advanced Logging with Google Cloud
-
-In addition to logging to a sheet, the script can be configured to send logs directly to **Google Cloud Logging (GCL)**. This provides a much more powerful, searchable, and persistent logging solution, which is highly recommended for production environments.
-
-**Benefits:**
-*   **Centralized Logging:** View logs from all script executions in one place.
-*   **Advanced Filtering:** Search and filter logs by severity (INFO, WARN, ERROR), time, or keyword.
-*   **Log-based Metrics & Alerts:** Create alerts for specific errors (e.g., notify you when a "FATAL ERROR" occurs).
-*   **Long-term Retention:** Store logs for extended periods, beyond the limits of a Google Sheet.
-
-**How to Enable:**
-
-1.  **Link to a GCP Project:** First, your Apps Script project **must** be linked to a standard Google Cloud Project. Follow the steps in the [Upgrading to a Production Environment](#upgrading-to-a-production-environment) section to do this.
-2.  **Enable in the Sheet:** In your Google Sheet, go to the `Config` sheet and change the value for `EnableGCPLogging` from `FALSE` to `TRUE`.
-
-Once enabled, all logs will be sent to Google Cloud Logging. You can view them by navigating to the [Logs Explorer](https://console.cloud.google.com/logs/viewer) in the Google Cloud Console for your linked project.
+For advanced workflows (auto-sync scheduling, edit mode safeguards, or the
+risk-based auto sync), consult the guides in the `docs/` directory.
 
 ---
 
-## Admin Directory Prerequisites
+## Automation & production deployment
 
-Some features (Google Group creation, membership sync, and permission assignment via groups) require the **Admin Directory** advanced service in Apps Script and the **Admin SDK** API in Google Cloud.
+The repository includes optional tooling for larger environments:
 
-- Apps Script: Add the service via the Services panel (Admin Directory API).
-- Google Cloud: Enable the Admin SDK in the linked GCP project.
-- Access: Requires Google Workspace. Personal `@gmail.com` accounts cannot use the Admin SDK.
+- **Docker setup wizard** — see `Dockerfile` and `docker-compose.yml` for a
+  containerised helper that validates prerequisites and provisions Google Cloud
+  resources.
+- **Terraform modules** — the `terraform/` directory automates API enablement,
+  service accounts, and quota configuration for production.
+- **ProductionOptimizations.gs** — optional Apps Script helpers that reduce API
+  calls during large syncs.
 
-Behavior without Admin SDK:
-- The script runs, creates/updates sheets and folders, and logs progress.
-- Group operations are skipped and clearly marked as `SKIPPED (No Admin SDK)` in the `Status` columns.
-- Tests that require groups will alert and abort.
+These steps are optional but recommended when managing thousands of folders or
+when multiple administrators collaborate on the same control sheet.
 
 ---
 
-## First Run & Testing Notes
+## Documentation map
 
-- **Two Types of Tests:** The project includes fast, automated **unit tests** (`npm test`) to check code logic and **manual tests** in the sheet menu to verify the live integration with Google services. See the [Testing Guide](./docs/TESTING.md) for a full explanation.
-- The menu contains three main sync options:
-  - **`Sync Adds`**: Performs only additions (creates folders/groups, adds members). This is safe to run to add new permissions without affecting existing ones.
-  - **`Sync Deletes`**: Performs only deletions (removes members from groups). It will ask for confirmation before proceeding.
-  - **`Full Sync (Add & Delete)`**: Performs both additions and deletions in one go.
-- Manual Access Test and Stress Test require Admin SDK. If not enabled or if you’re on a personal Gmail account, they will show an alert and abort. These tests use the `Full Sync` functionality.
-- If you want to validate sheet/folder setup only (without Admin SDK), run `Permissions Manager > Sync Adds` and verify:
-  - `ManagedFolders` rows populate `FolderID`, `UserSheetName`, and `GroupEmail`.
-  - `Status` shows `SKIPPED (No Admin SDK)` when group ops are not available.
-- To fully exercise group membership and permissions, ensure Admin SDK is enabled and your account has the required admin privileges.
+| Topic | Location |
+| ----- | -------- |
+| End-user how-to guide | [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) |
+| Hebrew user guide | [`docs/USER_GUIDE_he.md`](docs/USER_GUIDE_he.md) |
+| Testing menus and stress scenarios | [`docs/TESTING.md`](docs/TESTING.md) |
+| Edit-only mode walkthrough | [`docs/EDIT_MODE_GUIDE.md`](docs/EDIT_MODE_GUIDE.md) |
+| Auto-sync options & safety levers | [`docs/AUTO_SYNC_GUIDE.md`](docs/AUTO_SYNC_GUIDE.md) & [`docs/RISK_BASED_AUTO_SYNC.md`](docs/RISK_BASED_AUTO_SYNC.md) |
+| Stopping or pausing scripts | [`docs/STOP_SCRIPTS.md`](docs/STOP_SCRIPTS.md) |
+| Spreadsheet and script onboarding checklist | [`docs/ONBOARDING.md`](docs/ONBOARDING.md) |
+| Architecture deep dive | [`gdrive_permissions1.md`](gdrive_permissions1.md) |
+| Historical decisions & debugging notes | [`GEMINI.md`](GEMINI.md) |
+
+---
+
+## Testing
+
+Automated Jest tests validate the merge utilities and supporting JavaScript:
+
+```bash
+npm ci
+npm test -- --runInBand
+```
+
+The Apps Script logic is validated through the in-sheet testing harness. After
+pushing updates, open the spreadsheet and run **Permissions Manager → Testing →
+Run All Tests**. See [`docs/TESTING.md`](docs/TESTING.md) for details and
+troubleshooting.
+
+---
+
+## Tearing down the project
+
+To remove the automation:
+
+1. In the spreadsheet, run **Sync Deletes** to revoke any remaining folder
+   access.
+2. Delete the Google Groups that were created for managed folders.
+3. Remove the Apps Script project or delete the bound spreadsheet entirely.
+4. If you used the Terraform or Docker workflows, destroy the provisioned Google
+   Cloud resources using the respective tooling.
+
+---
+
+## Community
+
+- Review the [Contributing guide](CONTRIBUTING.md) before opening a pull
+  request.
+- Follow the [Code of Conduct](CODE_OF_CONDUCT.md) to keep the community
+  welcoming.
+- File issues using the templates under `.github/ISSUE_TEMPLATE/` so we can
+  triage efficiently.
+
+Thank you for helping us build a safer way to manage Google Drive permissions!
