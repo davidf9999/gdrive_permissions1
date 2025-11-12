@@ -16,18 +16,24 @@ function setupAutoSync() {
   // First, remove any existing triggers to avoid duplicates
   removeAutoSync();
 
-  // Create a new time-based trigger that runs every 5 minutes
+  const interval = getConfigValue_('SyncInterval', 5);
+  if (isNaN(interval) || interval < 5) {
+    SpreadsheetApp.getUi().alert('Invalid Sync Interval. Please set a number greater than or equal to 5 in the Config sheet.');
+    return;
+  }
+
+  // Create a new time-based trigger
   ScriptApp.newTrigger('autoSync')
     .timeBased()
-    .everyMinutes(5)
+    .everyMinutes(interval)
     .create();
 
-  log_('Auto-sync trigger installed. Will run every 5 minutes.', 'INFO');
+  log_('Auto-sync trigger installed. Will run every ' + interval + ' minutes.', 'INFO');
   updateConfigSetting_('AutoSyncStatus', 'ENABLED ✅'); // Update visual indicator directly
   updateConfigSetting_('EnableAutoSync', 'ENABLED');
   SpreadsheetApp.getUi().alert(
     'Auto-Sync Enabled',
-    'The script will now automatically sync every 5 minutes. ' +
+    'The script will now automatically sync every ' + interval + ' minutes. ' +
     'Volunteers can edit the sheets, and changes will be applied automatically.',
     SpreadsheetApp.getUi().ButtonSet.OK
   );
@@ -461,74 +467,7 @@ function recordAutoSyncSnapshot_(snapshot) {
   }
 }
 
-/**
- * Setup daily sync at a specific time (alternative to hourly)
- * Run this instead of setupAutoSync() if you prefer daily syncs
- */
-function setupDailySync() {
-  removeAutoSync(); // Remove existing triggers
 
-  const ui = SpreadsheetApp.getUi();
-  const response = ui.prompt(
-    'Setup Daily Sync',
-    'At what hour should the sync run? (0-23, e.g., 2 for 2 AM)',
-    ui.ButtonSet.OK_CANCEL
-  );
-
-  if (response.getSelectedButton() !== ui.Button.OK) {
-    return;
-  }
-
-  const hour = parseInt(response.getResponseText());
-  if (isNaN(hour) || hour < 0 || hour > 23) {
-    ui.alert('Invalid hour. Please enter a number between 0 and 23.');
-    return;
-  }
-
-  // Run every day at specified hour
-  ScriptApp.newTrigger('autoSync')
-    .timeBased()
-    .atHour(hour)
-    .everyDays(1)
-    .create();
-
-  log_('Daily auto-sync trigger installed for ' + hour + ':00.', 'INFO');
-  ui.alert('Daily sync enabled at ' + hour + ':00 (server time)');
-}
-
-/**
- * Setup custom interval sync
- */
-function setupCustomIntervalSync() {
-  removeAutoSync(); // Remove existing triggers
-
-  const ui = SpreadsheetApp.getUi();
-  const response = ui.prompt(
-    'Setup Custom Interval',
-    'How many hours between syncs? (1, 2, 4, 6, 8, or 12)',
-    ui.ButtonSet.OK_CANCEL
-  );
-
-  if (response.getSelectedButton() !== ui.Button.OK) {
-    return;
-  }
-
-  const hours = parseInt(response.getResponseText());
-  const validIntervals = [1, 2, 4, 6, 8, 12];
-
-  if (!validIntervals.includes(hours)) {
-    ui.alert('Invalid interval. Please choose: 1, 2, 4, 6, 8, or 12 hours.');
-    return;
-  }
-
-  ScriptApp.newTrigger('autoSync')
-    .timeBased()
-    .everyHours(hours)
-    .create();
-
-  log_('Auto-sync trigger installed for every ' + hours + ' hour(s).', 'INFO');
-  ui.alert('Auto-sync enabled every ' + hours + ' hour(s)');
-}
 
 /**
  * Menu item for admins to manually trigger a sync (still useful for immediate updates)
