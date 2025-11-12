@@ -86,12 +86,12 @@ function createAutoSyncMenu_(ui) {
     .addItem('📊 View Edit Mode Status', 'viewEditModeStatus');
 
   return ui.createMenu('Auto-Sync')
-    .addItem('⚡ Setup Auto-Sync', 'setupAutoSync')
+    .addItem('🚀 Apply Auto-Sync Settings', 'applyAutoSyncSettings')
+    .addItem('🛑 Disable & Remove Auto-Sync', 'removeAutoSync')
     .addSeparator()
     .addItem('▶️ Run Auto-Sync Now', 'runAutoSyncNow')
     .addSeparator()
     .addItem('📊 View Trigger Status', 'viewTriggerStatus')
-    .addItem('🛑 Disable Auto-Sync', 'removeAutoSync')
     .addSeparator()
     .addSubMenu(editModeMenu);
 }
@@ -148,6 +148,7 @@ function createHelpMenu_(ui) {
 function onEdit(e) {
   const range = e.range;
   const sheet = range.getSheet();
+  const oldValue = e.oldValue;
 
   // Exit if the edited sheet is not the Config sheet
   if (sheet.getName() !== CONFIG_SHEET_NAME) {
@@ -169,32 +170,42 @@ function onEdit(e) {
     return;
   }
 
+  const settingName = settingCell.getValue();
+  let value = valueCell.getValue();
+
+  // --- Handle Read-Only Status Indicator ---
+  if (settingName === 'AutoSyncStatus') {
+    // Revert the change and inform the user
+    valueCell.setValue(oldValue);
+    SpreadsheetApp.getActiveSpreadsheet().toast('The "AutoSyncStatus" is a read-only indicator.', 'Edit Reverted', 10);
+    return;
+  }
+
+  // --- Handle GUI for boolean settings ---
   const booleanSettings = [
     'EnableSheetLocking', 'EnableAutoSync', 'AllowAutosyncDeletion',
     'EnableEmailNotifications', 'NotifyOnSyncSuccess', 'NotifyDeletionsPending',
     'EnableGCPLogging', 'EnableToasts', 'ShowTestPrompts', 'TestCleanup', 'TestAutoConfirm'
   ];
 
-  const settingName = settingCell.getValue();
   if (!booleanSettings.includes(settingName)) {
     return;
   }
 
-  let value = valueCell.getValue();
   if (typeof value === 'string') {
-    value = value.toUpperCase().replace(/[^A-Z]/g, ''); // Sanitize to just letters
-  }
+    const sanitizedValue = value.toUpperCase().replace(/[^A-Z]/g, ''); // Sanitize to just letters
+    
+    // Use a timeout to let the sheet UI update before we change the value again.
+    Utilities.sleep(100);
 
-  // Use a timeout to let the sheet UI update before we change the value again.
-  // This helps prevent race conditions and weird UI behavior.
-  Utilities.sleep(100);
-
-  if (value === 'ENABLED') {
-    valueCell.setValue('ENABLED ✅');
-  } else if (value === 'DISABLED') {
-    valueCell.setValue('DISABLED ❌');
+    if (sanitizedValue === 'ENABLED') {
+      valueCell.setValue('ENABLED ✅');
+    } else if (sanitizedValue === 'DISABLED') {
+      valueCell.setValue('DISABLED ❌');
+    }
   }
 }
+
 
 function getActiveUserEmail_() {
   try {
@@ -260,7 +271,8 @@ function getSuperAdminEmails_() {
   } else if (Array.isArray(rawValue)) {
     values = rawValue;
   } else if (typeof rawValue === 'string') {
-    values = rawValue.split(/[\s,;]+/);
+    values = rawValue.split(/[
+,;]+/);
   } else {
     values = [String(rawValue)];
   }

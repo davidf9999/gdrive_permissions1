@@ -156,12 +156,12 @@ function setupControlSheets_() {
   // Check for Config sheet
   const defaultConfig = {
     '--- Status ---': {
-      'AutoSyncStatus': { value: 'N/A', description: 'A visual indicator of the auto-sync trigger status. Updated automatically on open. (Read-only)' },
+      'AutoSyncStatus': { value: 'N/A', description: 'A visual indicator of the auto-sync trigger status. Updated automatically. (Read-only)' },
     },
     '--- Sync Behavior ---': {
       'EnableSheetLocking': { value: 'ENABLED ✅', description: 'Set to DISABLED to disable the sheet locking mechanism during sync operations. This is not recommended as it can lead to data inconsistencies if sheets are edited during a sync.' },
-      'EnableAutoSync': { value: 'DISABLED ❌', description: 'Set to DISABLED to temporarily pause the hourly/daily auto-sync trigger without having to delete it.' },
-      'SyncInterval': { value: 5, description: 'The interval in minutes for the auto-sync trigger. Minimum is 5 minutes. After changing this value, you must run "Permissions Manager" -> "Auto-Sync" -> "⚡ Setup Auto-Sync" to apply the new interval.' },
+      'EnableAutoSync': { value: 'DISABLED ❌', description: 'Set to ENABLED to create and activate the time-based trigger for automatic syncing.' },
+      'SyncInterval': { value: 5, description: 'The interval in minutes for the auto-sync trigger. Minimum is 5 minutes. The new interval is applied when you re-enable auto-sync.' },
       'AllowAutosyncDeletion': { value: 'ENABLED ✅', description: 'Set to ENABLED to allow auto-sync to automatically delete users. WARNING: This is a powerful feature. If a user is accidentally removed from a sheet, their access will be revoked on the next sync.' },
       'AutoSyncMaxDeletions': { value: 10, description: 'The maximum number of deletions allowed in a single auto-sync run. If exceeded, deletions will be paused and manual intervention required.' },
     },

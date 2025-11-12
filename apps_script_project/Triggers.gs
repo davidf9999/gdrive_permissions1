@@ -6,19 +6,23 @@
  */
 
 /**
- * Sets up a 5-minute trigger for automatic synchronization.
- * Run this function ONCE from the menu to install the trigger.
- *
- * The trigger will run with the script owner's permissions, so volunteers
- * don't need to authenticate or have Admin SDK access.
+ * Sets up a time-based trigger for automatic synchronization.
+ * This function is called automatically when "EnableAutoSync" is set to ENABLED.
  */
 function setupAutoSync() {
   // First, remove any existing triggers to avoid duplicates
-  removeAutoSync();
+  const triggers = ScriptApp.getProjectTriggers();
+  for (const trigger of triggers) {
+    if (trigger.getHandlerFunction() === 'autoSync') {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  }
 
   const interval = getConfigValue_('SyncInterval', 5);
   if (isNaN(interval) || interval < 5) {
-    SpreadsheetApp.getUi().alert('Invalid Sync Interval. Please set a number greater than or equal to 5 in the Config sheet.');
+    showToast_('Invalid Sync Interval. Must be >= 5.', 'Error', 10);
+    // Revert the setting in the sheet
+    updateConfigSetting_('EnableAutoSync', 'DISABLED ❌');
     return;
   }
 
@@ -29,19 +33,13 @@ function setupAutoSync() {
     .create();
 
   log_('Auto-sync trigger installed. Will run every ' + interval + ' minutes.', 'INFO');
-  updateConfigSetting_('AutoSyncStatus', 'ENABLED ✅'); // Update visual indicator directly
-  updateConfigSetting_('EnableAutoSync', 'ENABLED');
-  SpreadsheetApp.getUi().alert(
-    'Auto-Sync Enabled',
-    'The script will now automatically sync every ' + interval + ' minutes. ' +
-    'Volunteers can edit the sheets, and changes will be applied automatically.',
-    SpreadsheetApp.getUi().ButtonSet.OK
-  );
+  updateConfigSetting_('AutoSyncStatus', 'ENABLED ✅');
+  showToast_('Auto-Sync has been ENABLED and will run every ' + interval + ' minutes.', 'Auto-Sync', 10);
 }
 
 /**
  * Removes all auto-sync triggers.
- * Run this if you want to disable automatic synchronization.
+ * This function is called automatically when "EnableAutoSync" is set to DISABLED.
  */
 function removeAutoSync() {
   const triggers = ScriptApp.getProjectTriggers();
@@ -56,16 +54,13 @@ function removeAutoSync() {
 
   if (removedCount > 0) {
     log_('Removed ' + removedCount + ' auto-sync trigger(s).', 'INFO');
-    updateConfigSetting_('AutoSyncStatus', 'DISABLED ❌'); // Update visual indicator directly
-    updateConfigSetting_('EnableAutoSync', 'DISABLED');
-    SpreadsheetApp.getUi().alert('Auto-sync triggers removed.');
+    showToast_('Auto-Sync has been DISABLED.', 'Auto-Sync', 10);
   } else {
-    // If no triggers were found, but the Config says it's enabled, we should probably set it to DISABLED.
-    // However, the new updateAutoSyncStatusIndicator_ will handle the PAUSED state based on EnableAutoSync.
-    updateConfigSetting_('AutoSyncStatus', 'DISABLED ❌'); // Ensure status is correct even if no triggers were found
-    updateConfigSetting_('EnableAutoSync', 'DISABLED');
-    SpreadsheetApp.getUi().alert('No auto-sync triggers were found.');
+    showToast_('Auto-Sync is already disabled.', 'Auto-Sync', 10);
   }
+  
+  // Always ensure the status indicators are correct
+  updateConfigSetting_('AutoSyncStatus', 'DISABLED ❌');
 }
 
 
