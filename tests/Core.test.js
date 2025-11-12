@@ -13,9 +13,8 @@ const coreCode = fs.readFileSync(path.resolve(__dirname, '../apps_script_project
 eval(coreCode);
 
 describe('processRow_', () => {
-  let mockManagedSheet, mockGetValue, mockSetValue, mockGetValues, mockRange;
-  let mockFolder, mockConfigSheet, sheetRegistry, mockSpreadsheet, mockUserSheet, mockUi;
-  let currentUserSheetName, currentFolderName;
+  let mockManagedSheet, mockFolder, mockConfigSheet, sheetRegistry, mockSpreadsheet, mockUserSheet, mockUi;
+  let currentUserSheetName, currentFolderName, managedRow;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -24,6 +23,11 @@ describe('processRow_', () => {
     global.CacheService = { getScriptCache: jest.fn(() => ({ get: jest.fn(), put: jest.fn() })) };
     global.Utilities = { formatDate: jest.fn(date => date.toISOString()), sleep: jest.fn() };
     global.Session = { getActiveUser: jest.fn(() => ({ getEmail: jest.fn(() => 'test.user@example.com') })) };
+    global.getConfigValue_ = jest.fn(() => false);
+    global.lockSheetForEdits_ = jest.fn();
+    global.unlockSheetForEdits_ = jest.fn();
+    lockSheetForEdits_ = global.lockSheetForEdits_;
+    unlockSheetForEdits_ = global.unlockSheetForEdits_;
     global.AdminDirectory = { Groups: { get: jest.fn(), insert: jest.fn() }, Members: { list: jest.fn(() => ({ members: [] })) } };
     global.DriveApp.Permission = { EDIT: 'EDIT', VIEW: 'VIEW', NONE: 'NONE' };
 
@@ -47,13 +51,60 @@ describe('processRow_', () => {
     DriveApp.createFolder = jest.fn().mockReturnValue(mockFolder);
 
     // --- Mock SpreadsheetApp ---
-    mockGetValue = jest.fn();
-    mockSetValue = jest.fn();
-    mockGetValues = jest.fn(() => []);
-    mockRange = { getValue: mockGetValue, setValue: mockSetValue, getValues: mockGetValues };
+    managedRow = {
+      folderName: 'mockFolderName',
+      folderId: 'folder-id',
+      role: 'viewer',
+      userSheetName: '',
+      groupEmail: '',
+      status: '',
+      url: '',
+      lastSynced: ''
+    };
+
+    const createCellRange = (key) => ({
+      getValue: jest.fn(() => managedRow[key]),
+      setValue: jest.fn(value => { managedRow[key] = value; }),
+      getValues: jest.fn(() => [[managedRow[key]]]),
+      setValues: jest.fn(values => {
+        managedRow[key] = Array.isArray(values) && values.length > 0 ? values[0][0] : values;
+      })
+    });
 
     mockManagedSheet = {
-      getRange: jest.fn(() => mockRange),
+      getName: jest.fn(() => global.MANAGED_FOLDERS_SHEET_NAME),
+      getRange: jest.fn((row, column, numRows, numCols) => {
+        if (row === 2 && column === 1 && numRows === 1 && numCols === 2) {
+          return {
+            getValues: jest.fn(() => [[managedRow.folderName, managedRow.folderId]])
+          };
+        }
+        if (column === global.USER_SHEET_NAME_COL) {
+          return createCellRange('userSheetName');
+        }
+        if (column === global.GROUP_EMAIL_COL) {
+          return createCellRange('groupEmail');
+        }
+        if (column === global.STATUS_COL) {
+          return createCellRange('status');
+        }
+        if (column === global.FOLDER_NAME_COL) {
+          return createCellRange('folderName');
+        }
+        if (column === global.FOLDER_ID_COL) {
+          return createCellRange('folderId');
+        }
+        if (column === global.ROLE_COL) {
+          return createCellRange('role');
+        }
+        if (column === global.URL_COL) {
+          return createCellRange('url');
+        }
+        if (column === global.LAST_SYNCED_COL) {
+          return createCellRange('lastSynced');
+        }
+        return createCellRange('status');
+      }),
       insertSheet: jest.fn(() => mockManagedSheet),
       getSheets: jest.fn(() => []),
       setFrozenRows: jest.fn(),
@@ -63,7 +114,12 @@ describe('processRow_', () => {
     };
 
     mockConfigSheet = {
-      getRange: jest.fn(() => mockRange),
+      getRange: jest.fn(() => ({
+        getValue: jest.fn(),
+        setValue: jest.fn(),
+        getValues: jest.fn(() => [[]]),
+        setValues: jest.fn()
+      })),
       getLastRow: jest.fn().mockReturnValue(2),
     };
 
@@ -94,6 +150,8 @@ describe('processRow_', () => {
     sheetRegistry.set(global.MANAGED_FOLDERS_SHEET_NAME, mockManagedSheet);
     sheetRegistry.set(global.CONFIG_SHEET_NAME, mockConfigSheet);
     sheetRegistry.set(currentUserSheetName, mockUserSheet);
+
+    managedRow.userSheetName = currentUserSheetName;
 
     const getSheetByName = jest.fn(name => sheetRegistry.get(name) || null);
     mockSpreadsheet = {
@@ -133,13 +191,9 @@ describe('processRow_', () => {
   });
 
   it('should call DriveApp.addViewer for viewer role', () => {
-    mockGetValues.mockReturnValueOnce([['mockFolderName', 'folder-id']]); // Mock for the initial empty row check
-    mockGetValue
-      .mockReturnValueOnce('mockFolderName')
-      .mockReturnValueOnce('folder-id')
-      .mockReturnValueOnce('viewer')
-      .mockReturnValueOnce('mockFolderName_viewer')
-      .mockReturnValueOnce('');
+    managedRow.userSheetName = '';
+    managedRow.groupEmail = '';
+    managedRow.role = 'viewer';
 
     processRow_(2, {});
 
@@ -147,17 +201,29 @@ describe('processRow_', () => {
   });
 
   it('should call DriveApp.addEditor for editor role', () => {
-    mockGetValues.mockReturnValueOnce([['mockFolderName', 'folder-id']]); // Mock for the initial empty row check
-    mockGetValue
-      .mockReturnValueOnce('mockFolderName')
-      .mockReturnValueOnce('folder-id')
-      .mockReturnValueOnce('editor')
-      .mockReturnValueOnce('mockFolderName_editor')
-      .mockReturnValueOnce('');
+    managedRow.role = 'editor';
+    managedRow.userSheetName = '';
+    managedRow.groupEmail = '';
 
     processRow_(2, {});
 
     expect(mockFolder.addEditor).toHaveBeenCalledWith('mockfoldernameeditor@example.com');
+  });
+
+  it('locks and unlocks only the relevant sheets when locking is enabled', () => {
+    global.getConfigValue_.mockReturnValue(true);
+
+    processRow_(2, {});
+
+    expect(global.lockSheetForEdits_).toHaveBeenCalledTimes(2);
+    expect(global.lockSheetForEdits_.mock.calls).toEqual([
+      [mockManagedSheet],
+      [mockUserSheet],
+    ]);
+
+    expect(global.unlockSheetForEdits_).toHaveBeenCalledTimes(2);
+    const unlockedSheets = global.unlockSheetForEdits_.mock.calls.map(call => call[0]);
+    expect(unlockedSheets).toEqual(expect.arrayContaining([mockManagedSheet, mockUserSheet]));
   });
 
   it('renames the folder and existing user sheet when the configured name changes', () => {
@@ -165,13 +231,10 @@ describe('processRow_', () => {
     currentUserSheetName = 'LegacySheet_viewer';
     sheetRegistry.set(currentUserSheetName, mockUserSheet);
 
-    mockGetValues.mockReturnValueOnce([['New Folder Name', 'folder-id']]); // Mock for the initial empty row check
-    mockGetValue
-      .mockReturnValueOnce('New Folder Name')
-      .mockReturnValueOnce('folder-id')
-      .mockReturnValueOnce('viewer')
-      .mockReturnValueOnce(currentUserSheetName)
-      .mockReturnValueOnce('existing-group@example.com');
+    managedRow.folderName = 'New Folder Name';
+    managedRow.role = 'viewer';
+    managedRow.userSheetName = currentUserSheetName;
+    managedRow.groupEmail = 'existing-group@example.com';
 
     processRow_(2, {});
 
@@ -186,13 +249,9 @@ describe('processRow_', () => {
   });
 
   it('should throw an error for an unsupported role', () => {
-    mockGetValues.mockReturnValueOnce([['mockFolderName', 'folder-id']]); // Mock for the initial empty row check
-    mockGetValue
-      .mockReturnValueOnce('mockFolderName')
-      .mockReturnValueOnce('folder-id')
-      .mockReturnValueOnce('unsupported-role')
-      .mockReturnValueOnce('mockFolderName_viewer')
-      .mockReturnValueOnce('');
+    managedRow.role = 'unsupported-role';
+    managedRow.userSheetName = '';
+    managedRow.groupEmail = '';
 
     expect(() => processRow_(2, {})).toThrow('Unsupported role: "unsupported-role"');
   });
