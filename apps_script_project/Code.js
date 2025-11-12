@@ -166,9 +166,10 @@ function createHelpMenu_(ui) {
 
 function isSuperAdmin_() {
   try {
-    const userEmail = (Session.getEffectiveUser().getEmail() || '').toLowerCase();
+    const userEmail = getActiveUserEmail_();
     if (!userEmail) {
-      return true;
+      log_('Could not resolve active user email. Defaulting to restricted mode.', 'WARN');
+      return false;
     }
 
     const superAdmins = getSuperAdminEmails_();
@@ -223,14 +224,6 @@ function getSuperAdminEmails_() {
 
   if (normalized.length === 0) {
     const fallbacks = [];
-    try {
-      const effectiveUser = Session.getEffectiveUser().getEmail();
-      if (effectiveUser) {
-        fallbacks.push(effectiveUser.toLowerCase());
-      }
-    } catch (e) {
-      // Ignore
-    }
     try {
       const owner = SpreadsheetApp.getActive().getOwner();
       if (owner && owner.getEmail()) {
@@ -321,7 +314,7 @@ function updateControlSheetModeIndicator_(mode) {
 
   let email = '';
   try {
-    email = Session.getEffectiveUser().getEmail();
+    email = getActiveUserEmail_();
   } catch (e) {
     email = '';
   }
@@ -333,4 +326,19 @@ function updateControlSheetModeIndicator_(mode) {
   } catch (e) {
     log_('Could not update ControlSheetMode indicator: ' + e.message, 'WARN');
   }
+}
+
+function getActiveUserEmail_() {
+  try {
+    const activeUser = Session.getActiveUser();
+    if (activeUser) {
+      const email = activeUser.getEmail();
+      if (email) {
+        return email.toLowerCase();
+      }
+    }
+  } catch (e) {
+    log_('Failed to read active user email: ' + e.message, 'WARN');
+  }
+  return '';
 }
