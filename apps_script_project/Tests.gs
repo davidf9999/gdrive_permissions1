@@ -1285,3 +1285,82 @@ function testOnlySync_(prefixes, addOnly = false) {
     }
   }
 }
+
+function cleanupFolderByName() {
+    SCRIPT_EXECUTION_MODE = 'TEST';
+    try {
+        if (shouldSkipGroupOps_()) {
+            showTestMessage_('Cleanup Aborted', 'Cleanup requires the Admin Directory service (Admin SDK). Please enable it or run on a Google Workspace domain.');
+            return;
+        }
+        const ui = SpreadsheetApp.getUi();
+        const testConfig = getTestConfiguration_();
+
+        const folderNamePrompt = ui.prompt('Enter the exact name of the folder to clean up:');
+        if (folderNamePrompt.getSelectedButton() !== ui.Button.OK || !folderNamePrompt.getResponseText()) {
+            return;
+        }
+        const folderName = folderNamePrompt.getResponseText();
+
+        const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+        const data = managedSheet.getDataRange().getValues();
+        let rowIndexToDelete = -1;
+        let folderId, groupEmail, userSheetName;
+
+        for (let i = 1; i < data.length; i++) {
+            if (data[i][FOLDER_NAME_COL - 1] === folderName) {
+                rowIndexToDelete = i + 1;
+                folderId = data[i][FOLDER_ID_COL - 1];
+                groupEmail = data[i][GROUP_EMAIL_COL - 1];
+                userSheetName = data[i][USER_SHEET_NAME_COL - 1];
+                break;
+            }
+        }
+
+        if (rowIndexToDelete === -1) {
+            showTestMessage_('Error', 'Folder not found in the ManagedFolders sheet.');
+            return;
+        }
+
+        let response = ui.Button.YES;
+        if (testConfig.autoConfirm !== true) {
+            response = ui.alert('Are you sure you want to delete all data for folder "' + folderName + '"?', 'This will delete the folder, group, and sheet.', ui.ButtonSet.YES_NO);
+        }
+        if (response !== ui.Button.YES) {
+            return;
+        }
+
+        cleanupFolderData_(folderName, folderId, groupEmail, userSheetName);
+        managedSheet.deleteRow(rowIndexToDelete);
+
+        showTestMessage_('Cleanup', 'Cleanup Complete for ' + folderName);
+    } finally {
+        SCRIPT_EXECUTION_MODE = 'DEFAULT';
+    }
+}
+
+function removeBlankRows() {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+    if (!sheet) {
+        SpreadsheetApp.getUi().alert('ManagedFolders sheet not found.');
+        return;
+    }
+    const data = sheet.getDataRange().getValues();
+    const rowsToDelete = [];
+    for (let i = data.length - 1; i >= 1; i--) { // Start from bottom, skip header
+        const folderName = data[i][FOLDER_NAME_COL - 1];
+        const folderId = data[i][FOLDER_ID_COL - 1];
+        if (!folderName && !folderId) {
+            rowsToDelete.push(i + 1);
+        }
+    }
+
+    if (rowsToDelete.length > 0) {
+        rowsToDelete.forEach(function(row) {
+            sheet.deleteRow(row);
+        });
+        SpreadsheetApp.getUi().alert(rowsToDelete.length + ' blank row(s) have been removed.');
+    } else {
+        SpreadsheetApp.getUi().alert('No blank rows found.');
+    }
+}

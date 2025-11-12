@@ -93,6 +93,9 @@ function onOpen() {
     const advancedMenu = ui.createMenu('Advanced');
     advancedMenu.addItem('Clear Cache', 'clearCache');
     advancedMenu.addItem('Update User Sheet Headers', 'updateUserSheetHeaders_');
+    advancedMenu.addSeparator();
+    advancedMenu.addItem('Clean up folder...', 'cleanupFolderByName');
+    advancedMenu.addItem('Remove Blank Rows', 'removeBlankRows');
 
     const helpMenu = ui.createMenu('Help');
     helpMenu.addItem('User Guide', 'openUserGuide');
