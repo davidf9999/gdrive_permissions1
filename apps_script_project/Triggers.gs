@@ -24,7 +24,7 @@ function setupAutoSync() {
 
   log_('Auto-sync trigger installed. Will run every 5 minutes.', 'INFO');
   updateConfigSetting_('AutoSyncStatus', 'ENABLED ✅'); // Update visual indicator directly
-  updateConfigSetting_('EnableAutoSync', true);
+  updateConfigSetting_('EnableAutoSync', 'ENABLED');
   SpreadsheetApp.getUi().alert(
     'Auto-Sync Enabled',
     'The script will now automatically sync every 5 minutes. ' +
@@ -51,13 +51,13 @@ function removeAutoSync() {
   if (removedCount > 0) {
     log_('Removed ' + removedCount + ' auto-sync trigger(s).', 'INFO');
     updateConfigSetting_('AutoSyncStatus', 'DISABLED ❌'); // Update visual indicator directly
-    updateConfigSetting_('EnableAutoSync', false);
+    updateConfigSetting_('EnableAutoSync', 'DISABLED');
     SpreadsheetApp.getUi().alert('Auto-sync triggers removed.');
   } else {
     // If no triggers were found, but the Config says it's enabled, we should probably set it to DISABLED.
     // However, the new updateAutoSyncStatusIndicator_ will handle the PAUSED state based on EnableAutoSync.
     updateConfigSetting_('AutoSyncStatus', 'DISABLED ❌'); // Ensure status is correct even if no triggers were found
-    updateConfigSetting_('EnableAutoSync', false);
+    updateConfigSetting_('EnableAutoSync', 'DISABLED');
     SpreadsheetApp.getUi().alert('No auto-sync triggers were found.');
   }
 }
@@ -249,27 +249,8 @@ function autoSync(e) {
  * @return {boolean} True if enabled, false otherwise
  */
 function isAutoSyncEnabled_() {
-  try {
-    const configSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG_SHEET_NAME);
-    if (!configSheet) {
-      return false; // If no config sheet, assume disabled
-    }
-
-    // Look for "EnableAutoSync" setting
-    const data = configSheet.getDataRange().getValues();
-    for (let i = 1; i < data.length; i++) {
-      if (data[i][0] === 'EnableAutoSync') {
-        return data[i][1] === true || data[i][1] === 'TRUE' || data[i][1] === 'true';
-      }
-    }
-
-    // Default to true if setting not found (for backwards compatibility)
-    return true;
-
-  } catch (e) {
-    log_('Error checking auto-sync status: ' + e.message, 'ERROR');
-    return false;
-  }
+  // Default to true for backward compatibility if setting is not found
+  return getConfigValue_('EnableAutoSync', true);
 }
 
 function calculateDataHash_() {
@@ -754,8 +735,8 @@ function getConfigValue_(key, defaultValue) {
       if (data[i][0] === key) {
         const value = data[i][1];
         // Handle boolean strings
-        if (value === 'TRUE' || value === true) return true;
-        if (value === 'FALSE' || value === false) return false;
+        if (value === 'TRUE' || value === true || (typeof value === 'string' && value.toUpperCase() === 'ENABLED')) return true;
+        if (value === 'FALSE' || value === false || (typeof value === 'string' && value.toUpperCase() === 'DISABLED')) return false;
         return value !== '' ? value : defaultValue;
       }
     }

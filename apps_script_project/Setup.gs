@@ -159,35 +159,35 @@ function setupControlSheets_() {
       'AutoSyncStatus': { value: 'N/A', description: 'A visual indicator of the auto-sync trigger status. Updated automatically on open. (Read-only)' },
     },
     '--- Sync Behavior ---': {
-      'EnableSheetLocking': { value: 'TRUE', description: 'Set to FALSE to disable the sheet locking mechanism during sync operations. This is not recommended as it can lead to data inconsistencies if sheets are edited during a sync.' },
-      'EnableAutoSync': { value: 'FALSE', description: 'Set to FALSE to temporarily pause the hourly/daily auto-sync trigger without having to delete it.' },
-      'AllowAutosyncDeletion': { value: 'TRUE', description: 'Set to TRUE to allow auto-sync to automatically delete users. WARNING: This is a powerful feature. If a user is accidentally removed from a sheet, their access will be revoked on the next sync.' },
+      'EnableSheetLocking': { value: 'ENABLED', description: 'Set to DISABLED to disable the sheet locking mechanism during sync operations. This is not recommended as it can lead to data inconsistencies if sheets are edited during a sync.' },
+      'EnableAutoSync': { value: 'DISABLED', description: 'Set to DISABLED to temporarily pause the hourly/daily auto-sync trigger without having to delete it.' },
+      'AllowAutosyncDeletion': { value: 'ENABLED', description: 'Set to ENABLED to allow auto-sync to automatically delete users. WARNING: This is a powerful feature. If a user is accidentally removed from a sheet, their access will be revoked on the next sync.' },
       'AutoSyncMaxDeletions': { value: 10, description: 'The maximum number of deletions allowed in a single auto-sync run. If exceeded, deletions will be paused and manual intervention required.' },
     },
     '--- Email Notifications ---': {
-      'EnableEmailNotifications': { value: 'FALSE', description: 'Set to TRUE to receive emails for errors and other notifications.' },
+      'EnableEmailNotifications': { value: 'DISABLED', description: 'Set to ENABLED to receive emails for errors and other notifications.' },
       'NotificationEmail': { value: '', description: 'The email address to send notifications to. Defaults to the script owner if left blank.' },
-      'NotifyOnSyncSuccess': { value: 'FALSE', description: 'Set to TRUE to receive a summary email after each successful auto-sync.' },
-      'NotifyDeletionsPending': { value: 'TRUE', description: 'Set to TRUE to receive an email alert when an auto-sync detects that a user needs to be manually removed. (This is ignored if AllowAutosyncDeletion is TRUE).' },
+      'NotifyOnSyncSuccess': { value: 'DISABLED', description: 'Set to ENABLED to receive a summary email after each successful auto-sync.' },
+      'NotifyDeletionsPending': { value: 'ENABLED', description: 'Set to ENABLED to receive an email alert when an auto-sync detects that a user needs to be manually removed. (This is ignored if AllowAutosyncDeletion is TRUE).' },
     },
     '--- Auditing & Limits ---': {
         'MaxLogLength': { value: DEFAULT_MAX_LOG_LENGTH, description: 'The maximum number of rows to keep in the Log and TestLog sheets.' },
         'MaxFileSizeMB': { value: 100, description: 'The maximum file size in MB for the spreadsheet. If exceeded, auto-sync will be aborted and an alert sent. This prevents uncontrolled growth of version history.' },
         '_SyncHistory': { value: 'Always enabled', description: 'Sync history is automatically tracked in the SyncHistory sheet with revision links (30-100 days retention).' },
-        'EnableGCPLogging': { value: 'FALSE', description: 'For advanced users. Set to TRUE to send logs to Google Cloud Logging for better monitoring.' },
+        'EnableGCPLogging': { value: 'DISABLED', description: 'For advanced users. Set to ENABLED to send logs to Google Cloud Logging for better monitoring.' },
     },
     '--- General ---': {
         'AdminGroupEmail': { value: '', description: 'The email address for the Google Group containing all Admins (editors of this sheet). Auto-generates if blank.' },
-        'EnableToasts': { value: 'FALSE', description: 'Set to TRUE to show small pop-up progress messages in the corner of the screen during syncs.' },
+        'EnableToasts': { value: 'DISABLED', description: 'Set to ENABLED to show small pop-up progress messages in the corner of the screen during syncs.' },
         'GitHubRepoURL': { value: 'https://github.com/davidf9999/gdrive_permissions1', description: 'The URL to the GitHub repository for this project. Used in the Help menu.' },
     },
     '--- Testing ---': {
-      'ShowTestPrompts': { value: 'FALSE', description: 'For developers. Set to TRUE to show UI alerts during automated testing.' },
+      'ShowTestPrompts': { value: 'DISABLED', description: 'For developers. Set to ENABLED to show UI alerts during automated testing.' },
       'TestFolderName': { value: 'Test Folder', description: 'The base name for the folder created during the Manual Access Test.' },
       'TestRole': { value: 'Viewer', description: 'The permission role to test with during the Manual Access Test.' },
       'TestEmail': { value: 'example@gmail.com', description: 'A test email address to use for the Manual Access Test.' },
-      'TestCleanup': { value: 'TRUE', description: 'Set to TRUE to automatically clean up resources created during tests.' },
-      'TestAutoConfirm': { value: 'FALSE', description: 'For developers. Set to TRUE to automatically skip confirmation prompts during tests.' },
+      'TestCleanup': { value: 'ENABLED', description: 'Set to ENABLED to automatically clean up resources created during tests.' },
+      'TestAutoConfirm': { value: 'DISABLED', description: 'For developers. Set to ENABLED to automatically skip confirmation prompts during tests.' },
       'TestNumFolders': { value: '10', description: 'The number of folders to create during the Stress Test.' },
       'TestNumUsers': { value: '200', description: 'The number of users to create per folder during the Stress Test.' },
       'TestBaseEmail': { value: 'example@gmail.com', description: 'The base email address used to generate unique users for the Stress Test.' },
@@ -241,12 +241,56 @@ function setupControlSheets_() {
             if (key === 'NotificationEmail' && !finalValue) {
                 finalValue = Session.getEffectiveUser().getEmail();
             }
+            // Convert old TRUE/FALSE to new ENABLED/DISABLED
+            if (typeof finalValue === 'boolean') {
+                finalValue = finalValue ? 'ENABLED' : 'DISABLED';
+            } else if (typeof finalValue === 'string') {
+                if (finalValue.toUpperCase() === 'TRUE') finalValue = 'ENABLED';
+                if (finalValue.toUpperCase() === 'FALSE') finalValue = 'DISABLED';
+            }
             newSettings.push([key, finalValue, defaultConfig[groupName][key].description]);
         }
     }
     configSheet.getRange(2, 1, newSettings.length, 3).setValues(newSettings);
   }
+  applyConfigValidation_();
 }
+
+function applyConfigValidation_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const configSheet = ss.getSheetByName(CONFIG_SHEET_NAME);
+  if (!configSheet) return;
+
+  const booleanSettings = [
+    'EnableSheetLocking',
+    'EnableAutoSync',
+    'AllowAutosyncDeletion',
+    'EnableEmailNotifications',
+    'NotifyOnSyncSuccess',
+    'NotifyDeletionsPending',
+    'EnableGCPLogging',
+    'EnableToasts',
+    'ShowTestPrompts',
+    'TestCleanup',
+    'TestAutoConfirm'
+  ];
+
+  const rule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(['ENABLED', 'DISABLED'], true)
+    .setAllowInvalid(false)
+    .build();
+
+  const data = configSheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    const key = data[i][0];
+    if (booleanSettings.includes(key)) {
+      const cell = configSheet.getRange(i + 1, 2);
+      cell.setDataValidation(rule);
+    }
+  }
+  log_('Applied ENABLED/DISABLED validation rules to Config sheet.');
+}
+
 
 function setupLogSheets_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
