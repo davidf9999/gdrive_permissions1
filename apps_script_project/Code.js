@@ -271,8 +271,7 @@ function getSuperAdminEmails_() {
   } else if (Array.isArray(rawValue)) {
     values = rawValue;
   } else if (typeof rawValue === 'string') {
-    values = rawValue.split(/[
-,;]+/);
+    values = rawValue.split(/[\n,;]+/);
   } else {
     values = [String(rawValue)];
   }
