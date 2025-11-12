@@ -673,9 +673,11 @@ function getConfigValue_(key, defaultValue) {
     for (let i = 1; i < data.length; i++) {
       if (data[i][0] === key) {
         const value = data[i][1];
-        // Handle boolean strings
-        if (value === 'TRUE' || value === true || (typeof value === 'string' && value.toUpperCase() === 'ENABLED')) return true;
-        if (value === 'FALSE' || value === false || (typeof value === 'string' && value.toUpperCase() === 'DISABLED')) return false;
+        // Handle boolean strings, ignoring extra characters like emojis
+        if (typeof value === 'string' && value.toUpperCase().startsWith('ENABLED')) return true;
+        if (typeof value === 'string' && value.toUpperCase().startsWith('DISABLED')) return false;
+        if (value === true || value === 'TRUE') return true;
+        if (value === false || value === 'FALSE') return false;
         return value !== '' ? value : defaultValue;
       }
     }
