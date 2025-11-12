@@ -386,6 +386,33 @@ Before pushing to an environment, run the switch script:
 
 ---
 
+## Advanced Feature: Nested Groups
+
+This script supports nested Google Groups, which allows you to build powerful, hierarchical permission structures. You can add a Google Group as a member of another group simply by adding its email address to the relevant user sheet.
+
+### Example 1: Making Admins Members of Another Group
+
+You can grant all script administrators access to a specific folder by nesting the `Admins` group.
+
+1.  **Find the Admins Group Email:** Look in the `Config` sheet to find the email address of the automatically generated `Admins` group (the `AdminGroupEmail` setting).
+2.  **Add it to a User Sheet:** Add this group email as a new row in any of your user sheets (e.g., `Project_X_Editors`).
+
+On the next sync, the script will add the entire `Admins` group as a member of the `Project_X_Editors` group. All administrators will now automatically have editor access to that folder.
+
+### Example 2: Using Other Groups to Define Admins
+
+You can also grant script administration rights to an existing Google Group (e.g., `it-department@your-domain.com`).
+
+1.  **Add the Group Email:** Add the email address of your existing group (`it-department@your-domain.com`) as a new row in the `Admins` sheet.
+
+On the next sync, the script will add your IT department group as a member of the script's admin group. All members of the IT department will now be able to edit the control spreadsheet.
+
+> **⚠️ Caution: Avoid Circular Dependencies**
+>
+> Be careful not to create circular dependencies (e.g., Group A contains Group B, and Group B contains Group A). This can lead to unpredictable behavior and sync failures.
+
+---
+
 ## Tearing Down the Project
 
 ### Manual Setup
