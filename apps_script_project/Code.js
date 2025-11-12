@@ -39,8 +39,7 @@ let SCRIPT_EXECUTION_MODE = 'DEFAULT'; // Can be 'DEFAULT' or 'TEST'
 function onOpen() {
   const superAdmin = isSuperAdmin_();
   const ui = SpreadsheetApp.getUi();
-  const menuTitle = superAdmin ? 'Permissions Manager' : 'Permissions Manager (Restricted)';
-  const menu = ui.createMenu(menuTitle);
+  const menu = ui.createMenu('Permissions Manager');
 
   if (superAdmin) {
     buildSuperAdminMenu_(menu, ui);
@@ -80,7 +79,22 @@ function buildSuperAdminMenu_(menu, ui) {
 }
 
 function buildRestrictedMenu_(menu, ui) {
+  menu.addItem('View Mode: Restricted', 'showRestrictedModeInfo_');
+  menu.addSeparator();
   menu.addSubMenu(createHelpMenu_(ui));
+}
+
+function showRestrictedModeInfo_() {
+  try {
+    const ui = SpreadsheetApp.getUi();
+    ui.alert(
+      'Restricted Mode',
+      'You have view-only access to control sheets. Contact a listed super admin if you need to run sync, audit, or test actions.',
+      ui.ButtonSet.OK
+    );
+  } catch (e) {
+    log_('Unable to show restricted mode dialog: ' + e.message, 'WARN');
+  }
 }
 
 function createManualSyncMenu_(ui) {
@@ -149,12 +163,19 @@ function createLoggingMenu_(ui) {
 }
 
 function createAdvancedMenu_(ui) {
-  return ui.createMenu('Advanced')
+  const menu = ui.createMenu('Advanced')
     .addItem('Clear Cache', 'clearCache')
     .addItem('Update User Sheet Headers', 'updateUserSheetHeaders_')
     .addSeparator()
     .addItem('Clean up folder...', 'cleanupFolderByName')
     .addItem('Remove Blank Rows', 'removeBlankRows');
+
+  if (typeof applyConfigValidation_ === 'function') {
+    menu.addSeparator();
+    menu.addItem('Refresh Config GUI', 'applyConfigValidation_');
+  }
+
+  return menu;
 }
 
 function createHelpMenu_(ui) {
@@ -187,7 +208,7 @@ function isSuperAdmin_() {
     }
 
     const domain = userEmail.indexOf('@') !== -1 ? userEmail.split('@')[1] : '';
-    return superAdmins.some(function(entry) {
+    const isSuperAdmin = superAdmins.some(function(entry) {
       if (entry === userEmail) {
         return true;
       }
@@ -202,6 +223,8 @@ function isSuperAdmin_() {
       }
       return false;
     });
+    log_('Super admin check for ' + userEmail + ': ' + (isSuperAdmin ? 'GRANTED' : 'DENIED'), 'DEBUG');
+    return isSuperAdmin;
   } catch (e) {
     log_('Could not determine super admin status: ' + e.message, 'WARN');
     return false;
