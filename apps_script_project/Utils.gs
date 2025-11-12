@@ -392,8 +392,9 @@ function clearAuxiliaryLogs() {
 
 function sendErrorNotification_(errorMessage) {
   try {
-    const enableEmailNotifications = getConfigValue_('EnableEmailNotifications', false);
-    const adminEmail = getConfigValue_('NotificationEmail', null);
+    const config = getConfiguration_();
+    const enableEmailNotifications = config['EnableEmailNotifications'];
+    const adminEmail = config['NotificationEmail'];
 
     if (enableEmailNotifications === true && adminEmail) {
       MailApp.sendEmail(adminEmail, 'Permissions Manager Script - Fatal Error', errorMessage);
@@ -655,7 +656,7 @@ function isGroup_(email) {
 }
 
 function showSyncInProgress_() {
-  const enableSheetLocking = getConfigValue_('EnableSheetLocking', true);
+  const enableSheetLocking = getConfiguration_()['EnableSheetLocking'];
   let message = 'A synchronization script is running. Please avoid making changes to the sheet.';
   if (enableSheetLocking) {
     message = 'A synchronization script is running. The sheet is temporarily locked to prevent data corruption. Please wait a moment.';
@@ -687,7 +688,7 @@ function validateGroupNesting_() {
 
     // Determine the parent group's email
     if (sheetName === ADMINS_SHEET_NAME) {
-      parentGroupEmail = getConfigValue_('AdminGroupEmail');
+      parentGroupEmail = getConfiguration_()['AdminGroupEmail'];
     } else {
       const groupName = sheetName.slice(0, -2); // Remove '_G'
       // Find this group's email in UserGroups or ManagedFolders

@@ -7,7 +7,7 @@
  * This is the primary function called from the menu.
  */
 function applyAutoSyncSettings() {
-  const isEnabled = getConfigValue_('EnableAutoSync', false);
+  const isEnabled = getConfiguration_('EnableAutoSync', false);
   
   if (isEnabled) {
     setupAutoSync();
@@ -28,7 +28,7 @@ function setupAutoSync() {
     }
   }
 
-  const interval = getConfigValue_('SyncInterval', 5);
+  const interval = getConfiguration_('SyncInterval', 5);
   if (isNaN(interval) || interval < 5) {
     SpreadsheetApp.getUi().alert('Invalid Sync Interval. Please set a number greater than or equal to 5 in the Config sheet.');
     // Revert the visual setting in the sheet, as the action failed
@@ -116,7 +116,7 @@ function autoSync(e) {
  * Helper function to check if auto-sync is enabled.
  */
 function isAutoSyncEnabled_() {
-  return getConfigValue_('EnableAutoSync', false);
+  return getConfiguration_('EnableAutoSync', false);
 }
 
 // ... (Other functions like calculateDataHash_, detectAutoSyncChanges_, etc. are unchanged)
@@ -159,7 +159,7 @@ function updateAutoSyncStatusIndicator_() {
   try {
     const triggers = ScriptApp.getProjectTriggers();
     const hasTrigger = triggers.some(t => t.getHandlerFunction() === 'autoSync');
-    const isEnabledInConfig = getConfigValue_('EnableAutoSync', false);
+    const isEnabledInConfig = getConfiguration_('EnableAutoSync', false);
     let statusToDisplay;
 
     if (hasTrigger) {
