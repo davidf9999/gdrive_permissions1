@@ -361,7 +361,7 @@ function shouldHideSheetForRestrictedView_(sheetName, config) {
     return true;
   }
 
-  return config.prefixes.some(function(prefix) {
+  return config.prefixes.some(function(prefix) { 
     return sheetName.indexOf(prefix) === 0;
   });
 }
