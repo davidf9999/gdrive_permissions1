@@ -135,20 +135,16 @@ function viewTriggerStatus() {
   if (autoSyncTriggers.length > 0) {
     message += 'A time-based trigger IS INSTALLED.\n';
     if (isEnabledInConfig) {
-      message += 'Status: ENABLED ✅\n';
-      message += 'The script will run automatically.';
+      message += 'Status: ENABLED ✅\n\nThe script will run automatically.';
     } else {
-      message += 'Status: PAUSED ⏸️\n';
-      message += 'The trigger is installed but is currently paused because "EnableAutoSync" is DISABLED in the Config sheet. The script will not run.';
+      message += 'Status: PAUSED ⏸️\n\nThe trigger is installed but is currently paused because "EnableAutoSync" is DISABLED in the Config sheet. The script will not run.';
     }
   } else {
     message += 'No time-based trigger is installed.\n';
     if (isEnabledInConfig) {
-      message += 'Status: MISCONFIGURED ⚠️\n';
-      message += '\n"EnableAutoSync" is ENABLED in the Config sheet, but no trigger is installed. Please run "Apply Auto-Sync Settings" from the menu.';
+      message += 'Status: MISCONFIGURED ⚠️\n\n"EnableAutoSync" is ENABLED in the Config sheet, but no trigger is installed. Please run "Apply Auto-Sync Settings" from the menu.';
     } else {
-      message += 'Status: DISABLED ❌\n';
-      message += 'The script will not run automatically.';
+      message += 'Status: DISABLED ❌\n\nThe script will not run automatically.';
     }
   }
   
