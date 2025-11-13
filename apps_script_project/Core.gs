@@ -295,6 +295,7 @@ function checkForOrphanSheets_() {
     requiredSheetNames.add(FOLDER_AUDIT_LOG_SHEET_NAME);
     requiredSheetNames.add(SYNC_HISTORY_SHEET_NAME);
     requiredSheetNames.add('DeepFolderAuditLog');
+    requiredSheetNames.add('Help');
 
     const managedSheet = spreadsheet.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
     if (managedSheet && managedSheet.getLastRow() > 1) {
