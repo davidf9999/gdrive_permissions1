@@ -186,18 +186,41 @@ function getConfiguration_() {
   return config;
 }
 
+/**
+ * Gets a configuration value by key with optional default value.
+ * Handles boolean strings (ENABLED/DISABLED) and normalizes them to true/false.
+ * @param {string} key - The config key to retrieve
+ * @param {*} defaultValue - The default value if key is not found
+ * @return {*} The config value, normalized if it's a boolean string
+ */
 function getConfigValue_(key, defaultValue) {
   const config = getConfiguration_();
   if (config[key] !== undefined && config[key] !== null) {
-    // Handle boolean strings
+    // Handle boolean strings using common normalization
     if (typeof config[key] === 'string') {
-      const upperValue = config[key].toUpperCase();
-      if (upperValue.startsWith('ENABLED')) return true;
-      if (upperValue.startsWith('DISABLED')) return false;
+      return normalizeBooleanConfigValue_(config[key]);
     }
     return config[key];
   }
   return defaultValue;
+}
+
+/**
+ * Normalizes a boolean config value string to a boolean.
+ * Handles various formats: 'ENABLED', 'ENABLED ✅', 'DISABLED', 'DISABLED ❌', etc.
+ * @param {string|boolean} value - The value to normalize
+ * @return {string|boolean} The normalized value (returns boolean for ENABLED/DISABLED, otherwise original)
+ */
+function normalizeBooleanConfigValue_(value) {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const upperValue = value.toUpperCase().trim();
+    if (upperValue.startsWith('ENABLED')) return true;
+    if (upperValue.startsWith('DISABLED')) return false;
+  }
+  return value;
 }
 
 

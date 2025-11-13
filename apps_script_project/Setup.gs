@@ -1,4 +1,24 @@
 /**
+ * Normalizes a boolean config value by removing emojis and extra whitespace.
+ * Converts 'ENABLED ✅' to 'ENABLED', 'DISABLED ❌' to 'DISABLED', etc.
+ * @param {*} value - The value to normalize
+ * @return {*} The normalized value
+ */
+function normalizeBooleanValue_(value) {
+  if (typeof value !== 'string') {
+    return value;
+  }
+  const upperValue = value.toUpperCase().trim();
+  if (upperValue.startsWith('ENABLED')) {
+    return 'ENABLED';
+  }
+  if (upperValue.startsWith('DISABLED')) {
+    return 'DISABLED';
+  }
+  return value;
+}
+
+/**
  * Migrates old UserGroup sheets to new naming convention (adds "_G" suffix).
  * This ensures compatibility with the new naming scheme where group sheets
  * end with "_G" to distinguish them from folder sheets.
@@ -159,35 +179,35 @@ function setupControlSheets_() {
       'Auto-Sync Trigger Status': { value: 'DISABLED', description: 'A visual indicator of the auto-sync trigger status. (Read-only)' },
     },
     '--- Sync Behavior ---': {
-      'EnableSheetLocking': { value: 'ENABLED ✅', description: 'Set to DISABLED to disable the sheet locking mechanism during sync operations. This is not recommended as it can lead to data inconsistencies if sheets are edited during a sync.' },
+      'EnableSheetLocking': { value: 'ENABLED', description: 'Set to DISABLED to disable the sheet locking mechanism during sync operations. This is not recommended as it can lead to data inconsistencies if sheets are edited during a sync.' },
       'AutoSyncInterval': { value: 5, description: 'The interval in minutes for the auto-sync trigger. Minimum is 5 minutes. Use the "Enable/Update Auto-Sync" menu item to apply a new interval.' },
-      'AllowAutosyncDeletion': { value: 'ENABLED ✅', description: 'Set to ENABLED to allow auto-sync to automatically delete users. WARNING: This is a powerful feature. If a user is accidentally removed from a sheet, their access will be revoked on the next sync.' },
+      'AllowAutosyncDeletion': { value: 'ENABLED', description: 'Set to ENABLED to allow auto-sync to automatically delete users. WARNING: This is a powerful feature. If a user is accidentally removed from a sheet, their access will be revoked on the next sync.' },
       'AutoSyncMaxDeletions': { value: 10, description: 'The maximum number of deletions allowed in a single auto-sync run. If exceeded, deletions will be paused and manual intervention required.' },
     },
     '--- Email Notifications ---': {
-      'EnableEmailNotifications': { value: 'DISABLED ❌', description: 'Set to ENABLED to receive emails for errors and other notifications.' },
+      'EnableEmailNotifications': { value: 'DISABLED', description: 'Set to ENABLED to receive emails for errors and other notifications.' },
       'NotificationEmail': { value: '', description: 'The email address to send notifications to. Defaults to the script owner if left blank.' },
-      'NotifyOnSyncSuccess': { value: 'DISABLED ❌', description: 'Set to ENABLED to receive a summary email after each successful auto-sync.' },
-      'NotifyDeletionsPending': { value: 'ENABLED ✅', description: 'Set to ENABLED to receive an email alert when an auto-sync detects that a user needs to be manually removed. (This is ignored if AllowAutosyncDeletion is TRUE).' },
+      'NotifyOnSyncSuccess': { value: 'DISABLED', description: 'Set to ENABLED to receive a summary email after each successful auto-sync.' },
+      'NotifyDeletionsPending': { value: 'ENABLED', description: 'Set to ENABLED to receive an email alert when an auto-sync detects that a user needs to be manually removed. (This is ignored if AllowAutosyncDeletion is TRUE).' },
     },
     '--- Auditing & Limits ---': {
         'MaxLogLength': { value: DEFAULT_MAX_LOG_LENGTH, description: 'The maximum number of rows to keep in the Log and TestLog sheets.' },
         'MaxFileSizeMB': { value: 100, description: 'The maximum file size in MB for the spreadsheet. If exceeded, auto-sync will be aborted and an alert sent. This prevents uncontrolled growth of version history.' },
         '_SyncHistory': { value: 'Always enabled', description: 'Sync history is automatically tracked in the SyncHistory sheet with revision links (30-100 days retention).' },
-        'EnableGCPLogging': { value: 'DISABLED ❌', description: 'For advanced users. Set to ENABLED to send logs to Google Cloud Logging for better monitoring.' },
+        'EnableGCPLogging': { value: 'DISABLED', description: 'For advanced users. Set to ENABLED to send logs to Google Cloud Logging for better monitoring.' },
     },
     '--- General ---': {
         'AdminGroupEmail': { value: '', description: 'The email address for the Google Group containing all Admins (editors of this sheet). Auto-generates if blank.' },
-        'EnableToasts': { value: 'DISABLED ❌', description: 'Set to ENABLED to show small pop-up progress messages in the corner of the screen during syncs.' },
+        'EnableToasts': { value: 'DISABLED', description: 'Set to ENABLED to show small pop-up progress messages in the corner of the screen during syncs.' },
         'GitHubRepoURL': { value: 'https://github.com/davidf9999/gdrive_permissions1', description: 'The URL to the GitHub repository for this project. Used in the Help menu.' },
     },
     '--- Testing ---': {
-      'ShowTestPrompts': { value: 'DISABLED ❌', description: 'For developers. Set to ENABLED to show UI alerts during automated testing.' },
+      'ShowTestPrompts': { value: 'DISABLED', description: 'For developers. Set to ENABLED to show UI alerts during automated testing.' },
       'TestFolderName': { value: 'Test Folder', description: 'The base name for the folder created during the Manual Access Test.' },
       'TestRole': { value: 'Viewer', description: 'The permission role to test with during the Manual Access Test.' },
       'TestEmail': { value: 'example@gmail.com', description: 'A test email address to use for the Manual Access Test.' },
-      'TestCleanup': { value: 'ENABLED ✅', description: 'Set to ENABLED to automatically clean up resources created during tests.' },
-      'TestAutoConfirm': { value: 'DISABLED ❌', description: 'For developers. Set to ENABLED to automatically skip confirmation prompts during tests.' },
+      'TestCleanup': { value: 'ENABLED', description: 'Set to ENABLED to automatically clean up resources created during tests.' },
+      'TestAutoConfirm': { value: 'DISABLED', description: 'For developers. Set to ENABLED to automatically skip confirmation prompts during tests.' },
       'TestNumFolders': { value: '10', description: 'The number of folders to create during the Stress Test.' },
       'TestNumUsers': { value: '200', description: 'The number of users to create per folder during the Stress Test.' },
       'TestBaseEmail': { value: 'example@gmail.com', description: 'The base email address used to generate unique users for the Stress Test.' },
@@ -223,15 +243,19 @@ function setupControlSheets_() {
             const value = row[1];
             const valueStr = String(value);
             if (!valueStr.startsWith('#') || (!valueStr.includes('ERROR') && !valueStr.includes('N/A') && !valueStr.includes('VALUE') && !valueStr.includes('REF') && !valueStr.includes('DIV'))) {
-                existingSettings.set(row[0], value);
+                // Normalize boolean values by removing emojis
+                const normalizedValue = normalizeBooleanValue_(value);
+                existingSettings.set(row[0], normalizedValue);
             } else {
                 log_('Warning: Skipping Config setting "' + row[0] + '" due to formula error: ' + valueStr, 'WARN');
             }
         }
     });
 
-    // Clear the sheet
-    configSheet.getRange(2, 1, configSheet.getMaxRows() - 1, 3).clearContent();
+    // Clear the sheet content and data validations
+    const clearRange = configSheet.getRange(2, 1, configSheet.getMaxRows() - 1, 3);
+    clearRange.clearContent();
+    clearRange.clearDataValidations();
 
     const newSettings = [];
     for (const groupName in defaultConfig) {
@@ -260,12 +284,20 @@ function applyConfigValidation_() {
     'EnableGCPLogging', 'EnableToasts', 'ShowTestPrompts', 'TestCleanup', 'TestAutoConfirm'
   ];
 
+  const data = configSheet.getDataRange().getValues();
+
+  // First, clear all data validations from the Value column (column B)
+  const lastRow = data.length;
+  if (lastRow > 1) {
+    configSheet.getRange(2, 2, lastRow - 1, 1).clearDataValidations();
+  }
+
+  // Then, apply ENABLED/DISABLED validation only to boolean settings
   const rule = SpreadsheetApp.newDataValidation()
     .requireValueInList(['ENABLED', 'DISABLED'])
     .setAllowInvalid(false)
     .build();
 
-  const data = configSheet.getDataRange().getValues();
   for (let i = 1; i < data.length; i++) {
     const key = data[i][0];
     if (booleanSettings.includes(key)) {
