@@ -96,8 +96,133 @@ function autoSync(e) {
 
 
 
-// ... (Other functions like calculateDataHash_, detectAutoSyncChanges_, etc. are unchanged)
+/**
+ * Detects changes in the spreadsheet and managed folders since the last AutoSync run.
+ * Returns whether a sync should run and the reasons why.
+ */
+function detectAutoSyncChanges_() {
+  const props = PropertiesService.getDocumentProperties();
+  let previousSnapshot = null;
 
+  try {
+    const rawSnapshot = props.getProperty(AUTO_SYNC_CHANGE_SIGNATURE_KEY);
+    if (rawSnapshot) {
+      previousSnapshot = JSON.parse(rawSnapshot);
+    }
+  } catch (e) {
+    log_('Failed to parse previous AutoSync snapshot: ' + e.message, 'WARN');
+  }
+
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const spreadsheetLastUpdated = spreadsheet.getLastUpdated();
+
+  const folderStates = {};
+  const folderIds = new Set();
+  let hadFolderErrors = false;
+
+  const managedSheet = spreadsheet.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+  if (managedSheet && managedSheet.getLastRow() > 1) {
+    const idValues = managedSheet.getRange(2, FOLDER_ID_COL, managedSheet.getLastRow() - 1, 1).getValues();
+    idValues.forEach(row => {
+      if (row && row[0]) {
+        const id = row[0].toString().trim();
+        if (id) {
+          folderIds.add(id);
+        }
+      }
+    });
+  }
+
+  folderIds.forEach(id => {
+    try {
+      const folder = DriveApp.getFolderById(id);
+      const lastUpdated = folder.getLastUpdated();
+      folderStates[id] = lastUpdated ? lastUpdated.getTime() : null;
+    } catch (e) {
+      hadFolderErrors = true;
+      folderStates[id] = previousSnapshot && previousSnapshot.folderStates && previousSnapshot.folderStates.hasOwnProperty(id)
+        ? previousSnapshot.folderStates[id]
+        : null;
+      log_('Change detection: unable to read folder ' + id + ': ' + e.message, 'WARN');
+    }
+  });
+
+  let shouldRun = false;
+  const reasons = [];
+
+  if (!previousSnapshot) {
+    shouldRun = true;
+    reasons.push('No previous AutoSync snapshot was found.');
+  }
+
+  const previousSpreadsheetTimestamp = previousSnapshot && typeof previousSnapshot.spreadsheetLastUpdated === 'number'
+    ? previousSnapshot.spreadsheetLastUpdated
+    : null;
+
+  if (spreadsheetLastUpdated) {
+    const currentSpreadsheetTimestamp = spreadsheetLastUpdated.getTime();
+    if (!previousSpreadsheetTimestamp || currentSpreadsheetTimestamp > previousSpreadsheetTimestamp) {
+      shouldRun = true;
+      reasons.push('Control spreadsheet updated at ' + spreadsheetLastUpdated.toISOString() + '.');
+    }
+  }
+
+  folderIds.forEach(id => {
+    const currentTimestamp = folderStates[id];
+    const previousTimestamp = previousSnapshot && previousSnapshot.folderStates
+      ? previousSnapshot.folderStates[id]
+      : undefined;
+
+    if (typeof previousTimestamp === 'undefined') {
+      shouldRun = true;
+      reasons.push('New managed folder detected (' + id + ').');
+      return;
+    }
+
+    if (currentTimestamp === null && previousTimestamp !== null) {
+      shouldRun = true;
+      reasons.push('Folder ' + id + ' is no longer accessible.');
+      return;
+    }
+
+    if (currentTimestamp !== null && previousTimestamp === null) {
+      shouldRun = true;
+      reasons.push('Folder ' + id + ' became accessible again.');
+      return;
+    }
+
+    if (typeof currentTimestamp === 'number' && typeof previousTimestamp === 'number' && currentTimestamp > previousTimestamp) {
+      shouldRun = true;
+      reasons.push('Folder ' + id + ' modified at ' + new Date(currentTimestamp).toISOString() + '.');
+    }
+  });
+
+  if (previousSnapshot && previousSnapshot.folderStates) {
+    Object.keys(previousSnapshot.folderStates).forEach(id => {
+      if (!folderIds.has(id)) {
+        shouldRun = true;
+        reasons.push('Managed folder removed from sheet (' + id + ').');
+      }
+    });
+  }
+
+  if (hadFolderErrors) {
+    shouldRun = true;
+    reasons.push('Encountered errors while inspecting managed folders.');
+  }
+
+  const snapshot = {
+    spreadsheetLastUpdated: spreadsheetLastUpdated ? spreadsheetLastUpdated.getTime() : null,
+    folderStates: folderStates,
+    capturedAt: new Date().toISOString()
+  };
+
+  return {
+    shouldRun,
+    reasons,
+    snapshot
+  };
+}
 
 /**
  * View current trigger status
