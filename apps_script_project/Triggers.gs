@@ -43,7 +43,7 @@ function setupAutoSync() {
     .create();
 
   log_('Auto-sync trigger installed. Will run every ' + interval + ' minutes.', 'INFO');
-  updateConfigSetting_('AutoSyncStatus', 'ENABLED ✅');
+  updateConfigSetting_('Auto-Sync Trigger Status', 'ENABLED');
   SpreadsheetApp.getUi().alert(
     'Auto-Sync Enabled',
     'The script will now automatically sync every ' + interval + ' minutes.',
@@ -73,8 +73,8 @@ function removeAutoSync() {
   }
   
   // Always ensure the status indicators are correct
-  updateConfigSetting_('AutoSyncStatus', 'DISABLED ❌');
-  updateConfigSetting_('EnableAutoSync', 'DISABLED ❌');
+  updateConfigSetting_('Auto-Sync Trigger Status', 'DISABLED');
+  updateConfigSetting_('EnableAutoSync', 'DISABLED');
 }
 
 
@@ -164,18 +164,18 @@ function updateAutoSyncStatusIndicator_() {
 
     if (hasTrigger) {
       if (isEnabledInConfig) {
-        statusToDisplay = 'ENABLED ✅';
+        statusToDisplay = 'ENABLED';
       } else {
-        statusToDisplay = 'PAUSED ⏸️';
+        statusToDisplay = 'PAUSED';
       }
     } else {
       if (isEnabledInConfig) {
-        statusToDisplay = 'MISCONFIGURED ⚠️';
+        statusToDisplay = 'MISCONFIGURED';
       } else {
-        statusToDisplay = 'DISABLED ❌';
+        statusToDisplay = 'DISABLED';
       }
     }
-    updateConfigSetting_('AutoSyncStatus', statusToDisplay);
+    updateConfigSetting_('Auto-Sync Trigger Status', statusToDisplay);
   } catch (e) {
     log_('Could not update Auto-Sync status indicator: ' + e.message, 'WARN');
   }

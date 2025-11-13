@@ -155,13 +155,21 @@ function onEdit(e) {
     return;
   }
 
+  const editedRow = range.getRow();
+  const editedCol = range.getColumn();
+  
+  // --- Protect Description Column ---
+  if (editedCol === 3) {
+    range.setValue(oldValue);
+    SpreadsheetApp.getActiveSpreadsheet().toast('The description column is not editable.', 'Edit Reverted', 10);
+    return;
+  }
+
   // Exit if more than one cell is edited at once
   if (range.getNumRows() > 1 || range.getNumColumns() > 1) {
     return;
   }
 
-  const editedRow = range.getRow();
-  const editedCol = range.getColumn();
   const settingCell = sheet.getRange(editedRow, 1);
   const valueCell = sheet.getRange(editedRow, 2);
 
@@ -171,38 +179,13 @@ function onEdit(e) {
   }
 
   const settingName = settingCell.getValue();
-  let value = valueCell.getValue();
 
   // --- Handle Read-Only Status Indicator ---
-  if (settingName === 'AutoSyncStatus') {
+  if (settingName === 'Auto-Sync Trigger Status') {
     // Revert the change and inform the user
     valueCell.setValue(oldValue);
-    SpreadsheetApp.getActiveSpreadsheet().toast('The "AutoSyncStatus" is a read-only indicator.', 'Edit Reverted', 10);
+    SpreadsheetApp.getActiveSpreadsheet().toast('This is a read-only status indicator.', 'Edit Reverted', 10);
     return;
-  }
-
-  // --- Handle GUI for boolean settings ---
-  const booleanSettings = [
-    'EnableSheetLocking', 'EnableAutoSync', 'AllowAutosyncDeletion',
-    'EnableEmailNotifications', 'NotifyOnSyncSuccess', 'NotifyDeletionsPending',
-    'EnableGCPLogging', 'EnableToasts', 'ShowTestPrompts', 'TestCleanup', 'TestAutoConfirm'
-  ];
-
-  if (!booleanSettings.includes(settingName)) {
-    return;
-  }
-
-  if (typeof value === 'string') {
-    const sanitizedValue = value.toUpperCase().replace(/[^A-Z]/g, ''); // Sanitize to just letters
-    
-    // Use a timeout to let the sheet UI update before we change the value again.
-    Utilities.sleep(100);
-
-    if (sanitizedValue === 'ENABLED') {
-      valueCell.setValue('ENABLED ✅');
-    } else if (sanitizedValue === 'DISABLED') {
-      valueCell.setValue('DISABLED ❌');
-    }
   }
 }
 

@@ -156,7 +156,7 @@ function setupControlSheets_() {
   // Check for Config sheet
   const defaultConfig = {
     '--- Status ---': {
-      'AutoSyncStatus': { value: 'DISABLED ❌', description: 'A visual indicator of the auto-sync trigger status. (Read-only)' },
+      'Auto-Sync Trigger Status': { value: 'DISABLED', description: 'A visual indicator of the auto-sync trigger status. (Read-only)' },
     },
     '--- Sync Behavior ---': {
       'EnableSheetLocking': { value: 'ENABLED ✅', description: 'Set to DISABLED to disable the sheet locking mechanism during sync operations. This is not recommended as it can lead to data inconsistencies if sheets are edited during a sync.' },
@@ -241,11 +241,6 @@ function setupControlSheets_() {
             let finalValue = existingSettings.has(key) ? existingSettings.get(key) : defaultConfig[groupName][key].value;
             if (key === 'NotificationEmail' && !finalValue) {
                 finalValue = Session.getEffectiveUser().getEmail();
-            }
-            // Convert old TRUE/FALSE to new ENABLED/DISABLED with emojis
-            if (typeof finalValue === 'boolean' || (typeof finalValue === 'string' && (finalValue.toUpperCase() === 'TRUE' || finalValue.toUpperCase() === 'FALSE'))) {
-                const isTrue = (finalValue === true || (typeof finalValue === 'string' && finalValue.toUpperCase() === 'TRUE'));
-                finalValue = isTrue ? 'ENABLED ✅' : 'DISABLED ❌';
             }
             newSettings.push([key, finalValue, defaultConfig[groupName][key].description]);
         }
