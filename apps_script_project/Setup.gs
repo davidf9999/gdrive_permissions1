@@ -183,8 +183,7 @@ function setupControlSheets_() {
 
   const defaultConfig = {
     '--- Status ---': {
-      'AutoSync Trigger Status': { value: 'DISABLED', description: 'A visual indicator of the AutoSync trigger status. (Read-only)' },
-      'ControlSheetMode': { value: currentUserEmail ? 'FULL - ' + currentUserEmail : 'FULL', description: 'Indicates whether the last viewer had full or restricted access. Automatically updated on open.' }
+      'AutoSync Trigger Status': { value: 'DISABLED', description: 'A visual indicator of the AutoSync trigger status. (Read-only)' }
     },
     '--- Access Control ---': {
       'SuperAdminEmails': { value: currentUserEmail, description: 'Comma-separated list of super admin email addresses. Super admins see the full menu and test sheets.' }

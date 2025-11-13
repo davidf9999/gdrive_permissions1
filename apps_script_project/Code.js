@@ -55,11 +55,9 @@ function onOpen() {
 
   if (superAdmin) {
     applyFullView_();
-    updateControlSheetModeIndicator_('FULL');
   } else {
     applyRestrictedView_();
     ensureHelpSheetVisible_();
-    updateControlSheetModeIndicator_('RESTRICTED');
   }
 }
 
@@ -254,26 +252,6 @@ function ensureHelpSheetVisible_() {
   }
 }
 
-function updateControlSheetModeIndicator_(mode) {
-  if (typeof updateConfigSetting_ !== 'function') {
-    return;
-  }
-
-  let email = '';
-  try {
-    email = getActiveUserEmail_();
-  } catch (e) {
-    email = '';
-  }
-
-  const value = email ? mode + ' - ' + email : mode;
-
-  try {
-    updateConfigSetting_('ControlSheetMode', value);
-  } catch (e) {
-    log_('Could not update ControlSheetMode indicator: ' + e.message, 'WARN');
-  }
-}
 
 function getActiveUserEmail_() {
   try {
@@ -528,25 +506,4 @@ function getSuperAdminEmails_() {
   }
 
   return Array.from(new Set(normalized));
-}
-
-function updateControlSheetModeIndicator_(mode) {
-  if (typeof updateConfigSetting_ !== 'function') {
-    return;
-  }
-
-  let email = '';
-  try {
-    email = getActiveUserEmail_();
-  } catch (e) {
-    email = '';
-  }
-
-  const value = email ? mode + ' - ' + email : mode;
-
-  try {
-    updateConfigSetting_('ControlSheetMode', value);
-  } catch (e) {
-    log_('Failed to update ControlSheetMode indicator: ' + e.message, 'WARN');
-  }
 }
