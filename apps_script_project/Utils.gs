@@ -298,21 +298,24 @@ function log_(message, severity = 'INFO') {
 
 
 function logSyncHistory_(revisionId, revisionLink, summary, durationSeconds) {
-  const syncHistorySheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SYNC_HISTORY_SHEET_NAME);
-  if (!syncHistorySheet) {
-    log_('SyncHistory sheet not found. Skipping sync history logging.', 'WARN');
-    return;
-  }
+  try {
+    const syncHistorySheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SYNC_HISTORY_SHEET_NAME);
+    if (!syncHistorySheet) {
+      log_('SyncHistory sheet not found. Skipping sync history logging.', 'WARN');
+      return;
+    }
 
-  const timestamp = Utilities.formatDate(new Date(), SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss');
-  const added = summary ? summary.added || 0 : 0;
-  const removed = summary ? summary.removed || 0 : 0;
-  const failed = summary ? summary.failed || 0 : 0;
+    const timestamp = Utilities.formatDate(new Date(), SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+    const added = summary ? summary.added || 0 : 0;
+    const removed = summary ? summary.removed || 0 : 0;
+    const failed = summary ? summary.failed || 0 : 0;
 
-  if (added === 0 && removed === 0 && failed === 0) {
-    log_('No permission changes detected. Skipping SyncHistory entry.', 'INFO');
-    return;
-  }
+    log_('Attempting to log sync history: +' + added + ' -' + removed + ' !' + failed, 'DEBUG');
+
+    if (added === 0 && removed === 0 && failed === 0) {
+      log_('No permission changes detected. Skipping SyncHistory entry.', 'INFO');
+      return;
+    }
 
   let lastRow = syncHistorySheet.getLastRow();
   const headers = ['Timestamp', 'Revision ID', 'Added', 'Removed', 'Failed', 'Duration (seconds)', 'Revision Link'];
@@ -361,7 +364,10 @@ function logSyncHistory_(revisionId, revisionLink, summary, durationSeconds) {
   syncHistorySheet.getRange('B1').setNote('Google\'s internal revision ID (for reference only - cannot be used to link directly).');
   syncHistorySheet.getRange('G1').setNote('To view this version: Open the spreadsheet, go to File > Version history > See version history, then find the revision matching the timestamp in column A. Google keeps revisions for 30-100 days.');
 
-  log_('Logged sync history: Revision ' + (revisionId || 'N/A') + ', Changes: +' + added + ' -' + removed + ' !' + failed, 'INFO');
+    log_('Logged sync history: Revision ' + (revisionId || 'N/A') + ', Changes: +' + added + ' -' + removed + ' !' + failed, 'INFO');
+  } catch (e) {
+    log_('ERROR writing to SyncHistory: ' + e.message + '\n' + e.stack, 'ERROR');
+  }
 }
 
 function clearAllLogs() {
