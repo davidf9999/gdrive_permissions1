@@ -263,7 +263,17 @@ function updateAutoSyncStatusIndicator_() {
     }
     updateConfigSetting_('AutoSync Trigger Status', statusToDisplay);
   } catch (e) {
-    log_('Could not update AutoSync status indicator: ' + e.message, 'WARN');
+    // Permission errors are expected when non-admin users open the sheet
+    // Just set status to unknown instead of logging a warning
+    if (e.message && e.message.indexOf('permissions') > -1) {
+      try {
+        updateConfigSetting_('AutoSync Trigger Status', 'Unknown (check permissions)');
+      } catch (err) {
+        // Silently fail if we can't update the setting
+      }
+    } else {
+      log_('Could not update AutoSync status indicator: ' + e.message, 'WARN');
+    }
   }
 }
 

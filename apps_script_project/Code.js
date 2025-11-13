@@ -100,78 +100,6 @@ function createManualSyncMenu_(ui) {
     .addSubMenu(granularMenu);
 }
 
-function createAutoSyncMenu_(ui) {
-  const editModeMenu = ui.createMenu('Edit Mode')
-    .addItem('🔒 Enter Edit Mode', 'enterEditMode')
-    .addItem('🔓 Exit Edit Mode', 'exitEditMode')
-    .addSeparator()
-    .addItem('📊 View Edit Mode Status', 'viewEditModeStatus');
-
-  return ui.createMenu('Auto-Sync')
-    .addItem('⚡ Setup Auto-Sync', 'setupAutoSync')
-    .addSeparator()
-    .addItem('▶️ Run Auto-Sync Now', 'runAutoSyncNow')
-    .addSeparator()
-    .addItem('📊 View Trigger Status', 'viewTriggerStatus')
-    .addItem('🛑 Disable Auto-Sync', 'removeAutoSync')
-    .addSeparator()
-    .addSubMenu(editModeMenu);
-}
-
-function createAuditsMenu_(ui) {
-  return ui.createMenu('Audits')
-    .addItem('Folders Audit', 'foldersAudit')
-    .addItem('Deep Folder Audit', 'deepAuditFolder');
-}
-
-function createTestingMenu_(ui) {
-  return ui.createMenu('Testing')
-    .addItem('Run All Tests', 'runAllTests')
-    .addSeparator()
-    .addItem('Run Manual Access Test', 'runManualAccessTest')
-    .addItem('Run Stress Test', 'runStressTest')
-    .addItem('Run Add/Delete Separation Test', 'runAddDeleteSeparationTest')
-    .addItem('Run Auto-Sync Error Email Test', 'runAutoSyncErrorEmailTest')
-    .addItem('Run Email Capability Test', 'runEmailCapabilityTest')
-    .addItem('Run Sheet Locking Test', 'runSheetLockingTest_')
-    .addItem('Run Circular Dependency Test', 'runCircularDependencyTest_')
-    .addSeparator()
-    .addItem('Cleanup Manual Test Data', 'cleanupManualTestData')
-    .addItem('Cleanup Stress Test Data', 'cleanupStressTestData')
-    .addItem('Cleanup Add/Delete Test Data', 'cleanupAddDeleteSeparationTestData')
-    .addSeparator()
-    .addItem('Clear All Test Data', 'clearAllTestsData');
-}
-
-function createLoggingMenu_(ui) {
-  return ui.createMenu('Logging')
-    .addItem('Clear Auxiliary Logs (Keep Main Log)', 'clearAuxiliaryLogs')
-    .addItem('Clear All Logs', 'clearAllLogs');
-}
-
-function createAdvancedMenu_(ui) {
-  const menu = ui.createMenu('Advanced')
-    .addItem('Clear Cache', 'clearCache')
-    .addItem('Update User Sheet Headers', 'updateUserSheetHeaders_')
-    .addSeparator()
-    .addItem('Clean up folder...', 'cleanupFolderByName')
-    .addItem('Remove Blank Rows', 'removeBlankRows');
-
-  if (typeof applyConfigValidation_ === 'function') {
-    menu.addSeparator();
-    menu.addItem('Refresh Config GUI', 'applyConfigValidation_');
-  }
-
-  return menu;
-}
-
-function createHelpMenu_(ui) {
-  return ui.createMenu('Help')
-    .addItem('User Guide', 'openUserGuide')
-    .addItem('Testing Guide', 'openTestingGuide')
-    .addItem('README', 'openReadme');
-}
-
 function isSuperAdmin_() {
   try {
     const userEmail = getActiveUserEmail_();
@@ -425,6 +353,13 @@ function createAutoSyncMenu_(ui) {
     .addItem('📊 View Trigger Status', 'viewTriggerStatus')
     .addSeparator()
     .addSubMenu(editModeMenu);
+}
+
+/**
+ * Manually triggers an AutoSync run (callable from menu)
+ */
+function runAutoSyncNow() {
+  autoSync();
 }
 
 function createAuditsMenu_(ui) {
