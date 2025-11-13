@@ -393,11 +393,12 @@ function setupHelpSheet_() {
     ['', ''],
     [adminContactInfo, ''],
     ['', ''],
-    ['⚠️ NOTE FOR NON-ADMIN USERS', ''],
+    ['ℹ️ ABOUT ACCESS LEVELS', ''],
     ['', ''],
-    ['If you see only a "Permissions Manager" menu with no items,', ''],
-    ['you have view-only access. This is intentional.', ''],
-    ['Super admins manage sync operations and settings.', '']
+    ['Super Admins: Full access to all sync operations, testing, and settings.', ''],
+    ['Non-Admins: View-only access to sheets. Super admins manage operations.', ''],
+    ['', ''],
+    ['Note: This Help sheet is created when a super admin opens the spreadsheet.', '']
   ];
 
   // Write content
@@ -406,7 +407,7 @@ function setupHelpSheet_() {
   // Format the sheet
   helpSheet.getRange('A1:B1').setFontWeight('bold').setFontSize(14).setBackground('#4285f4').setFontColor('#ffffff');
   helpSheet.getRange('A13:B13').setFontWeight('bold').setFontSize(12).setBackground('#fbbc04').setFontColor('#000000');
-  helpSheet.getRange('A17:B17').setFontWeight('bold').setFontSize(12).setBackground('#ea4335').setFontColor('#ffffff');
+  helpSheet.getRange('A17:B17').setFontWeight('bold').setFontSize(12).setBackground('#34a853').setFontColor('#ffffff');
 
   // Make URL cells clickable
   for (let i = 6; i <= 10; i++) {
