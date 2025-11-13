@@ -103,10 +103,10 @@ function autoSync(e) {
 
     if (allowDeletions) {
       log_('AutoSync with deletions enabled (max: ' + maxDeletions + '). Performing full sync...');
-      fullSync({ silentMode: silentMode });
+      fullSync({ silentMode: silentMode, skipSetup: true });
     } else {
       log_('Performing SAFE operations (additions only)...');
-      syncAdds({ silentMode: silentMode });
+      syncAdds({ silentMode: silentMode, skipSetup: true });
     }
 
     // Save the snapshot after successful sync

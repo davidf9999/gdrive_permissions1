@@ -321,7 +321,12 @@ function syncUserGroups(options = {}) {
 
 function syncAdds(options = {}) {
   const silentMode = options && options.silentMode !== undefined ? options.silentMode : false;
-  setupControlSheets_();
+  const skipSetup = options && options.skipSetup !== undefined ? options.skipSetup : false;
+
+  if (!skipSetup) {
+    setupControlSheets_();
+  }
+
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(15000)) {
     if (!silentMode) SpreadsheetApp.getUi().alert('Sync is already in progress. Please wait a few minutes and try again.');
@@ -329,6 +334,7 @@ function syncAdds(options = {}) {
   }
 
   const totalSummary = { added: 0, removed: 0, failed: 0 };
+  const startTime = new Date();
 
   try {
     if (!silentMode) showToast_('Starting non-destructive sync (adds only)...', 'Sync Adds', -1);
@@ -358,6 +364,11 @@ function syncAdds(options = {}) {
 
     const summaryMessage = 'Add-only sync complete. Total changes: ' + totalSummary.added + ' added, ' + totalSummary.failed + ' failed.';
     log_(summaryMessage, 'INFO');
+
+    // Log to SyncHistory
+    const endTime = new Date();
+    const durationSeconds = (endTime - startTime) / 1000;
+    logSyncHistory_(null, null, totalSummary, durationSeconds);
 
     if (SCRIPT_EXECUTION_MODE === 'TEST') {
       showTestMessage_('Add-only Sync', summaryMessage);
@@ -497,8 +508,14 @@ function syncDeletes() {
 
 function fullSync(options = {}) {
   const silentMode = options && options.silentMode !== undefined ? options.silentMode : false;
+  const skipSetup = options && options.skipSetup !== undefined ? options.skipSetup : false;
+
   log_('Running script version 2.0');
-  setupControlSheets_(); // Ensure control sheets exist
+
+  if (!skipSetup) {
+    setupControlSheets_(); // Ensure control sheets exist
+  }
+
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(15000)) {
     if (!silentMode) SpreadsheetApp.getUi().alert('Sync is already in progress. Please wait a few minutes and try again.');
@@ -507,6 +524,7 @@ function fullSync(options = {}) {
 
   const totalSummary = { added: 0, removed: 0, failed: 0 };
   const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const startTime = new Date();
 
   try {
     if (!silentMode) showToast_('Starting full synchronization...', 'Full Sync', -1);
@@ -565,6 +583,11 @@ function fullSync(options = {}) {
 
     const summaryMessage = 'Full synchronization completed. Total changes: ' + totalSummary.added + ' added, ' + totalSummary.removed + ' removed, ' + totalSummary.failed + ' failed.';
     log_(summaryMessage, 'INFO');
+
+    // Log to SyncHistory
+    const endTime = new Date();
+    const durationSeconds = (endTime - startTime) / 1000;
+    logSyncHistory_(null, null, totalSummary, durationSeconds);
 
     if (SCRIPT_EXECUTION_MODE === 'TEST') {
       showTestMessage_('Full Sync', summaryMessage + '\n\nCheck the \'Status\' column in the \'ManagedFolders\' sheet for details.');
