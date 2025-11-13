@@ -101,19 +101,23 @@ function autoSync(e) {
     const maxDeletions = getConfigValue_('AutoSyncMaxDeletions', 0);
     const allowDeletions = maxDeletions > 0;
 
+    let syncResult;
     if (allowDeletions) {
       log_('AutoSync with deletions enabled (max: ' + maxDeletions + '). Performing full sync...');
-      fullSync({ silentMode: silentMode, skipSetup: true });
+      syncResult = fullSync({ silentMode: silentMode, skipSetup: true });
     } else {
       log_('Performing SAFE operations (additions only)...');
-      syncAdds({ silentMode: silentMode, skipSetup: true });
+      syncResult = syncAdds({ silentMode: silentMode, skipSetup: true });
     }
 
-    // Save the snapshot after successful sync
-    const props = PropertiesService.getDocumentProperties();
-    props.setProperty(AUTO_SYNC_CHANGE_SIGNATURE_KEY, JSON.stringify(changeDetection.snapshot));
-
-    log_('*** Scheduled AutoSync completed successfully.');
+    // Only save the snapshot if sync completed successfully
+    if (syncResult) {
+      const props = PropertiesService.getDocumentProperties();
+      props.setProperty(AUTO_SYNC_CHANGE_SIGNATURE_KEY, JSON.stringify(changeDetection.snapshot));
+      log_('*** Scheduled AutoSync completed successfully.');
+    } else {
+      log_('AutoSync did not complete successfully. Snapshot not saved - will retry on next run.', 'WARN');
+    }
 
   } catch (e) {
     const errorMessage = 'FATAL ERROR in autoSync: ' + e.toString() + '\n' + e.stack;
