@@ -79,22 +79,7 @@ function buildSuperAdminMenu_(menu, ui) {
 }
 
 function buildRestrictedMenu_(menu, ui) {
-  menu.addItem('View Mode: Restricted', 'showRestrictedModeInfo_');
-  menu.addSeparator();
   menu.addSubMenu(createHelpMenu_(ui));
-}
-
-function showRestrictedModeInfo_() {
-  try {
-    const ui = SpreadsheetApp.getUi();
-    ui.alert(
-      'Restricted Mode',
-      'You have view-only access to control sheets. Contact a listed super admin if you need to run sync, audit, or test actions.',
-      ui.ButtonSet.OK
-    );
-  } catch (e) {
-    log_('Unable to show restricted mode dialog: ' + e.message, 'WARN');
-  }
 }
 
 function createManualSyncMenu_(ui) {
