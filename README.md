@@ -176,7 +176,7 @@ With APIs enabled, you can return to the sheet and run the initial sync.
 4. Review the `Log` sheet after each sync for status messages. Errors contain
    actionable guidance.
 
-For advanced workflows (auto-sync scheduling, edit mode safeguards, or the
+For advanced workflows (AutoSync scheduling, edit mode safeguards, or the
 risk-based auto sync), consult the guides in the `docs/` directory.
 
 ---

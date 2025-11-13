@@ -12,8 +12,8 @@ keep the content current.
 | [`docs/USER_GUIDE.md`](USER_GUIDE.md) | Day-to-day usage guide for the spreadsheet menu. | Spreadsheet operators | Align with the in-sheet menu names and supported workflows. |
 | [`docs/USER_GUIDE_he.md`](USER_GUIDE_he.md) | Hebrew translation of the user guide. | Hebrew-speaking operators | Keep translation in sync with `USER_GUIDE.md`. |
 | [`docs/TESTING.md`](TESTING.md) | Describes the in-sheet testing harness and expected results. | Developers & QA | Update when new tests or diagnostics are added. |
-| [`docs/AUTO_SYNC_GUIDE.md`](AUTO_SYNC_GUIDE.md) | Explains optional auto-sync triggers. | Advanced admins | Validate instructions alongside `RISK_BASED_AUTO_SYNC.md`. |
-| [`docs/RISK_BASED_AUTO_SYNC.md`](RISK_BASED_AUTO_SYNC.md) | Details the risk-based auto-sync safeguards. | Advanced admins | Ensure screenshots and copy match the current script options. |
+| [`docs/AUTO_SYNC_GUIDE.md`](AUTO_SYNC_GUIDE.md) | Explains optional AutoSync triggers. | Advanced admins | Validate instructions alongside `RISK_BASED_AUTO_SYNC.md`. |
+| [`docs/RISK_BASED_AUTO_SYNC.md`](RISK_BASED_AUTO_SYNC.md) | Details the risk-based AutoSync safeguards. | Advanced admins | Ensure screenshots and copy match the current script options. |
 | [`docs/EDIT_MODE_GUIDE.md`](EDIT_MODE_GUIDE.md) | Walkthrough for edit-mode protections. | Editors & auditors | Revise if the locking strategy changes. |
 | [`docs/STOP_SCRIPTS.md`](STOP_SCRIPTS.md) | How to temporarily or permanently halt automation. | Administrators | Keep remediation steps accurate when trigger names or menus change. |
 | [`GEMINI.md`](../GEMINI.md) | Historical decision log and debugging notes. | Maintainers | Add entries when significant architectural decisions are made. |

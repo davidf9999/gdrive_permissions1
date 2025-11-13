@@ -2,7 +2,7 @@
  * Synchronizes the editors of the spreadsheet file with the list in the Admins sheet.
  *
  * @param {Object} options - Options for sync behavior
- * @param {boolean} options.addOnly - If true, only add admins (SAFE operations for auto-sync)
+ * @param {boolean} options.addOnly - If true, only add admins (SAFE operations for AutoSync)
  * @param {boolean} options.silentMode - If true, skip UI dialogs (for background execution)
  * @returns {object} A summary of the changes made, with properties for `added` and `removed` counts.
  */
@@ -335,7 +335,7 @@ function syncAdds(options = {}) {
     showSyncInProgress_();
     log_('*** Starting non-destructive synchronization (adds only)...');
 
-    // 1. Sync Admins (SAFE mode: additions only, silent for auto-sync)
+    // 1. Sync Admins (SAFE mode: additions only, silent for AutoSync)
     const adminSummary = syncAdmins({ addOnly: true, silentMode: true });
     if (adminSummary) {
       totalSummary.added += adminSummary.added;

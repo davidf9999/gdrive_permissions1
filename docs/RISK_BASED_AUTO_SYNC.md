@@ -1,4 +1,4 @@
-# Risk-Based Auto-Sync Strategy
+# Risk-Based AutoSync Strategy
 
 ## Executive Summary
 
@@ -26,7 +26,7 @@ This document analyzes the risk levels of different permission management operat
 
 The system uses **three risk levels** based on consequence of error and reversibility:
 
-| Risk Level | Operations | Impact if Wrong | Auto-Sync Treatment | Admin Action |
+| Risk Level | Operations | Impact if Wrong | AutoSync Treatment | Admin Action |
 |:-----------|:-----------|:----------------|:--------------------|:-------------|
 | **SAFE**<br>*(Additive)* | • Add users to groups<br>• Create folders & share with groups<br>• Add spreadsheet editors<br>• Create Google Groups<br>• All `syncAdds()` operations including admins | Users get unintended access (easily reverted and detected) | ✅ **Automatic**<br>Runs every 5 minutes with post-notification email | Review summary email; revert if needed |
 | **DESTRUCTIVE**<br>*(Reversible Removals)* | • Remove users from groups<br>• Remove spreadsheet editors<br>• Revoke folder permissions<br>• All `syncDeletes()` operations | Users lose access they need, work blocked, requires restoration | 🛑 **Manual Only**<br>Notifies admin, does NOT execute | Run "Sync Deletes" manually after review |
@@ -65,7 +65,7 @@ The system uses **three risk levels** based on consequence of error and reversib
 
 ## Implementation Strategy
 
-### Phase 1: Fix Current Auto-Sync Failure
+### Phase 1: Fix Current AutoSync Failure
 
 **Current Issue**: `autoSync()` → `fullSync()` → `syncDeletes()` → fails on UI confirmation dialog
 
@@ -83,10 +83,10 @@ Add these settings to the **Config sheet**:
 | Setting Name | Default Value | Description |
 |:-------------|:--------------|:------------|
 | `EnableAutoSync` | `TRUE` | Master switch: enable/disable automatic synchronization |
-| `NotifyAfterSync` | `TRUE` | Send email summary after each auto-sync completion |
+| `NotifyAfterSync` | `TRUE` | Send email summary after each AutoSync completion |
 | `NotifyDeletionsPending` | `TRUE` | Send email when deletions detected (require manual action) |
 | `AutoSyncMaxDeletions` | `10` | Safety limit: if deletions exceed this, notify admin but don't allow manual sync without review |
-| `MaxFileSizeMB` | `100` | Safety limit: if the total spreadsheet file size exceeds this limit in MB, auto-sync is aborted to prevent uncontrolled file history growth. |
+| `MaxFileSizeMB` | `100` | Safety limit: if the total spreadsheet file size exceeds this limit in MB, AutoSync is aborted to prevent uncontrolled file history growth. |
 | `_SyncHistory` | Always enabled | (Informational only) Sync history is automatically tracked in the SyncHistory sheet with revision links for auditing (30-100 days retention). |
 
 **No Complex Modes**: Behavior is simple and predictable:
@@ -94,7 +94,7 @@ Add these settings to the **Config sheet**:
 - 🛑 **DESTRUCTIVE** operations always require manual execution
 - 🚫 **CRITICAL** operations always require manual execution with full context
 
-### Phase 3: Auto-Sync Behavior
+### Phase 3: AutoSync Behavior
 
 **Single, Simple Behavior**:
 1. **Automatic**: All SAFE operations (additive) run on schedule
@@ -115,10 +115,10 @@ No modes, no configuration complexity, predictable behavior.
 
 **Two Simple Email Types**:
 
-#### A. Summary Email (After Every Auto-Sync)
+#### A. Summary Email (After Every AutoSync)
 
-Sent after each successful auto-sync:
-- **Subject**: "✅ Auto-Sync Completed"
+Sent after each successful AutoSync:
+- **Subject**: "✅ AutoSync Completed"
 - **Content**:
   - Users added (including any new admins)
   - Folders shared
@@ -135,7 +135,7 @@ Sent when DESTRUCTIVE operations detected:
 
 ### Phase 5: Sync History & Audit Trail
 
-**Automatic Audit Trail**: Every auto-sync is automatically logged in the `SyncHistory` sheet.
+**Automatic Audit Trail**: Every AutoSync is automatically logged in the `SyncHistory` sheet.
 
 **What's Tracked**:
 - Timestamp of each sync
@@ -192,7 +192,7 @@ Sent when DESTRUCTIVE operations detected:
 
 #### Example 1: Summary Email (Routine)
 ```
-Subject: ✅ Auto-Sync Completed Successfully
+Subject: ✅ AutoSync Completed Successfully
 
 Summary:
 - 5 users added to groups
@@ -239,7 +239,7 @@ Note: Deletions will NOT execute automatically.
    - Destructive operations always require explicit manual execution
 
 2. **Email Notifications**
-   - Admin receives summary of all auto-sync actions
+   - Admin receives summary of all AutoSync actions
    - Proactive alerts for pending manual actions
    - Error notifications for failures
 
@@ -248,8 +248,8 @@ Note: Deletions will NOT execute automatically.
    - Deletion operations logged separately for potential rollback
 
 4. **Manual Override**
-   - Edit Mode disables all auto-sync (for bulk editing)
-   - Admin can disable auto-sync via Config sheet
+   - Edit Mode disables all AutoSync (for bulk editing)
+   - Admin can disable AutoSync via Config sheet
 
 5. **Deletion Limits**
    - Configurable threshold (default: 10 deletions)
@@ -266,12 +266,12 @@ Note: Deletions will NOT execute automatically.
 
 ### Risk Mitigation Matrix
 
-| Risk | Without Auto-Sync | With Simplified Auto-Sync | Mitigation |
+| Risk | Without AutoSync | With Simplified AutoSync | Mitigation |
 |:-----|:------------------|:--------------------------|:-----------|
 | **Accidental deletion of legitimate user** | Admin must remember to run sync | Admin must explicitly approve deletions | DESTRUCTIVE: Email notification + manual approval |
 | **Wrong admin added to control sheet** | Admin must remember to run sync | Automatic execution with notification | SAFE: Post-notification + easy reversal |
 | **Mass deletion due to sheet corruption** | Admin would catch during manual review | Safety limit prevents execution | `AutoSyncMaxDeletions` threshold blocks sync |
-| **Auto-sync runs during bulk editing** | N/A | Edit Mode suspends auto-sync | Edit Mode detection |
+| **Auto-sync runs during bulk editing** | N/A | Edit Mode suspends AutoSync | Edit Mode detection |
 | **Forgetting to grant access to new users** | Users must request access | Auto-sync grants within 5 minutes | SAFE: Automatic execution |
 
 ---
@@ -292,7 +292,7 @@ Note: Deletions will NOT execute automatically.
 - New behavior is safer than current implementation
 - Existing manual sync menu items unchanged
 - No changes to sheet structure or user workflows
-- Admin can disable auto-sync if desired (`EnableAutoSync: FALSE`)
+- Admin can disable AutoSync if desired (`EnableAutoSync: FALSE`)
 
 ### Recommended Default Configuration
 

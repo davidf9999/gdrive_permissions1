@@ -70,7 +70,7 @@ function createManualSyncMenu_(ui) {
     .addItem('Sync All Folders - Adds Only', 'syncManagedFoldersAdds')
     .addItem('Sync All Folders - Deletes Only', 'syncManagedFoldersDeletes');
 
-  return ui.createMenu('Manual-Sync')
+  return ui.createMenu('ManualSync')
     .addItem('Full Sync (Add & Delete)', 'fullSync')
     .addItem('Sync Adds', 'syncAdds')
     .addItem('Sync Deletes', 'syncDeletes')
@@ -85,11 +85,11 @@ function createAutoSyncMenu_(ui) {
     .addSeparator()
     .addItem('📊 View Edit Mode Status', 'viewEditModeStatus');
 
-  return ui.createMenu('Auto-Sync')
-    .addItem('🚀 Enable/Update Auto-Sync', 'setupAutoSync')
-    .addItem('🛑 Disable Auto-Sync', 'removeAutoSync')
+  return ui.createMenu('AutoSync')
+    .addItem('🚀 Enable/Update AutoSync', 'setupAutoSync')
+    .addItem('🛑 Disable AutoSync', 'removeAutoSync')
     .addSeparator()
-    .addItem('▶️ Run Auto-Sync Now', 'runAutoSyncNow')
+    .addItem('▶️ Run AutoSync Now', 'runAutoSyncNow')
     .addSeparator()
     .addItem('📊 View Trigger Status', 'viewTriggerStatus')
     .addSeparator()
@@ -109,7 +109,7 @@ function createTestingMenu_(ui) {
     .addItem('Run Manual Access Test', 'runManualAccessTest')
     .addItem('Run Stress Test', 'runStressTest')
     .addItem('Run Add/Delete Separation Test', 'runAddDeleteSeparationTest')
-    .addItem('Run Auto-Sync Error Email Test', 'runAutoSyncErrorEmailTest')
+    .addItem('Run AutoSync Error Email Test', 'runAutoSyncErrorEmailTest')
     .addItem('Run Email Capability Test', 'runEmailCapabilityTest')
     .addItem('Run Sheet Locking Test', 'runSheetLockingTest_')
     .addItem('Run Circular Dependency Test', 'runCircularDependencyTest_')
@@ -181,7 +181,7 @@ function onEdit(e) {
   const settingName = settingCell.getValue();
 
   // --- Handle Read-Only Status Indicator ---
-  if (settingName === 'Auto-Sync Trigger Status') {
+  if (settingName === 'AutoSync Trigger Status') {
     // Revert the change and inform the user
     valueCell.setValue(oldValue);
     SpreadsheetApp.getActiveSpreadsheet().toast('This is a read-only status indicator.', 'Edit Reverted', 10);

@@ -4,12 +4,12 @@
  * Allows administrators to enter "Edit Mode" which temporarily suspends
  * automatic syncs while making bulk changes to the control sheets.
  *
- * This prevents auto-sync from running while you're in the middle of
+ * This prevents AutoSync from running while you're in the middle of
  * reorganizing sheets, making bulk edits, or testing configurations.
  */
 
 /**
- * Enters Edit Mode - suspends auto-sync and marks sheets with visual indicator
+ * Enters Edit Mode - suspends AutoSync and marks sheets with visual indicator
  */
 function enterEditMode() {
   const ui = SpreadsheetApp.getUi();
@@ -39,7 +39,7 @@ function enterEditMode() {
     '✓ Add a visual banner to the spreadsheet\n' +
     '✓ Log the time and user who enabled it\n\n' +
     'Use this when making bulk changes, reorganizing sheets, or testing.\n\n' +
-    'Remember to EXIT Edit Mode when done to resume auto-sync!',
+    'Remember to EXIT Edit Mode when done to resume AutoSync!',
     ui.ButtonSet.OK_CANCEL
   );
 
@@ -78,7 +78,7 @@ function enterEditMode() {
 }
 
 /**
- * Exits Edit Mode - resumes auto-sync and removes visual indicator
+ * Exits Edit Mode - resumes AutoSync and removes visual indicator
  */
 function exitEditMode() {
   const ui = SpreadsheetApp.getUi();

@@ -94,7 +94,7 @@ describe('detectAutoSyncChanges_', () => {
 
     expect(result.shouldRun).toBe(true);
     expect(result.reasons).toEqual(
-      expect.arrayContaining(['No previous auto-sync snapshot was found.'])
+      expect.arrayContaining(['No previous AutoSync snapshot was found.'])
     );
     expect(result.snapshot.folderStates).toEqual({ 'folder-1': new Date('2024-01-01T00:00:00Z').getTime() });
   });

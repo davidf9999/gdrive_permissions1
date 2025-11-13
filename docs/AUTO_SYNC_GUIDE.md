@@ -1,8 +1,8 @@
-# Auto-Sync Guide
+# AutoSync Guide
 
 ## Overview
 
-The Auto-Sync feature allows the Permission Manager to run automatically on a schedule, eliminating the need for users to manually trigger syncs. This is particularly useful for:
+The AutoSync feature allows the Permission Manager to run automatically on a schedule, eliminating the need for users to manually trigger syncs. This is particularly useful for:
 
 - **NGOs with volunteers** - Volunteers can edit sheets without needing to run scripts
 - **Teams with non-technical users** - No need to understand or trigger syncs
@@ -15,13 +15,13 @@ The Auto-Sync feature allows the Permission Manager to run automatically on a sc
 
 ### The Problem It Solves
 
-**Without Auto-Sync:**
+**Without AutoSync:**
 1. Volunteer edits sheet (adds user email)
 2. Volunteer must click "Permissions Manager → Full Sync"
 3. Volunteer may need to authenticate with Google
 4. May encounter permission errors if not a Workspace user
 
-**With Auto-Sync:**
+**With AutoSync:**
 1. Volunteer edits sheet (adds user email)
 2. **That's it!** The change is automatically applied within 5 minutes (or your chosen interval)
 3. No authentication required from volunteer
@@ -31,19 +31,19 @@ The Auto-Sync feature allows the Permission Manager to run automatically on a sc
 
 ## Setup Instructions
 
-### Step 1: Enable Auto-Sync
+### Step 1: Enable AutoSync
 
 1. Open your Permission Manager spreadsheet
-2. Go to **Permissions Manager → Auto-Sync → ⚡ Setup Auto-Sync (Every 5 Minutes)**
+2. Go to **Permissions Manager → AutoSync → ⚡ Setup AutoSync (Every 5 Minutes)**
 3. Click "OK" when prompted
 
 That's it! The script will now run automatically every five minutes.
 
 ### Step 2: Verify It's Running
 
-To confirm auto-sync is active:
+To confirm AutoSync is active:
 
-1. Go to **Permissions Manager → Auto-Sync → 📊 View Trigger Status**
+1. Go to **Permissions Manager → AutoSync → 📊 View Trigger Status**
 2. You should see: "Auto-sync is ENABLED"
 
 ---
@@ -53,23 +53,23 @@ To confirm auto-sync is active:
 ### Choose Your Sync Frequency
 
 **5-Minute Sync (Recommended)**
-- Menu: `Auto-Sync → ⚡ Setup Auto-Sync (Every 5 Minutes)`
+- Menu: `AutoSync → ⚡ Setup AutoSync (Every 5 Minutes)`
 - Runs roughly every five minutes
 - Good for: Active NGOs with frequent changes
 
 **Daily Sync**
-- Menu: `Auto-Sync → 📅 Setup Daily Sync`
+- Menu: `AutoSync → 📅 Setup Daily Sync`
 - Runs once per day at a specific hour
 - Good for: Low-activity organizations
 
 **Custom Interval**
-- Menu: `Auto-Sync → ⚙️ Setup Custom Interval`
+- Menu: `AutoSync → ⚙️ Setup Custom Interval`
 - Choose: 1, 2, 4, 6, 8, or 12 hours
 - Good for: Specific needs
 
 ### Enable/Disable in Config Sheet
 
-You can temporarily disable auto-sync without removing the trigger:
+You can temporarily disable AutoSync without removing the trigger:
 
 1. Open the **Config** sheet
 2. Find the row: `EnableAutoSync`
@@ -83,7 +83,7 @@ This is useful if you want to pause automatic syncing temporarily (e.g., during 
 
 ## Google Workspace User Configuration
 
-For the auto-sync feature to function correctly, the Google Workspace user account that owns the script must have specific administrative privileges. This is best accomplished by creating a custom admin role with the minimum necessary permissions.
+For the AutoSync feature to function correctly, the Google Workspace user account that owns the script must have specific administrative privileges. This is best accomplished by creating a custom admin role with the minimum necessary permissions.
 
 ### Creating a Custom Admin Role
 
@@ -138,9 +138,9 @@ These operations are performed either through the Google Workspace Admin Console
 
 ### Setting Up for Your Volunteers
 
-1. **You (the admin) set up auto-sync ONCE:**
+1. **You (the admin) set up AutoSync ONCE:**
    - Install the script (see main README)
-   - Run `Setup Auto-Sync (Every 5 Minutes)` from the menu
+   - Run `Setup AutoSync (Every 5 Minutes)` from the menu
    - This creates a time-based trigger
 
 2. **Volunteers can now:**
@@ -159,7 +159,7 @@ These operations are performed either through the Google Workspace Admin Console
 
 If you (the admin) need immediate sync:
 
-1. Go to **Auto-Sync → ▶️ Run Manual Sync Now**
+1. Go to **AutoSync → ▶️ Run Manual Sync Now**
 2. Confirm when prompted
 3. Changes apply immediately
 
@@ -169,9 +169,9 @@ Note: This requires YOU to be logged in (not volunteers).
 
 ## Advanced Configuration
 
-### How Auto-Sync Handles Deletions
+### How AutoSync Handles Deletions
 
-By default, auto-sync is designed to be **non-destructive**. This is a critical safety feature to prevent accidental removal of user permissions.
+By default, AutoSync is designed to be **non-destructive**. This is a critical safety feature to prevent accidental removal of user permissions.
 
 -   **Auto-sync only performs additions:** It will process new users added to sheets, but it will **not** remove users.
 -   **Deletions require manual action:** When the script detects that a user should be removed, it does not perform the deletion. Instead, it sends an email notification to the administrator with the subject "⚠️ Manual Action Required: Permission Deletions Pending".
@@ -185,7 +185,7 @@ To improve auditability and prevent the spreadsheet from growing too large, the 
 
 **1. Sync History Sheet (for Auditing)**
 
--   **What it does:** After each successful auto-sync, the script automatically logs the sync details in a dedicated `SyncHistory` sheet.
+-   **What it does:** After each successful AutoSync, the script automatically logs the sync details in a dedicated `SyncHistory` sheet.
 -   **What's tracked:**
     -   Timestamp of the sync
     -   Revision ID (Google's internal identifier)
@@ -207,12 +207,12 @@ To improve auditability and prevent the spreadsheet from growing too large, the 
 
 -   **The Problem:** Google Sheets automatically saves version history, which can cause the file to grow over time.
 -   **The Solution:** A `MaxFileSizeMB` setting in the `Config` sheet (defaulting to 100 MB) acts as a safeguard.
--   **How it works:** Before each auto-sync, the script checks the spreadsheet's total size. If it exceeds the configured limit, the sync is **aborted**, and an email alert is sent to the administrator. This prevents the file from becoming unusably large and prompts you to perform manual cleanup.
+-   **How it works:** Before each AutoSync, the script checks the spreadsheet's total size. If it exceeds the configured limit, the sync is **aborted**, and an email alert is sent to the administrator. This prevents the file from becoming unusably large and prompts you to perform manual cleanup.
 -   **Manual Cleanup:** You can delete old versions by going to **File → Version history → See version history** in your spreadsheet.
 
 ### Handling Errors
 
-If auto-sync encounters an error:
+If AutoSync encounters an error:
 
 1. **Email notifications** (if enabled in Config sheet):
    - You'll receive an email with the error
@@ -220,8 +220,8 @@ If auto-sync encounters an error:
    - Set: `NotificationEmail = your@email.com`
 
 2. **Check the Log sheet:**
-   - All auto-sync runs are logged
-   - Look for entries starting with "*** Starting scheduled auto-sync..."
+   - All AutoSync runs are logged
+   - Look for entries starting with "*** Starting scheduled AutoSync..."
 
 3. **Manual intervention:**
    - Run **Run Manual Sync Now** to see the error in real-time
@@ -255,7 +255,7 @@ If auto-sync encounters an error:
 **Check:**
 
 1. **Verify trigger exists:**
-   - Menu: `Auto-Sync → View Trigger Status`
+   - Menu: `AutoSync → View Trigger Status`
    - Should show "Auto-sync is ENABLED"
 
 2. **Check trigger in Apps Script:**
@@ -269,8 +269,8 @@ If auto-sync encounters an error:
    - Recent runs of `autoSync` should appear
 
 4. **Re-install trigger:**
-   - Menu: `Auto-Sync → Disable Auto-Sync`
-   - Menu: `Auto-Sync → Setup Auto-Sync (Every 5 Minutes)`
+   - Menu: `AutoSync → Disable AutoSync`
+   - Menu: `AutoSync → Setup AutoSync (Every 5 Minutes)`
 
 ---
 
@@ -280,11 +280,11 @@ If auto-sync encounters an error:
 
 **No!** Volunteers can use free Gmail accounts. Only YOU (the script owner/admin) need a Workspace account.
 
-### Can multiple admins use auto-sync?
+### Can multiple admins use AutoSync?
 
 The trigger runs with the **script owner's** permissions (whoever deployed it). Other admins can edit sheets, but the sync runs under one account.
 
-### Does auto-sync use quotas?
+### Does AutoSync use quotas?
 
 Yes, but Google's quotas are generous:
 - **Trigger quota:** 90 minutes of runtime per day
@@ -310,15 +310,15 @@ Your edits will be picked up in the next sync.
 
 ---
 
-## Disabling Auto-Sync
+## Disabling AutoSync
 
-To completely remove auto-sync:
+To completely remove AutoSync:
 
-1. Go to **Auto-Sync → 🛑 Disable Auto-Sync**
+1. Go to **AutoSync → 🛑 Disable AutoSync**
 2. Confirm when prompted
 3. The trigger is removed
 
-You can always re-enable it later using Setup Auto-Sync.
+You can always re-enable it later using Setup AutoSync.
 
 ---
 
@@ -346,7 +346,7 @@ You can always re-enable it later using Setup Auto-Sync.
 
 ### Trigger Lifecycle
 
-When you run "Setup Auto-Sync":
+When you run "Setup AutoSync":
 
 1. Script creates a time-based trigger via `ScriptApp.newTrigger()`
 2. Trigger is stored in the project's trigger list
@@ -367,7 +367,7 @@ This is why volunteers don't need Workspace accounts!
 
 ## Support
 
-If you have questions about auto-sync:
+If you have questions about AutoSync:
 
 1. Check this guide first
 2. Review the Log sheet for errors

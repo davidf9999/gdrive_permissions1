@@ -80,7 +80,7 @@ Because they create real folders and groups, they are much slower than unit test
 *   Performing a full system health check.
 *   Troubleshooting complex, environment-specific issues.
 
-### Verifying the Auto-Sync Trigger
+### Verifying the AutoSync Trigger
 
 The following steps provide a gradual plan to safely verify that the scheduled, automatic sync is working correctly.
 
@@ -89,9 +89,9 @@ The following steps provide a gradual plan to safely verify that the scheduled, 
 The system is designed to be safe by default. The automatic sync will only process additions; it will not automatically remove users. Deletions require manual approval.
 
 1.  **Enable and Verify the Trigger**:
-    *   In your sheet, go to **Permissions Manager → Auto-Sync → ⚡ Setup Auto-Sync (Every 5 Minutes)**.
-    *   The first time you run this, it's normal to see a `"No auto-sync triggers were found."` message, followed by an `"Auto-Sync Enabled"` confirmation.
-    *   Verify it's active by going to **Permissions Manager → Auto-Sync → 📊 View Trigger Status**.
+    *   In your sheet, go to **Permissions Manager → AutoSync → ⚡ Setup AutoSync (Every 5 Minutes)**.
+    *   The first time you run this, it's normal to see a `"No AutoSync triggers were found."` message, followed by an `"AutoSync Enabled"` confirmation.
+    *   Verify it's active by going to **Permissions Manager → AutoSync → 📊 View Trigger Status**.
 
 2.  **Perform an "Add" Test**:
     *   Add a **test user's email** to one of the permission sheets (e.g., a sheet named `MyFolder_Viewers_G`).

@@ -18,7 +18,7 @@ function setupAutoSync() {
 
   const interval = getConfigValue_('AutoSyncInterval', 5);
   if (isNaN(interval) || interval < 5) {
-    SpreadsheetApp.getUi().alert('Invalid Auto-Sync Interval. Please set a number greater than or equal to 5 in the Config sheet.');
+    SpreadsheetApp.getUi().alert('Invalid AutoSync Interval. Please set a number greater than or equal to 5 in the Config sheet.');
     return;
   }
 
@@ -28,17 +28,17 @@ function setupAutoSync() {
     .everyMinutes(interval)
     .create();
 
-  log_('Auto-sync trigger installed. Will run every ' + interval + ' minutes.', 'INFO');
-  updateConfigSetting_('Auto-Sync Trigger Status', 'ENABLED');
+  log_('AutoSync trigger installed. Will run every ' + interval + ' minutes.', 'INFO');
+  updateConfigSetting_('AutoSync Trigger Status', 'ENABLED');
   SpreadsheetApp.getUi().alert(
-    'Auto-Sync Enabled',
+    'AutoSync Enabled',
     'The script will now automatically sync every ' + interval + ' minutes.',
     SpreadsheetApp.getUi().ButtonSet.OK
   );
 }
 
 /**
- * Removes all auto-sync triggers.
+ * Removes all AutoSync triggers.
  */
 function removeAutoSync() {
   const triggers = ScriptApp.getProjectTriggers();
@@ -52,32 +52,32 @@ function removeAutoSync() {
   }
 
   if (removedCount > 0) {
-    log_('Removed ' + removedCount + ' auto-sync trigger(s).', 'INFO');
-    SpreadsheetApp.getUi().alert('Auto-sync trigger has been removed.');
+    log_('Removed ' + removedCount + ' AutoSync trigger(s).', 'INFO');
+    SpreadsheetApp.getUi().alert('AutoSync trigger has been removed.');
   } else {
-    SpreadsheetApp.getUi().alert('No auto-sync trigger was found to remove.');
+    SpreadsheetApp.getUi().alert('No AutoSync trigger was found to remove.');
   }
-  
+
   // Always ensure the status indicators are correct
-  updateConfigSetting_('Auto-Sync Trigger Status', 'DISABLED');
+  updateConfigSetting_('AutoSync Trigger Status', 'DISABLED');
 }
 
 
 /**
- * The main auto-sync function that runs on schedule.
+ * The main AutoSync function that runs on schedule.
  */
 function autoSync(e) {
   const silentMode = e && e.triggerUid ? true : false;
   const lock = LockService.getScriptLock();
 
   if (!lock.tryLock(10000)) {
-    log_('Auto-sync skipped: another sync is already in progress.', 'WARN');
+    log_('AutoSync skipped: another sync is already in progress.', 'WARN');
     return;
   }
 
   try {
     if (isInEditMode_()) {
-      log_('Auto-sync skipped: spreadsheet is in Edit Mode.', 'INFO');
+      log_('AutoSync skipped: spreadsheet is in Edit Mode.', 'INFO');
       return;
     }
 
@@ -114,10 +114,10 @@ function viewTriggerStatus() {
     message += 'Status: ENABLED\n\nThe script will run automatically.';
   } else {
     message += 'No time-based trigger is installed.\n';
-    message += 'Status: DISABLED\n\nThe script will not run automatically. To enable, use the "Enable/Update Auto-Sync" menu item.';
+    message += 'Status: DISABLED\n\nThe script will not run automatically. To enable, use the "Enable/Update AutoSync" menu item.';
   }
-  
-  ui.alert('Auto-Sync Status', message, ui.ButtonSet.OK);
+
+  ui.alert('AutoSync Status', message, ui.ButtonSet.OK);
 }
 
 
@@ -136,9 +136,9 @@ function updateAutoSyncStatusIndicator_() {
     } else {
       statusToDisplay = 'DISABLED';
     }
-    updateConfigSetting_('Auto-Sync Trigger Status', statusToDisplay);
+    updateConfigSetting_('AutoSync Trigger Status', statusToDisplay);
   } catch (e) {
-    log_('Could not update Auto-Sync status indicator: ' + e.message, 'WARN');
+    log_('Could not update AutoSync status indicator: ' + e.message, 'WARN');
   }
 }
 

@@ -59,7 +59,7 @@ function processManagedFolders_(options = {}) {
     const rowIndex = i + 2;
     const folderName = allFolderData[i][FOLDER_NAME_COL - 1];
 
-    // If running in silent mode (auto-sync), skip test folders.
+    // If running in silent mode (AutoSync), skip test folders.
     if (silentMode) {
       const testConfig = getTestConfiguration_();
       const manualTestFolderName = testConfig.folderName;
