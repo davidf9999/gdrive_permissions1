@@ -84,22 +84,6 @@ function buildRestrictedMenu_() {
   // Help documentation is available in the Help sheet instead.
 }
 
-function createManualSyncMenu_(ui) {
-  const granularMenu = ui.createMenu('Granular Sync')
-    .addItem('Sync Admins', 'syncAdmins')
-    .addItem('Sync User Groups', 'syncUserGroups')
-    .addSeparator()
-    .addItem('Sync All Folders - Adds Only', 'syncManagedFoldersAdds')
-    .addItem('Sync All Folders - Deletes Only', 'syncManagedFoldersDeletes');
-
-  return ui.createMenu('Manual-Sync')
-    .addItem('Full Sync (Add & Delete)', 'fullSync')
-    .addItem('Sync Adds', 'syncAdds')
-    .addItem('Sync Deletes', 'syncDeletes')
-    .addSeparator()
-    .addSubMenu(granularMenu);
-}
-
 function isSuperAdmin_() {
   try {
     const userEmail = getActiveUserEmail_();
