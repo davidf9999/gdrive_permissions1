@@ -44,7 +44,7 @@ function onOpen() {
   if (superAdmin) {
     buildSuperAdminMenu_(menu, ui);
   } else {
-    buildRestrictedMenu_(menu);
+    buildRestrictedMenu_();
   }
 
   menu.addToUi();
@@ -58,6 +58,7 @@ function onOpen() {
     updateControlSheetModeIndicator_('FULL');
   } else {
     applyRestrictedView_();
+    ensureHelpSheetVisible_();
     updateControlSheetModeIndicator_('RESTRICTED');
   }
 }
@@ -78,7 +79,7 @@ function buildSuperAdminMenu_(menu, ui) {
   menu.addSubMenu(createHelpMenu_(ui));
 }
 
-function buildRestrictedMenu_(menu) {
+function buildRestrictedMenu_() {
   // Restricted users cannot run Apps Script functions, so no menu items are shown.
   // Help documentation is available in the Help sheet instead.
 }
@@ -324,6 +325,21 @@ function shouldHideSheetForRestrictedView_(sheetName, config) {
   return config.prefixes.some(function(prefix) {
     return sheetName.indexOf(prefix) === 0;
   });
+}
+
+/**
+ * Ensures the Help sheet is visible for non-admin users
+ */
+function ensureHelpSheetVisible_() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const helpSheet = ss.getSheetByName('Help');
+    if (helpSheet && helpSheet.isSheetHidden()) {
+      helpSheet.showSheet();
+    }
+  } catch (e) {
+    log_('Could not ensure Help sheet visibility: ' + e.message, 'WARN');
+  }
 }
 
 function updateControlSheetModeIndicator_(mode) {
@@ -593,75 +609,6 @@ function getSuperAdminEmails_() {
   }
 
   return Array.from(new Set(normalized));
-}
-
-function applyRestrictedView_() {
-  try {
-    const visibilityConfig = getTestSheetVisibilityConfig_();
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    ss.getSheets().forEach(function(sheet) {
-      const name = sheet.getName();
-      if (shouldHideSheetForRestrictedView_(name, visibilityConfig) && typeof sheet.hideSheet === 'function') {
-        try {
-          if (!sheet.isSheetHidden()) {
-            sheet.hideSheet();
-          }
-        } catch (e) {
-          log_('Could not hide sheet "' + name + '": ' + e.message, 'WARN');
-        }
-      }
-    });
-  } catch (e) {
-    log_('Failed to apply restricted view: ' + e.message, 'WARN');
-  }
-}
-
-function applyFullView_() {
-  try {
-    const visibilityConfig = getTestSheetVisibilityConfig_();
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    ss.getSheets().forEach(function(sheet) {
-      const name = sheet.getName();
-      if (shouldHideSheetForRestrictedView_(name, visibilityConfig) && typeof sheet.showSheet === 'function') {
-        try {
-          if (sheet.isSheetHidden()) {
-            sheet.showSheet();
-          }
-        } catch (e) {
-          log_('Could not show sheet "' + name + '": ' + e.message, 'WARN');
-        }
-      }
-    });
-  } catch (e) {
-    log_('Failed to restore full view: ' + e.message, 'WARN');
-  }
-}
-
-function getTestSheetVisibilityConfig_() {
-  const config = typeof getConfiguration_ === 'function' ? getConfiguration_() : {};
-  const manualTestFolderName = config['TestFolderName'] ? String(config['TestFolderName']) : '';
-
-  const exactNames = [TEST_LOG_SHEET_NAME, 'TestCycleA_G', 'TestCycleB_G'];
-  const prefixes = ['StressTestFolder_', 'SheetLockingTestSheet_'];
-
-  if (manualTestFolderName) {
-    prefixes.push(manualTestFolderName + '_');
-  }
-
-  return {
-    exactNames: new Set(exactNames),
-    prefixes: prefixes
-  };
-}
-
-function shouldHideSheetForRestrictedView_(sheetName, config) {
-  if (config.exactNames.has(sheetName)) {
-    return true;
-  }
-
-  return config.prefixes.some(function(prefix) { 
-    return sheetName.indexOf(prefix) === 0;
-  });
 }
 
 function updateControlSheetModeIndicator_(mode) {
