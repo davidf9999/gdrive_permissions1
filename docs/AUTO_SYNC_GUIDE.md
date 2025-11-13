@@ -363,6 +363,31 @@ When you run "Setup AutoSync":
 
 This is why volunteers don't need Workspace accounts!
 
+### Change Detection & Self-Healing
+
+AutoSync intelligently detects when changes require a sync:
+
+**When AutoSync Runs:**
+1. **Data Changes** - When ManagedFolders, Admins, or UserGroups sheets are modified
+   - Uses SHA-256 hash of actual data content
+   - Ignores formatting, validation rules, and status updates
+2. **Folder Changes** - When managed Google Drive folders are modified
+3. **Previous Sync Failed** - Automatically retries failed syncs
+
+**Self-Healing Behavior:**
+- If a sync fails (error, manual termination, validation failure), AutoSync automatically retries on the next schedule
+- No manual intervention needed - system recovers automatically
+- Logged as: "Previous AutoSync run did not complete successfully or status unknown. Retrying."
+
+**What Doesn't Trigger AutoSync:**
+- Opening the spreadsheet
+- Applying validation rules or formatting
+- Updating Config sheet settings
+- Status column updates
+- Log entries
+
+This smart detection prevents unnecessary syncs while ensuring reliable automatic recovery from failures.
+
 ---
 
 ## Support

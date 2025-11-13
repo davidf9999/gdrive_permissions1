@@ -448,10 +448,9 @@ function setupSyncHistorySheet_() {
     const logSheet = ss.getSheetByName(LOG_SHEET_NAME);
     const index = logSheet ? logSheet.getIndex() + 1 : ss.getSheets().length + 1;
     sheet = ss.insertSheet(SYNC_HISTORY_SHEET_NAME, index);
-    const headers = ['Timestamp', 'Revision ID', 'How to View', 'Added', 'Removed', 'Failed', 'Duration (seconds)'];
+    const headers = ['Timestamp', 'Added', 'Removed', 'Failed', 'Duration (seconds)'];
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
     sheet.setFrozenRows(1);
-    sheet.setColumnWidth(3, 400); // Make "How to View" column wider
     log_('Created "' + SYNC_HISTORY_SHEET_NAME + '" sheet.');
   }
   return sheet;

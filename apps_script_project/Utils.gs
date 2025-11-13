@@ -297,7 +297,7 @@ function log_(message, severity = 'INFO') {
 }
 
 
-function logSyncHistory_(revisionId, revisionLink, summary, durationSeconds) {
+function logSyncHistory_(summary, durationSeconds) {
   try {
     const syncHistorySheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SYNC_HISTORY_SHEET_NAME);
     if (!syncHistorySheet) {
@@ -309,6 +309,7 @@ function logSyncHistory_(revisionId, revisionLink, summary, durationSeconds) {
     const added = summary ? summary.added || 0 : 0;
     const removed = summary ? summary.removed || 0 : 0;
     const failed = summary ? summary.failed || 0 : 0;
+    const duration = Math.round(durationSeconds || 0);
 
     log_('Attempting to log sync history: +' + added + ' -' + removed + ' !' + failed, 'DEBUG');
 
@@ -318,7 +319,7 @@ function logSyncHistory_(revisionId, revisionLink, summary, durationSeconds) {
     }
 
   let lastRow = syncHistorySheet.getLastRow();
-  const headers = ['Timestamp', 'Revision ID', 'Added', 'Removed', 'Failed', 'Duration (seconds)', 'Revision Link'];
+  const headers = ['Timestamp', 'Added', 'Removed', 'Failed', 'Duration (seconds)'];
 
   // Ensure header row exists and is up to date
   if (lastRow === 0) {
@@ -344,27 +345,22 @@ function logSyncHistory_(revisionId, revisionLink, summary, durationSeconds) {
 
   const nextRow = Math.max(lastRow + 1, 2);
 
-  // Create instructions for viewing revision history
-  // Note: Google Sheets doesn't provide direct URLs to specific revisions
   const rowValues = [
     timestamp,
-    revisionId || 'N/A',
     added,
     removed,
     failed,
-    durationSeconds || 0,
-    ''
+    duration
   ];
 
   syncHistorySheet.getRange(nextRow, 1, 1, rowValues.length).setValues([rowValues]);
 
-  // Refresh header notes so guidance stays aligned with the new column order
-  syncHistorySheet.getRange('A1:G1').clearNote();
-  syncHistorySheet.getRange('A1').setNote('Timestamp when the sync completed. Use this to find the corresponding revision in version history.');
-  syncHistorySheet.getRange('B1').setNote('Google\'s internal revision ID (for reference only - cannot be used to link directly).');
-  syncHistorySheet.getRange('G1').setNote('To view this version: Open the spreadsheet, go to File > Version history > See version history, then find the revision matching the timestamp in column A. Google keeps revisions for 30-100 days.');
+  // Add note to timestamp column for version history navigation
+  if (nextRow === 2) {
+    syncHistorySheet.getRange('A1').setNote('To view this version: Open the spreadsheet, go to File > Version history > See version history, then find the revision matching this timestamp. Google keeps revisions for 30-100 days.');
+  }
 
-    log_('Logged sync history: Revision ' + (revisionId || 'N/A') + ', Changes: +' + added + ' -' + removed + ' !' + failed, 'INFO');
+    log_('Logged sync history: Changes: +' + added + ' -' + removed + ' !' + failed + ', Duration: ' + duration + 's', 'INFO');
   } catch (e) {
     log_('ERROR writing to SyncHistory: ' + e.message + '\n' + e.stack, 'ERROR');
   }
