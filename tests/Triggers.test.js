@@ -101,7 +101,7 @@ describe('detectAutoSyncChanges_', () => {
 
   it('skips when spreadsheet and folders match the previous snapshot', () => {
     const previousSnapshot = {
-      spreadsheetLastUpdated: new Date('2024-01-01T00:00:00Z').getTime(),
+      dataHash: 'mock-hash-string',
       folderStates: { 'folder-1': new Date('2024-01-01T00:00:00Z').getTime() },
       capturedAt: '2024-01-01T00:00:00Z'
     };
@@ -115,7 +115,7 @@ describe('detectAutoSyncChanges_', () => {
 
   it('detects folder modifications since the last snapshot', () => {
     const previousSnapshot = {
-      spreadsheetLastUpdated: new Date('2024-01-01T00:00:00Z').getTime(),
+      dataHash: 'mock-hash-string',
       folderStates: { 'folder-1': new Date('2024-01-01T00:00:00Z').getTime() },
       capturedAt: '2024-01-01T00:00:00Z'
     };

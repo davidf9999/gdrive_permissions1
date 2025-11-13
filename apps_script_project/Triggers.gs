@@ -144,8 +144,34 @@ function detectAutoSyncChanges_() {
   }
 
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  const spreadsheetFile = DriveApp.getFileById(spreadsheet.getId());
-  const spreadsheetLastUpdated = spreadsheetFile.getLastUpdated();
+
+  // Compute hash of actual data content in control sheets
+  let dataHash = '';
+  try {
+    const managedSheet = spreadsheet.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+    const adminsSheet = spreadsheet.getSheetByName(ADMINS_SHEET_NAME);
+    const userGroupsSheet = spreadsheet.getSheetByName(USER_GROUPS_SHEET_NAME);
+
+    let dataString = '';
+    if (managedSheet && managedSheet.getLastRow() > 1) {
+      const data = managedSheet.getRange(2, 1, managedSheet.getLastRow() - 1, managedSheet.getLastColumn()).getValues();
+      dataString += JSON.stringify(data);
+    }
+    if (adminsSheet && adminsSheet.getLastRow() > 1) {
+      const data = adminsSheet.getRange(2, 1, adminsSheet.getLastRow() - 1, adminsSheet.getLastColumn()).getValues();
+      dataString += JSON.stringify(data);
+    }
+    if (userGroupsSheet && userGroupsSheet.getLastRow() > 1) {
+      const data = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, userGroupsSheet.getLastColumn()).getValues();
+      dataString += JSON.stringify(data);
+    }
+
+    // Compute SHA-256 hash
+    const digest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, dataString);
+    dataHash = Utilities.base64Encode(digest);
+  } catch (e) {
+    log_('Failed to compute data hash: ' + e.message, 'WARN');
+  }
 
   const folderStates = {};
   const folderIds = new Set();
@@ -186,16 +212,11 @@ function detectAutoSyncChanges_() {
     reasons.push('No previous AutoSync snapshot was found.');
   }
 
-  const previousSpreadsheetTimestamp = previousSnapshot && typeof previousSnapshot.spreadsheetLastUpdated === 'number'
-    ? previousSnapshot.spreadsheetLastUpdated
-    : null;
-
-  if (spreadsheetLastUpdated) {
-    const currentSpreadsheetTimestamp = spreadsheetLastUpdated.getTime();
-    if (!previousSpreadsheetTimestamp || currentSpreadsheetTimestamp > previousSpreadsheetTimestamp) {
-      shouldRun = true;
-      reasons.push('Control spreadsheet updated at ' + spreadsheetLastUpdated.toISOString() + '.');
-    }
+  // Check if actual data in control sheets has changed
+  const previousDataHash = previousSnapshot && previousSnapshot.dataHash ? previousSnapshot.dataHash : null;
+  if (dataHash && previousDataHash && dataHash !== previousDataHash) {
+    shouldRun = true;
+    reasons.push('Control sheet data has changed.');
   }
 
   folderIds.forEach(id => {
@@ -243,7 +264,7 @@ function detectAutoSyncChanges_() {
   }
 
   const snapshot = {
-    spreadsheetLastUpdated: spreadsheetLastUpdated ? spreadsheetLastUpdated.getTime() : null,
+    dataHash: dataHash,
     folderStates: folderStates,
     capturedAt: new Date().toISOString()
   };
