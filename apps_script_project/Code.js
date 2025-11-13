@@ -44,7 +44,7 @@ function onOpen() {
   if (superAdmin) {
     buildSuperAdminMenu_(menu, ui);
   } else {
-    buildRestrictedMenu_(menu, ui);
+    buildRestrictedMenu_(menu);
   }
 
   menu.addToUi();
@@ -78,8 +78,9 @@ function buildSuperAdminMenu_(menu, ui) {
   menu.addSubMenu(createHelpMenu_(ui));
 }
 
-function buildRestrictedMenu_(menu, ui) {
-  menu.addSubMenu(createHelpMenu_(ui));
+function buildRestrictedMenu_(menu) {
+  // Restricted users cannot run Apps Script functions, so no menu items are shown.
+  // Help documentation is available in the Help sheet instead.
 }
 
 function createManualSyncMenu_(ui) {

@@ -350,6 +350,93 @@ function setupLogSheets_() {
 
   // Check for SyncHistory sheet
   setupSyncHistorySheet_();
+
+  // Check for Help sheet
+  setupHelpSheet_();
+}
+
+function setupHelpSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let helpSheet = ss.getSheetByName('Help');
+
+  if (!helpSheet) {
+    helpSheet = ss.insertSheet('Help');
+  }
+
+  // Clear existing content
+  helpSheet.clear();
+
+  // Get GitHub repo URL from config
+  const config = typeof getConfiguration_ === 'function' ? getConfiguration_() : {};
+  const repoUrl = config['GitHubRepoURL'] || 'https://github.com/davidf9999/gdrive_permissions1';
+
+  // Get super admin emails for contact info
+  const superAdmins = typeof getSuperAdminEmails_ === 'function' ? getSuperAdminEmails_() : [];
+  const adminContactInfo = superAdmins.length > 0
+    ? 'Contact any of these super admins for help:\n' + superAdmins.join('\n')
+    : 'Contact the spreadsheet owner for help.';
+
+  // Create help content
+  const content = [
+    ['📚 HELP & DOCUMENTATION', ''],
+    ['', ''],
+    ['Welcome to the Google Drive Permissions Manager!', ''],
+    ['', ''],
+    ['For detailed documentation, visit:', ''],
+    ['User Guide:', repoUrl + '/blob/main/docs/USER_GUIDE.md'],
+    ['Testing Guide:', repoUrl + '/blob/main/docs/TESTING.md'],
+    ['AutoSync Guide:', repoUrl + '/blob/main/docs/AUTO_SYNC_GUIDE.md'],
+    ['Edit Mode Guide:', repoUrl + '/blob/main/docs/EDIT_MODE_GUIDE.md'],
+    ['Main README:', repoUrl + '/blob/main/README.md'],
+    ['', ''],
+    ['📧 NEED HELP?', ''],
+    ['', ''],
+    [adminContactInfo, ''],
+    ['', ''],
+    ['⚠️ NOTE FOR NON-ADMIN USERS', ''],
+    ['', ''],
+    ['If you see only a "Permissions Manager" menu with no items,', ''],
+    ['you have view-only access. This is intentional.', ''],
+    ['Super admins manage sync operations and settings.', '']
+  ];
+
+  // Write content
+  helpSheet.getRange(1, 1, content.length, 2).setValues(content);
+
+  // Format the sheet
+  helpSheet.getRange('A1:B1').setFontWeight('bold').setFontSize(14).setBackground('#4285f4').setFontColor('#ffffff');
+  helpSheet.getRange('A13:B13').setFontWeight('bold').setFontSize(12).setBackground('#fbbc04').setFontColor('#000000');
+  helpSheet.getRange('A17:B17').setFontWeight('bold').setFontSize(12).setBackground('#ea4335').setFontColor('#ffffff');
+
+  // Make URL cells clickable
+  for (let i = 6; i <= 10; i++) {
+    const cell = helpSheet.getRange(i, 2);
+    const url = cell.getValue();
+    if (url && url.startsWith('http')) {
+      cell.setFontColor('#1155cc').setFontUnderline(true);
+    }
+  }
+
+  // Set column widths
+  helpSheet.setColumnWidth(1, 500);
+  helpSheet.setColumnWidth(2, 500);
+
+  // Protect the sheet so non-admins can't modify it
+  try {
+    const protection = helpSheet.protect();
+    protection.setDescription('Help sheet (view-only for non-admins)');
+    protection.setWarningOnly(false);
+
+    // Allow editors (super admins) to edit
+    const me = Session.getEffectiveUser();
+    protection.addEditor(me);
+    protection.removeEditors(protection.getEditors());
+    protection.addEditor(me);
+  } catch (e) {
+    log_('Could not protect Help sheet: ' + e.message, 'WARN');
+  }
+
+  log_('Created or updated Help sheet.');
 }
 
 function setupSyncHistorySheet_() {
