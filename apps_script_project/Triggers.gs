@@ -81,10 +81,40 @@ function autoSync(e) {
       return;
     }
 
+    log_('*** Starting scheduled AutoSync...');
 
-    
-    // ... (rest of the function is unchanged) 
-    
+    // Detect if changes warrant a sync
+    const changeDetection = detectAutoSyncChanges_();
+
+    if (!changeDetection.shouldRun) {
+      log_('AutoSync skipped: No changes detected since last run.', 'INFO');
+      return;
+    }
+
+    // Log reasons for sync
+    log_('AutoSync triggered. Reasons:', 'INFO');
+    changeDetection.reasons.forEach(function(reason) {
+      log_('  - ' + reason, 'INFO');
+    });
+
+    // Determine if deletions are allowed
+    const maxDeletions = getConfigValue_('AutoSyncMaxDeletions', 0);
+    const allowDeletions = maxDeletions > 0;
+
+    if (allowDeletions) {
+      log_('AutoSync with deletions enabled (max: ' + maxDeletions + '). Performing full sync...');
+      fullSync({ silentMode: silentMode });
+    } else {
+      log_('Performing SAFE operations (additions only)...');
+      syncAdds({ silentMode: silentMode });
+    }
+
+    // Save the snapshot after successful sync
+    const props = PropertiesService.getDocumentProperties();
+    props.setProperty(AUTO_SYNC_CHANGE_SIGNATURE_KEY, JSON.stringify(changeDetection.snapshot));
+
+    log_('*** Scheduled AutoSync completed successfully.');
+
   } catch (e) {
     const errorMessage = 'FATAL ERROR in autoSync: ' + e.toString() + '\n' + e.stack;
     log_(errorMessage, 'ERROR');
