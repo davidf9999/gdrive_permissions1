@@ -445,13 +445,67 @@ function sendErrorNotification_(errorMessage) {
 
 function showTestMessage_(title, message) {
     const config = getConfiguration_();
-    const showPrompts = config['ShowTestPrompts'];
+    const showPrompts = normalizeBooleanValue_(config['ShowTestPrompts']);
 
-    if (showPrompts === true || showPrompts === 'TRUE') {
+    if (showPrompts === 'ENABLED') {
         SpreadsheetApp.getUi().alert(title, message, SpreadsheetApp.getUi().ButtonSet.OK);
     } else {
         log_(`Test Message: ${title} - ${message}`, 'INFO');
     }
+}
+
+/**
+ * Shows a confirmation dialog if ShowTestPrompts is ENABLED, otherwise returns default value
+ * @param {string} title - The dialog title
+ * @param {string} message - The dialog message
+ * @param {*} defaultValue - The value to return if prompts are disabled (default: ui.Button.YES)
+ * @return {*} The user's response or the default value
+ */
+function showTestConfirm_(title, message, defaultValue) {
+    const config = getConfiguration_();
+    const showPrompts = normalizeBooleanValue_(config['ShowTestPrompts']);
+    const autoConfirm = normalizeBooleanValue_(config['TestAutoConfirm']);
+    const ui = SpreadsheetApp.getUi();
+
+    // If prompts are disabled, return default silently
+    if (showPrompts !== 'ENABLED') {
+        log_(`Test Confirmation (auto-accepted): ${title} - ${message}`, 'INFO');
+        return defaultValue !== undefined ? defaultValue : ui.Button.YES;
+    }
+
+    // If auto-confirm is enabled, skip the prompt
+    if (autoConfirm === 'ENABLED') {
+        log_(`Test Confirmation (auto-accepted): ${title}`, 'INFO');
+        return defaultValue !== undefined ? defaultValue : ui.Button.YES;
+    }
+
+    // Show the actual confirmation dialog
+    return ui.alert(title, message, ui.ButtonSet.YES_NO);
+}
+
+/**
+ * Shows a prompt dialog if ShowTestPrompts is ENABLED, otherwise returns default value
+ * @param {string} title - The dialog title
+ * @param {string} message - The dialog message
+ * @param {string} defaultValue - The value to return if prompts are disabled
+ * @return {Object} An object with getSelectedButton() and getResponseText() methods
+ */
+function showTestPrompt_(title, message, defaultValue) {
+    const config = getConfiguration_();
+    const showPrompts = normalizeBooleanValue_(config['ShowTestPrompts']);
+    const ui = SpreadsheetApp.getUi();
+
+    // If prompts are disabled, return a mock response with the default value
+    if (showPrompts !== 'ENABLED') {
+        log_(`Test Prompt (using default): ${title} - ${defaultValue}`, 'INFO');
+        return {
+            getSelectedButton: function() { return ui.Button.OK; },
+            getResponseText: function() { return defaultValue || ''; }
+        };
+    }
+
+    // Show the actual prompt dialog
+    return ui.prompt(title, message, ui.ButtonSet.OK_CANCEL);
 }
 
 /**

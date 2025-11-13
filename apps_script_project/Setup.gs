@@ -443,14 +443,59 @@ function setupHelpSheet_() {
 function setupSyncHistorySheet_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName(SYNC_HISTORY_SHEET_NAME);
+  const newHeaders = ['Timestamp', 'Added', 'Removed', 'Failed', 'Duration (seconds)'];
+
   if (!sheet) {
     const logSheet = ss.getSheetByName(LOG_SHEET_NAME);
     const index = logSheet ? logSheet.getIndex() + 1 : ss.getSheets().length + 1;
     sheet = ss.insertSheet(SYNC_HISTORY_SHEET_NAME, index);
-    const headers = ['Timestamp', 'Added', 'Removed', 'Failed', 'Duration (seconds)'];
-    sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
+    sheet.getRange(1, 1, 1, newHeaders.length).setValues([newHeaders]).setFontWeight('bold');
     sheet.setFrozenRows(1);
     log_('Created "' + SYNC_HISTORY_SHEET_NAME + '" sheet.');
+  } else {
+    // Migrate old format (7 columns with Revision ID) to new format (5 columns)
+    const lastRow = sheet.getLastRow();
+    if (lastRow > 0) {
+      const currentHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+      // Check if this is the old format with Revision ID columns
+      if (currentHeaders.length >= 7 &&
+          (currentHeaders[1] === 'Revision ID' || currentHeaders[2] === 'Revision Link')) {
+        log_('Migrating SyncHistory from old format (7 cols) to new format (5 cols)...', 'INFO');
+
+        // Old format: Timestamp, Revision ID, Revision Link, Added, Removed, Failed, Duration
+        // New format: Timestamp, Added, Removed, Failed, Duration
+        // Mapping: [0, 3, 4, 5, 6] from old -> [0, 1, 2, 3, 4] in new
+
+        if (lastRow > 1) {
+          const oldData = sheet.getRange(2, 1, lastRow - 1, 7).getValues();
+          const newData = oldData.map(function(row) {
+            return [
+              row[0],  // Timestamp
+              row[3],  // Added (was col 4)
+              row[4],  // Removed (was col 5)
+              row[5],  // Failed (was col 6)
+              Math.round(row[6] || 0)  // Duration - convert to integer if float
+            ];
+          });
+
+          // Clear old data
+          sheet.getRange(2, 1, lastRow - 1, 7).clearContent();
+
+          // Write new data
+          sheet.getRange(2, 1, newData.length, newHeaders.length).setValues(newData);
+        }
+
+        // Delete old columns (6 and 7)
+        if (sheet.getLastColumn() > 5) {
+          sheet.deleteColumns(6, sheet.getLastColumn() - 5);
+        }
+
+        // Update headers
+        sheet.getRange(1, 1, 1, newHeaders.length).setValues([newHeaders]).setFontWeight('bold');
+        log_('SyncHistory migration completed. Removed Revision ID/Link columns.', 'INFO');
+      }
+    }
   }
   return sheet;
 }

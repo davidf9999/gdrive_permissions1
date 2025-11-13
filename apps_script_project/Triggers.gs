@@ -166,6 +166,7 @@ function detectAutoSyncChanges_() {
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
 
   // Compute hash of actual data content in control sheets
+  // IMPORTANT: Exclude script-managed columns (Status, Last Synced, URL) to avoid triggering on metadata updates
   let dataHash = '';
   try {
     const managedSheet = spreadsheet.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
@@ -174,14 +175,19 @@ function detectAutoSyncChanges_() {
 
     let dataString = '';
     if (managedSheet && managedSheet.getLastRow() > 1) {
-      const data = managedSheet.getRange(2, 1, managedSheet.getLastRow() - 1, managedSheet.getLastColumn()).getValues();
+      // Read only user-editable columns (1-5): FolderName, FolderId, Role, GroupEmail, UserSheetName
+      // Exclude script-managed columns (6-8): LastSynced, Status, URL
+      const data = managedSheet.getRange(2, 1, managedSheet.getLastRow() - 1, USER_SHEET_NAME_COL).getValues();
       dataString += JSON.stringify(data);
     }
     if (adminsSheet && adminsSheet.getLastRow() > 1) {
-      const data = adminsSheet.getRange(2, 1, adminsSheet.getLastRow() - 1, adminsSheet.getLastColumn()).getValues();
+      // Read only user-editable column (1): Group Email
+      // Exclude script-managed columns (Last Synced, Status)
+      const data = adminsSheet.getRange(2, 1, adminsSheet.getLastRow() - 1, 1).getValues();
       dataString += JSON.stringify(data);
     }
     if (userGroupsSheet && userGroupsSheet.getLastRow() > 1) {
+      // Read all columns from UserGroups (no script-managed columns here)
       const data = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, userGroupsSheet.getLastColumn()).getValues();
       dataString += JSON.stringify(data);
     }

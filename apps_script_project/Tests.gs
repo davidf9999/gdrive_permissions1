@@ -1087,12 +1087,9 @@ function runAllTests() {
             return;
         }
 
-        let response = ui.Button.YES;
-        if (testConfig.autoConfirm !== true) {
-            response = ui.alert('Run All Tests', 'This will run all tests sequentially. This may take several minutes. Continue?', ui.ButtonSet.YES_NO);
-        }
+        const response = showTestConfirm_('Run All Tests', 'This will run all tests sequentially. This may take several minutes. Continue?', ui.Button.YES);
         if (response !== ui.Button.YES) {
-            ui.alert('All Tests cancelled.');
+            showTestMessage_('All Tests cancelled.', 'The test run was cancelled.');
             return;
         }
 

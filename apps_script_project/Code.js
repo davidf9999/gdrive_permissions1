@@ -193,12 +193,17 @@ function applyFullView_() {
   try {
     const visibilityConfig = getTestSheetVisibilityConfig_();
     const ss = SpreadsheetApp.getActiveSpreadsheet();
+    log_('applyFullView_: Processing sheets for super admin visibility', 'DEBUG');
     ss.getSheets().forEach(function(sheet) {
       const name = sheet.getName();
-      if (shouldHideSheetForRestrictedView_(name, visibilityConfig) && typeof sheet.showSheet === 'function') {
+      const shouldHide = shouldHideSheetForRestrictedView_(name, visibilityConfig);
+      if (shouldHide && typeof sheet.showSheet === 'function') {
         try {
           if (sheet.isSheetHidden()) {
             sheet.showSheet();
+            log_('applyFullView_: Showed hidden test sheet: ' + name, 'INFO');
+          } else {
+            log_('applyFullView_: Test sheet already visible: ' + name, 'DEBUG');
           }
         } catch (e) {
           log_('Could not show sheet "' + name + '": ' + e.message, 'WARN');
