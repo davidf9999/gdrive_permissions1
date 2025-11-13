@@ -34,8 +34,8 @@ function generateGroupEmail_(baseName) {
 
   if (!sanitizedName) {
     throw new Error(
-      'Group name "' + baseName + '" contains only non-ASCII characters (e.g., Hebrew, Arabic, Chinese) which cannot be used in email addresses. ' +
-      'Please manually specify a group email in the "GroupEmail" column (Column B) using only ASCII characters (a-z, 0-9, hyphens). ' +
+      'Group name "' + baseName + '" contains only non-ASCII characters (e.g., Hebrew, Arabic, Chinese) which cannot be used in email addresses. ' + 
+      'Please manually specify a group email in the "GroupEmail" column (Column B) using only ASCII characters (a-z, 0-9, hyphens). ' + 
       'Example: for "' + baseName + '", you could use "coordinators@' + domain + '" or "team-a@' + domain + '".'
     );
   }
@@ -184,6 +184,20 @@ function getConfiguration_() {
 
   cache.put('config', JSON.stringify(config), 300); // Cache for 5 minutes
   return config;
+}
+
+function getConfigValue_(key, defaultValue) {
+  const config = getConfiguration_();
+  if (config[key] !== undefined && config[key] !== null) {
+    // Handle boolean strings
+    if (typeof config[key] === 'string') {
+      const upperValue = config[key].toUpperCase();
+      if (upperValue.startsWith('ENABLED')) return true;
+      if (upperValue.startsWith('DISABLED')) return false;
+    }
+    return config[key];
+  }
+  return defaultValue;
 }
 
 
