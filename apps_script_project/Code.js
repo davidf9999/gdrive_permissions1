@@ -86,8 +86,8 @@ function createAutoSyncMenu_(ui) {
     .addItem('📊 View Edit Mode Status', 'viewEditModeStatus');
 
   return ui.createMenu('Auto-Sync')
-    .addItem('🚀 Apply Auto-Sync Settings', 'applyAutoSyncSettings')
-    .addItem('🛑 Disable & Remove Auto-Sync', 'removeAutoSync')
+    .addItem('🚀 Enable/Update Auto-Sync', 'setupAutoSync')
+    .addItem('🛑 Disable Auto-Sync', 'removeAutoSync')
     .addSeparator()
     .addItem('▶️ Run Auto-Sync Now', 'runAutoSyncNow')
     .addSeparator()
@@ -189,16 +189,6 @@ function onEdit(e) {
   }
 }
 
-
-function applyAutoSyncSettings() {
-  const isEnabled = getConfiguration_('EnableAutoSync', false);
-  
-  if (isEnabled) {
-    setupAutoSync();
-  } else {
-    removeAutoSync();
-  }
-}
 
 
 function getActiveUserEmail_() {

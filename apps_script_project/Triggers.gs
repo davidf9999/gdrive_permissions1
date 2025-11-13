@@ -2,19 +2,7 @@
  * Triggers.gs - Automatic sync scheduling
  */
 
-/**
- * Reads the settings from the Config sheet and applies them by creating or deleting the auto-sync trigger.
- * This is the primary function called from the menu.
- */
-function applyAutoSyncSettings() {
-  const isEnabled = getConfigValue_('EnableAutoSync', false);
-  
-  if (isEnabled) {
-    setupAutoSync();
-  } else {
-    removeAutoSync();
-  }
-}
+
 
 /**
  * Sets up a time-based trigger for automatic synchronization.
@@ -28,11 +16,9 @@ function setupAutoSync() {
     }
   }
 
-  const interval = getConfigValue_('SyncInterval', 5);
+  const interval = getConfigValue_('AutoSyncInterval', 5);
   if (isNaN(interval) || interval < 5) {
-    SpreadsheetApp.getUi().alert('Invalid Sync Interval. Please set a number greater than or equal to 5 in the Config sheet.');
-    // Revert the visual setting in the sheet, as the action failed
-    updateConfigSetting_('EnableAutoSync', 'DISABLED ❌');
+    SpreadsheetApp.getUi().alert('Invalid Auto-Sync Interval. Please set a number greater than or equal to 5 in the Config sheet.');
     return;
   }
 
@@ -74,7 +60,6 @@ function removeAutoSync() {
   
   // Always ensure the status indicators are correct
   updateConfigSetting_('Auto-Sync Trigger Status', 'DISABLED');
-  updateConfigSetting_('EnableAutoSync', 'DISABLED');
 }
 
 
@@ -96,10 +81,7 @@ function autoSync(e) {
       return;
     }
 
-    if (!isAutoSyncEnabled_()) {
-      log_('Auto-sync is disabled in Config sheet. Skipping.', 'INFO');
-      return;
-    }
+
     
     // ... (rest of the function is unchanged) 
     
@@ -112,12 +94,7 @@ function autoSync(e) {
   }
 }
 
-/**
- * Helper function to check if auto-sync is enabled.
- */
-function isAutoSyncEnabled_() {
-  return getConfigValue_('EnableAutoSync', false);
-}
+
 
 // ... (Other functions like calculateDataHash_, detectAutoSyncChanges_, etc. are unchanged)
 
@@ -128,24 +105,16 @@ function isAutoSyncEnabled_() {
 function viewTriggerStatus() {
   const triggers = ScriptApp.getProjectTriggers();
   const autoSyncTriggers = triggers.filter(t => t.getHandlerFunction() === 'autoSync');
-  const isEnabledInConfig = isAutoSyncEnabled_();
   const ui = SpreadsheetApp.getUi();
   let message = '';
 
   if (autoSyncTriggers.length > 0) {
-    message += 'A time-based trigger IS INSTALLED.\n';
-    if (isEnabledInConfig) {
-      message += 'Status: ENABLED ✅\n\nThe script will run automatically.';
-    } else {
-      message += 'Status: PAUSED ⏸️\n\nThe trigger is installed but is currently paused because "EnableAutoSync" is DISABLED in the Config sheet. The script will not run.';
-    }
+    const interval = getConfigValue_('AutoSyncInterval', 5);
+    message += `A time-based trigger IS INSTALLED, running every ${interval} minutes.\n`;
+    message += 'Status: ENABLED\n\nThe script will run automatically.';
   } else {
     message += 'No time-based trigger is installed.\n';
-    if (isEnabledInConfig) {
-      message += 'Status: MISCONFIGURED ⚠️\n\n"EnableAutoSync" is ENABLED in the Config sheet, but no trigger is installed. Please run "Apply Auto-Sync Settings" from the menu.';
-    } else {
-      message += 'Status: DISABLED ❌\n\nThe script will not run automatically.';
-    }
+    message += 'Status: DISABLED\n\nThe script will not run automatically. To enable, use the "Enable/Update Auto-Sync" menu item.';
   }
   
   ui.alert('Auto-Sync Status', message, ui.ButtonSet.OK);
@@ -159,21 +128,13 @@ function updateAutoSyncStatusIndicator_() {
   try {
     const triggers = ScriptApp.getProjectTriggers();
     const hasTrigger = triggers.some(t => t.getHandlerFunction() === 'autoSync');
-    const isEnabledInConfig = getConfigValue_('EnableAutoSync', false);
     let statusToDisplay;
 
     if (hasTrigger) {
-      if (isEnabledInConfig) {
-        statusToDisplay = 'ENABLED';
-      } else {
-        statusToDisplay = 'PAUSED';
-      }
+      const interval = getConfigValue_('AutoSyncInterval', 5);
+      statusToDisplay = `ENABLED (every ${interval} mins)`;
     } else {
-      if (isEnabledInConfig) {
-        statusToDisplay = 'MISCONFIGURED';
-      } else {
-        statusToDisplay = 'DISABLED';
-      }
+      statusToDisplay = 'DISABLED';
     }
     updateConfigSetting_('Auto-Sync Trigger Status', statusToDisplay);
   } catch (e) {
