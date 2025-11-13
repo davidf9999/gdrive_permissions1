@@ -144,7 +144,8 @@ function detectAutoSyncChanges_() {
   }
 
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  const spreadsheetLastUpdated = spreadsheet.getLastUpdated();
+  const spreadsheetFile = DriveApp.getFileById(spreadsheet.getId());
+  const spreadsheetLastUpdated = spreadsheetFile.getLastUpdated();
 
   const folderStates = {};
   const folderIds = new Set();
