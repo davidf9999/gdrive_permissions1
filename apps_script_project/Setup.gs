@@ -191,6 +191,7 @@ function setupControlSheets_() {
     },
     '--- Sync Behavior ---': {
       'EnableSheetLocking': { value: 'ENABLED', description: 'Set to DISABLED to disable the sheet locking mechanism during sync operations. This is not recommended as it can lead to data inconsistencies if sheets are edited during a sync.' },
+      'EnableCircularDependencyCheck': { value: 'ENABLED', description: 'Set to DISABLED to skip circular dependency validation during sync. This check prevents infinite loops when groups contain each other. Only disable if you are certain your group structure has no cycles and need faster sync performance.' },
       'AutoSyncInterval': { value: 5, description: 'The interval in minutes for the AutoSync trigger. Minimum is 5 minutes. Use the "Enable/Update AutoSync" menu item to apply a new interval.' },
       'AllowAutosyncDeletion': { value: 'ENABLED', description: 'Set to ENABLED to allow AutoSync to automatically delete users. WARNING: This is a powerful feature. If a user is accidentally removed from a sheet, their access will be revoked on the next sync.' },
       'AutoSyncMaxDeletions': { value: 10, description: 'The maximum number of deletions allowed in a single AutoSync run. If exceeded, deletions will be paused and manual intervention required.' },

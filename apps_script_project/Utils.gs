@@ -750,8 +750,12 @@ function validateGroupNesting_() {
       dependencyGraph.set(parentGroupEmail, []);
     }
 
-    // Find child groups within this sheet
-    const memberEmails = sheet.getRange('A2:A').getValues().flat().filter(String);
+    // Find child groups within this sheet (only read actual data rows)
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) {
+      return; // No data in this sheet
+    }
+    const memberEmails = sheet.getRange(2, 1, lastRow - 1, 1).getValues().flat().filter(String);
     memberEmails.forEach(email => {
       const childEmail = email.toString().trim().toLowerCase();
       if (childEmail && childEmail.includes('@')) {
@@ -800,23 +804,23 @@ function validateGroupNesting_() {
 
 function findGroupEmailByName_(groupName) {
     const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-    
-    // Check UserGroups sheet
+
+    // Check UserGroups sheet (only read actual data rows)
     const userGroupsSheet = spreadsheet.getSheetByName(USER_GROUPS_SHEET_NAME);
-    if (userGroupsSheet) {
-        const data = userGroupsSheet.getDataRange().getValues();
-        for (let i = 1; i < data.length; i++) {
+    if (userGroupsSheet && userGroupsSheet.getLastRow() > 1) {
+        const data = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 2).getValues();
+        for (let i = 0; i < data.length; i++) {
             if (data[i][0] === groupName && data[i][1]) {
                 return data[i][1];
             }
         }
     }
 
-    // Check ManagedFolders sheet
+    // Check ManagedFolders sheet (only read actual data rows)
     const managedFoldersSheet = spreadsheet.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
-    if (managedFoldersSheet) {
-        const data = managedFoldersSheet.getDataRange().getValues();
-        for (let i = 1; i < data.length; i++) {
+    if (managedFoldersSheet && managedFoldersSheet.getLastRow() > 1) {
+        const data = managedFoldersSheet.getRange(2, 1, managedFoldersSheet.getLastRow() - 1, Math.max(USER_SHEET_NAME_COL, GROUP_EMAIL_COL)).getValues();
+        for (let i = 0; i < data.length; i++) {
             const currentSheetName = data[i][USER_SHEET_NAME_COL - 1];
             if (currentSheetName && currentSheetName.slice(0, -2) === groupName && data[i][GROUP_EMAIL_COL - 1]) {
                  return data[i][GROUP_EMAIL_COL - 1];

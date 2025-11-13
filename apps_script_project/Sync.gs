@@ -532,7 +532,12 @@ function fullSync(options = {}) {
     log_('*** Starting full synchronization...');
 
     // --- PRE-SYNC CHECKS ---
-    validateGroupNesting_(); // Check for circular dependencies
+    const enableCircularCheck = getConfigValue_('EnableCircularDependencyCheck', 'ENABLED');
+    if (enableCircularCheck === 'ENABLED' || enableCircularCheck === true) {
+      validateGroupNesting_(); // Check for circular dependencies
+    } else {
+      log_('Circular dependency check is disabled in Config.', 'INFO');
+    }
 
     const orphanSheets = checkForOrphanSheets_();
     if (orphanSheets && orphanSheets.length > 0) {
