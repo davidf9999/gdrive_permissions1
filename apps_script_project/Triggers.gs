@@ -110,19 +110,35 @@ function autoSync(e) {
       syncResult = syncAdds({ silentMode: silentMode, skipSetup: true });
     }
 
-    // Only save the snapshot if sync completed successfully
+    // Save snapshot with success/failure status
+    const props = PropertiesService.getDocumentProperties();
     if (syncResult) {
-      const props = PropertiesService.getDocumentProperties();
+      changeDetection.snapshot.lastSyncSuccessful = true;
       props.setProperty(AUTO_SYNC_CHANGE_SIGNATURE_KEY, JSON.stringify(changeDetection.snapshot));
       log_('*** Scheduled AutoSync completed successfully.');
     } else {
-      log_('AutoSync did not complete successfully. Snapshot not saved - will retry on next run.', 'WARN');
+      changeDetection.snapshot.lastSyncSuccessful = false;
+      props.setProperty(AUTO_SYNC_CHANGE_SIGNATURE_KEY, JSON.stringify(changeDetection.snapshot));
+      log_('AutoSync did not complete successfully. Will retry on next run.', 'WARN');
     }
 
   } catch (e) {
     const errorMessage = 'FATAL ERROR in autoSync: ' + e.toString() + '\n' + e.stack;
     log_(errorMessage, 'ERROR');
     sendErrorNotification_(errorMessage);
+
+    // Mark sync as failed in snapshot so we retry on next run
+    try {
+      const props = PropertiesService.getDocumentProperties();
+      const rawSnapshot = props.getProperty(AUTO_SYNC_CHANGE_SIGNATURE_KEY);
+      if (rawSnapshot) {
+        const snapshot = JSON.parse(rawSnapshot);
+        snapshot.lastSyncSuccessful = false;
+        props.setProperty(AUTO_SYNC_CHANGE_SIGNATURE_KEY, JSON.stringify(snapshot));
+      }
+    } catch (snapErr) {
+      log_('Could not update snapshot after error: ' + snapErr.message, 'WARN');
+    }
   } finally {
     lock.releaseLock();
   }
@@ -214,6 +230,13 @@ function detectAutoSyncChanges_() {
   if (!previousSnapshot) {
     shouldRun = true;
     reasons.push('No previous AutoSync snapshot was found.');
+  }
+
+  // Check if previous sync failed - if so, retry regardless of changes
+  // If lastSyncSuccessful is missing (old snapshot), treat as failed for safety
+  if (previousSnapshot && previousSnapshot.lastSyncSuccessful !== true) {
+    shouldRun = true;
+    reasons.push('Previous AutoSync run did not complete successfully or status unknown. Retrying.');
   }
 
   // Check if actual data in control sheets has changed
