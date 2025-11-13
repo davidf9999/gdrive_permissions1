@@ -674,4 +674,12 @@ function updateControlSheetModeIndicator_(mode) {
   } catch (e) {
     email = '';
   }
+
+  const value = email ? mode + ' - ' + email : mode;
+
+  try {
+    updateConfigSetting_('ControlSheetMode', value);
+  } catch (e) {
+    log_('Failed to update ControlSheetMode indicator: ' + e.message, 'WARN');
+  }
 }
