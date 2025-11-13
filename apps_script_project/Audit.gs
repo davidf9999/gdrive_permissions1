@@ -223,7 +223,10 @@ function deepAuditFolder() {
     return;
   }
 
-  const { folderName, groupEmail, userSheetName, expectedRole } = managedFolderInfo;
+  const folderName = managedFolderInfo.folderName;
+  const groupEmail = managedFolderInfo.groupEmail;
+  const userSheetName = managedFolderInfo.userSheetName;
+  const expectedRole = managedFolderInfo.expectedRole;
 
   try {
     log_(`*** Starting Deep Audit for folder: ${folderName} (${folderId})`);

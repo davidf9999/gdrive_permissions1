@@ -2,7 +2,7 @@
 
 ## Overview
 
-**Edit Mode** allows you to temporarily suspend automatic syncs while making bulk changes to the control sheets. This prevents auto-sync from running in the middle of your edits, which could cause:
+**Edit Mode** allows you to temporarily suspend automatic syncs while making bulk changes to the control sheets. This prevents AutoSync from running in the middle of your edits, which could cause:
 
 - Partial syncs with incomplete data
 - Confusion about what's been applied
@@ -151,7 +151,7 @@ Check the Log sheet for entries like:
 
 ### Priority Order
 
-When auto-sync trigger fires, it checks in this order:
+When AutoSync trigger fires, it checks in this order:
 
 1. **Is another sync already running?**
    - Yes → Skip this trigger (normal behavior)
@@ -161,7 +161,7 @@ When auto-sync trigger fires, it checks in this order:
    - Yes → Skip and log: "spreadsheet is in Edit Mode"
    - No → Continue checking
 
-3. **Is auto-sync enabled in Config sheet?**
+3. **Is AutoSync enabled in Config sheet?**
    - Yes → Run the sync
    - No → Skip and log: "disabled in Config sheet"
 
@@ -234,7 +234,7 @@ Edit Mode uses **Document Properties** to store state:
 
 ```
 1. Enter Edit Mode
-   └─> Don't want auto-sync retrying while investigating
+   └─> Don't want AutoSync retrying while investigating
 
 2. Investigate:
    └─> Check Log sheet for error details
@@ -252,7 +252,7 @@ Edit Mode uses **Document Properties** to store state:
    └─> Verify it succeeds
 
 5. Exit Edit Mode
-   └─> Let auto-sync handle the remaining folders
+   └─> Let AutoSync handle the remaining folders
 ```
 
 ---
@@ -266,7 +266,7 @@ Don't worry! There are multiple safeguards:
    - Hard to miss when you open the sheet
 
 2. **Log Entries**
-   - Every skipped auto-sync is logged
+   - Every skipped AutoSync is logged
    - Reviewing logs will show "spreadsheet is in Edit Mode"
 
 3. **Status Check**
@@ -291,7 +291,7 @@ Don't worry! There are multiple safeguards:
 
 ## Edit Mode vs Config Sheet Disable
 
-You have two ways to pause auto-sync. What's the difference?
+You have two ways to pause AutoSync. What's the difference?
 
 | Feature | Edit Mode | Config Sheet (`EnableAutoSync = FALSE`) |
 |---------|-----------|----------------------------------------|
@@ -302,9 +302,9 @@ You have two ways to pause auto-sync. What's the difference?
 | **Typical duration** | Minutes to hours | Days to weeks |
 | **Best for** | Bulk edits, troubleshooting | Testing, maintenance mode |
 
-**Use Edit Mode when:** You're actively working and plan to resume auto-sync soon.
+**Use Edit Mode when:** You're actively working and plan to resume AutoSync soon.
 
-**Use Config Sheet when:** You want to disable auto-sync for an extended period or permanently.
+**Use Config Sheet when:** You want to disable AutoSync for an extended period or permanently.
 
 ---
 
@@ -314,7 +314,7 @@ You have two ways to pause auto-sync. What's the difference?
 
 Edit Mode is a menu item, so technically anyone with menu access can use it. However:
 - **Best practice:** Only admins should use Edit Mode
-- **Why:** Volunteers don't run syncs anyway (auto-sync does it)
+- **Why:** Volunteers don't run syncs anyway (AutoSync does it)
 - **Protection:** You could restrict menu access if needed
 
 ### Does Edit Mode affect manual syncs?
@@ -343,7 +343,7 @@ Edit Mode is **per-spreadsheet**, not per-user:
 - Survives days/weeks (until you exit)
 - Survives script redeployments
 
-This is intentional - you might want to pause auto-sync overnight while planning changes.
+This is intentional - you might want to pause AutoSync overnight while planning changes.
 
 ### Can I see edit mode history?
 
@@ -486,7 +486,7 @@ Document Properties:
 Edit Mode is a simple but powerful feature that gives you control over when syncs happen:
 
 - 🔒 **Enter** when making bulk changes
-- ⏸️ **Pauses** auto-sync while you work
+- ⏸️ **Pauses** AutoSync while you work
 - 🟡 **Shows** clear visual indicator
 - 🔓 **Exit** when done to resume automation
 

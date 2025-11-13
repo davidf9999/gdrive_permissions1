@@ -1,4 +1,24 @@
 /**
+ * Normalizes a boolean config value by removing emojis and extra whitespace.
+ * Converts 'ENABLED ✅' to 'ENABLED', 'DISABLED ❌' to 'DISABLED', etc.
+ * @param {*} value - The value to normalize
+ * @return {*} The normalized value
+ */
+function normalizeBooleanValue_(value) {
+  if (typeof value !== 'string') {
+    return value;
+  }
+  const upperValue = value.toUpperCase().trim();
+  if (upperValue.startsWith('ENABLED')) {
+    return 'ENABLED';
+  }
+  if (upperValue.startsWith('DISABLED')) {
+    return 'DISABLED';
+  }
+  return value;
+}
+
+/**
  * Migrates old UserGroup sheets to new naming convention (adds "_G" suffix).
  * This ensures compatibility with the new naming scheme where group sheets
  * end with "_G" to distinguish them from folder sheets.
@@ -163,7 +183,7 @@ function setupControlSheets_() {
 
   const defaultConfig = {
     '--- Status ---': {
-      'AutoSyncStatus': { value: 'N/A', description: 'A visual indicator of the auto-sync trigger status. Updated automatically on open. (Read-only)' },
+      'AutoSync Trigger Status': { value: 'DISABLED', description: 'A visual indicator of the AutoSync trigger status. (Read-only)' },
       'ControlSheetMode': { value: currentUserEmail ? 'FULL - ' + currentUserEmail : 'FULL', description: 'Indicates whether the last viewer had full or restricted access. Automatically updated on open.' }
     },
     '--- Access Control ---': {
@@ -171,20 +191,19 @@ function setupControlSheets_() {
     },
     '--- Sync Behavior ---': {
       'EnableSheetLocking': { value: 'ENABLED', description: 'Set to DISABLED to disable the sheet locking mechanism during sync operations. This is not recommended as it can lead to data inconsistencies if sheets are edited during a sync.' },
-      'EnableAutoSync': { value: 'DISABLED', description: 'Set to DISABLED to temporarily pause the hourly/daily auto-sync trigger without having to delete it.' },
-      'SyncInterval': { value: 5, description: 'The interval in minutes for the auto-sync trigger. Minimum is 5 minutes. After changing this value, you must run "Permissions Manager" -> "Auto-Sync" -> "⚡ Setup Auto-Sync" to apply the new interval.' },
-      'AllowAutosyncDeletion': { value: 'ENABLED', description: 'Set to ENABLED to allow auto-sync to automatically delete users. WARNING: This is a powerful feature. If a user is accidentally removed from a sheet, their access will be revoked on the next sync.' },
-      'AutoSyncMaxDeletions': { value: 10, description: 'The maximum number of deletions allowed in a single auto-sync run. If exceeded, deletions will be paused and manual intervention required.' },
+      'AutoSyncInterval': { value: 5, description: 'The interval in minutes for the AutoSync trigger. Minimum is 5 minutes. Use the "Enable/Update AutoSync" menu item to apply a new interval.' },
+      'AllowAutosyncDeletion': { value: 'ENABLED', description: 'Set to ENABLED to allow AutoSync to automatically delete users. WARNING: This is a powerful feature. If a user is accidentally removed from a sheet, their access will be revoked on the next sync.' },
+      'AutoSyncMaxDeletions': { value: 10, description: 'The maximum number of deletions allowed in a single AutoSync run. If exceeded, deletions will be paused and manual intervention required.' },
     },
     '--- Email Notifications ---': {
       'EnableEmailNotifications': { value: 'DISABLED', description: 'Set to ENABLED to receive emails for errors and other notifications.' },
       'NotificationEmail': { value: '', description: 'The email address to send notifications to. Defaults to the script owner if left blank.' },
-      'NotifyOnSyncSuccess': { value: 'DISABLED', description: 'Set to ENABLED to receive a summary email after each successful auto-sync.' },
-      'NotifyDeletionsPending': { value: 'ENABLED', description: 'Set to ENABLED to receive an email alert when an auto-sync detects that a user needs to be manually removed. (This is ignored if AllowAutosyncDeletion is TRUE).' },
+      'NotifyOnSyncSuccess': { value: 'DISABLED', description: 'Set to ENABLED to receive a summary email after each successful AutoSync.' },
+      'NotifyDeletionsPending': { value: 'ENABLED', description: 'Set to ENABLED to receive an email alert when an AutoSync detects that a user needs to be manually removed. (This is ignored if AllowAutosyncDeletion is TRUE).' },
     },
     '--- Auditing & Limits ---': {
         'MaxLogLength': { value: DEFAULT_MAX_LOG_LENGTH, description: 'The maximum number of rows to keep in the Log and TestLog sheets.' },
-        'MaxFileSizeMB': { value: 100, description: 'The maximum file size in MB for the spreadsheet. If exceeded, auto-sync will be aborted and an alert sent. This prevents uncontrolled growth of version history.' },
+        'MaxFileSizeMB': { value: 100, description: 'The maximum file size in MB for the spreadsheet. If exceeded, AutoSync will be aborted and an alert sent. This prevents uncontrolled growth of version history.' },
         '_SyncHistory': { value: 'Always enabled', description: 'Sync history is automatically tracked in the SyncHistory sheet with revision links (30-100 days retention).' },
         'EnableGCPLogging': { value: 'DISABLED', description: 'For advanced users. Set to ENABLED to send logs to Google Cloud Logging for better monitoring.' },
     },
@@ -235,15 +254,19 @@ function setupControlSheets_() {
             const value = row[1];
             const valueStr = String(value);
             if (!valueStr.startsWith('#') || (!valueStr.includes('ERROR') && !valueStr.includes('N/A') && !valueStr.includes('VALUE') && !valueStr.includes('REF') && !valueStr.includes('DIV'))) {
-                existingSettings.set(row[0], value);
+                // Normalize boolean values by removing emojis
+                const normalizedValue = normalizeBooleanValue_(value);
+                existingSettings.set(row[0], normalizedValue);
             } else {
                 log_('Warning: Skipping Config setting "' + row[0] + '" due to formula error: ' + valueStr, 'WARN');
             }
         }
     });
 
-    // Clear the sheet
-    configSheet.getRange(2, 1, configSheet.getMaxRows() - 1, 3).clearContent();
+    // Clear the sheet content and data validations
+    const clearRange = configSheet.getRange(2, 1, configSheet.getMaxRows() - 1, 3);
+    clearRange.clearContent();
+    clearRange.clearDataValidations();
 
     const newSettings = [];
     for (const groupName in defaultConfig) {
@@ -253,20 +276,48 @@ function setupControlSheets_() {
             if (key === 'NotificationEmail' && !finalValue) {
                 finalValue = Session.getEffectiveUser().getEmail();
             }
-            // Convert old TRUE/FALSE to new ENABLED/DISABLED
-            if (typeof finalValue === 'boolean') {
-                finalValue = finalValue ? 'ENABLED' : 'DISABLED';
-            } else if (typeof finalValue === 'string') {
-                if (finalValue.toUpperCase() === 'TRUE') finalValue = 'ENABLED';
-                if (finalValue.toUpperCase() === 'FALSE') finalValue = 'DISABLED';
-            }
             newSettings.push([key, finalValue, defaultConfig[groupName][key].description]);
         }
     }
     configSheet.getRange(2, 1, newSettings.length, 3).setValues(newSettings);
   }
+  applyConfigValidation_();
 }
 
+function applyConfigValidation_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const configSheet = ss.getSheetByName(CONFIG_SHEET_NAME);
+  if (!configSheet) return;
+
+  const booleanSettings = [
+    'EnableSheetLocking', 'AllowAutosyncDeletion',
+    'EnableEmailNotifications', 'NotifyOnSyncSuccess', 'NotifyDeletionsPending',
+    'EnableGCPLogging', 'EnableToasts', 'ShowTestPrompts', 'TestCleanup', 'TestAutoConfirm'
+  ];
+
+  const data = configSheet.getDataRange().getValues();
+
+  // First, clear all data validations from the Value column (column B)
+  const lastRow = data.length;
+  if (lastRow > 1) {
+    configSheet.getRange(2, 2, lastRow - 1, 1).clearDataValidations();
+  }
+
+  // Then, apply ENABLED/DISABLED validation only to boolean settings
+  const rule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(['ENABLED', 'DISABLED'])
+    .setAllowInvalid(false)
+    .build();
+
+  for (let i = 1; i < data.length; i++) {
+    const key = data[i][0];
+    if (booleanSettings.includes(key)) {
+      const cell = configSheet.getRange(i + 1, 2);
+      cell.setDataValidation(rule);
+    }
+  }
+  log_('Applied ENABLED/DISABLED validation rules to Config sheet.');
+}
 
 function setupLogSheets_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();

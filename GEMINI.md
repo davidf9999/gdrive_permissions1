@@ -141,11 +141,11 @@ A series of failures in the `npm test` command, which runs the Jest test suite, 
 *   **The Fix:** The test setup for `Triggers.test.js` was refactored to load all required code files (`Code.js`, `Utils.gs`, `Core.gs`, `Triggers.gs`) into the global scope before the tests run. This involved creating a helper function to correctly transform Apps Script `function` and `const` declarations into properties of the `global` object for the Node.js environment.
 *   **Mocking Updates:** Mocks for the `Utilities` service and for sheet data access (`getValues`) were updated to match the current state of the code, resolving assertion failures.
 
-### Auto-Sync and Performance Improvements
+### AutoSync and Performance Improvements
 
-Several improvements were made to the auto-sync feature and overall script performance.
+Several improvements were made to the AutoSync feature and overall script performance.
 
-*   **Auto-Sync Robustness:** The auto-sync feature was failing when it encountered test data (e.g., folders named `StressTestFolder_...`). The core sync logic in `Core.gs` was updated to detect when it's running in auto-sync mode and to automatically skip any rows in `ManagedFolders` that correspond to test data, preventing errors.
+*   **AutoSync Robustness:** The AutoSync feature was failing when it encountered test data (e.g., folders named `StressTestFolder_...`). The core sync logic in `Core.gs` was updated to detect when it's running in AutoSync mode and to automatically skip any rows in `ManagedFolders` that correspond to test data, preventing errors.
 *   **Adaptive Group Propagation Wait:** A fixed 60-second `Utilities.sleep()` was removed from the group creation logic. The script now relies on the existing exponential backoff retry loop in the `setFolderPermission_` function. This makes the sync process more efficient, as it only waits as long as necessary for a new Google Group's email to become active, rather than always waiting a full minute.
 *   **UI and Naming Standardization:** The "Dry Run Audit" feature was renamed to "Folders Audit" across the entire codebase, including all UI text, log messages, and documentation, to improve clarity and consistency.
 
@@ -168,15 +168,15 @@ To provide the highest level of data integrity and prevent race conditions betwe
 
 *   **Testing:** A new test function, `runSheetLockingTest_`, has been added to `Tests.gs` to verify that the locking and unlocking mechanism works as expected. This test is included in the `runAllTests` suite.
 
-### Simplified Auto-Sync Controls
+### Simplified AutoSync Controls
 
-To eliminate confusion and provide a more intuitive user experience, the controls for the auto-sync feature have been refactored.
+To eliminate confusion and provide a more intuitive user experience, the controls for the AutoSync feature have been refactored.
 
-*   **The Problem:** Previously, the "Setup Auto-Sync" / "Disable Auto-Sync" menu items operated independently of the `EnableAutoSync` setting in the `Config` sheet. This created a confusing "paused" state where a trigger could be installed but the sync would not run if the `Config` setting was `FALSE`.
+*   **The Problem:** Previously, the "Setup AutoSync" / "Disable AutoSync" menu items operated independently of the `EnableAutoSync` setting in the `Config` sheet. This created a confusing "paused" state where a trigger could be installed but the sync would not run if the `Config` setting was `FALSE`.
 
 *   **The Solution:** The menu items and the `Config` sheet setting are now synchronized.
-    *   Running **"Setup Auto-Sync"** from the menu will now automatically set `EnableAutoSync` to `TRUE` in the `Config` sheet, in addition to creating the time-based trigger.
-    *   Running **"Disable Auto-Sync"** from the menu will now automatically set `EnableAutoSync` to `FALSE` in the `Config` sheet, in addition to deleting the time-based trigger.
-    *   **Default State:** The default value for `EnableAutoSync` in the `Config` sheet has been changed to `FALSE`. This means auto-sync is now off by default, requiring explicit user action to enable it, which is a safer initial state.
+    *   Running **"Setup AutoSync"** from the menu will now automatically set `EnableAutoSync` to `TRUE` in the `Config` sheet, in addition to creating the time-based trigger.
+    *   Running **"Disable AutoSync"** from the menu will now automatically set `EnableAutoSync` to `FALSE` in the `Config` sheet, in addition to deleting the time-based trigger.
+    *   **Default State:** The default value for `EnableAutoSync` in the `Config` sheet has been changed to `FALSE`. This means AutoSync is now off by default, requiring explicit user action to enable it, which is a safer initial state.
 
-This change makes the `EnableAutoSync` setting in the `Config` sheet the single, clear source of truth for whether the auto-sync is active, removing any ambiguity.
+This change makes the `EnableAutoSync` setting in the `Config` sheet the single, clear source of truth for whether the AutoSync is active, removing any ambiguity.

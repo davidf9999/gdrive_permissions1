@@ -27,7 +27,8 @@ function createSheetLockManager_(enableSheetLocking) {
 }
 
 function processManagedFolders_(options = {}) {
-  const { returnPlanOnly = false, silentMode = false } = options;
+  const returnPlanOnly = options && options.returnPlanOnly !== undefined ? options.returnPlanOnly : false;
+  const silentMode = options && options.silentMode !== undefined ? options.silentMode : false;
   let deletionPlan = [];
   const totalSummary = { added: 0, removed: 0, failed: 0 };
 
@@ -58,7 +59,7 @@ function processManagedFolders_(options = {}) {
     const rowIndex = i + 2;
     const folderName = allFolderData[i][FOLDER_NAME_COL - 1];
 
-    // If running in silent mode (auto-sync), skip test folders.
+    // If running in silent mode (AutoSync), skip test folders.
     if (silentMode) {
       const testConfig = getTestConfiguration_();
       const manualTestFolderName = testConfig.folderName;
@@ -92,131 +93,185 @@ function processManagedFolders_(options = {}) {
   return totalSummary;
 }
 
+function buildManagedFolderRowContext_(spreadsheet, sheet, rowIndex) {
+  const emptyCheck = sheet.getRange(rowIndex, 1, 1, 2).getValues()[0];
+  const folderNameCheck = emptyCheck[0];
+  const folderIdCheck = emptyCheck[1];
+
+  if (!folderNameCheck && !folderIdCheck) {
+    return null;
+  }
+
+  const context = {
+    spreadsheet: spreadsheet,
+    sheet: sheet,
+    rowIndex: rowIndex,
+    statusCell: sheet.getRange(rowIndex, STATUS_COL),
+    userSheetCell: sheet.getRange(rowIndex, USER_SHEET_NAME_COL),
+    groupEmailCell: sheet.getRange(rowIndex, GROUP_EMAIL_COL)
+  };
+
+  context.existingUserSheetName = context.userSheetCell.getValue();
+  context.existingGroupEmail = context.groupEmailCell.getValue();
+  context.folderName = sheet.getRange(rowIndex, FOLDER_NAME_COL).getValue();
+  context.folderId = sheet.getRange(rowIndex, FOLDER_ID_COL).getValue();
+  context.role = sheet.getRange(rowIndex, ROLE_COL).getValue();
+
+  return context;
+}
+
+function lockAssociatedUserSheet_(context, lockManager, sheetName) {
+  if (!lockManager.isEnabled || !sheetName) {
+    return;
+  }
+
+  const userSheet = context.spreadsheet.getSheetByName(sheetName);
+  if (userSheet) {
+    lockManager.lock(userSheet);
+  }
+}
+
+function handlePlanningModeForRow_(context, options) {
+  const existingGroupEmail = context.existingGroupEmail;
+  const existingUserSheetName = context.existingUserSheetName;
+
+  if (existingGroupEmail && existingUserSheetName && !shouldSkipGroupOps_()) {
+    return syncGroupMembership_(existingGroupEmail, existingUserSheetName, options);
+  }
+
+  return null;
+}
+
+function handleRemoveOnlyForRow_(context, options, lockManager) {
+  const rowIndex = context.rowIndex;
+  const groupEmailCell = context.groupEmailCell;
+  const userSheetCell = context.userSheetCell;
+
+  context.statusCell.setValue('Processing Deletions...');
+  const groupEmail = groupEmailCell.getValue();
+  const userSheetName = userSheetCell.getValue();
+
+  lockAssociatedUserSheet_(context, lockManager, userSheetName);
+
+  if (groupEmail && userSheetName && !shouldSkipGroupOps_()) {
+    const deleteSummary = syncGroupMembership_(groupEmail, userSheetName, options);
+    context.statusCell.setValue('OK (Deletions processed)');
+    return deleteSummary;
+  }
+
+  log_('Skipping row ' + rowIndex + ' for deletions: missing group info or Admin SDK.', 'WARN');
+  context.statusCell.setValue('SKIPPED');
+  return null;
+}
+
+function executeFullSyncForRow_(context, options, lockManager) {
+  const sheet = context.sheet;
+  const spreadsheet = context.spreadsheet;
+  const rowIndex = context.rowIndex;
+  const silentMode = options && options.silentMode ? options.silentMode : false;
+
+  context.statusCell.setValue('Processing...');
+
+  const folderName = context.folderName;
+  const folderId = context.folderId;
+  const role = context.role;
+
+  if (!folderName && !folderId) throw new Error('Both FolderName and FolderID are blank.');
+  if (!role) throw new Error('Role is not specified.');
+
+  const folder = getOrCreateFolder_(folderName, folderId, { silentMode: silentMode });
+  sheet.getRange(rowIndex, FOLDER_ID_COL).setValue(folder.getId());
+  sheet.getRange(rowIndex, FOLDER_NAME_COL).setValue(folder.getName());
+  sheet.getRange(rowIndex, URL_COL).setValue(folder.getUrl());
+
+  let userSheetName = folder.getName() + '_' + role;
+  const renameSucceeded = renameSheetIfExists_(context.existingUserSheetName, userSheetName);
+  if (!renameSucceeded && context.existingUserSheetName) {
+    userSheetName = context.existingUserSheetName;
+  }
+  context.userSheetCell.setValue(userSheetName);
+
+  let groupEmail = context.existingGroupEmail;
+  if (groupEmail) {
+    groupEmail = groupEmail.toString().trim();
+  }
+
+  if (!groupEmail) {
+    try {
+      groupEmail = generateGroupEmail_(userSheetName);
+    } catch (e) {
+      throw new Error(
+        'Cannot auto-generate group email for folder "' + folderName + '" with role "' + role + '". ' +
+        'The folder name contains non-ASCII characters (e.g., Hebrew, Arabic, Chinese). ' +
+        'Please manually specify a group email in the "GroupEmail" column (Column D) of the ManagedFolders sheet. ' +
+        'Example: "coordinators-editor@' + Session.getActiveUser().getEmail().split('@')[1] + '"'
+      );
+    }
+  }
+  context.groupEmailCell.setValue(groupEmail);
+
+  const userSheet = getOrCreateUserSheet_(userSheetName);
+  if (lockManager.isEnabled) {
+    lockManager.lock(userSheet);
+  }
+
+  if (shouldSkipGroupOps_()) {
+    log_('Skipping group operations for row ' + rowIndex + ' (Admin SDK not available).', 'WARN');
+    sheet.getRange(rowIndex, LAST_SYNCED_COL).setValue(formatSpreadsheetTimestamp_(spreadsheet));
+    context.statusCell.setValue('SKIPPED (No Admin SDK)');
+    return { added: 0, removed: 0, failed: 0 };
+  }
+
+  getOrCreateGroup_(groupEmail, userSheetName);
+  setFolderPermission_(folder.getId(), groupEmail, role);
+  const syncSummary = syncGroupMembership_(groupEmail, userSheetName, options);
+
+  sheet.getRange(rowIndex, LAST_SYNCED_COL).setValue(formatSpreadsheetTimestamp_(spreadsheet));
+  context.statusCell.setValue('OK');
+  return syncSummary;
+}
+
+function formatSpreadsheetTimestamp_(spreadsheet) {
+  return Utilities.formatDate(new Date(), spreadsheet.getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+}
+
 function processRow_(rowIndex, options = {}) {
-  const { returnPlanOnly = false, removeOnly = false, silentMode = false } = options;
+  const returnPlanOnly = options && options.returnPlanOnly !== undefined ? options.returnPlanOnly : false;
+  const removeOnly = options && options.removeOnly !== undefined ? options.removeOnly : false;
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = spreadsheet.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
 
   // Gracefully skip empty rows
-  const checkRange = sheet.getRange(rowIndex, 1, 1, 2).getValues()[0];
-  const folderNameCheck = checkRange[0];
-  const folderIdCheck = checkRange[1];
-  if (!folderNameCheck && !folderIdCheck) {
+  const context = buildManagedFolderRowContext_(spreadsheet, sheet, rowIndex);
+  if (!context) {
     log_('Skipping empty row ' + rowIndex + ' in ManagedFolders sheet.', 'INFO');
     return null;
   }
-
-  const statusCell = sheet.getRange(rowIndex, STATUS_COL);
-  const userSheetCell = sheet.getRange(rowIndex, USER_SHEET_NAME_COL);
-  const groupEmailCell = sheet.getRange(rowIndex, GROUP_EMAIL_COL);
-  let existingUserSheetName = userSheetCell.getValue();
-  let existingGroupEmail = groupEmailCell.getValue();
-  const summary = { added: 0, removed: 0, failed: 0 };
 
   const lockManager = createSheetLockManager_(options.enableSheetLocking);
 
   try {
     // Handle planning mode separately
     if (returnPlanOnly) {
-      if (existingGroupEmail && existingUserSheetName && !shouldSkipGroupOps_()) {
-        return syncGroupMembership_(existingGroupEmail, existingUserSheetName, options);
-      }
-      return null; // Cannot create a plan if group info isn't already populated.
+      return handlePlanningModeForRow_(context, options);
     }
 
     if (lockManager.isEnabled) {
-      lockManager.lock(sheet);
-      if (existingUserSheetName) {
-        const existingSheet = spreadsheet.getSheetByName(existingUserSheetName);
-        lockManager.lock(existingSheet);
-      }
+      lockManager.lock(context.sheet);
+      lockAssociatedUserSheet_(context, lockManager, context.existingUserSheetName);
     }
 
     // Handle delete-only execution mode
     if (removeOnly) {
-      statusCell.setValue('Processing Deletions...');
-      const groupEmail = groupEmailCell.getValue();
-      const userSheetName = userSheetCell.getValue();
-      if (lockManager.isEnabled && userSheetName) {
-        const userSheet = spreadsheet.getSheetByName(userSheetName);
-        lockManager.lock(userSheet);
-      }
-      if (groupEmail && userSheetName && !shouldSkipGroupOps_()) {
-        const deleteSummary = syncGroupMembership_(groupEmail, userSheetName, options);
-        statusCell.setValue('OK (Deletions processed)');
-        return deleteSummary;
-      } else {
-        log_('Skipping row ' + rowIndex + ' for deletions: missing group info or Admin SDK.', 'WARN');
-        statusCell.setValue('SKIPPED');
-      }
-      return null;
+      return handleRemoveOnlyForRow_(context, options, lockManager);
     }
 
     // --- Full Sync (Add/Update) Execution Logic ---
-    statusCell.setValue('Processing...');
-
-    let folderName = sheet.getRange(rowIndex, FOLDER_NAME_COL).getValue();
-    let folderId = sheet.getRange(rowIndex, FOLDER_ID_COL).getValue();
-    let role = sheet.getRange(rowIndex, ROLE_COL).getValue();
-
-    if (!folderName && !folderId) throw new Error('Both FolderName and FolderID are blank.');
-    if (!role) throw new Error('Role is not specified.');
-
-    const folder = getOrCreateFolder_(folderName, folderId, { silentMode });
-    sheet.getRange(rowIndex, FOLDER_ID_COL).setValue(folder.getId());
-    sheet.getRange(rowIndex, FOLDER_NAME_COL).setValue(folder.getName());
-    sheet.getRange(rowIndex, URL_COL).setValue(folder.getUrl());
-
-    let userSheetName = folder.getName() + '_' + role;
-    const renameSucceeded = renameSheetIfExists_(existingUserSheetName, userSheetName);
-    if (!renameSucceeded && existingUserSheetName) {
-      userSheetName = existingUserSheetName;
-    }
-    userSheetCell.setValue(userSheetName);
-
-    if (existingGroupEmail) {
-      existingGroupEmail = existingGroupEmail.toString().trim();
-    }
-    let groupEmail = existingGroupEmail;
-    if (!groupEmail) {
-      try {
-        groupEmail = generateGroupEmail_(userSheetName);
-      } catch (e) {
-        // Provide a more specific error for ManagedFolders
-        throw new Error(
-          'Cannot auto-generate group email for folder "' + folderName + '" with role "' + role + '". ' +
-          'The folder name contains non-ASCII characters (e.g., Hebrew, Arabic, Chinese). ' +
-          'Please manually specify a group email in the "GroupEmail" column (Column D) of the ManagedFolders sheet. ' +
-          'Example: "coordinators-editor@' + Session.getActiveUser().getEmail().split('@')[1] + '"'
-        );
-      }
-    }
-    groupEmailCell.setValue(groupEmail);
-
-    const userSheet = getOrCreateUserSheet_(userSheetName);
-    if (lockManager.isEnabled) {
-      lockManager.lock(userSheet);
-    }
-
-    if (shouldSkipGroupOps_()) {
-      log_('Skipping group operations for row ' + rowIndex + ' (Admin SDK not available).', 'WARN');
-      sheet.getRange(rowIndex, LAST_SYNCED_COL).setValue(Utilities.formatDate(new Date(), spreadsheet.getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss'));
-      statusCell.setValue('SKIPPED (No Admin SDK)');
-      return summary;
-    }
-
-    const { group, wasNewlyCreated } = getOrCreateGroup_(groupEmail, userSheetName);
-
-    setFolderPermission_(folder.getId(), groupEmail, role);
-    const syncSummary = syncGroupMembership_(groupEmail, userSheetName, options);
-
-    sheet.getRange(rowIndex, LAST_SYNCED_COL).setValue(Utilities.formatDate(new Date(), spreadsheet.getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss'));
-    statusCell.setValue('OK');
-    return syncSummary;
+    return executeFullSyncForRow_(context, options, lockManager);
 
   } catch (e) {
     log_('Failed to process row ' + rowIndex + '. Error: ' + e.message + ' Stack: ' + e.stack, 'ERROR');
-    statusCell.setValue('Error: ' + e.message);
+    context.statusCell.setValue('Error: ' + e.message);
     throw e;
   } finally {
     lockManager.unlockAll();
@@ -270,7 +325,7 @@ function checkForOrphanSheets_() {
 }
 
 function getOrCreateFolder_(folderName, folderId, options = {}) {
-  const { silentMode = false } = options;
+  const silentMode = options && options.silentMode !== undefined ? options.silentMode : false;
   if (folderId) {
     try {
       const folder = DriveApp.getFolderById(folderId);
@@ -500,7 +555,9 @@ function renameSheetIfExists_(oldName, newName) {
 }
 
 function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
-  const { addOnly = false, removeOnly = false, returnPlanOnly = false } = options;
+  const addOnly = options && options.addOnly !== undefined ? options.addOnly : false;
+  const removeOnly = options && options.removeOnly !== undefined ? options.removeOnly : false;
+  const returnPlanOnly = options && options.returnPlanOnly !== undefined ? options.returnPlanOnly : false;
   log_('*** Starting membership sync for group "' + groupEmail + '" from sheet "' + userSheetName + '"');
   const summary = { added: 0, removed: 0, failed: 0 };
 

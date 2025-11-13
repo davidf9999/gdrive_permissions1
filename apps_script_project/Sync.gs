@@ -2,12 +2,13 @@
  * Synchronizes the editors of the spreadsheet file with the list in the Admins sheet.
  *
  * @param {Object} options - Options for sync behavior
- * @param {boolean} options.addOnly - If true, only add admins (SAFE operations for auto-sync)
+ * @param {boolean} options.addOnly - If true, only add admins (SAFE operations for AutoSync)
  * @param {boolean} options.silentMode - If true, skip UI dialogs (for background execution)
  * @returns {object} A summary of the changes made, with properties for `added` and `removed` counts.
  */
 function syncAdmins(options = {}) {
-  const { addOnly = false, silentMode = false } = options;
+  const addOnly = options && options.addOnly !== undefined ? options.addOnly : false;
+  const silentMode = options && options.silentMode !== undefined ? options.silentMode : false;
   const totalSummary = { added: 0, removed: 0, failed: 0 };
   let adminSheet;
   try {
@@ -154,7 +155,7 @@ function syncAdmins(options = {}) {
 }
 
 function syncAdminsGroup_(adminSheet, adminGroupEmail, options = {}) {
-  const { addOnly = false } = options;
+  const addOnly = options && options.addOnly !== undefined ? options.addOnly : false;
   const statusCell = adminSheet.getRange(ADMINS_STATUS_CELL);
   const lastSyncedCell = adminSheet.getRange(ADMINS_LAST_SYNC_CELL);
   statusCell.setValue('Processing group sync...');
@@ -186,7 +187,8 @@ function syncAdminsGroup_(adminSheet, adminGroupEmail, options = {}) {
 
 
 function syncUserGroups(options = {}) {
-  const { returnPlanOnly = false, silentMode = false } = options;
+  const returnPlanOnly = options && options.returnPlanOnly !== undefined ? options.returnPlanOnly : false;
+  const silentMode = options && options.silentMode !== undefined ? options.silentMode : false;
   let deletionPlan = [];
   const totalSummary = { added: 0, removed: 0, failed: 0 };
 
@@ -263,8 +265,8 @@ function syncUserGroups(options = {}) {
 
           const groupSheetName = groupName + '_G';
           getOrCreateUserSheet_(groupSheetName);
-          const { group } = getOrCreateGroup_(groupEmail, groupName);
-          const adminLink = 'https://admin.google.com/ac/groups/' + group.id + '/members';
+          const groupResult = getOrCreateGroup_(groupEmail, groupName);
+          const adminLink = 'https://admin.google.com/ac/groups/' + groupResult.group.id + '/members';
           groupAdminLinkCell.setValue(adminLink);
 
           const summary = syncGroupMembership_(groupEmail, groupSheetName, options);
@@ -318,7 +320,7 @@ function syncUserGroups(options = {}) {
 }
 
 function syncAdds(options = {}) {
-  const { silentMode = false } = options;
+  const silentMode = options && options.silentMode !== undefined ? options.silentMode : false;
   setupControlSheets_();
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(15000)) {
@@ -333,7 +335,7 @@ function syncAdds(options = {}) {
     showSyncInProgress_();
     log_('*** Starting non-destructive synchronization (adds only)...');
 
-    // 1. Sync Admins (SAFE mode: additions only, silent for auto-sync)
+    // 1. Sync Admins (SAFE mode: additions only, silent for AutoSync)
     const adminSummary = syncAdmins({ addOnly: true, silentMode: true });
     if (adminSummary) {
       totalSummary.added += adminSummary.added;
@@ -494,7 +496,7 @@ function syncDeletes() {
 }
 
 function fullSync(options = {}) {
-  const { silentMode = false } = options;
+  const silentMode = options && options.silentMode !== undefined ? options.silentMode : false;
   log_('Running script version 2.0');
   setupControlSheets_(); // Ensure control sheets exist
   const lock = LockService.getScriptLock();

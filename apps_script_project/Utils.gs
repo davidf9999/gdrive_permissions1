@@ -34,8 +34,8 @@ function generateGroupEmail_(baseName) {
 
   if (!sanitizedName) {
     throw new Error(
-      'Group name "' + baseName + '" contains only non-ASCII characters (e.g., Hebrew, Arabic, Chinese) which cannot be used in email addresses. ' +
-      'Please manually specify a group email in the "GroupEmail" column (Column B) using only ASCII characters (a-z, 0-9, hyphens). ' +
+      'Group name "' + baseName + '" contains only non-ASCII characters (e.g., Hebrew, Arabic, Chinese) which cannot be used in email addresses. ' + 
+      'Please manually specify a group email in the "GroupEmail" column (Column B) using only ASCII characters (a-z, 0-9, hyphens). ' + 
       'Example: for "' + baseName + '", you could use "coordinators@' + domain + '" or "team-a@' + domain + '".'
     );
   }
@@ -184,6 +184,43 @@ function getConfiguration_() {
 
   cache.put('config', JSON.stringify(config), 300); // Cache for 5 minutes
   return config;
+}
+
+/**
+ * Gets a configuration value by key with optional default value.
+ * Handles boolean strings (ENABLED/DISABLED) and normalizes them to true/false.
+ * @param {string} key - The config key to retrieve
+ * @param {*} defaultValue - The default value if key is not found
+ * @return {*} The config value, normalized if it's a boolean string
+ */
+function getConfigValue_(key, defaultValue) {
+  const config = getConfiguration_();
+  if (config[key] !== undefined && config[key] !== null) {
+    // Handle boolean strings using common normalization
+    if (typeof config[key] === 'string') {
+      return normalizeBooleanConfigValue_(config[key]);
+    }
+    return config[key];
+  }
+  return defaultValue;
+}
+
+/**
+ * Normalizes a boolean config value string to a boolean.
+ * Handles various formats: 'ENABLED', 'ENABLED ✅', 'DISABLED', 'DISABLED ❌', etc.
+ * @param {string|boolean} value - The value to normalize
+ * @return {string|boolean} The normalized value (returns boolean for ENABLED/DISABLED, otherwise original)
+ */
+function normalizeBooleanConfigValue_(value) {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const upperValue = value.toUpperCase().trim();
+    if (upperValue.startsWith('ENABLED')) return true;
+    if (upperValue.startsWith('DISABLED')) return false;
+  }
+  return value;
 }
 
 
@@ -392,8 +429,9 @@ function clearAuxiliaryLogs() {
 
 function sendErrorNotification_(errorMessage) {
   try {
-    const enableEmailNotifications = getConfigValue_('EnableEmailNotifications', false);
-    const adminEmail = getConfigValue_('NotificationEmail', null);
+    const config = getConfiguration_();
+    const enableEmailNotifications = config['EnableEmailNotifications'];
+    const adminEmail = config['NotificationEmail'];
 
     if (enableEmailNotifications === true && adminEmail) {
       MailApp.sendEmail(adminEmail, 'Permissions Manager Script - Fatal Error', errorMessage);
@@ -655,7 +693,7 @@ function isGroup_(email) {
 }
 
 function showSyncInProgress_() {
-  const enableSheetLocking = getConfigValue_('EnableSheetLocking', true);
+  const enableSheetLocking = getConfiguration_()['EnableSheetLocking'];
   let message = 'A synchronization script is running. Please avoid making changes to the sheet.';
   if (enableSheetLocking) {
     message = 'A synchronization script is running. The sheet is temporarily locked to prevent data corruption. Please wait a moment.';
@@ -687,7 +725,7 @@ function validateGroupNesting_() {
 
     // Determine the parent group's email
     if (sheetName === ADMINS_SHEET_NAME) {
-      parentGroupEmail = getConfigValue_('AdminGroupEmail');
+      parentGroupEmail = getConfiguration_()['AdminGroupEmail'];
     } else {
       const groupName = sheetName.slice(0, -2); // Remove '_G'
       // Find this group's email in UserGroups or ManagedFolders

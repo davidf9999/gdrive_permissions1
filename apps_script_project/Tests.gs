@@ -874,7 +874,7 @@ function runAutoSyncErrorEmailTest() {
 
     try {
         log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
-        log_('║  Auto-Sync Error Email Test                                ║', 'INFO');
+        log_('║  AutoSync Error Email Test                                ║', 'INFO');
         log_('╚══════════════════════════════════════════════════════════════╝', 'INFO');
 
         // Temporarily enable email notifications for the test
@@ -886,7 +886,7 @@ function runAutoSyncErrorEmailTest() {
         managedSheet.getRange(testRowIndex, FOLDER_NAME_COL).setValue('Invalid Folder');
         managedSheet.getRange(testRowIndex, FOLDER_ID_COL).setValue('invalid_folder_id');
 
-        // Run auto-sync, which should fail
+        // Run AutoSync, which should fail
         try {
             autoSync({ silentMode: true });
         } catch (e) {
@@ -895,10 +895,10 @@ function runAutoSyncErrorEmailTest() {
 
         // Check if the email spy was called
         if (mailAppSpy.wasCalled) {
-            log_('VERIFICATION PASSED: MailApp.sendEmail was called after auto-sync error.', 'INFO');
+            log_('VERIFICATION PASSED: MailApp.sendEmail was called after AutoSync error.', 'INFO');
             success = true;
         } else {
-            throw new Error('VERIFICATION FAILED: MailApp.sendEmail was not called after auto-sync error.');
+            throw new Error('VERIFICATION FAILED: MailApp.sendEmail was not called after AutoSync error.');
         }
 
     } catch (e) {
@@ -910,7 +910,7 @@ function runAutoSyncErrorEmailTest() {
         const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
         managedSheet.deleteRow(managedSheet.getLastRow());
         const testStatus = success ? '✓ PASSED' : '✗ FAILED';
-        log_('>>> TEST RESULT: Auto-Sync Error Email Test ' + testStatus, success ? 'INFO' : 'ERROR');
+        log_('>>> TEST RESULT: AutoSync Error Email Test ' + testStatus, success ? 'INFO' : 'ERROR');
         log_('', 'INFO');
         SCRIPT_EXECUTION_MODE = 'DEFAULT';
     }
@@ -1104,7 +1104,7 @@ function runAllTests() {
             { name: 'Manual Access Test', func: runManualAccessTest },
             { name: 'Stress Test', func: runStressTest },
             { name: 'Add/Delete Separation Test', func: runAddDeleteSeparationTest },
-            { name: 'Auto-Sync Error Email Test', func: runAutoSyncErrorEmailTest },
+            { name: 'AutoSync Error Email Test', func: runAutoSyncErrorEmailTest },
             { name: 'Sheet Locking Test', func: runSheetLockingTest_ },
             { name: 'Circular Dependency Test', func: runCircularDependencyTest_ }
         ];
