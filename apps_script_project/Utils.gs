@@ -297,7 +297,22 @@ function log_(message, severity = 'INFO') {
 }
 
 
-function logSyncHistory_(summary, durationSeconds) {
+function logSyncHistory_(arg1, arg2, arg3, arg4) {
+  let revisionId = '';
+  let revisionUrl = '';
+  let summary = null;
+  let durationSeconds = 0;
+
+  if (typeof arg1 === 'string' || arg1 === null) {
+    revisionId = arg1 || '';
+    revisionUrl = typeof arg2 === 'string' ? arg2 : '';
+    summary = arg3;
+    durationSeconds = arg4;
+  } else {
+    summary = arg1;
+    durationSeconds = arg2;
+  }
+
   try {
     const syncHistorySheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SYNC_HISTORY_SHEET_NAME);
     if (!syncHistorySheet) {
@@ -318,47 +333,43 @@ function logSyncHistory_(summary, durationSeconds) {
       return;
     }
 
-  let lastRow = syncHistorySheet.getLastRow();
-  const headers = ['Timestamp', 'Added', 'Removed', 'Failed', 'Duration (seconds)'];
+    const headers = ['Timestamp', 'Revision ID', 'Added', 'Removed', 'Failed', 'Duration (seconds)', 'Revision Link'];
+    let lastRow = syncHistorySheet.getLastRow();
+    const headerRange = syncHistorySheet.getRange(1, 1, 1, headers.length);
+    headerRange.setValues([headers]).setFontWeight('bold');
 
-  // Ensure header row exists and is up to date
-  if (lastRow === 0) {
-    syncHistorySheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
-    syncHistorySheet.setFrozenRows(1);
-    lastRow = 1;
-  } else {
-    const currentHeaders = syncHistorySheet.getRange(1, 1, 1, headers.length).getValues()[0];
-    const needsRefresh = headers.some((header, idx) => currentHeaders[idx] !== header);
-    if (needsRefresh) {
-      syncHistorySheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
-      if (syncHistorySheet.getFrozenRows() < 1) {
-        syncHistorySheet.setFrozenRows(1);
-      }
-      lastRow = Math.max(lastRow, 1);
+    if (syncHistorySheet.getFrozenRows() < 1) {
+      syncHistorySheet.setFrozenRows(1);
     }
-  }
 
-  // Check if row 2 is empty (history was cleared) - if so, reset to row 1
-  if (lastRow > 1 && !syncHistorySheet.getRange('A2').getValue()) {
-    lastRow = 1;
-  }
+    // Reset lastRow if the sheet was empty or headers were just rewritten
+    lastRow = Math.max(lastRow, 1);
 
-  const nextRow = Math.max(lastRow + 1, 2);
+    if (lastRow > 1) {
+      const hasDataInSecondRow = syncHistorySheet.getRange('A2').getValue();
+      if (!hasDataInSecondRow) {
+        lastRow = 1;
+      }
+    }
 
-  const rowValues = [
-    timestamp,
-    added,
-    removed,
-    failed,
-    duration
-  ];
+    const nextRow = Math.max(lastRow + 1, 2);
+    const rowValues = [
+      timestamp,
+      revisionId,
+      added,
+      removed,
+      failed,
+      duration,
+      '' // Revision link is stored manually if desired; leave blank by default
+    ];
 
-  syncHistorySheet.getRange(nextRow, 1, 1, rowValues.length).setValues([rowValues]);
+    syncHistorySheet.getRange(nextRow, 1, 1, rowValues.length).setValues([rowValues]);
 
-  // Add note to timestamp column for version history navigation
-  if (nextRow === 2) {
-    syncHistorySheet.getRange('A1').setNote('To view this version: Open the spreadsheet, go to File > Version history > See version history, then find the revision matching this timestamp. Google keeps revisions for 30-100 days.');
-  }
+    // Refresh header notes to help operators interpret the sheet
+    syncHistorySheet.getRange('A1:G1').clearNote();
+    syncHistorySheet.getRange('A1').setNote('Timestamp of the sync in the spreadsheet\'s timezone.');
+    syncHistorySheet.getRange('B1').setNote('internal revision ID captured at the start of the sync run.');
+    syncHistorySheet.getRange('G1').setNote('Link to Version history entry, if available.');
 
     log_('Logged sync history: Changes: +' + added + ' -' + removed + ' !' + failed + ', Duration: ' + duration + 's', 'INFO');
   } catch (e) {
