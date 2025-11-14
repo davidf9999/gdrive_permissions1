@@ -179,6 +179,18 @@ function detectAutoSyncChanges_() {
       // Exclude script-managed columns (6-8): LastSynced, Status, URL
       const data = managedSheet.getRange(2, 1, managedSheet.getLastRow() - 1, USER_SHEET_NAME_COL).getValues();
       dataString += JSON.stringify(data);
+
+      // Add user sheets from ManagedFolders to the hash
+      const userSheetNames = managedSheet.getRange(2, USER_SHEET_NAME_COL, managedSheet.getLastRow() - 1, 1).getValues().flat();
+      userSheetNames.forEach(name => {
+        if (name) {
+          const userSheet = spreadsheet.getSheetByName(name);
+          if (userSheet && userSheet.getLastRow() > 1) {
+            const userData = userSheet.getRange(2, 1, userSheet.getLastRow() - 1, 1).getValues();
+            dataString += JSON.stringify(userData);
+          }
+        }
+      });
     }
     if (adminsSheet && adminsSheet.getLastRow() > 1) {
       // Read only user-editable column (1): Group Email
@@ -190,6 +202,18 @@ function detectAutoSyncChanges_() {
       // Read all columns from UserGroups (no script-managed columns here)
       const data = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, userGroupsSheet.getLastColumn()).getValues();
       dataString += JSON.stringify(data);
+
+      // Add user sheets from UserGroups to the hash
+      const groupNames = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 1).getValues().flat();
+      groupNames.forEach(name => {
+        if (name) {
+          const groupSheet = spreadsheet.getSheetByName(name + '_G');
+          if (groupSheet && groupSheet.getLastRow() > 1) {
+            const groupData = groupSheet.getRange(2, 1, groupSheet.getLastRow() - 1, 1).getValues();
+            dataString += JSON.stringify(groupData);
+          }
+        }
+      });
     }
 
     // Compute SHA-256 hash
@@ -276,10 +300,10 @@ function detectAutoSyncChanges_() {
       return;
     }
 
-    if (typeof currentTimestamp === 'number' && typeof previousTimestamp === 'number' && currentTimestamp > previousTimestamp) {
+    /* if (typeof currentTimestamp === 'number' && typeof previousTimestamp === 'number' && currentTimestamp > previousTimestamp) {
       shouldRun = true;
       reasons.push('Folder ' + id + ' modified at ' + new Date(currentTimestamp).toISOString() + '.');
-    }
+    } */
   });
 
   if (previousSnapshot && previousSnapshot.folderStates) {
