@@ -878,7 +878,7 @@ function runAutoSyncErrorEmailTest() {
         log_('╚══════════════════════════════════════════════════════════════╝', 'INFO');
 
         // Temporarily enable email notifications for the test
-        updateConfigSetting_('EnableEmailNotifications', true);
+        updateConfigSetting_('EnableEmailNotifications', 'ENABLED'); // Changed from true to 'ENABLED'
 
         // Simulate an error by providing an invalid folder ID
         const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
