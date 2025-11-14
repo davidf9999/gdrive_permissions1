@@ -463,7 +463,7 @@ function showTestMessage_(title, message) {
  * Shows a confirmation dialog if ShowTestPrompts is ENABLED, otherwise returns default value
  * @param {string} title - The dialog title
  * @param {string} message - The dialog message
- * @param {*} defaultValue - The value to return if prompts are disabled (default: ui.Button.YES)
+ * @param {*} defaultValue - The default value if prompts are disabled (default: ui.Button.YES)
  * @return {*} The user's response or the default value
  */
 function showTestConfirm_(title, message, defaultValue) {
@@ -771,7 +771,7 @@ function validateGroupNesting_() {
   log_('Validating group nesting for circular dependencies...');
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   const groupSheets = spreadsheet.getSheets().filter(s => s.getName().endsWith('_G'));
-  const adminSheet = spreadsheet.getSheetByName(ADMINS_SHEET_NAME);
+  const adminSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(ADMINS_SHEET_NAME);
   if (adminSheet) {
     groupSheets.push(adminSheet);
   }

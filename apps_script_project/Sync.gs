@@ -27,7 +27,7 @@ function syncAdmins(options = {}) {
       adminGroupEmail = adminGroupEmail.toString().trim().toLowerCase();
     }
     // Validate that adminGroupEmail is a valid email format (contains @ and a domain)
-    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const emailPattern = /^[^S@]+@[^S@]+\.[^S@]+$/;
     if (!adminGroupEmail || !emailPattern.test(adminGroupEmail)) {
       if (adminGroupEmail) {
         log_('Invalid admin group email in Config: "' + adminGroupEmail + '". Regenerating...', 'WARN');
@@ -428,6 +428,12 @@ function syncDeletes() {
   });
   confirmationMessage += '\nAre you sure you want to continue?';
 
+  const response = ui.alert(
+    'Confirm Destructive Sync',
+    confirmationMessage,
+    ui.ButtonSet.YES_NO
+  );
+
   if (response !== ui.Button.YES) {
     ui.alert('Delete sync cancelled.');
     return;
@@ -683,7 +689,7 @@ function syncManagedFoldersDeletes() {
   confirmationMessage += '\nAre you sure you want to continue?';
 
   const response = ui.alert(
-    'Confirm Destructive Folder Sync',
+    'Confirm Destructive Sync',
     confirmationMessage,
     ui.ButtonSet.YES_NO
   );
@@ -726,13 +732,27 @@ function syncManagedFoldersDeletes() {
     return;
   }
 
-  try {
-    showToast_('Starting folder-only sync (deletes only)...', 'Sync Folders - Deletes', -1);
-    showSyncInProgress_();
-    log_('*** Starting Managed Folders only synchronization (deletes only)...');
+  const totalSummary = { added: 0, removed: 0, failed: 0 };
 
-    const summary = processManagedFolders_({ removeOnly: true });
-    const summaryMessage = 'Destructive folder-only sync (deletes only) is complete. Total changes: ' + summary.removed + ' removed, ' + summary.failed + ' failed.';
+  try {
+    showToast_('Starting destructive sync (deletes only)...', 'Sync Deletes', -1);
+    showSyncInProgress_();
+    log_('*** Starting destructive synchronization (deletes only)...');
+
+    const execOptions = { removeOnly: true };
+    const userGroupsSummary = syncUserGroups(execOptions);
+    if (userGroupsSummary) {
+      totalSummary.removed += userGroupsSummary.removed;
+      totalSummary.failed += userGroupsSummary.failed;
+    }
+
+    const managedFoldersSummary = processManagedFolders_(execOptions);
+    if (managedFoldersSummary) {
+      totalSummary.removed += managedFoldersSummary.removed;
+      totalSummary.failed += managedFoldersSummary.failed;
+    }
+
+    const summaryMessage = 'Destructive folder-only sync (deletes only) is complete. Total changes: ' + totalSummary.removed + ' removed, ' + totalSummary.failed + ' failed.';
     log_(summaryMessage, 'INFO');
 
     showToast_('Folder-only sync (deletes) complete!', 'Sync Folders - Deletes', 5);
