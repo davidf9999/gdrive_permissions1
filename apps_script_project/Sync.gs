@@ -368,7 +368,7 @@ function syncAdds(options = {}) {
     // Log to SyncHistory
     const endTime = new Date();
     const durationSeconds = (endTime - startTime) / 1000;
-    logSyncHistory_(null, null, totalSummary, durationSeconds);
+    logSyncHistory_(null, totalSummary, durationSeconds);
 
     if (SCRIPT_EXECUTION_MODE === 'TEST') {
       showTestMessage_('Add-only Sync', summaryMessage);
@@ -598,7 +598,7 @@ function fullSync(options = {}) {
     // Log to SyncHistory
     const endTime = new Date();
     const durationSeconds = (endTime - startTime) / 1000;
-    logSyncHistory_(null, null, totalSummary, durationSeconds);
+    logSyncHistory_(null, totalSummary, durationSeconds);
 
     if (SCRIPT_EXECUTION_MODE === 'TEST') {
       showTestMessage_('Full Sync', summaryMessage + '\n\nCheck the \'Status\' column in the \'ManagedFolders\' sheet for details.');
