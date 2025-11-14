@@ -25,7 +25,12 @@ const TRANSPOSED_CONNECTOR_CONFIG = {
   },
   candidateEnabledBackgrounds: ['#ffffff', '#fff'],
   createDisabledRowIfMissing: true,
-  createCandidateRowIfMissing: true
+  createCandidateRowIfMissing: true,
+  additionalFieldLabels: [
+    // { header: 'Name', label: 'Full Name' },
+    // { header: 'Phone', label: 'Phone Number' },
+    // { header: 'Comments', label: 'Notes' }
+  ]
 };
 
 /**
@@ -40,7 +45,12 @@ const COLUMN_CONNECTOR_CONFIG = {
   sourceSheetName: 'Sheet1',
   headerRow: 1,
   emailColumnHeader: 'Email',
-  enabledColumnHeader: 'Enabled'
+  enabledColumnHeader: 'Enabled',
+  additionalColumns: [
+    // { header: 'Name', sourceHeader: 'Full Name' },
+    // { header: 'Phone', sourceHeader: 'Phone Number' },
+    // { header: 'Comments', sourceHeader: 'Notes' }
+  ]
 };
 
 /**
@@ -54,7 +64,12 @@ const TARGET_DISABLED_CONNECTOR_CONFIG = {
   sourceSpreadsheetId: 'REPLACE_WITH_SPREADSHEET_ID',
   sourceSheetName: 'Sheet1',
   headerRow: 1,
-  emailColumnHeader: 'Email'
+  emailColumnHeader: 'Email',
+  additionalColumns: [
+    // { header: 'Name', sourceHeader: 'Full Name' },
+    // { header: 'Phone', sourceHeader: 'Phone Number' },
+    // { header: 'Comments', sourceHeader: 'Notes' }
+  ]
 };
 
 /**
@@ -138,9 +153,13 @@ function runTransposedConnector_(context, config) {
   const labelColumnIndex = labelColumn - 1;
   const lastRow = sourceSheet.getLastRow();
   const lastColumn = sourceSheet.getLastColumn();
+  const additionalFieldLabels = prepareAdditionalRowLabelDefinitions_(config.additionalFieldLabels);
+  const additionalHeaders = additionalFieldLabels.map(function(def) { return def.header; });
+  const headers = buildTargetHeaders_(additionalHeaders);
+  ensureTargetSheetHeaders_(context.targetSheet, headers);
   if (lastRow === 0 || lastColumn <= labelColumnIndex) {
     log_('Transposed connector found no data to import for group "' + context.groupName + '".', 'WARN');
-    clearTargetSheet_(context.targetSheet);
+    clearTargetSheet_(context.targetSheet, headers.length);
     return;
   }
   let valuesRange = sourceSheet.getRange(1, 1, lastRow, lastColumn);
@@ -183,6 +202,17 @@ function runTransposedConnector_(context, config) {
   disabledRowIndex = disabledLabel ? rowLookup[disabledLabel] : undefined;
   candidateRowIndex = candidateLabel ? rowLookup[candidateLabel] : undefined;
 
+  const additionalIndexes = additionalFieldLabels.map(function(def) {
+    return rowLookup[def.label];
+  });
+  const missingAdditional = [];
+  for (let a = 0; a < additionalFieldLabels.length; a++) {
+    if (additionalIndexes[a] === undefined) {
+      missingAdditional.push(additionalFieldLabels[a].label);
+    }
+  }
+  logMissingOptionalFields_(config, missingAdditional, 'row labels');
+
   const dataStartColumn = labelColumnIndex + 1;
   const totalColumns = sourceSheet.getLastColumn();
   const disabledRowValues = disabledRowIndex !== undefined ? values[disabledRowIndex] : null;
@@ -218,7 +248,17 @@ function runTransposedConnector_(context, config) {
     if (candidateRowValuesToWrite) {
       candidateRowValuesToWrite[col] = disabled ? 'TRUE' : 'FALSE';
     }
-    rows.push([email.toLowerCase(), disabled]);
+    const row = createEmptyRow_(headers.length);
+    row[0] = email.toLowerCase();
+    row[1] = disabled;
+    for (let a = 0; a < additionalIndexes.length; a++) {
+      const index = additionalIndexes[a];
+      if (index === undefined) {
+        continue;
+      }
+      row[2 + a] = normalizeAdditionalValue_(values[index][col]);
+    }
+    rows.push(row);
   }
 
   if (disabledRowWasCreated && newDisabledRowValues) {
@@ -231,8 +271,11 @@ function runTransposedConnector_(context, config) {
     sourceSheet.getRange(candidateRowIndex + 1, 1, 1, totalColumns).setValues([candidateRowValuesToWrite]);
   }
 
-  clearTargetSheet_(context.targetSheet);
-  writeRowsToTargetSheet_(context.targetSheet, rows);
+  clearTargetSheet_(context.targetSheet, headers.length);
+  if (rows.length === 0) {
+    return;
+  }
+  writeRowsToTargetSheet_(context.targetSheet, headers, rows);
 }
 
 function runColumnConnector_(context, config) {
@@ -244,8 +287,12 @@ function runColumnConnector_(context, config) {
   }
   const headerRow = config.headerRow || 1;
   const lastColumn = sourceSheet.getLastColumn();
+  const additionalColumns = prepareAdditionalColumnDefinitions_(config.additionalColumns);
+  const additionalHeaders = additionalColumns.map(function(def) { return def.header; });
+  const headers = buildTargetHeaders_(additionalHeaders);
+  ensureTargetSheetHeaders_(context.targetSheet, headers);
   if (lastColumn === 0) {
-    clearTargetSheet_(context.targetSheet);
+    clearTargetSheet_(context.targetSheet, headers.length);
     return;
   }
   const headerValues = sourceSheet.getRange(headerRow, 1, 1, lastColumn).getValues()[0];
@@ -261,9 +308,22 @@ function runColumnConnector_(context, config) {
   if (enabledIndex === -1) {
     throw new Error('Column connector requires a column named "' + config.enabledColumnHeader + '".');
   }
+  const additionalIndexes = additionalColumns.map(function(def) {
+    return headerValues.findIndex(function(value) {
+      return value && value.toString().trim() === def.sourceHeader;
+    });
+  });
+  const missingAdditional = [];
+  for (let a = 0; a < additionalColumns.length; a++) {
+    if (additionalIndexes[a] === -1) {
+      missingAdditional.push(additionalColumns[a].sourceHeader);
+    }
+  }
+  logMissingOptionalFields_(config, missingAdditional, 'column headers');
+
   const lastRow = sourceSheet.getLastRow();
   if (lastRow <= headerRow) {
-    clearTargetSheet_(context.targetSheet);
+    clearTargetSheet_(context.targetSheet, headers.length);
     return;
   }
   const dataRange = sourceSheet.getRange(headerRow + 1, 1, lastRow - headerRow, lastColumn);
@@ -280,10 +340,23 @@ function runColumnConnector_(context, config) {
     }
     const enabledValue = row[enabledIndex];
     const disabled = !isTruthy_(enabledValue);
-    rows.push([email.toLowerCase(), disabled]);
+    const newRow = createEmptyRow_(headers.length);
+    newRow[0] = email.toLowerCase();
+    newRow[1] = disabled;
+    for (let a = 0; a < additionalIndexes.length; a++) {
+      const index = additionalIndexes[a];
+      if (index === -1) {
+        continue;
+      }
+      newRow[2 + a] = normalizeAdditionalValue_(row[index]);
+    }
+    rows.push(newRow);
   });
-  clearTargetSheet_(context.targetSheet);
-  writeRowsToTargetSheet_(context.targetSheet, rows);
+  clearTargetSheet_(context.targetSheet, headers.length);
+  if (rows.length === 0) {
+    return;
+  }
+  writeRowsToTargetSheet_(context.targetSheet, headers, rows);
 }
 
 function runTargetManagedDisabledConnector_(context, config) {
@@ -295,8 +368,12 @@ function runTargetManagedDisabledConnector_(context, config) {
   }
   const headerRow = config.headerRow || 1;
   const lastColumn = sourceSheet.getLastColumn();
+  const additionalColumns = prepareAdditionalColumnDefinitions_(config.additionalColumns);
+  const additionalHeaders = additionalColumns.map(function(def) { return def.header; });
+  const headers = buildTargetHeaders_(additionalHeaders);
+  ensureTargetSheetHeaders_(context.targetSheet, headers);
   if (lastColumn === 0) {
-    clearTargetSheet_(context.targetSheet);
+    clearTargetSheet_(context.targetSheet, headers.length);
     return;
   }
   const headerValues = sourceSheet.getRange(headerRow, 1, 1, lastColumn).getValues()[0];
@@ -306,9 +383,22 @@ function runTargetManagedDisabledConnector_(context, config) {
   if (emailIndex === -1) {
     throw new Error('Target-managed connector requires a column named "' + config.emailColumnHeader + '".');
   }
+  const additionalIndexes = additionalColumns.map(function(def) {
+    return headerValues.findIndex(function(value) {
+      return value && value.toString().trim() === def.sourceHeader;
+    });
+  });
+  const missingAdditional = [];
+  for (let a = 0; a < additionalColumns.length; a++) {
+    if (additionalIndexes[a] === -1) {
+      missingAdditional.push(additionalColumns[a].sourceHeader);
+    }
+  }
+  logMissingOptionalFields_(config, missingAdditional, 'column headers');
+
   const lastRow = sourceSheet.getLastRow();
   if (lastRow <= headerRow) {
-    clearTargetSheet_(context.targetSheet);
+    clearTargetSheet_(context.targetSheet, headers.length);
     return;
   }
   const dataRange = sourceSheet.getRange(headerRow + 1, 1, lastRow - headerRow, lastColumn);
@@ -326,10 +416,23 @@ function runTargetManagedDisabledConnector_(context, config) {
     }
     const key = email.toLowerCase();
     const disabled = Object.prototype.hasOwnProperty.call(existingDisabled, key) ? existingDisabled[key] : false;
-    rows.push([key, disabled]);
+    const newRow = createEmptyRow_(headers.length);
+    newRow[0] = key;
+    newRow[1] = disabled;
+    for (let a = 0; a < additionalIndexes.length; a++) {
+      const index = additionalIndexes[a];
+      if (index === -1) {
+        continue;
+      }
+      newRow[2 + a] = normalizeAdditionalValue_(row[index]);
+    }
+    rows.push(newRow);
   });
-  clearTargetSheet_(context.targetSheet);
-  writeRowsToTargetSheet_(context.targetSheet, rows);
+  clearTargetSheet_(context.targetSheet, headers.length);
+  if (rows.length === 0) {
+    return;
+  }
+  writeRowsToTargetSheet_(context.targetSheet, headers, rows);
 }
 
 function validateConnectorConfig_(config, requiredKeys) {
@@ -390,24 +493,157 @@ function appendLabeledRow_(sheet, label, labelColumn, totalColumns) {
   return newRowIndex - 1; // Convert to zero-based index
 }
 
-function clearTargetSheet_(sheet) {
+function prepareAdditionalRowLabelDefinitions_(definitions) {
+  const results = [];
+  if (!definitions || definitions.length === 0) {
+    return results;
+  }
+  for (let i = 0; i < definitions.length; i++) {
+    const def = definitions[i];
+    if (!def) {
+      continue;
+    }
+    const header = def.header ? def.header.toString().trim() : '';
+    const label = def.label ? def.label.toString().trim() : '';
+    if (!header || !label || header.indexOf('REPLACE_WITH') !== -1 || label.indexOf('REPLACE_WITH') !== -1) {
+      continue;
+    }
+    results.push({ header: header, label: label });
+  }
+  return results;
+}
+
+function prepareAdditionalColumnDefinitions_(definitions) {
+  const results = [];
+  if (!definitions || definitions.length === 0) {
+    return results;
+  }
+  for (let i = 0; i < definitions.length; i++) {
+    const def = definitions[i];
+    if (!def) {
+      continue;
+    }
+    const header = def.header ? def.header.toString().trim() : '';
+    const sourceHeader = def.sourceHeader ? def.sourceHeader.toString().trim() : '';
+    if (!header || !sourceHeader || header.indexOf('REPLACE_WITH') !== -1 || sourceHeader.indexOf('REPLACE_WITH') !== -1) {
+      continue;
+    }
+    results.push({ header: header, sourceHeader: sourceHeader });
+  }
+  return results;
+}
+
+function buildTargetHeaders_(additionalHeaders) {
+  const headers = [USER_EMAIL_HEADER, DISABLED_HEADER];
+  if (!additionalHeaders || additionalHeaders.length === 0) {
+    return headers;
+  }
+  for (let i = 0; i < additionalHeaders.length; i++) {
+    const header = additionalHeaders[i];
+    if (!header) {
+      continue;
+    }
+    if (headers.indexOf(header) === -1) {
+      headers.push(header);
+    }
+  }
+  return headers;
+}
+
+function ensureTargetSheetHeaders_(sheet, headers) {
+  if (!sheet || !headers || headers.length === 0) {
+    return;
+  }
+  const requiredColumns = headers.length;
+  const currentMaxColumns = sheet.getMaxColumns();
+  if (currentMaxColumns < requiredColumns) {
+    sheet.insertColumnsAfter(currentMaxColumns, requiredColumns - currentMaxColumns);
+  }
+  const headerRange = sheet.getRange(1, 1, 1, requiredColumns);
+  const existingHeaders = headerRange.getValues();
+  const currentRow = existingHeaders && existingHeaders.length > 0 ? existingHeaders[0] : [];
+  let needsUpdate = currentRow.length !== headers.length;
+  if (!needsUpdate) {
+    for (let i = 0; i < headers.length; i++) {
+      if (currentRow[i] !== headers[i]) {
+        needsUpdate = true;
+        break;
+      }
+    }
+  }
+  if (needsUpdate) {
+    headerRange.setValues([headers]);
+  }
+  headerRange.setFontWeight('bold');
+  sheet.setFrozenRows(1);
+  const lastColumn = sheet.getLastColumn();
+  if (lastColumn > headers.length) {
+    sheet.getRange(1, headers.length + 1, 1, lastColumn - headers.length).clearContent();
+  }
+  const disabledRange = sheet.getRange('B2:B');
+  const rule = SpreadsheetApp.newDataValidation().requireCheckbox().build();
+  disabledRange.setDataValidation(rule);
+}
+
+function createEmptyRow_(columnCount) {
+  const row = [];
+  for (let i = 0; i < columnCount; i++) {
+    row.push('');
+  }
+  return row;
+}
+
+function normalizeAdditionalValue_(value) {
+  if (value === null || value === undefined) {
+    return '';
+  }
+  if (typeof value === 'string') {
+    return value.trim();
+  }
+  return value;
+}
+
+function clearTargetSheet_(sheet, columnCount) {
   if (!sheet) {
     return;
   }
   const lastRow = sheet.getLastRow();
-  if (lastRow > 1) {
-    sheet.getRange(2, 1, lastRow - 1, 2).clearContent();
+  if (lastRow <= 1) {
+    return;
   }
+  const width = columnCount && columnCount > 0 ? columnCount : sheet.getLastColumn();
+  if (width <= 0) {
+    return;
+  }
+  sheet.getRange(2, 1, lastRow - 1, width).clearContent();
 }
 
-function writeRowsToTargetSheet_(sheet, rows) {
+function writeRowsToTargetSheet_(sheet, headers, rows) {
   if (!sheet) {
     return;
   }
   if (!rows || rows.length === 0) {
     return;
   }
-  sheet.getRange(2, 1, rows.length, 2).setValues(rows);
+  const width = headers && headers.length ? headers.length : rows[0].length;
+  const normalizedRows = rows.map(function(row) {
+    const output = createEmptyRow_(width);
+    for (let i = 0; i < width; i++) {
+      if (row && row[i] !== undefined && row[i] !== null) {
+        output[i] = row[i];
+      }
+    }
+    return output;
+  });
+  sheet.getRange(2, 1, normalizedRows.length, width).setValues(normalizedRows);
+}
+
+function logMissingOptionalFields_(config, missingValues, description) {
+  if (!missingValues || missingValues.length === 0) {
+    return;
+  }
+  const configId = config && config.id ? config.id : 'UNNAMED_CONNECTOR';
+  log_('Connector "' + configId + '" could not find optional ' + description + ': ' + missingValues.join(', ') + '. Leaving the fields blank.', 'WARN');
 }
 
 function isColorInWhitelist_(color, whitelist) {
