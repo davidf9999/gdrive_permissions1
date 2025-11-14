@@ -290,7 +290,7 @@ function applyConfigValidation_() {
   if (!configSheet) return;
 
   const booleanSettings = [
-    'EnableSheetLocking', 'AllowAutosyncDeletion',
+    'EnableSheetLocking', 'AllowAutosyncDeletion', 'EnableCircularDependencyCheck',
     'EnableEmailNotifications', 'NotifyOnSyncSuccess', 'NotifyDeletionsPending',
     'EnableGCPLogging', 'EnableToasts', 'ShowTestPrompts', 'TestCleanup', 'TestAutoConfirm'
   ];
