@@ -101,6 +101,7 @@ describe('detectAutoSyncChanges_', () => {
 
   it('skips when spreadsheet and folders match the previous snapshot', () => {
     const previousSnapshot = {
+      lastSyncSuccessful: true,
       dataHash: 'mock-hash-string',
       folderStates: { 'folder-1': new Date('2024-01-01T00:00:00Z').getTime() },
       capturedAt: '2024-01-01T00:00:00Z'
