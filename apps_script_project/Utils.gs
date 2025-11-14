@@ -219,6 +219,8 @@ function normalizeBooleanConfigValue_(value) {
     const upperValue = value.toUpperCase().trim();
     if (upperValue.startsWith('ENABLED')) return true;
     if (upperValue.startsWith('DISABLED')) return false;
+    if (upperValue === 'TRUE') return true;
+    if (upperValue === 'FALSE') return false;
   }
   return value;
 }
@@ -449,10 +451,9 @@ function sendErrorNotification_(errorMessage) {
 }
 
 function showTestMessage_(title, message) {
-    const config = getConfiguration_();
-    const showPrompts = normalizeBooleanValue_(config['ShowTestPrompts']);
+    const showPrompts = getConfigValue_('ShowTestPrompts', false);
 
-    if (showPrompts === 'ENABLED') {
+    if (showPrompts === true) {
         SpreadsheetApp.getUi().alert(title, message, SpreadsheetApp.getUi().ButtonSet.OK);
     } else {
         log_(`Test Message: ${title} - ${message}`, 'INFO');
@@ -467,19 +468,18 @@ function showTestMessage_(title, message) {
  * @return {*} The user's response or the default value
  */
 function showTestConfirm_(title, message, defaultValue) {
-    const config = getConfiguration_();
-    const showPrompts = normalizeBooleanValue_(config['ShowTestPrompts']);
-    const autoConfirm = normalizeBooleanValue_(config['TestAutoConfirm']);
+    const showPrompts = getConfigValue_('ShowTestPrompts', false);
+    const autoConfirm = getConfigValue_('TestAutoConfirm', false);
     const ui = SpreadsheetApp.getUi();
 
     // If prompts are disabled, return default silently
-    if (showPrompts !== 'ENABLED') {
+    if (showPrompts !== true) {
         log_(`Test Confirmation (auto-accepted): ${title} - ${message}`, 'INFO');
         return defaultValue !== undefined ? defaultValue : ui.Button.YES;
     }
 
     // If auto-confirm is enabled, skip the prompt
-    if (autoConfirm === 'ENABLED') {
+    if (autoConfirm === true) {
         log_(`Test Confirmation (auto-accepted): ${title}`, 'INFO');
         return defaultValue !== undefined ? defaultValue : ui.Button.YES;
     }
@@ -496,12 +496,11 @@ function showTestConfirm_(title, message, defaultValue) {
  * @return {Object} An object with getSelectedButton() and getResponseText() methods
  */
 function showTestPrompt_(title, message, defaultValue) {
-    const config = getConfiguration_();
-    const showPrompts = normalizeBooleanValue_(config['ShowTestPrompts']);
+    const showPrompts = getConfigValue_('ShowTestPrompts', false);
     const ui = SpreadsheetApp.getUi();
 
     // If prompts are disabled, return a mock response with the default value
-    if (showPrompts !== 'ENABLED') {
+    if (showPrompts !== true) {
         log_(`Test Prompt (using default): ${title} - ${defaultValue}`, 'INFO');
         return {
             getSelectedButton: function() { return ui.Button.OK; },

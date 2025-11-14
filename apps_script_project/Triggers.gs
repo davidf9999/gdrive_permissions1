@@ -29,7 +29,7 @@ function setupAutoSync() {
     .create();
 
   log_('AutoSync trigger installed. Will run every ' + interval + ' minutes.', 'INFO');
-  updateConfigSetting_('AutoSync Trigger Status', 'ENABLED');
+  updateAutoSyncStatusIndicator_();
   SpreadsheetApp.getUi().alert(
     'AutoSync Enabled',
     'The script will now automatically sync every ' + interval + ' minutes.',
@@ -59,7 +59,7 @@ function removeAutoSync() {
   }
 
   // Always ensure the status indicators are correct
-  updateConfigSetting_('AutoSync Trigger Status', 'DISABLED');
+  updateAutoSyncStatusIndicator_();
 }
 
 
