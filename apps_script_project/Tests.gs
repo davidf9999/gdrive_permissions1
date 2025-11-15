@@ -871,6 +871,8 @@ function runAutoSyncErrorEmailTest() {
     let success = false;
     const mailAppSpy = createSpy_(MailApp, 'sendEmail');
     const originalEmailNotificationSetting = getConfigValue_('EnableEmailNotifications', false);
+    const orphanSheetName = 'OrphanSheetForErrorTest_' + new Date().getTime();
+    let orphanSheet;
 
     try {
         log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
@@ -878,23 +880,22 @@ function runAutoSyncErrorEmailTest() {
         log_('╚══════════════════════════════════════════════════════════════╝', 'INFO');
 
         // Temporarily enable email notifications for the test
-        updateConfigSetting_('EnableEmailNotifications', true); // Changed from true to 'ENABLED'
+        updateConfigSetting_('EnableEmailNotifications', true);
 
-        // Simulate an error by providing an invalid folder ID
-        const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
-        const testRowIndex = managedSheet.getLastRow() + 1;
-        managedSheet.getRange(testRowIndex, FOLDER_NAME_COL).setValue('Invalid Folder');
-        managedSheet.getRange(testRowIndex, FOLDER_ID_COL).setValue('invalid_folder_id');
-        managedSheet.getRange(testRowIndex, ROLE_COL).setValue('Editor');
+        // Simulate an error by creating an orphan sheet
+        const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+        orphanSheet = spreadsheet.insertSheet(orphanSheetName);
+        log_('Created orphan sheet "' + orphanSheetName + '" to trigger a fatal error.', 'INFO');
 
-        // Run AutoSync, which should fail
+        // Run AutoSync, which should fail because of the orphan sheet
         try {
             autoSync({ silentMode: true });
         } catch (e) {
-            // Error is expected
+            // Error is expected, and should be caught by the autoSync's own try...catch
+            log_('Caught expected error during autoSync call: ' + e.message, 'INFO');
         }
 
-        // Check if the email spy was called
+        // Check if the email spy was called by the autoSync's catch block
         if (mailAppSpy.wasCalled) {
             log_('VERIFICATION PASSED: MailApp.sendEmail was called after AutoSync error.', 'INFO');
             success = true;
@@ -908,13 +909,15 @@ function runAutoSyncErrorEmailTest() {
     } finally {
         mailAppSpy.restore();
         updateConfigSetting_('EnableEmailNotifications', originalEmailNotificationSetting);
-        const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-        const managedSheet = spreadsheet.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
-        managedSheet.deleteRow(managedSheet.getLastRow());
-
-        const orphanSheet = spreadsheet.getSheetByName('Invalid Folder_Editor');
+        
+        // Cleanup the orphan sheet
         if (orphanSheet) {
-            spreadsheet.deleteSheet(orphanSheet);
+            try {
+                SpreadsheetApp.getActiveSpreadsheet().deleteSheet(orphanSheet);
+                log_('Cleaned up orphan sheet: ' + orphanSheetName, 'INFO');
+            } catch (e) {
+                log_('Failed to clean up orphan sheet "' + orphanSheetName + '": ' + e.message, 'ERROR');
+            }
         }
 
         const testStatus = success ? '✓ PASSED' : '✗ FAILED';
