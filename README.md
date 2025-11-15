@@ -3,12 +3,14 @@
 > **Project status:** Beta — feature complete but still evolving. Expect minor
 > breaking changes while we continue to refine the onboarding flow and tooling.
 
-The Google Drive Permission Manager keeps multiple Drive folders in sync with
-Google Groups using a central Google Sheet. Non-technical administrators can
-edit user email addresses into dedicated tabs. A script runs periodically (once every 5 minutes) 
-to ensure that Google Group membership and folder permissions stay
-correct. This repository contains the Apps Script source, automated tests, and
-optional infrastructure tooling that powers that workflow.
+The Google Drive Permission Manager automates Drive folder sharing by treating
+one Google Sheet as the source of truth for access. Each folder/role combination
+gets its own tab where administrators list email addresses—no scripting
+experience required. A bound Apps Script project runs on a five-minute cadence
+to keep the relevant Google Groups and Drive permissions aligned with those
+tabs. This repository packages that script alongside guided setup
+documentation, automated tests, and optional infrastructure helpers so teams can
+roll out the workflow consistently.
 
 ---
 
@@ -59,6 +61,92 @@ the spreadsheet:
 
 A deeper architectural walkthrough is available in
 [`gdrive_permissions1.md`](gdrive_permissions1.md).
+
+### Visual system overview
+
+```mermaid
+flowchart LR
+  subgraph Workspace[Google Workspace]
+    U[Individual Users]
+    G[Google Groups]
+  end
+  subgraph Drive[Google Drive]
+    F[Managed Folders]
+  end
+  subgraph Sheet[Control Sheets]
+    tabs((Folder / Role Tabs))
+  end
+
+  tabs -- "Membership source" --> G
+  tabs -- "Direct invites (optional)" --> U
+  G -- "Shared with" --> F
+  U -- "Shared with (direct)" --> F
+  classDef default fill:#f2f7ff,stroke:#335bff,stroke-width:1.5px,color:#0f1e4d;
+  classDef sheet fill:#fff7eb,stroke:#ff8b33,stroke-width:1.5px,color:#5a2500;
+  classDef drive fill:#eefcf3,stroke:#2e8540,stroke-width:1.5px,color:#0c3214;
+  classDef workspace fill:#f9f0ff,stroke:#8a2be2,stroke-width:1.5px,color:#2e0b4d;
+  class tabs sheet;
+  class F drive;
+  class U,G workspace;
+```
+
+```mermaid
+sequenceDiagram
+  participant Editor as Sheet Editor
+  participant Sheets as Control Sheet
+  participant Script as Apps Script (5-min Trigger)
+  participant Admin as Workspace Admin APIs
+  participant Status as Status Sheet / Dashboard
+  participant Alerts as Admin Notifications
+
+  Editor->>Sheets: Update adds/removes or disable users
+  Note over Sheets,Admin: Sheet now diverges from Google Workspace permissions
+  Script-->>Sheets: Periodic trigger detects changes
+  Script->>Admin: Apply adds/deletes to Groups and Folders
+  Admin-->>Status: Record sync timestamp & outcome
+  Admin-->>Alerts: Email on errors with remediation steps
+```
+
+```mermaid
+flowchart TD
+  subgraph ControlSheet[Control Spreadsheet]
+    direction TB
+    ManagedFolders[[ManagedFolders<br/>(Folder IDs + Roles)]]
+    ManagedGroups[[ManagedGroups<br/>(Optional Indirection)]]
+    subgraph GroupTabs[Group Membership Tabs]
+      direction LR
+      GroupSheet1[Group: Marketing Editors]
+      GroupSheet2[Group: Finance Viewers]
+    end
+    subgraph FolderRoleTabs[Folder / Role Tabs]
+      direction LR
+      FolderSheet1[Folder: Marketing Drive → Editor]
+      FolderSheet2[Folder: Finance Reports → Viewer]
+    end
+    Config[[Config (Notifications, API toggles)]]
+    Logs[[Log / TestLog Sheets]]
+  end
+
+  ManagedFolders -.-> FolderSheet1
+  ManagedFolders -.-> FolderSheet2
+  ManagedGroups -.-> GroupSheet1
+  ManagedGroups -.-> GroupSheet2
+  GroupSheet1 --> FolderSheet1
+  GroupSheet2 --> FolderSheet2
+  FolderSheet1 --> Logs
+  FolderSheet2 --> Logs
+  Config --> Logs
+
+  classDef default fill:#f4fbff,stroke:#1463a5,stroke-width:1.5px,color:#0d273d;
+  classDef group fill:#fff6e8,stroke:#d97706,color:#4a1d05;
+  classDef folder fill:#effaf3,stroke:#047857,color:#092314;
+  classDef config fill:#fce7f3,stroke:#be185d,color:#4a0418;
+  classDef log fill:#ede9fe,stroke:#4c1d95,color:#1c0c3f;
+  class ManagedFolders,ManagedGroups,GroupSheet1,GroupSheet2 group;
+  class FolderSheet1,FolderSheet2 folder;
+  class Config config;
+  class Logs log;
+```
 
 ---
 
