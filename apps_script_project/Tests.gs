@@ -908,8 +908,15 @@ function runAutoSyncErrorEmailTest() {
     } finally {
         mailAppSpy.restore();
         updateConfigSetting_('EnableEmailNotifications', originalEmailNotificationSetting);
-        const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+        const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+        const managedSheet = spreadsheet.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
         managedSheet.deleteRow(managedSheet.getLastRow());
+
+        const orphanSheet = spreadsheet.getSheetByName('Invalid Folder_Editor');
+        if (orphanSheet) {
+            spreadsheet.deleteSheet(orphanSheet);
+        }
+
         const testStatus = success ? '✓ PASSED' : '✗ FAILED';
         log_('>>> TEST RESULT: AutoSync Error Email Test ' + testStatus, success ? 'INFO' : 'ERROR');
         log_('', 'INFO');
