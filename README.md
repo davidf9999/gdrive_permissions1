@@ -3,12 +3,12 @@
 > **Project status:** Beta — feature complete but still evolving. Expect minor
 > breaking changes while we continue to refine the onboarding flow and tooling.
 
-The Google Drive Permission Manager keeps hundreds of Drive folders in sync with
+The Google Drive Permission Manager keeps multiple Drive folders in sync with
 Google Groups using a central Google Sheet. Non-technical administrators can
-paste user email addresses into dedicated tabs, run a sync from the custom menu,
-and the script ensures that Google Group membership and folder permissions stay
+edit user email addresses into dedicated tabs. A script runs periodically (once every 5 minutes) 
+to ensure that Google Group membership and folder permissions stay
 correct. This repository contains the Apps Script source, automated tests, and
-optional infrastructure tooling that power that workflow.
+optional infrastructure tooling that powers that workflow.
 
 ---
 
