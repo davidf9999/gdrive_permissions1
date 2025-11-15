@@ -111,8 +111,8 @@ sequenceDiagram
 flowchart TD
   subgraph ControlSheet[Control Spreadsheet]
     direction TB
-    ManagedFolders[[ManagedFolders<br/>(Folder IDs + Roles)]]
-    ManagedGroups[[ManagedGroups<br/>(Optional Indirection)]]
+    ManagedFolders[[ManagedFolders\n(Folder IDs + Roles)]]
+    ManagedGroups[[ManagedGroups\n(Optional Indirection)]]
     subgraph GroupTabs[Group Membership Tabs]
       direction LR
       GroupSheet1[Group: Marketing Editors]
@@ -123,7 +123,7 @@ flowchart TD
       FolderSheet1[Folder: Marketing Drive → Editor]
       FolderSheet2[Folder: Finance Reports → Viewer]
     end
-    Config[[Config (Notifications, API toggles)]]
+    Config[[Config\n(Notifications, API toggles)]]
     Logs[[Log / TestLog Sheets]]
   end
 
