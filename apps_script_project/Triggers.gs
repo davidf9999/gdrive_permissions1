@@ -201,7 +201,7 @@ function detectAutoSyncChanges_() {
     }
     if (userGroupsSheet && userGroupsSheet.getLastRow() > 1) {
       // Read all columns from UserGroups (no script-managed columns here)
-      const data = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, userGroupsSheet.getLastColumn()).getValues();
+      const data = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 2).getValues();
       dataString += JSON.stringify(data);
 
       // Add user sheets from UserGroups to the hash
