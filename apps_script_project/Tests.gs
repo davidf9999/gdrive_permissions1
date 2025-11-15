@@ -1196,13 +1196,7 @@ function clearAllTestsData(skipConfirmation = false) {
         let deletedSheetCount = 0;
         allSheets.forEach(function (sheet) {
             const sheetName = sheet.getName();
-            const isStressTest = sheetName.startsWith('StressTestFolder_');
-            const isManualTestViewer = sheetName === manualTestFolderName + '_Viewer';
-            const isManualTestEditor = sheetName === manualTestFolderName + '_Editor';
-            const isManualTestCommenter = sheetName === manualTestFolderName + '_Commenter';
-            const shouldDelete = isStressTest || isManualTestViewer || isManualTestEditor || isManualTestCommenter;
-
-            if (shouldDelete) {
+            if (isTestSheet_(sheetName)) {
                 log_('Attempting to delete sheet: ' + sheetName);
                 try {
                     SpreadsheetApp.getActiveSpreadsheet().deleteSheet(sheet);

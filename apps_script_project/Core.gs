@@ -317,7 +317,9 @@ function checkForOrphanSheets_() {
         }
     }
 
-    return allSheetNames.filter(function(name) { return !requiredSheetNames.has(name); });
+    return allSheetNames.filter(function(name) {
+        return !requiredSheetNames.has(name) && !isTestSheet_(name);
+    });
 
   } catch (e) {
     log_('Error during orphan sheet check: ' + e.message, 'ERROR');

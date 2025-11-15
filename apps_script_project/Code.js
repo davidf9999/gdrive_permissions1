@@ -329,22 +329,32 @@ function createAuditsMenu_(ui) {
 }
 
 function createTestingMenu_(ui) {
-  return ui.createMenu('Testing')
-    .addItem('Run All Tests', 'runAllTests')
-    .addSeparator()
+  const individualTestsMenu = ui.createMenu('Individual Tests')
     .addItem('Run Manual Access Test', 'runManualAccessTest')
     .addItem('Run Stress Test', 'runStressTest')
     .addItem('Run Add/Delete Separation Test', 'runAddDeleteSeparationTest')
     .addItem('Run AutoSync Error Email Test', 'runAutoSyncErrorEmailTest')
-    .addItem('Run Email Capability Test', 'runEmailCapabilityTest')
     .addItem('Run Sheet Locking Test', 'runSheetLockingTest_')
-    .addItem('Run Circular Dependency Test', 'runCircularDependencyTest_')
-    .addSeparator()
+    .addItem('Run Circular Dependency Test', 'runCircularDependencyTest_');
+
+  const standaloneTestsMenu = ui.createMenu('Standalone Tests')
+    .addItem('Run Email Capability Test', 'runEmailCapabilityTest');
+
+  const cleanupMenu = ui.createMenu('Cleanup')
     .addItem('Cleanup Manual Test Data', 'cleanupManualTestData')
     .addItem('Cleanup Stress Test Data', 'cleanupStressTestData')
     .addItem('Cleanup Add/Delete Test Data', 'cleanupAddDeleteSeparationTestData')
     .addSeparator()
     .addItem('Clear All Test Data', 'clearAllTestsData');
+
+  return ui.createMenu('Testing')
+    .addItem('Run All Tests', 'runAllTests')
+    .addSeparator()
+    .addSubMenu(individualTestsMenu)
+    .addSeparator()
+    .addSubMenu(standaloneTestsMenu)
+    .addSeparator()
+    .addSubMenu(cleanupMenu);
 }
 
 function createLoggingMenu_(ui) {
