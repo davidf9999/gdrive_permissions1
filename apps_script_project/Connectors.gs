@@ -611,7 +611,9 @@ function clearTargetSheet_(sheet, columnCount) {
   if (lastRow <= 1) {
     return;
   }
-  const width = columnCount && columnCount > 0 ? columnCount : sheet.getLastColumn();
+  const availableWidth = sheet.getLastColumn();
+  const desiredWidth = columnCount && columnCount > 0 ? columnCount : availableWidth;
+  const width = Math.max(desiredWidth, availableWidth);
   if (width <= 0) {
     return;
   }
