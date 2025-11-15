@@ -88,7 +88,7 @@ function autoSync(options = {}) {
 
     if (!changeDetection.shouldRun) {
       log_('AutoSync skipped: No changes detected since last run.', 'INFO');
-      return;
+      return { skipped: true, added: 0, removed: 0, failed: 0 };
     }
 
     // Log reasons for sync

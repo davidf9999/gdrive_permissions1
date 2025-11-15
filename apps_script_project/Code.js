@@ -386,7 +386,11 @@ function createHelpMenu_(ui) {
  */
 function runAutoSyncNow() {
   const summary = autoSync({ silentMode: true });
-  if (summary) {
+  if (summary && summary.skipped) {
+    const summaryMessage = 'AutoSync skipped: No changes detected since last run.';
+    log_(summaryMessage, 'INFO');
+    SpreadsheetApp.getUi().alert(summaryMessage);
+  } else if (summary) {
     const summaryMessage = 'Manual AutoSync complete. Total changes: ' + summary.added + ' added, ' + summary.removed + ' removed, ' + summary.failed + ' failed.';
     log_(summaryMessage, 'INFO');
     SpreadsheetApp.getUi().alert(summaryMessage);
