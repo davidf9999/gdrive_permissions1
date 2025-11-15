@@ -187,7 +187,7 @@ function detectAutoSyncChanges_() {
         if (name) {
           const userSheet = spreadsheet.getSheetByName(name);
           if (userSheet && userSheet.getLastRow() > 1) {
-            const userData = userSheet.getRange(2, 1, userSheet.getLastRow() - 1, 1).getValues();
+            const userData = userSheet.getRange(2, 1, userSheet.getLastRow() - 1, 2).getValues();
             dataString += JSON.stringify(userData);
           }
         }
@@ -210,7 +210,7 @@ function detectAutoSyncChanges_() {
         if (name) {
           const groupSheet = spreadsheet.getSheetByName(name + '_G');
           if (groupSheet && groupSheet.getLastRow() > 1) {
-            const groupData = groupSheet.getRange(2, 1, groupSheet.getLastRow() - 1, 1).getValues();
+            const groupData = groupSheet.getRange(2, 1, groupSheet.getLastRow() - 1, 2).getValues();
             dataString += JSON.stringify(groupData);
           }
         }
