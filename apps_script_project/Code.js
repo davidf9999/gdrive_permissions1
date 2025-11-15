@@ -105,7 +105,7 @@ function isSuperAdmin_() {
     }
 
     const domain = userEmail.indexOf('@') !== -1 ? userEmail.split('@')[1] : '';
-    const isSuperAdmin = superAdmins.some(function(entry) {
+    const isSuperAdmin = superAdmins.some(function (entry) {
       if (entry === userEmail) {
         return true;
       }
@@ -144,13 +144,13 @@ function getSuperAdminEmails_() {
   }
 
   const normalized = values
-    .map(function(value) { return value.trim().toLowerCase(); })
-    .filter(function(value) { return value.length > 0; });
+    .map(function (value) { return value.trim().toLowerCase(); })
+    .filter(function (value) { return value.length > 0; });
 
   const ownerEmail = getSpreadsheetOwnerEmail_();
   const ownerTokens = ['owner', 'spreadsheet_owner'];
 
-  const expanded = normalized.reduce(function(acc, value) {
+  const expanded = normalized.reduce(function (acc, value) {
     if (ownerTokens.indexOf(value) !== -1) {
       if (ownerEmail) {
         acc.push(ownerEmail);
@@ -172,7 +172,7 @@ function applyRestrictedView_() {
   try {
     const visibilityConfig = getTestSheetVisibilityConfig_();
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    ss.getSheets().forEach(function(sheet) {
+    ss.getSheets().forEach(function (sheet) {
       const name = sheet.getName();
       if (shouldHideSheetForRestrictedView_(name, visibilityConfig) && typeof sheet.hideSheet === 'function') {
         try {
@@ -194,7 +194,7 @@ function applyFullView_() {
     const visibilityConfig = getTestSheetVisibilityConfig_();
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     log_('applyFullView_: Processing sheets for super admin visibility', 'DEBUG');
-    ss.getSheets().forEach(function(sheet) {
+    ss.getSheets().forEach(function (sheet) {
       const name = sheet.getName();
       const shouldHide = shouldHideSheetForRestrictedView_(name, visibilityConfig);
       if (shouldHide && typeof sheet.showSheet === 'function') {
@@ -237,7 +237,7 @@ function shouldHideSheetForRestrictedView_(sheetName, config) {
     return true;
   }
 
-  return config.prefixes.some(function(prefix) {
+  return config.prefixes.some(function (prefix) {
     return sheetName.indexOf(prefix) === 0;
   });
 }
@@ -329,7 +329,7 @@ function createAuditsMenu_(ui) {
 }
 
 function createTestingMenu_(ui) {
-  const individualTestsMenu = ui.createMenu('Individual Tests')
+  const individualTestsMenu = ui.createMenu('Individual Tests Of All Tests')
     .addItem('Run Manual Access Test', 'runManualAccessTest')
     .addItem('Run Stress Test', 'runStressTest')
     .addItem('Run Add/Delete Separation Test', 'runAddDeleteSeparationTest')
@@ -411,7 +411,7 @@ function onEdit(e) {
 
   const editedRow = range.getRow();
   const editedCol = range.getColumn();
-  
+
   // --- Protect Description Column ---
   if (editedCol === 3) {
     range.setValue(oldValue);
@@ -478,7 +478,7 @@ function isSuperAdmin_() {
     }
 
     const domain = userEmail.indexOf('@') !== -1 ? userEmail.split('@')[1] : '';
-    return superAdmins.some(function(entry) {
+    return superAdmins.some(function (entry) {
       if (entry === userEmail) {
         return true;
       }
@@ -515,8 +515,8 @@ function getSuperAdminEmails_() {
   }
 
   const normalized = values
-    .map(function(value) { return value.trim().toLowerCase(); })
-    .filter(function(value) { return value.length > 0; });
+    .map(function (value) { return value.trim().toLowerCase(); })
+    .filter(function (value) { return value.length > 0; });
 
   if (normalized.length === 0) {
     const fallbacks = [];
@@ -528,7 +528,7 @@ function getSuperAdminEmails_() {
     } catch (e) {
       // Ignore
     }
-    return Array.from(new Set(fallbacks.filter(function(email) { return email && email.length > 0; })));
+    return Array.from(new Set(fallbacks.filter(function (email) { return email && email.length > 0; })));
   }
 
   return Array.from(new Set(normalized));
