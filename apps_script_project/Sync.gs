@@ -337,6 +337,7 @@ function syncAdds(options = {}) {
   const startTime = new Date();
 
   try {
+    validateManagedFolders_();
     if (!silentMode) showToast_('Starting non-destructive sync (adds only)...', 'Sync Adds', -1);
     showSyncInProgress_();
     log_('*** Starting non-destructive synchronization (adds only)...');
@@ -538,6 +539,7 @@ function fullSync(options = {}) {
     log_('*** Starting full synchronization...');
 
     // --- PRE-SYNC CHECKS ---
+    validateManagedFolders_();
     const enableCircularCheck = getConfigValue_('EnableCircularDependencyCheck', true);
     if (enableCircularCheck === true) {
       validateGroupNesting_(); // Check for circular dependencies

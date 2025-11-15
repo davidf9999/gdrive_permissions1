@@ -1024,3 +1024,33 @@ function updateUserSheetHeaders_() {
     log_('Could not update user sheet headers. Error: ' + e.message, 'WARN');
   }
 }
+
+function validateManagedFolders_() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+  if (!sheet) {
+    return; // Sheet doesn't exist, so nothing to validate.
+  }
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) {
+    return; // No data rows to validate.
+  }
+
+  const data = sheet.getRange(2, 1, lastRow - 1, ROLE_COL).getValues();
+  const errors = [];
+
+  for (let i = 0; i < data.length; i++) {
+    const row = data[i];
+    const folderName = row[FOLDER_NAME_COL - 1];
+    const folderId = row[FOLDER_ID_COL - 1];
+    const role = row[ROLE_COL - 1];
+
+    if ((folderName || folderId) && !role) {
+      errors.push(`Row ${i + 2}: Role is not specified.`);
+    }
+  }
+
+  if (errors.length > 0) {
+    throw new Error('Validation failed for ManagedFolders sheet:\n' + errors.join('\n'));
+  }
+}
