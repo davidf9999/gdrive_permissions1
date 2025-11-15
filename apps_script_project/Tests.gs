@@ -873,11 +873,18 @@ function runAutoSyncErrorEmailTest() {
     const originalEmailNotificationSetting = getConfigValue_('EnableEmailNotifications', false);
     const orphanSheetName = 'OrphanSheetForErrorTest_' + new Date().getTime();
     let orphanSheet;
+    const props = PropertiesService.getDocumentProperties();
+    const originalSnapshot = props.getProperty(AUTO_SYNC_CHANGE_SIGNATURE_KEY);
 
     try {
         log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
         log_('║  AutoSync Error Email Test                                ║', 'INFO');
         log_('╚══════════════════════════════════════════════════════════════╝', 'INFO');
+
+        // Force the next sync to run by invalidating the last one
+        log_('Forcing next autoSync to run by marking last sync as failed.', 'INFO');
+        const tempSnapshot = { dataHash: 'force-run', capturedAt: new Date().toISOString(), lastSyncSuccessful: false };
+        props.setProperty(AUTO_SYNC_CHANGE_SIGNATURE_KEY, JSON.stringify(tempSnapshot));
 
         // Temporarily enable email notifications for the test
         updateConfigSetting_('EnableEmailNotifications', true);
@@ -887,7 +894,7 @@ function runAutoSyncErrorEmailTest() {
         orphanSheet = spreadsheet.insertSheet(orphanSheetName);
         log_('Created orphan sheet "' + orphanSheetName + '" to trigger a fatal error.', 'INFO');
 
-        // Run AutoSync, which should fail because of the orphan sheet
+        // Run AutoSync, which should now run and fail because of the orphan sheet
         try {
             autoSync({ silentMode: true });
         } catch (e) {
@@ -909,6 +916,13 @@ function runAutoSyncErrorEmailTest() {
     } finally {
         mailAppSpy.restore();
         updateConfigSetting_('EnableEmailNotifications', originalEmailNotificationSetting);
+        
+        // Restore the original snapshot
+        if (originalSnapshot) {
+            props.setProperty(AUTO_SYNC_CHANGE_SIGNATURE_KEY, originalSnapshot);
+        } else {
+            props.deleteProperty(AUTO_SYNC_CHANGE_SIGNATURE_KEY);
+        }
         
         // Cleanup the orphan sheet
         if (orphanSheet) {
