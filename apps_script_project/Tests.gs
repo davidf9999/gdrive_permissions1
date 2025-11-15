@@ -885,6 +885,7 @@ function runAutoSyncErrorEmailTest() {
         const testRowIndex = managedSheet.getLastRow() + 1;
         managedSheet.getRange(testRowIndex, FOLDER_NAME_COL).setValue('Invalid Folder');
         managedSheet.getRange(testRowIndex, FOLDER_ID_COL).setValue('invalid_folder_id');
+        managedSheet.getRange(testRowIndex, ROLE_COL).setValue('Editor');
 
         // Run AutoSync, which should fail
         try {
