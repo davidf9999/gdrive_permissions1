@@ -180,3 +180,24 @@ To eliminate confusion and provide a more intuitive user experience, the control
     *   **Default State:** The default value for `EnableAutoSync` in the `Config` sheet has been changed to `FALSE`. This means AutoSync is now off by default, requiring explicit user action to enable it, which is a safer initial state.
 
 This change makes the `EnableAutoSync` setting in the `Config` sheet the single, clear source of truth for whether the AutoSync is active, removing any ambiguity.
+
+### Test Suite and AutoSync Robustness (November 2025)
+
+A series of improvements were made to the test suite and the `autoSync` feature to improve robustness and prevent test artifacts from interfering with normal operation.
+
+*   **Test and Sync Segregation:**
+    *   A new helper function, `isTestSheet_`, was created in `TestHelpers.gs` to identify test-related sheets using a centralized list of patterns.
+    *   The `checkForOrphanSheets_` function was updated to use this helper, preventing `autoSync` from failing due to the presence of test sheets.
+    *   The `clearAllTestsData` function was also updated to use `isTestSheet_`, ensuring that all test-related sheets are properly cleaned up.
+
+*   **`autoSync` Failure Detection:**
+    *   The logic for determining whether an `autoSync` run was successful has been made more strict. A sync is now only considered successful if it runs to completion **and** has zero failed operations. This ensures that if any part of the sync fails, `autoSync` will correctly detect the failure and re-run on the next cycle.
+    *   To improve visibility, a "Status" column was added to the `SyncHistory` sheet, providing a clear "Success" or "Failed" status for each sync operation.
+
+*   **Pre-sync Validation:**
+    *   A new pre-sync validation step was added to check for rows in the `ManagedFolders` sheet that have a folder name but no role. This prevents "Role is not specified" errors and provides a clear error message to the user.
+
+*   **Test Fixes and Menu Reorganization:**
+    *   The `runAutoSyncErrorEmailTest` was fixed to prevent it from leaving behind an orphan sheet (`Invalid Folder_Editor`).
+    *   The "Testing" menu was reorganized to group tests into logical sub-menus, making it easier to navigate.
+    *   The "Run AutoSync Now" menu item now runs silently without intermediate confirmation messages and provides a summary at the end.
