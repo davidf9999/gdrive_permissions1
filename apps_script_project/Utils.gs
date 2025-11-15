@@ -298,6 +298,7 @@ function logSyncHistory_(revisionLink, summary, durationSeconds) {
     const removed = summary ? summary.removed || 0 : 0;
     const failed = summary ? summary.failed || 0 : 0;
     const duration = Math.round(durationSeconds || 0);
+    const status = failed === 0 ? 'Success' : 'Failed';
 
     log_('Attempting to log sync history: +' + added + ' -' + removed + ' !' + failed, 'DEBUG');
 
@@ -307,7 +308,7 @@ function logSyncHistory_(revisionLink, summary, durationSeconds) {
     }
 
   let lastRow = syncHistorySheet.getLastRow();
-  const headers = ['Timestamp', 'Added', 'Removed', 'Failed', 'Duration (seconds)', 'Revision Link'];
+  const headers = ['Timestamp', 'Status', 'Added', 'Removed', 'Failed', 'Duration (seconds)', 'Revision Link'];
   
   // Ensure header row exists and is up to date
   if (lastRow === 0) {
@@ -335,6 +336,7 @@ function logSyncHistory_(revisionLink, summary, durationSeconds) {
 
   const rowValues = [
     timestamp,
+    status,
     added,
     removed,
     failed,
@@ -346,12 +348,12 @@ function logSyncHistory_(revisionLink, summary, durationSeconds) {
 
   // Add note to header for version history navigation
   if (nextRow === 2) { // Add notes only once to the header
-    syncHistorySheet.getRange('A1:F1').clearNote();
+    syncHistorySheet.getRange('A1:G1').clearNote();
     syncHistorySheet.getRange('A1').setNote('Timestamp of when the sync operation was logged.');
-    syncHistorySheet.getRange('F1').setNote('To view changes for a given sync: Open the spreadsheet, go to File > Version history > See version history, then find the revision matching the Timestamp in this row. Google keeps revisions for 30-100 days.');
+    syncHistorySheet.getRange('G1').setNote('To view changes for a given sync: Open the spreadsheet, go to File > Version history > See version history, then find the revision matching the Timestamp in this row. Google keeps revisions for 30-100 days.');
   }
 
-    log_('Logged sync history: Changes: +' + added + ' -' + removed + ' !' + failed + ', Duration: ' + duration + 's', 'INFO');
+    log_('Logged sync history: Status: ' + status + ', Changes: +' + added + ' -' + removed + ' !' + failed + ', Duration: ' + duration + 's', 'INFO');
   } catch (e) {
     log_('ERROR writing to SyncHistory: ' + e.message + '\n' + e.stack, 'ERROR');
   }
