@@ -385,7 +385,15 @@ function createHelpMenu_(ui) {
  * Wrapper function to run AutoSync manually from menu
  */
 function runAutoSyncNow() {
-  autoSync();
+  const summary = autoSync({ silentMode: true });
+  if (summary) {
+    const summaryMessage = 'Manual AutoSync complete. Total changes: ' + summary.added + ' added, ' + summary.removed + ' removed, ' + summary.failed + ' failed.';
+    log_(summaryMessage, 'INFO');
+    SpreadsheetApp.getUi().alert(summaryMessage);
+  } else {
+    log_('Manual AutoSync did not complete successfully. Check logs for details.', 'WARN');
+    SpreadsheetApp.getUi().alert('Manual AutoSync did not complete successfully. Check logs for details.');
+  }
 }
 
 function onEdit(e) {

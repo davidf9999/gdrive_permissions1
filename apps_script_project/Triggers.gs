@@ -66,8 +66,8 @@ function removeAutoSync() {
 /**
  * The main AutoSync function that runs on schedule.
  */
-function autoSync(e) {
-  const silentMode = e && e.triggerUid ? true : false;
+function autoSync(options = {}) {
+  const silentMode = (options && options.triggerUid) || (options && options.silentMode);
   const lock = LockService.getScriptLock();
 
   if (!lock.tryLock(10000)) {
@@ -121,6 +121,7 @@ function autoSync(e) {
       props.setProperty(AUTO_SYNC_CHANGE_SIGNATURE_KEY, JSON.stringify(changeDetection.snapshot));
       log_('AutoSync did not complete successfully. Will retry on next run.', 'WARN');
     }
+    return syncResult;
 
   } catch (e) {
     const errorMessage = 'FATAL ERROR in autoSync: ' + e.toString() + '\n' + e.stack;
