@@ -59,6 +59,10 @@ function discoverManualAdditions_() {
     try {
       const groupMembers = new Set(getActualMembers_(groupInfo.email).map(m => m.toLowerCase()));
 
+      // Log the contents of both sets for debugging
+      log_(`[Audit Debug] Sheet: ${sheetName}, Sheet Members: ${JSON.stringify(Array.from(sheetMembers))}`, 'DEBUG');
+      log_(`[Audit Debug] Group: ${groupInfo.email}, Group Members: ${JSON.stringify(Array.from(groupMembers))}`, 'DEBUG');
+
       // A. Discover members in the group but not in the sheet (Manual Additions)
       groupMembers.forEach(member => {
         if (!sheetMembers.has(member)) {
