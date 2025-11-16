@@ -48,21 +48,87 @@ roll out the workflow consistently.
 ## Architecture overview
 
 The Apps Script project is split into focused modules (`Core.gs`, `Sync.gs`,
-`Audit.gs`, etc.) which are orchestrated by `Code.js`. Configuration lives in
-the spreadsheet:
-
-- **ManagedFolders** — master list of folders, their Drive IDs, and the role to
-  enforce.
-- **Admins** — spreadsheet editors managed automatically by the script.
-- **User group tabs** — one sheet per folder-role or named user group containing
-  email addresses to sync.
-- **Config** — advanced settings such as notification options and logging.
-- **Log/TestLog** — operational output for day-to-day monitoring.
-
-A deeper architectural walkthrough is available in
+`Audit.gs`, etc.) that orchestrate Drive permissions from a single spreadsheet.
+The sheet is the operating manual: administrators describe the folders they care
+about, map those folders to Google Groups or direct invitees, and let the
+automation enforce whatever is written down. The story below walks through the
+control sheet, the sharing relationships, the sync loop, and the personas who
+keep everything healthy. A deeper architectural walkthrough is available in
 [`gdrive_permissions1.md`](gdrive_permissions1.md).
 
-### Visual system overview
+### 1. Model access in the control sheet
+
+The spreadsheet captures every folder/role pairing and the people (or groups)
+who should receive that access. Admins typically maintain a few foundational
+tabs:
+
+- **ManagedFolders** — drive IDs, human-friendly names, and which roles should
+  be enforced for each folder.
+- **ManagedGroups** — optional indirection so one tab can define membership that
+  several folder roles reuse.
+- **Folder / role tabs** — each tab corresponds to a single folder+role pairing,
+  referencing one or more managed groups as well as any direct invitees.
+- **Admins + Status** — who may edit the sheet and the timestamps/outcomes of
+  recent syncs.
+- **Logs / Config** — troubleshooting helpers (these can stay collapsed unless
+  something goes wrong).
+
+```mermaid
+flowchart TD
+  subgraph ControlSheet[Control Spreadsheet]
+    direction TB
+    ManagedFolders["ManagedFolders\n(Folder IDs + enforced roles)"]
+    ManagedGroups["ManagedGroups\n(Reusable membership lists)"]
+    subgraph GroupTabs[Group Membership Tabs]
+      direction LR
+      GroupSheet1[Group tab: Marketing Editors]
+      GroupSheet2[Group tab: Marketing Viewers]
+      GroupSheet3[Group tab: Agency Partners]
+    end
+    subgraph FolderRoleTabs[Folder / Role Tabs]
+      direction TB
+      FolderSheet1[Marketing Drive → Editor tab]
+      FolderSheet2[Marketing Drive → Viewer tab]
+      FolderSheet3[Finance Reports → Viewer tab]
+    end
+    Logs["Logs / Status\n(collapse unless needed)"]
+    Config["Config\n(optional tuning)"]
+  end
+
+  ManagedFolders -. tracks .-> FolderSheet1
+  ManagedFolders -. tracks .-> FolderSheet2
+  ManagedFolders -. tracks .-> FolderSheet3
+  ManagedGroups -. seeds .-> GroupSheet1
+  ManagedGroups -. seeds .-> GroupSheet2
+  ManagedGroups -. seeds .-> GroupSheet3
+  GroupSheet1 -- editors --> FolderSheet1
+  GroupSheet2 -- viewers --> FolderSheet2
+  GroupSheet3 -- partners --> FolderSheet2
+  GroupSheet2 -. reused .-> FolderSheet3
+
+  classDef default fill:#f4fbff,stroke:#1463a5,stroke-width:1.5px,color:#0d273d;
+  classDef group fill:#fff6e8,stroke:#d97706,color:#4a1d05;
+  classDef folder fill:#effaf3,stroke:#047857,color:#092314;
+  classDef log fill:#e5e7eb,stroke:#9ca3af,color:#374151;
+  classDef config fill:#fce7f3,stroke:#be185d,color:#4a0418;
+  class ManagedFolders,ManagedGroups,GroupSheet1,GroupSheet2,GroupSheet3 group;
+  class FolderSheet1,FolderSheet2,FolderSheet3 folder;
+  class Logs log;
+  class Config config;
+```
+
+The diagram shows how a single folder (Marketing Drive) can have both Editor and
+Viewer tabs that share a managed group, while another folder (Finance Reports)
+reuses different groups entirely. Logs and Config exist, but they sit on the
+periphery of day-to-day edits.
+
+### 2. Share folder roles with groups or individuals
+
+Each folder/role definition ultimately shares its access with one or more Google
+Groups, plus any optional individual addresses. Those groups get their
+membership from the tabs above, so large Drive folders stay within the per-item
+sharing limit while still mirroring business org charts. The diagram below shows
+how those relationships resolve from definition → group → individual users.
 
 ```mermaid
 flowchart LR
@@ -91,39 +157,13 @@ flowchart LR
   class GroupSheet,Users membership;
 ```
 
-```mermaid
-flowchart LR
-  subgraph Workspace[Google Workspace]
-    U[Individual Users]
-    G[Google Groups]
-  end
-  subgraph Drive[Google Drive]
-    F[Managed Folders]
-  end
-  subgraph Sheet[Control Sheets]
-    tabs((Folder / Role Tabs))
-  end
+### 3. Let the sync loop do the work
 
-  tabs -- "Membership source" --> G
-  tabs -- "Direct invites (optional)" --> U
-  G -- "Shared with" --> F
-  U -- "Shared with (direct)" --> F
-  classDef default fill:#f2f7ff,stroke:#335bff,stroke-width:1.5px,color:#0f1e4d;
-  classDef sheet fill:#fff7eb,stroke:#ff8b33,stroke-width:1.5px,color:#5a2500;
-  classDef drive fill:#eefcf3,stroke:#2e8540,stroke-width:1.5px,color:#0c3214;
-  classDef workspace fill:#f9f0ff,stroke:#8a2be2,stroke-width:1.5px,color:#2e0b4d;
-  class tabs sheet;
-  class F drive;
-  class U,G workspace;
-```
-
-### Operational roles
-
-| Persona / role | What they configure | Day-to-day usage |
-| --- | --- | --- |
-| **Workspace Super Admin** (a.k.a. Google Workspace Super Administrator) | Creates the Workspace tenant, enables Admin SDK + Drive APIs, authorises the Apps Script project, and grants the automation account least-privilege access. | Periodically reviews audit logs, monitors email alerts, and unblocks escalations that require domain-wide privileges. |
-| **Sheet / Automation Admin** | Maintains the control spreadsheet, edits ManagedFolders, ManagedGroups, and Config tabs, and runs the "Sync Adds" / "Sync Deletes" / "Full Sync" menu items. | Updates membership tabs in response to business changes, checks the Status sheet to verify sync recency, and triages any errors surfaced via the Logs or email notifications. |
-| **Managed User** (anyone granted access to a folder) | No configuration; they are represented by rows within the relevant group or folder-role tab. | Receives Drive access once the next sync completes, and may use the sheet read-only to confirm which folders they should expect. |
+Once the sheet drifts from Drive (because someone added or removed a user), the
+five-minute trigger notices the discrepancy and reconciles Workspace to match
+the plan. The sequence diagram mirrors the operator experience: edit the sheet,
+wait for the automation, watch the status dashboard, and investigate any error
+alerts.
 
 ```mermaid
 sequenceDiagram
@@ -142,49 +182,13 @@ sequenceDiagram
   Admin-->>Alerts: Email on errors with remediation steps
 ```
 
-```mermaid
-flowchart TD
-  subgraph ControlSheet[Control Spreadsheet]
-    direction TB
-    ManagedFolders["ManagedFolders
-(Folder IDs + Roles)"]
-    ManagedGroups["ManagedGroups
-(Optional Indirection)"]
-    subgraph GroupTabs[Group Membership Tabs]
-      direction LR
-      GroupSheet1[Group: Marketing Editors]
-      GroupSheet2[Group: Finance Viewers]
-    end
-    subgraph FolderRoleTabs[Folder / Role Tabs]
-      direction LR
-      FolderSheet1[Folder: Marketing Drive → Editor]
-      FolderSheet2[Folder: Finance Reports → Viewer]
-    end
-    Config["Config
-(Notifications, API toggles)"]
-    Logs["Log / TestLog Sheets"]
-  end
+### 4. Know who operates what
 
-  ManagedFolders -.-> FolderSheet1
-  ManagedFolders -.-> FolderSheet2
-  ManagedGroups -.-> GroupSheet1
-  ManagedGroups -.-> GroupSheet2
-  GroupSheet1 --> FolderSheet1
-  GroupSheet2 --> FolderSheet2
-  FolderSheet1 --> Logs
-  FolderSheet2 --> Logs
-  Config --> Logs
-
-  classDef default fill:#f4fbff,stroke:#1463a5,stroke-width:1.5px,color:#0d273d;
-  classDef group fill:#fff6e8,stroke:#d97706,color:#4a1d05;
-  classDef folder fill:#effaf3,stroke:#047857,color:#092314;
-  classDef config fill:#fce7f3,stroke:#be185d,color:#4a0418;
-  classDef log fill:#ede9fe,stroke:#4c1d95,color:#1c0c3f;
-  class ManagedFolders,ManagedGroups,GroupSheet1,GroupSheet2 group;
-  class FolderSheet1,FolderSheet2 folder;
-  class Config config;
-  class Logs log;
-```
+| Persona / role | What they configure | Day-to-day usage |
+| --- | --- | --- |
+| **Workspace Super Admin** (a.k.a. Google Workspace Super Administrator) | Creates the Workspace tenant, enables Admin SDK + Drive APIs, authorises the Apps Script project, and grants the automation account least-privilege access. | Periodically reviews audit logs, monitors email alerts, and unblocks escalations that require domain-wide privileges. |
+| **Sheet / Automation Admin** | Maintains the control spreadsheet, edits ManagedFolders, ManagedGroups, and Config tabs, and runs the "Sync Adds" / "Sync Deletes" / "Full Sync" menu items. | Updates membership tabs in response to business changes, checks the Status sheet to verify sync recency, and triages any errors surfaced via the Logs or email notifications. |
+| **Managed User** (anyone granted access to a folder) | No configuration; they are represented by rows within the relevant group or folder-role tab. | Receives Drive access once the next sync completes, and may use the sheet read-only to confirm which folders they should expect. |
 
 ---
 
