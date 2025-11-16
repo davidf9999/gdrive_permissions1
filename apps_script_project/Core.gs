@@ -568,6 +568,13 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
       throw new Error('User sheet "' + userSheetName + '" not found.');
     }
 
+    if (typeof applyUserGroupConnectorIfConfigured_ === 'function') {
+      const connectorGroupName = typeof deriveConnectorGroupNameFromSheetName_ === 'function'
+        ? deriveConnectorGroupNameFromSheetName_(userSheetName)
+        : userSheetName;
+      applyUserGroupConnectorIfConfigured_(connectorGroupName, groupEmail, sheet, options);
+    }
+
     // Validate for duplicate emails (case-insensitive)
     const validation = validateUserSheetEmails_(userSheetName);
     if (!validation.valid) {

@@ -97,6 +97,17 @@ const USER_GROUP_CONNECTORS = [
   }
 ];
 
+function deriveConnectorGroupNameFromSheetName_(sheetName) {
+  if (!sheetName) {
+    return '';
+  }
+  const name = sheetName.toString();
+  if (name.slice(-2) === '_G') {
+    return name.slice(0, -2);
+  }
+  return name;
+}
+
 /**
  * Applies the connector mapped to the current group sheet, if any.
  *
