@@ -66,6 +66,33 @@ A deeper architectural walkthrough is available in
 
 ```mermaid
 flowchart LR
+  subgraph Definition[Folder / Role Definition]
+    FR["Managed folder + enforced role"]
+  end
+  subgraph SharingTargets[Sharing Targets]
+    Groups[Managed Google Group(s)]
+    Individuals[Optional direct user invites]
+  end
+  subgraph Membership[List-based Membership]
+    GroupSheet[Group tab in control sheet]
+    Users[List of user emails]
+  end
+
+  FR -- "Shared with" --> Groups
+  FR -- "Shared with" --> Individuals
+  Groups -- "Group contains" --> GroupSheet
+  GroupSheet -- "Defines" --> Users
+  classDef default fill:#f2f7ff,stroke:#335bff,stroke-width:1.5px,color:#0f1e4d;
+  classDef def fill:#eefcf3,stroke:#2e8540,stroke-width:1.5px,color:#0c3214;
+  classDef targets fill:#fff7eb,stroke:#ff8b33,stroke-width:1.5px,color:#5a2500;
+  classDef membership fill:#f9f0ff,stroke:#8a2be2,stroke-width:1.5px,color:#2e0b4d;
+  class FR def;
+  class Groups,Individuals targets;
+  class GroupSheet,Users membership;
+```
+
+```mermaid
+flowchart LR
   subgraph Workspace[Google Workspace]
     U[Individual Users]
     G[Google Groups]
@@ -90,6 +117,14 @@ flowchart LR
   class U,G workspace;
 ```
 
+### Operational roles
+
+| Persona / role | What they configure | Day-to-day usage |
+| --- | --- | --- |
+| **Workspace Super Admin** (a.k.a. Google Workspace Super Administrator) | Creates the Workspace tenant, enables Admin SDK + Drive APIs, authorises the Apps Script project, and grants the automation account least-privilege access. | Periodically reviews audit logs, monitors email alerts, and unblocks escalations that require domain-wide privileges. |
+| **Sheet / Automation Admin** | Maintains the control spreadsheet, edits ManagedFolders, ManagedGroups, and Config tabs, and runs the "Sync Adds" / "Sync Deletes" / "Full Sync" menu items. | Updates membership tabs in response to business changes, checks the Status sheet to verify sync recency, and triages any errors surfaced via the Logs or email notifications. |
+| **Managed User** (anyone granted access to a folder) | No configuration; they are represented by rows within the relevant group or folder-role tab. | Receives Drive access once the next sync completes, and may use the sheet read-only to confirm which folders they should expect. |
+
 ```mermaid
 sequenceDiagram
   participant Editor as Sheet Editor
@@ -111,8 +146,10 @@ sequenceDiagram
 flowchart TD
   subgraph ControlSheet[Control Spreadsheet]
     direction TB
-    ManagedFolders["ManagedFolders\\n(Folder IDs + Roles)"]
-    ManagedGroups["ManagedGroups\\n(Optional Indirection)"]
+    ManagedFolders["ManagedFolders
+(Folder IDs + Roles)"]
+    ManagedGroups["ManagedGroups
+(Optional Indirection)"]
     subgraph GroupTabs[Group Membership Tabs]
       direction LR
       GroupSheet1[Group: Marketing Editors]
@@ -123,7 +160,8 @@ flowchart TD
       FolderSheet1[Folder: Marketing Drive → Editor]
       FolderSheet2[Folder: Finance Reports → Viewer]
     end
-    Config["Config\\n(Notifications, API toggles)"]
+    Config["Config
+(Notifications, API toggles)"]
     Logs["Log / TestLog Sheets"]
   end
 
