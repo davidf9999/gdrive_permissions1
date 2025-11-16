@@ -119,8 +119,10 @@ describe('logSyncHistory_', () => {
   let originalLog;
   let originalSyncHistorySheetName;
 
+  const HEADERS = ['Timestamp', 'Status', 'Added', 'Removed', 'Failed', 'Duration (seconds)', 'Revision Link'];
+
   const buildSyncHistorySheet = ({ lastRow = 0, headerValues = null } = {}) => {
-    const headerGetValues = jest.fn(() => headerValues || ['Timestamp', 'Added', 'Removed', 'Failed', 'Duration (seconds)', 'Revision Link']);
+    const headerGetValues = jest.fn(() => headerValues || HEADERS);
     const headerSetFontWeight = jest.fn();
     const rowSetValues = jest.fn();
     const clearNoteMock = jest.fn();
@@ -138,10 +140,10 @@ describe('logSyncHistory_', () => {
       getFrozenRows: jest.fn(() => 0),
       getRange: jest.fn((a, b, c, d) => {
         if (typeof a === 'string') {
-          if (a === 'A1:F1') {
+          if (a === 'A1:F1' || a === 'A1:G1') {
             return { clearNote: clearNoteMock };
           }
-          if (a === 'A1' || a === 'F1') {
+          if (a === 'A1' || a === 'F1' || a === 'G1') {
             return { setNote: setNoteMock };
           }
           if (a === 'A2') {
@@ -150,11 +152,11 @@ describe('logSyncHistory_', () => {
           throw new Error('Unexpected A1 range: ' + a);
         }
 
-        if (a === 1 && b === 1 && c === 1 && d === 6) {
+        if (a === 1 && b === 1 && c === 1 && d === HEADERS.length) {
           return headerRange;
         }
 
-        if (a === 2 && b === 1 && c === 1 && d === 6) {
+        if (a === 2 && b === 1 && c === 1 && d === HEADERS.length) {
           return {
             setValues: rowSetValues
           };
@@ -224,11 +226,9 @@ describe('logSyncHistory_', () => {
     global.Utilities = { formatDate: jest.fn(() => '2024-01-01 00:00:00') };
     logSyncHistory_('https://docs.example.com', { added: 2, removed: 1, failed: 0 }, 45);
 
-    expect(headerRange.setValues).toHaveBeenCalledWith([
-      ['Timestamp', 'Added', 'Removed', 'Failed', 'Duration (seconds)', 'Revision Link']
-    ]);
+    expect(headerRange.setValues).toHaveBeenCalledWith([HEADERS]);
     expect(rowSetValues).toHaveBeenCalledWith([
-      ['2024-01-01 00:00:00', 2, 1, 0, 45, 'https://docs.example.com']
+      ['2024-01-01 00:00:00', 'Success', 2, 1, 0, 45, 'https://docs.example.com']
     ]);
     expect(clearNoteMock).toHaveBeenCalledTimes(1);
     expect(setNoteMock).toHaveBeenCalledTimes(2);
