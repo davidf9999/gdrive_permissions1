@@ -70,12 +70,12 @@ flowchart LR
     FR["Managed folder + enforced role"]
   end
   subgraph SharingTargets[Sharing Targets]
-    Groups[Managed Google Group(s)]
-    Individuals[Optional direct user invites]
+    Groups["Managed Google Groups"]
+    Individuals["Optional direct user invites"]
   end
   subgraph Membership[List-based Membership]
-    GroupSheet[Group tab in control sheet]
-    Users[List of user emails]
+    GroupSheet["Group tab in control sheet"]
+    Users["List of user emails"]
   end
 
   FR -- "Shared with" --> Groups
