@@ -120,7 +120,7 @@ describe('logSyncHistory_', () => {
   let originalSyncHistorySheetName;
 
   const buildSyncHistorySheet = ({ lastRow = 0, headerValues = null } = {}) => {
-    const headerGetValues = jest.fn(() => headerValues || ['Timestamp', 'Revision ID', 'Added', 'Removed', 'Failed', 'Duration (seconds)', 'Revision Link']);
+    const headerGetValues = jest.fn(() => headerValues || ['Timestamp', 'Added', 'Removed', 'Failed', 'Duration (seconds)', 'Revision Link']);
     const headerSetFontWeight = jest.fn();
     const rowSetValues = jest.fn();
     const clearNoteMock = jest.fn();
@@ -138,10 +138,10 @@ describe('logSyncHistory_', () => {
       getFrozenRows: jest.fn(() => 0),
       getRange: jest.fn((a, b, c, d) => {
         if (typeof a === 'string') {
-          if (a === 'A1:G1') {
+          if (a === 'A1:F1') {
             return { clearNote: clearNoteMock };
           }
-          if (a === 'A1' || a === 'B1' || a === 'G1') {
+          if (a === 'A1' || a === 'F1') {
             return { setNote: setNoteMock };
           }
           if (a === 'A2') {
@@ -150,11 +150,11 @@ describe('logSyncHistory_', () => {
           throw new Error('Unexpected A1 range: ' + a);
         }
 
-        if (a === 1 && b === 1 && c === 1 && d === 7) {
+        if (a === 1 && b === 1 && c === 1 && d === 6) {
           return headerRange;
         }
 
-        if (a === 2 && b === 1 && c === 1 && d === 7) {
+        if (a === 2 && b === 1 && c === 1 && d === 6) {
           return {
             setValues: rowSetValues
           };
@@ -205,7 +205,7 @@ describe('logSyncHistory_', () => {
 
     global.Utilities = { formatDate: jest.fn(() => '2024-01-01 00:00:00') };
 
-    logSyncHistory_('rev-0', 'ignored', { added: 0, removed: 0, failed: 0 }, 12);
+    logSyncHistory_('ignored', { added: 0, removed: 0, failed: 0 }, 12);
 
     expect(sheet.getLastRow).not.toHaveBeenCalled();
     expect(global.log_).toHaveBeenCalledWith('No permission changes detected. Skipping SyncHistory entry.', 'INFO');
@@ -222,18 +222,17 @@ describe('logSyncHistory_', () => {
     };
 
     global.Utilities = { formatDate: jest.fn(() => '2024-01-01 00:00:00') };
-    logSyncHistory_('rev-123', 'https://docs.example.com', { added: 2, removed: 1, failed: 0 }, 45);
+    logSyncHistory_('https://docs.example.com', { added: 2, removed: 1, failed: 0 }, 45);
 
     expect(headerRange.setValues).toHaveBeenCalledWith([
-      ['Timestamp', 'Revision ID', 'Added', 'Removed', 'Failed', 'Duration (seconds)', 'Revision Link']
+      ['Timestamp', 'Added', 'Removed', 'Failed', 'Duration (seconds)', 'Revision Link']
     ]);
     expect(rowSetValues).toHaveBeenCalledWith([
-      ['2024-01-01 00:00:00', 'rev-123', 2, 1, 0, 45, '']
+      ['2024-01-01 00:00:00', 2, 1, 0, 45, 'https://docs.example.com']
     ]);
     expect(clearNoteMock).toHaveBeenCalledTimes(1);
-    expect(setNoteMock).toHaveBeenCalledTimes(3);
+    expect(setNoteMock).toHaveBeenCalledTimes(2);
     expect(setNoteMock.mock.calls[0][0]).toContain('Timestamp');
-    expect(setNoteMock.mock.calls[1][0]).toContain('internal revision ID');
-    expect(setNoteMock.mock.calls[2][0]).toContain('Version history');
+    expect(setNoteMock.mock.calls[1][0]).toContain('Version history');
   });
 });

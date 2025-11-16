@@ -105,7 +105,7 @@ function isSuperAdmin_() {
     }
 
     const domain = userEmail.indexOf('@') !== -1 ? userEmail.split('@')[1] : '';
-    const isSuperAdmin = superAdmins.some(function(entry) {
+    const isSuperAdmin = superAdmins.some(function (entry) {
       if (entry === userEmail) {
         return true;
       }
@@ -144,13 +144,13 @@ function getSuperAdminEmails_() {
   }
 
   const normalized = values
-    .map(function(value) { return value.trim().toLowerCase(); })
-    .filter(function(value) { return value.length > 0; });
+    .map(function (value) { return value.trim().toLowerCase(); })
+    .filter(function (value) { return value.length > 0; });
 
   const ownerEmail = getSpreadsheetOwnerEmail_();
   const ownerTokens = ['owner', 'spreadsheet_owner'];
 
-  const expanded = normalized.reduce(function(acc, value) {
+  const expanded = normalized.reduce(function (acc, value) {
     if (ownerTokens.indexOf(value) !== -1) {
       if (ownerEmail) {
         acc.push(ownerEmail);
@@ -172,7 +172,7 @@ function applyRestrictedView_() {
   try {
     const visibilityConfig = getTestSheetVisibilityConfig_();
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    ss.getSheets().forEach(function(sheet) {
+    ss.getSheets().forEach(function (sheet) {
       const name = sheet.getName();
       if (shouldHideSheetForRestrictedView_(name, visibilityConfig) && typeof sheet.hideSheet === 'function') {
         try {
@@ -193,12 +193,17 @@ function applyFullView_() {
   try {
     const visibilityConfig = getTestSheetVisibilityConfig_();
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    ss.getSheets().forEach(function(sheet) {
+    log_('applyFullView_: Processing sheets for super admin visibility', 'DEBUG');
+    ss.getSheets().forEach(function (sheet) {
       const name = sheet.getName();
-      if (shouldHideSheetForRestrictedView_(name, visibilityConfig) && typeof sheet.showSheet === 'function') {
+      const shouldHide = shouldHideSheetForRestrictedView_(name, visibilityConfig);
+      if (shouldHide && typeof sheet.showSheet === 'function') {
         try {
           if (sheet.isSheetHidden()) {
             sheet.showSheet();
+            log_('applyFullView_: Showed hidden test sheet: ' + name, 'INFO');
+          } else {
+            log_('applyFullView_: Test sheet already visible: ' + name, 'DEBUG');
           }
         } catch (e) {
           log_('Could not show sheet "' + name + '": ' + e.message, 'WARN');
@@ -232,7 +237,7 @@ function shouldHideSheetForRestrictedView_(sheetName, config) {
     return true;
   }
 
-  return config.prefixes.some(function(prefix) {
+  return config.prefixes.some(function (prefix) {
     return sheetName.indexOf(prefix) === 0;
   });
 }
@@ -324,22 +329,32 @@ function createAuditsMenu_(ui) {
 }
 
 function createTestingMenu_(ui) {
-  return ui.createMenu('Testing')
-    .addItem('Run All Tests', 'runAllTests')
-    .addSeparator()
+  const individualTestsMenu = ui.createMenu('Individual Tests Of All Tests')
     .addItem('Run Manual Access Test', 'runManualAccessTest')
     .addItem('Run Stress Test', 'runStressTest')
     .addItem('Run Add/Delete Separation Test', 'runAddDeleteSeparationTest')
     .addItem('Run AutoSync Error Email Test', 'runAutoSyncErrorEmailTest')
-    .addItem('Run Email Capability Test', 'runEmailCapabilityTest')
     .addItem('Run Sheet Locking Test', 'runSheetLockingTest_')
-    .addItem('Run Circular Dependency Test', 'runCircularDependencyTest_')
-    .addSeparator()
+    .addItem('Run Circular Dependency Test', 'runCircularDependencyTest_');
+
+  const standaloneTestsMenu = ui.createMenu('Standalone Tests')
+    .addItem('Run Email Capability Test', 'runEmailCapabilityTest');
+
+  const cleanupMenu = ui.createMenu('Cleanup')
     .addItem('Cleanup Manual Test Data', 'cleanupManualTestData')
     .addItem('Cleanup Stress Test Data', 'cleanupStressTestData')
     .addItem('Cleanup Add/Delete Test Data', 'cleanupAddDeleteSeparationTestData')
     .addSeparator()
     .addItem('Clear All Test Data', 'clearAllTestsData');
+
+  return ui.createMenu('Testing')
+    .addItem('Run All Tests', 'runAllTests')
+    .addSeparator()
+    .addSubMenu(individualTestsMenu)
+    .addSeparator()
+    .addSubMenu(standaloneTestsMenu)
+    .addSeparator()
+    .addSubMenu(cleanupMenu);
 }
 
 function createLoggingMenu_(ui) {
@@ -370,7 +385,18 @@ function createHelpMenu_(ui) {
  * Wrapper function to run AutoSync manually from menu
  */
 function runAutoSyncNow() {
-  autoSync();
+  const summary = autoSync({ silentMode: true });
+  if (summary && summary.skipped) {
+    const summaryMessage = 'AutoSync skipped: No changes detected since last run.';
+    SpreadsheetApp.getUi().alert(summaryMessage);
+  } else if (summary) {
+    const summaryMessage = 'Manual AutoSync complete. Total changes: ' + summary.added + ' added, ' + summary.removed + ' removed, ' + summary.failed + ' failed.';
+    log_(summaryMessage, 'INFO');
+    SpreadsheetApp.getUi().alert(summaryMessage);
+  } else {
+    log_('Manual AutoSync did not complete successfully. Check logs for details.', 'WARN');
+    SpreadsheetApp.getUi().alert('Manual AutoSync did not complete successfully. Check logs for details.');
+  }
 }
 
 function onEdit(e) {
@@ -385,7 +411,7 @@ function onEdit(e) {
 
   const editedRow = range.getRow();
   const editedCol = range.getColumn();
-  
+
   // --- Protect Description Column ---
   if (editedCol === 3) {
     range.setValue(oldValue);
@@ -452,7 +478,7 @@ function isSuperAdmin_() {
     }
 
     const domain = userEmail.indexOf('@') !== -1 ? userEmail.split('@')[1] : '';
-    return superAdmins.some(function(entry) {
+    return superAdmins.some(function (entry) {
       if (entry === userEmail) {
         return true;
       }
@@ -489,8 +515,8 @@ function getSuperAdminEmails_() {
   }
 
   const normalized = values
-    .map(function(value) { return value.trim().toLowerCase(); })
-    .filter(function(value) { return value.length > 0; });
+    .map(function (value) { return value.trim().toLowerCase(); })
+    .filter(function (value) { return value.length > 0; });
 
   if (normalized.length === 0) {
     const fallbacks = [];
@@ -502,7 +528,7 @@ function getSuperAdminEmails_() {
     } catch (e) {
       // Ignore
     }
-    return Array.from(new Set(fallbacks.filter(function(email) { return email && email.length > 0; })));
+    return Array.from(new Set(fallbacks.filter(function (email) { return email && email.length > 0; })));
   }
 
   return Array.from(new Set(normalized));

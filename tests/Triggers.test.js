@@ -5,7 +5,6 @@ describe('detectAutoSyncChanges_', () => {
   let storedSnapshot;
   let spreadsheet;
   let managedSheet;
-  let folderUpdates;
   let spreadsheetLastUpdated;
 
   beforeAll(() => {
@@ -27,7 +26,6 @@ describe('detectAutoSyncChanges_', () => {
 
   beforeEach(() => {
     storedSnapshot = null;
-    folderUpdates = {};
     spreadsheetLastUpdated = new Date('2024-01-01T00:00:00Z');
 
     managedSheet = {
@@ -59,9 +57,6 @@ describe('detectAutoSyncChanges_', () => {
     };
 
     global.DriveApp = {
-      getFolderById: jest.fn(id => ({
-        getLastUpdated: jest.fn(() => new Date(folderUpdates[id] || '2024-01-01T00:00:00Z'))
-      })),
       getFileById: jest.fn(() => spreadsheetFile)
     };
 
@@ -96,13 +91,12 @@ describe('detectAutoSyncChanges_', () => {
     expect(result.reasons).toEqual(
       expect.arrayContaining(['No previous AutoSync snapshot was found.'])
     );
-    expect(result.snapshot.folderStates).toEqual({ 'folder-1': new Date('2024-01-01T00:00:00Z').getTime() });
   });
 
   it('skips when spreadsheet and folders match the previous snapshot', () => {
     const previousSnapshot = {
+      lastSyncSuccessful: true,
       dataHash: 'mock-hash-string',
-      folderStates: { 'folder-1': new Date('2024-01-01T00:00:00Z').getTime() },
       capturedAt: '2024-01-01T00:00:00Z'
     };
     storedSnapshot = JSON.stringify(previousSnapshot);
@@ -112,24 +106,4 @@ describe('detectAutoSyncChanges_', () => {
     expect(result.shouldRun).toBe(false);
     expect(result.reasons).toHaveLength(0);
   });
-
-  it('detects folder modifications since the last snapshot', () => {
-    const previousSnapshot = {
-      dataHash: 'mock-hash-string',
-      folderStates: { 'folder-1': new Date('2024-01-01T00:00:00Z').getTime() },
-      capturedAt: '2024-01-01T00:00:00Z'
-    };
-    storedSnapshot = JSON.stringify(previousSnapshot);
-    folderUpdates['folder-1'] = '2024-01-01T00:05:00Z';
-
-    const result = detectAutoSyncChanges_();
-
-    expect(result.shouldRun).toBe(true);
-    expect(result.reasons).toEqual(
-      expect.arrayContaining([
-        'Folder folder-1 modified at 2024-01-01T00:05:00.000Z.'
-      ])
-    );
-  });
-
 });

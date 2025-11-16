@@ -871,29 +871,38 @@ function runAutoSyncErrorEmailTest() {
     let success = false;
     const mailAppSpy = createSpy_(MailApp, 'sendEmail');
     const originalEmailNotificationSetting = getConfigValue_('EnableEmailNotifications', false);
+    const orphanSheetName = 'OrphanSheetForErrorTest_' + new Date().getTime();
+    let orphanSheet;
+    const props = PropertiesService.getDocumentProperties();
+    const originalSnapshot = props.getProperty(AUTO_SYNC_CHANGE_SIGNATURE_KEY);
 
     try {
         log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
         log_('║  AutoSync Error Email Test                                ║', 'INFO');
         log_('╚══════════════════════════════════════════════════════════════╝', 'INFO');
 
+        // Force the next sync to run by invalidating the last one
+        log_('Forcing next autoSync to run by marking last sync as failed.', 'INFO');
+        const tempSnapshot = { dataHash: 'force-run', capturedAt: new Date().toISOString(), lastSyncSuccessful: false };
+        props.setProperty(AUTO_SYNC_CHANGE_SIGNATURE_KEY, JSON.stringify(tempSnapshot));
+
         // Temporarily enable email notifications for the test
         updateConfigSetting_('EnableEmailNotifications', true);
 
-        // Simulate an error by providing an invalid folder ID
-        const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
-        const testRowIndex = managedSheet.getLastRow() + 1;
-        managedSheet.getRange(testRowIndex, FOLDER_NAME_COL).setValue('Invalid Folder');
-        managedSheet.getRange(testRowIndex, FOLDER_ID_COL).setValue('invalid_folder_id');
+        // Simulate an error by creating an orphan sheet
+        const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+        orphanSheet = spreadsheet.insertSheet(orphanSheetName);
+        log_('Created orphan sheet "' + orphanSheetName + '" to trigger a fatal error.', 'INFO');
 
-        // Run AutoSync, which should fail
+        // Run AutoSync, which should now run and fail because of the orphan sheet
         try {
             autoSync({ silentMode: true });
         } catch (e) {
-            // Error is expected
+            // Error is expected, and should be caught by the autoSync's own try...catch
+            log_('Caught expected error during autoSync call: ' + e.message, 'INFO');
         }
 
-        // Check if the email spy was called
+        // Check if the email spy was called by the autoSync's catch block
         if (mailAppSpy.wasCalled) {
             log_('VERIFICATION PASSED: MailApp.sendEmail was called after AutoSync error.', 'INFO');
             success = true;
@@ -907,8 +916,24 @@ function runAutoSyncErrorEmailTest() {
     } finally {
         mailAppSpy.restore();
         updateConfigSetting_('EnableEmailNotifications', originalEmailNotificationSetting);
-        const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
-        managedSheet.deleteRow(managedSheet.getLastRow());
+        
+        // Restore the original snapshot
+        if (originalSnapshot) {
+            props.setProperty(AUTO_SYNC_CHANGE_SIGNATURE_KEY, originalSnapshot);
+        } else {
+            props.deleteProperty(AUTO_SYNC_CHANGE_SIGNATURE_KEY);
+        }
+        
+        // Cleanup the orphan sheet
+        if (orphanSheet) {
+            try {
+                SpreadsheetApp.getActiveSpreadsheet().deleteSheet(orphanSheet);
+                log_('Cleaned up orphan sheet: ' + orphanSheetName, 'INFO');
+            } catch (e) {
+                log_('Failed to clean up orphan sheet "' + orphanSheetName + '": ' + e.message, 'ERROR');
+            }
+        }
+
         const testStatus = success ? '✓ PASSED' : '✗ FAILED';
         log_('>>> TEST RESULT: AutoSync Error Email Test ' + testStatus, success ? 'INFO' : 'ERROR');
         log_('', 'INFO');
@@ -1087,12 +1112,9 @@ function runAllTests() {
             return;
         }
 
-        let response = ui.Button.YES;
-        if (testConfig.autoConfirm !== true) {
-            response = ui.alert('Run All Tests', 'This will run all tests sequentially. This may take several minutes. Continue?', ui.ButtonSet.YES_NO);
-        }
+        const response = showTestConfirm_('Run All Tests', 'This will run all tests sequentially. This may take several minutes. Continue?', ui.Button.YES);
         if (response !== ui.Button.YES) {
-            ui.alert('All Tests cancelled.');
+            showTestMessage_('All Tests cancelled.', 'The test run was cancelled.');
             return;
         }
 
@@ -1191,13 +1213,7 @@ function clearAllTestsData(skipConfirmation = false) {
         let deletedSheetCount = 0;
         allSheets.forEach(function (sheet) {
             const sheetName = sheet.getName();
-            const isStressTest = sheetName.startsWith('StressTestFolder_');
-            const isManualTestViewer = sheetName === manualTestFolderName + '_Viewer';
-            const isManualTestEditor = sheetName === manualTestFolderName + '_Editor';
-            const isManualTestCommenter = sheetName === manualTestFolderName + '_Commenter';
-            const shouldDelete = isStressTest || isManualTestViewer || isManualTestEditor || isManualTestCommenter;
-
-            if (shouldDelete) {
+            if (isTestSheet_(sheetName)) {
                 log_('Attempting to delete sheet: ' + sheetName);
                 try {
                     SpreadsheetApp.getActiveSpreadsheet().deleteSheet(sheet);
