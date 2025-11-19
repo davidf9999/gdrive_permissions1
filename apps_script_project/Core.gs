@@ -456,8 +456,8 @@ function getOrCreateUserSheet_(sheetName) {
     log_('User sheet "' + sheetName + '" not found. Creating it...');
     sheet = spreadsheet.insertSheet(sheetName, spreadsheet.getSheets().length);
 
-    const headerRange = sheet.getRange(1, 1, 1, 2);
-    headerRange.setValues([[USER_EMAIL_HEADER, DISABLED_HEADER]]);
+    const headerRange = sheet.getRange(1, 1, 1, USER_SHEET_SUPPORTED_HEADERS.length);
+    headerRange.setValues([USER_SHEET_SUPPORTED_HEADERS]);
     headerRange.setFontWeight('bold');
     sheet.setFrozenRows(1);
 
@@ -475,12 +475,12 @@ function getOrCreateUserSheet_(sheetName) {
 
 function ensureUserSheetHeaders_(sheet) {
   try {
-    const headerRange = sheet.getRange(1, 1, 1, 2);
+    const headerRange = sheet.getRange(1, 1, 1, USER_SHEET_SUPPORTED_HEADERS.length);
     const headerValues = headerRange.getValues();
     const currentHeaders = headerValues && headerValues.length > 0 ? headerValues[0] : [];
     let headersUpdated = false;
 
-    if (!currentHeaders[0]) {
+    if (!currentHeaders[0] || currentHeaders[0] === LEGACY_USER_EMAIL_HEADER) {
       headerRange.getCell(1, 1).setValue(USER_EMAIL_HEADER);
       headersUpdated = true;
     }
@@ -490,8 +490,15 @@ function ensureUserSheetHeaders_(sheet) {
       headersUpdated = true;
     }
 
+    for (let i = 2; i < USER_SHEET_SUPPORTED_HEADERS.length; i++) {
+      if (!currentHeaders[i]) {
+        headerRange.getCell(1, i + 1).setValue(USER_SHEET_SUPPORTED_HEADERS[i]);
+        headersUpdated = true;
+      }
+    }
+
     if (headersUpdated) {
-      log_('Updated headers on user sheet "' + sheet.getName() + '" to include the Disabled column.');
+      log_('Updated headers on user sheet "' + sheet.getName() + '" to match expected column names.');
     }
 
     headerRange.setFontWeight('bold');

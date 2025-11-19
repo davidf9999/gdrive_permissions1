@@ -25,8 +25,23 @@ const ADMINS_STATUS_CELL = 'C2';
 const ADMINS_GROUP_NAME = 'Admins Control Panel';
 
 // User sheet header constants
-const USER_EMAIL_HEADER = 'User Email Address';
+const USER_EMAIL_HEADER = 'Email';
+const LEGACY_USER_EMAIL_HEADER = 'User Email Address';
 const DISABLED_HEADER = 'Disabled';
+const USER_SHEET_SUPPORTED_HEADERS = [
+  USER_EMAIL_HEADER,
+  DISABLED_HEADER,
+  'Name',
+  'Given Name',
+  'Family Name',
+  'Phone',
+  'Notes',
+  'Address',
+  'Organization',
+  'Title',
+  'Birthday',
+  'Group Membership'
+];
 
 /***** GLOBAL STATE *****/
 let SCRIPT_EXECUTION_MODE = 'DEFAULT'; // Can be 'DEFAULT' or 'TEST'
