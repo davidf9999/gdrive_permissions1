@@ -3,12 +3,14 @@
 > **Project status:** Beta — feature complete but still evolving. Expect minor
 > breaking changes while we continue to refine the onboarding flow and tooling.
 
-The Google Drive Permission Manager keeps multiple Drive folders in sync with
-Google Groups using a central Google Sheet. Non-technical administrators can
-edit user email addresses into dedicated tabs. A script runs periodically (once every 5 minutes) 
-to ensure that Google Group membership and folder permissions stay
-correct. This repository contains the Apps Script source, automated tests, and
-optional infrastructure tooling that powers that workflow.
+The Google Drive Permission Manager automates Drive folder sharing by treating
+one Google Sheet as the source of truth for access. Each folder/role combination
+gets its own tab where administrators list email addresses—no scripting
+experience required. A bound Apps Script project runs on a five-minute cadence
+to keep the relevant Google Groups and Drive permissions aligned with those
+tabs. This repository packages that script alongside guided setup
+documentation, automated tests, and optional infrastructure helpers so teams can
+roll out the workflow consistently.
 
 ---
 
@@ -45,19 +47,47 @@ optional infrastructure tooling that powers that workflow.
 
 ## Architecture overview
 
-The Apps Script project is split into focused modules (`Core.gs`, `Sync.gs`,
-`Audit.gs`, etc.) which are orchestrated by `Code.js`. Configuration lives in
-the spreadsheet:
+At a glance, the system combines three moving pieces:
 
-- **ManagedFolders** — master list of folders, their Drive IDs, and the role to
-  enforce.
-- **Admins** — spreadsheet editors managed automatically by the script.
-- **User group tabs** — one sheet per folder-role or named user group containing
-  email addresses to sync.
-- **Config** — advanced settings such as notification options and logging.
-- **Log/TestLog** — operational output for day-to-day monitoring.
+1. **Control sheet** – Administrators describe folders, roles, and Google Group
+   membership using purpose-built tabs.
+2. **Apps Script automation** – A bound script reads those tabs every five
+   minutes (or on-demand) and reconciles Workspace to match the plan.
+3. **Google Workspace services** – Drive folders and Google Groups are updated
+   via the Admin SDK and Drive APIs, with results surfaced back to the sheet via
+   status tabs and optional alerting.
 
-A deeper architectural walkthrough is available in
+```mermaid
+flowchart LR
+  Control["Control sheet tabs\n(ManagedFolders, groups, folder-role tabs)"]
+  Script["Apps Script automation\n(5-min trigger)"]
+  Groups["Google Groups\n(one per folder/role)"]
+  Drive["Drive folder permissions\n(Editor / Viewer / etc.)"]
+  Status["Status + Logs tabs\n(for administrators)"]
+  Alerts["Email / Chat alerts\n(on errors)"]
+
+  Control -- desired access --> Script
+  Script -- enforce membership --> Groups
+  Script -- enforce sharing --> Drive
+  Groups -- hydrate from --> Control
+  Drive -- grants access to --> Users[(Managed users)]
+  Script -- write outcomes --> Status
+  Script -- notify issues --> Alerts
+
+  classDef default fill:#f4fbff,stroke:#1463a5,stroke-width:1.5px,color:#0d273d;
+  classDef script fill:#eefcf3,stroke:#047857,color:#092314;
+  classDef ws fill:#fff6e8,stroke:#d97706,color:#4a1d05;
+  classDef status fill:#e5e7eb,stroke:#6b7280,color:#1f2937;
+  classDef alerts fill:#fce7f3,stroke:#be185d,color:#4a0418;
+  class Script script;
+  class Groups,Drive ws;
+  class Status status;
+  class Alerts alerts;
+```
+
+For a detailed architectural narrative—including how the control sheet is
+structured, how folder roles fan out to groups and individuals, how the sync
+loop runs, and which personas operate each part—see
 [`gdrive_permissions1.md`](gdrive_permissions1.md).
 
 ---
