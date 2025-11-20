@@ -263,7 +263,7 @@ Don't worry! There are multiple safeguards:
 
 1. **Visual Reminder**
    - The yellow banner stays visible
-   - Hard to miss when you open the sheet
+   - Hard to miss when you open the spreadsheet
 
 2. **Log Entries**
    - Every skipped AutoSync is logged

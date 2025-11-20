@@ -40,12 +40,12 @@ If you want to verify that your SMTP credentials can deliver a real email, an op
 
 If the environment variables are missing, the test is skipped automatically.
 
-### Optional: Email Capability Test from Google Sheets
+### Optional: Email Capability Test from Google Spreadsheets
 
 To trigger a live email using the Apps Script runtime (no local tooling required), run the menu action:
 
 *   **Menu:** `Permissions Manager > Testing > Run Email Capability Test`
-*   **Purpose:** Confirms that the sheet can send outbound notification email via `MailApp.sendEmail` using the configured `NotificationEmail` (or an address you enter on the prompt).
+*   **Purpose:** Confirms that the spreadsheet can send outbound notification email via `MailApp.sendEmail` using the configured `NotificationEmail` (or an address you enter on the prompt).
 *   **Process:**
     1.  You will be asked which email address should receive the message. Leave the prompt blank to use the `NotificationEmail` value from the `Config` sheet (or your account email if that cell is empty).
     2.  The script sends an email with the subject `Email Capability Test` and logs the outcome to the `TestLog` sheet.
@@ -68,12 +68,12 @@ For example, the mock for `Session` is configured to return a fake user email, a
 
 ---
 
-## Manual & End-to-End Testing (from Google Sheets)
+## Manual & End-to-End Testing (from Google Spreadsheets)
 
 *   **Environment:** Runs inside the Google Apps Script editor.
 *   **Goal:** To verify the **entire end-to-end workflow** and its integration with live Google services.
 
-These tests are run from the **Permissions Manager > Testing** menu inside your Google Sheet. They are designed to confirm that all the pieces of the system (the sheet, the script, Google Drive, and Google Groups) are working together correctly in your specific Google Workspace environment.
+These tests are run from the **Permissions Manager > Testing** menu inside your Google Spreadsheet. They are designed to confirm that all the pieces of the system (the spreadsheet, the script, Google Drive, and Google Groups) are working together correctly in your specific Google Workspace environment.
 
 Because they create real folders and groups, they are much slower than unit tests. They are perfect for:
 *   Verifying your initial setup and API permissions.
@@ -89,7 +89,7 @@ The following steps provide a gradual plan to safely verify that the scheduled, 
 The system is designed to be safe by default. The automatic sync will only process additions; it will not automatically remove users. Deletions require manual approval.
 
 1.  **Enable and Verify the Trigger**:
-    *   In your sheet, go to **Permissions Manager → AutoSync → ⚡ Setup AutoSync (Every 5 Minutes)**.
+    *   In your spreadsheet, go to **Permissions Manager → AutoSync → ⚡ Setup AutoSync (Every 5 Minutes)**.
     *   The first time you run this, it's normal to see a `"No AutoSync triggers were found."` message, followed by an `"AutoSync Enabled"` confirmation.
     *   Verify it's active by going to **Permissions Manager → AutoSync → 📊 View Trigger Status**.
 
@@ -106,12 +106,12 @@ The system is designed to be safe by default. The automatic sync will only proce
         *   Check your email. You should receive a **"MANUAL ACTION REQUIRED"** notification listing the pending deletion.
         *   To complete the deletion, you must manually run **Permissions Manager → Sync Deletes**.
 
-**Phase 2: Non-Admin User Verification**
+**Phase 2: Standard User Verification**
 
 This simulates the experience for a non-technical user.
 
-1.  **Share the Sheet**:
-    *   Share the main Google Sheet with a non-admin user (a regular Gmail account is perfect) and give them **Editor** access to the sheet itself.
+1.  **Share the Spreadsheet**:
+    *   Share the main Google Spreadsheet with a non-admin user (a regular Gmail account is perfect) and give them **Editor** access to the spreadsheet itself.
 
 2.  **Instruct the User**:
     *   Ask the non-admin user to add a new test user's email to a permission sheet.
@@ -138,7 +138,7 @@ If Admin SDK is not available (e.g., personal `@gmail.com` account), the tests w
 
 The testing functions are available in the **Permissions Manager > Testing** menu.
 
-**Important:** When running tests that require user interaction (like the Manual Access Test), it is highly recommended to have two instances of the Google Sheet open in separate browser windows or tabs. Use one window to run the test from the menu, and the other to view the changes the script is making to the sheets. This is because the modal dialog boxes used by the script can interrupt the execution flow if you interact with the sheet in the same window.
+**Important:** When running tests that require user interaction (like the Manual Access Test), it is highly recommended to have two instances of the Google Spreadsheet open in separate browser windows or tabs. Use one window to run the test from the menu, and the other to view the changes the script is making to the sheets. This is because the modal dialog boxes used by the script can interrupt the execution flow if you interact with the spreadsheet in the same window.
 
 ### Manual Access Test
 
@@ -178,7 +178,7 @@ If you need to manually clean up test data, you can use the following functions 
 
 ## Manual Testing with Existing Resources
 
-This test allows you to verify the permission system using your own existing folder structure and user groups. This is useful for confirming that the permissions managed by the sheet align with the actual access in Google Drive.
+This test allows you to verify the permission system using your own existing folder structure and user groups. This is useful for confirming that the permissions managed by the spreadsheet align with the actual access in Google Drive.
 
 ### Prerequisites
 
@@ -215,9 +215,9 @@ This test allows you to verify the permission system using your own existing fol
 
 1.  **Log In:** Sign in to Google Drive with the account that should have **no access**.
 2.  **Attempt to Navigate:** Try to access the folder using a direct link.
-3.  **Test Permissions:** You should see a "You need permission" or "Access Denied" page. You should not be able to see the folder's name (unless you had prior access) or its contents.
+3.  **Test Permissions:** You should see a "You need permission" or "Access Denied" page. You should not be able to see the spreadsheet's name (unless you had prior access) or its contents.
 
-By running these manual tests, you can be confident that the permissions you have defined in the Google Sheet are being correctly applied and enforced by Google Drive.
+By running these manual tests, you can be confident that the permissions you have defined in the Google Spreadsheet are being correctly applied and enforced by Google Drive.
 
 ## Enabling Progress Messages (Toasts)
 
