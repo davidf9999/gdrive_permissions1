@@ -1,6 +1,6 @@
 /***** CONFIGURATION CONSTANTS *****/
 const MANAGED_FOLDERS_SHEET_NAME = 'ManagedFolders';
-const ADMINS_SHEET_NAME = 'Admins';
+const SHEET_EDITORS_SHEET_NAME = 'SheetEditors';
 const LOG_SHEET_NAME = 'Log';
 const TEST_LOG_SHEET_NAME = 'TestLog';
 const USER_GROUPS_SHEET_NAME = 'UserGroups';
@@ -22,7 +22,7 @@ const URL_COL = 8;                 // Managed by script
 
 const ADMINS_LAST_SYNC_CELL = 'B2';
 const ADMINS_STATUS_CELL = 'C2';
-const ADMINS_GROUP_NAME = 'Admins Control Panel';
+const SHEET_EDITORS_GROUP_NAME = 'Sheet Editors Control Panel';
 
 // User sheet header constants
 const USER_EMAIL_HEADER = 'User Email Address';
@@ -290,7 +290,7 @@ function getSpreadsheetOwnerEmail_() {
 
 function createManualSyncMenu_(ui) {
   const granularMenu = ui.createMenu('Granular Sync')
-    .addItem('Sync Admins', 'syncAdmins')
+    .addItem('Sync Sheet Editors', 'syncSheetEditors')
     .addItem('Sync User Groups', 'syncUserGroups')
     .addSeparator()
     .addItem('Sync All Folders - Adds Only', 'syncManagedFoldersAdds')

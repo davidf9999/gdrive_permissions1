@@ -1,8 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 
-describe('syncAdminsGroup_', () => {
-  let adminSheet;
+describe('syncSheetEditorsGroup_', () => {
+  let sheetEditorsSheet;
   let statusRange;
   let lastSyncedRange;
   let activeSpreadsheet;
@@ -32,7 +32,7 @@ describe('syncAdminsGroup_', () => {
     eval(fs.readFileSync(path.resolve(__dirname, '../apps_script_project/Utils.gs'), 'utf8'));
     eval(fs.readFileSync(path.resolve(__dirname, '../apps_script_project/Core.gs'), 'utf8'));
     let syncCode = fs.readFileSync(path.resolve(__dirname, '../apps_script_project/Sync.gs'), 'utf8');
-    syncCode = syncCode.replace('function syncAdminsGroup_', 'global.syncAdminsGroup_ = function syncAdminsGroup_');
+    syncCode = syncCode.replace('function syncSheetEditorsGroup_', 'global.syncSheetEditorsGroup_ = function syncSheetEditorsGroup_');
     eval(syncCode);
 
     global.shouldSkipGroupOps_ = jest.fn(() => false);
@@ -46,7 +46,7 @@ describe('syncAdminsGroup_', () => {
 
     statusRange = { setValue: jest.fn() };
     lastSyncedRange = { setValue: jest.fn() };
-    adminSheet = {
+    sheetEditorsSheet = {
       getRange: jest.fn(range => {
         if (range === global.ADMINS_STATUS_CELL) return statusRange;
         if (range === global.ADMINS_LAST_SYNC_CELL) return lastSyncedRange;
@@ -58,7 +58,7 @@ describe('syncAdminsGroup_', () => {
   it('skips group sync when Admin Directory is unavailable', () => {
     global.shouldSkipGroupOps_.mockReturnValue(true);
 
-    global.syncAdminsGroup_(adminSheet, 'admins@example.com');
+    global.syncSheetEditorsGroup_(sheetEditorsSheet, 'editors@example.com');
 
     expect(global.shouldSkipGroupOps_).toHaveBeenCalled();
     expect(statusRange.setValue).toHaveBeenNthCalledWith(1, 'Processing group sync...');
@@ -68,12 +68,12 @@ describe('syncAdminsGroup_', () => {
     expect(global.syncGroupMembership_).not.toHaveBeenCalled();
   });
 
-  it('creates and syncs the Admins group', () => {
-    global.syncAdminsGroup_(adminSheet, 'admins@example.com');
+  it('creates and syncs the SheetEditors group', () => {
+    global.syncSheetEditorsGroup_(sheetEditorsSheet, 'editors@example.com');
 
     expect(global.shouldSkipGroupOps_).toHaveBeenCalled();
-    expect(global.getOrCreateGroup_).toHaveBeenCalledWith('admins@example.com', global.ADMINS_GROUP_NAME);
-    expect(global.syncGroupMembership_).toHaveBeenCalledWith('admins@example.com', global.ADMINS_SHEET_NAME, { addOnly: false });
+    expect(global.getOrCreateGroup_).toHaveBeenCalledWith('editors@example.com', global.SHEET_EDITORS_GROUP_NAME);
+    expect(global.syncGroupMembership_).toHaveBeenCalledWith('editors@example.com', global.SHEET_EDITORS_SHEET_NAME, { addOnly: false });
     expect(statusRange.setValue).toHaveBeenNthCalledWith(2, 'OK');
     expect(lastSyncedRange.setValue).toHaveBeenCalledWith('2024-01-01 00:00:00');
   });
@@ -81,7 +81,7 @@ describe('syncAdminsGroup_', () => {
   it('records errors from group sync', () => {
     global.syncGroupMembership_.mockImplementation(() => { throw new Error('boom'); });
 
-    expect(() => global.syncAdminsGroup_(adminSheet, 'admins@example.com')).toThrow('boom');
+    expect(() => global.syncSheetEditorsGroup_(sheetEditorsSheet, 'editors@example.com')).toThrow('boom');
     expect(statusRange.setValue).toHaveBeenNthCalledWith(2, 'ERROR: boom');
     expect(lastSyncedRange.setValue).not.toHaveBeenCalled();
   });

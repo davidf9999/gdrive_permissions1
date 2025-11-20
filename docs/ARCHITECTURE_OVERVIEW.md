@@ -10,7 +10,7 @@ fit together.
 ### 1. Model access in the control sheet
 
 The spreadsheet captures every folder/role pairing and the people (or groups)
-who should receive that access. Admins typically maintain a few foundational
+who should receive that access. Spreadsheet administrators typically maintain a few foundational
 tabs:
 
 - **ManagedFolders** — drive IDs, human-friendly names, and which roles should
@@ -19,7 +19,7 @@ tabs:
   several folder roles reuse.
 - **Folder / role tabs** — each tab corresponds to a single folder+role pairing,
   referencing one or more managed groups as well as any direct invitees.
-- **Admins + Status** — who may edit the sheet and the timestamps/outcomes of
+- **SheetEditors + Status** — who may edit the control spreadsheet and the timestamps/outcomes of
   recent syncs.
 - **Logs / Config** — troubleshooting helpers (these can stay collapsed unless
   something goes wrong).
@@ -119,7 +119,7 @@ alerts.
 ```mermaid
 sequenceDiagram
   participant Editor as Sheet Editor
-  participant Sheets as Control Sheet
+  participant Sheets as Control Spreadsheet
   participant Script as Apps Script (5-min Trigger)
   participant Admin as Workspace Admin APIs
   participant Status as Status Sheet / Dashboard
@@ -138,22 +138,22 @@ sequenceDiagram
 | Persona / role | What they configure | Day-to-day usage |
 | --- | --- | --- |
 | **Workspace Super Admin** (a.k.a. Google Workspace Super Administrator) | Creates the Workspace tenant, enables Admin SDK + Drive APIs, authorises the Apps Script project, and grants the automation account least-privilege access. | Periodically reviews audit logs, monitors email alerts, and unblocks escalations that require domain-wide privileges. |
-| **Sheet / Automation Admin** | Maintains the control spreadsheet, edits ManagedFolders, ManagedGroups, and Config tabs, and runs the "Sync Adds" / "Sync Deletes" / "Full Sync" menu items. | Updates membership tabs in response to business changes, checks the Status sheet to verify sync recency, and triages any errors surfaced via the Logs or email notifications. |
+| **Spreadsheet Administrator** | Maintains the control spreadsheet, edits ManagedFolders, ManagedGroups, and Config tabs, and runs the "Sync Adds" / "Sync Deletes" / "Full Sync" menu items. | Updates membership tabs in response to business changes, checks the Status sheet to verify sync recency, and triages any errors surfaced via the Logs or email notifications. |
 | **Managed User** (anyone granted access to a folder) | No configuration; they are represented by rows within the relevant group or folder-role tab. | Receives Drive access once the next sync completes, and may use the sheet read-only to confirm which folders they should expect. |
 
 ---
 
 ## Control spreadsheet structure
 
-The Apps Script solution operates on a purpose-built Google Sheet that acts as
+The Apps Script solution operates on a purpose-built Google Spreadsheet that acts as
 the source of truth for permissions. Important tabs include:
 
 - **ManagedFolders** — defines each folder to manage. Columns specify folder
   names, Drive IDs, target roles (Editor/Viewer/Commenter), default email
   prefixes for Google Groups, and optional settings such as disabled rows.
-- **Admins** — list of spreadsheet editors. The script keeps this sheet in sync
-  with the document's sharing settings so only approved administrators can edit
-  the control sheet.
+- **SheetEditors** — list of spreadsheet editors. The script keeps this sheet in sync
+  with the document's sharing settings so only approved editors can edit
+  the control spreadsheet.
 - **User group sheets** — automatically generated tabs for each
   folder/role combination plus any reusable groups defined in `UserGroups`. Each
   sheet accepts a list of email addresses and exposes toggles for disabled users

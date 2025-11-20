@@ -127,7 +127,7 @@ first time you roll out the tool.
 
 You now have a fully configured Google Workspace administrator account and a
 working installation of the Google Drive Permission Manager. Keep the Super
-Admin credentials secure and add additional administrators through the `Admins`
+Admin credentials secure and add additional administrators through the `SheetEditors`
 sheet rather than sharing the Super Admin password directly.
 
 ---

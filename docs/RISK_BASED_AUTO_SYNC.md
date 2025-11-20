@@ -13,7 +13,7 @@ This document analyzes the risk levels of different permission management operat
 
 ### Key Issues Identified
 
-1. **`syncAdmins()`** (Sync.gs:64-71) requires confirmation before adding/removing spreadsheet editors
+1. **`syncSheetEditors()`** (Sync.gs:64-71) requires confirmation before adding/removing spreadsheet editors
 2. **`syncDeletes()`** (Sync.gs:315-324) requires confirmation before removing users from groups
 3. **`fullSync()`** (currently called by `autoSync()`) internally calls `syncDeletes()`, which fails in background execution
 4. All operations are currently treated equally, regardless of their risk profile
@@ -28,7 +28,7 @@ The system uses **three risk levels** based on consequence of error and reversib
 
 | Risk Level | Operations | Impact if Wrong | AutoSync Treatment | Admin Action |
 |:-----------|:-----------|:----------------|:--------------------|:-------------|
-| **SAFE**<br>*(Additive)* | • Add users to groups<br>• Create folders & share with groups<br>• Add spreadsheet editors<br>• Create Google Groups<br>• All `syncAdds()` operations including admins | Users get unintended access (easily reverted and detected) | ✅ **Automatic**<br>Runs every 5 minutes with post-notification email | Review summary email; revert if needed |
+| **SAFE**<br>*(Additive)* | • Add users to groups<br>• Create folders & share with groups<br>• Add spreadsheet editors<br>• Create Google Groups<br>• All `syncAdds()` operations including sheet editors | Users get unintended access (easily reverted and detected) | ✅ **Automatic**<br>Runs every 5 minutes with post-notification email | Review summary email; revert if needed |
 | **DESTRUCTIVE**<br>*(Reversible Removals)* | • Remove users from groups<br>• Remove spreadsheet editors<br>• Revoke folder permissions<br>• All `syncDeletes()` operations | Users lose access they need, work blocked, requires restoration | 🛑 **Manual Only**<br>Notifies admin, does NOT execute | Run "Sync Deletes" manually after review |
 | **CRITICAL**<br>*(Irreversible)* | • `mergeSync()` - Approve manual changes<br>• Delete Google Groups (permanent)<br>• Delete Drive folders (data loss)<br>• Domain-wide bulk changes | Permanent data loss or inadvertent approval of unauthorized access | 🚫 **Always Manual**<br>Never automated, requires human judgment | Run manually with full context |
 
@@ -36,8 +36,8 @@ The system uses **three risk levels** based on consequence of error and reversib
 
 **Key Design Principle**: The distinction between SAFE and DESTRUCTIVE is based on **user impact**, not privilege level.
 
-**Why Admin Additions are SAFE**:
-- Adding wrong admin = Reversible (remove from Admins sheet, sync again)
+**Why Sheet Editor Additions are SAFE**:
+- Adding wrong editor = Reversible (remove from SheetEditors sheet, sync again)
 - Detected quickly (admin email notification immediately after)
 - Low blast radius (one person, not mass-change)
 - Same recovery path as any wrong permission grant
@@ -72,7 +72,7 @@ The system uses **three risk levels** based on consequence of error and reversib
 **Solution**: Modify `autoSync()` to only call risk-appropriate operations based on configuration.
 
 **Default Behavior**:
-- Auto-sync runs **SAFE operations only** (all additions including admins)
+- Auto-sync runs **SAFE operations only** (all additions including sheet editors)
 - Detects pending DESTRUCTIVE/CRITICAL operations
 - Sends email notifications for operations requiring manual execution
 
@@ -104,7 +104,7 @@ Add these settings to the **Config sheet**:
 **Implementation**:
 ```
 autoSync() executes:
-  → syncAdds() including admin additions (SAFE)
+  → syncAdds() including sheet editor additions (SAFE)
   → checkPendingDeletions() and notify if found (DESTRUCTIVE)
   → sendSummaryEmail() with results
 ```
@@ -120,7 +120,7 @@ No modes, no configuration complexity, predictable behavior.
 Sent after each successful AutoSync:
 - **Subject**: "✅ AutoSync Completed"
 - **Content**:
-  - Users added (including any new admins)
+  - Users added (including any new sheet editors)
   - Folders shared
   - Groups created
   - Errors/warnings
@@ -183,7 +183,7 @@ Sent when DESTRUCTIVE operations detected:
 |:---------|:---------------------------|:---------------------|
 | **Users added to sheets** | Auto-sync grants access within 5 minutes | ✅ None (review summary email periodically) |
 | **Users removed from sheets** | Auto-sync detects, sends "Action Required" email | ⚠️ Check email → Run "Sync Deletes" manually → Review → Confirm |
-| **Admin list changed in Admins sheet** | Auto-sync detects, sends "Action Required" email | ⚠️ Check email → Run "Sync Admins" manually → Review → Confirm |
+| **Sheet Editor list changed in SheetEditors sheet** | Auto-sync detects, sends "Action Required" email | ⚠️ Check email → Run "Sync Sheet Editors" manually → Review → Confirm |
 | **Manual changes in Google Groups** | Auto-sync continues normal operations | ⚠️ Run "Merge & Reconcile" to document manual changes |
 | **Auto-sync error occurs** | Error email sent with details | ⚠️ Check logs, fix issue, optionally run manual sync |
 | **Edit Mode enabled** | Auto-sync suspended (skips all operations) | ✅ None (resume when Edit Mode disabled) |
@@ -269,7 +269,7 @@ Note: Deletions will NOT execute automatically.
 | Risk | Without AutoSync | With Simplified AutoSync | Mitigation |
 |:-----|:------------------|:--------------------------|:-----------|
 | **Accidental deletion of legitimate user** | Admin must remember to run sync | Admin must explicitly approve deletions | DESTRUCTIVE: Email notification + manual approval |
-| **Wrong admin added to control sheet** | Admin must remember to run sync | Automatic execution with notification | SAFE: Post-notification + easy reversal |
+| **Wrong editor added to control spreadsheet** | Admin must remember to run sync | Automatic execution with notification | SAFE: Post-notification + easy reversal |
 | **Mass deletion due to sheet corruption** | Admin would catch during manual review | Safety limit prevents execution | `AutoSyncMaxDeletions` threshold blocks sync |
 | **Auto-sync runs during bulk editing** | N/A | Edit Mode suspends AutoSync | Edit Mode detection |
 | **Forgetting to grant access to new users** | Users must request access | Auto-sync grants within 5 minutes | SAFE: Automatic execution |
@@ -307,7 +307,7 @@ Config Sheet Settings:
 ```
 
 This simple configuration provides:
-- ✅ Automatic permission grants including admins (low friction)
+- ✅ Automatic permission grants including sheet editors (low friction)
 - ✅ Manual approval required for all deletions (high safety)
 - ✅ Admin visibility of all changes (summary emails)
 - ✅ Protection against mass-deletion mistakes (safety threshold)

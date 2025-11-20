@@ -63,16 +63,16 @@ This sheet allows you to create your own reusable groups of people.
     *   **Example:** Group name "Marketing Team" creates sheet "Marketing Team_G".
     *   **Note:** The script automatically migrates old sheets without the "_G" suffix when you run a sync.
 
-### 4. `Admins`
+### 4. `SheetEditors`
 
-This sheet controls who has permission to **edit** this spreadsheet itself. Add the email addresses of anyone who should be an administrator of this control panel.
+This sheet controls who has permission to **edit** this spreadsheet itself. Add the email addresses of anyone who should be an editor of this control panel.
 
 **Sheet Structure:**
-- **Column A**: Administrator Emails - List the email addresses of all admins (one per row).
+- **Column A**: Sheet Editor Emails - List the email addresses of all editors (one per row).
 - **Column B**: Last Synced - Timestamp of the last successful sync.
 - **Column C**: Status - Current sync status (OK, Processing..., ERROR, etc.).
 
-Each sync also keeps a dedicated Google Group in sync with this list. The admin group email (e.g., `admins-control-panel@yourdomain.com`) is stored in the **Config sheet** under `AdminGroupEmail`. You can use this group email to grant admin access to any managed folder by adding it to that folder's user sheet.
+Each sync also keeps a dedicated Google Group in sync with this list. The editors' group email (e.g., `sheet-editors-control-panel@yourdomain.com`) is stored in the **Config sheet** under `AdminGroupEmail`. You can use this group email to grant editor access to any managed folder by adding it to that folder's user sheet.
 
 **Adding Viewers to the Control Spreadsheet:** If you want to grant some users **view-only** access to the control spreadsheet (without editing permissions), simply use the standard Google Sheets sharing functionality. Click the "Share" button in the top-right corner of the spreadsheet and add users with "Viewer" permissions. This does not need to be managed through the script.
 
@@ -92,7 +92,7 @@ This sheet allows you to configure advanced settings for the script. It also dis
 **System Information (Read-Only):**
 
 - **`AutoSyncStatus`**: A visual indicator showing the current status of the AutoSync trigger. Updated automatically when the spreadsheet is opened or when triggers are changed.
-- **`AdminGroupEmail`**: Shows the email address of the administrators' Google Group (e.g., `admins-control-panel@yourdomain.com`). This is automatically updated when you run "Sync Admins" and can be used to grant admin access to any managed folder by adding it to that folder's user sheet.
+- **`AdminGroupEmail`**: Shows the email address of the Sheet Editors' Google Group (e.g., `sheet-editors-control-panel@yourdomain.com`). This is automatically updated when you run "Sync Sheet Editors" and can be used to grant editor access to any managed folder by adding it to that folder's user sheet.
 
 ### 6. `Log` & `TestLog`
 
@@ -163,7 +163,7 @@ If duplicates are found, the script will:
 You can manually check all user sheets at once using the menu option: **Permissions Manager > Validate All User Sheets**
 
 This will:
-1. Check all user sheets from `ManagedFolders`, `UserGroups`, and `Admins`.
+1. Check all user sheets from `ManagedFolders`, `UserGroups`, and `SheetEditors`.
 2. Display a summary showing which sheets have errors.
 3. Provide detailed information about each duplicate found.
 
@@ -180,7 +180,7 @@ Details:
 ❌ Project_B_Editors: Duplicate emails found: "user@domain.com" appears in rows 3, 7
 ✓ Project_C_Editors: OK
 ❌ Marketing_Team: Duplicate emails found: "admin@company.com" appears in rows 2, 5, 9
-✓ Admins: OK
+✓ SheetEditors: OK
 ...
 ```
 
