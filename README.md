@@ -67,7 +67,7 @@ flowchart LR
   Drive["Drive folder permissions<br>(Editor / Viewer / etc.)"]
   Status["Status + Logs tabs<br>(for administrators)"]
   Alerts["Email / Chat alerts<br>(on errors)"]
-
+ 
   Control -- desired access --> Script
   Script -- enforce membership --> Groups
   Script -- enforce sharing --> Drive
