@@ -310,11 +310,11 @@ You have two ways to pause AutoSync. What's the difference?
 
 ## Frequently Asked Questions
 
-### Can volunteers use Edit Mode?
+### Can non-admin users use Edit Mode?
 
 Edit Mode is a menu item, so technically anyone with menu access can use it. However:
 - **Best practice:** Only admins should use Edit Mode
-- **Why:** Volunteers don't run syncs anyway (AutoSync does it)
+- **Why:** Non-admin users don't run syncs anyway (AutoSync does it)
 - **Protection:** You could restrict menu access if needed
 
 ### Does Edit Mode affect manual syncs?

@@ -297,22 +297,7 @@ function log_(message, severity = 'INFO') {
 }
 
 
-function logSyncHistory_(arg1, arg2, arg3, arg4) {
-  let revisionId = '';
-  let revisionUrl = '';
-  let summary = null;
-  let durationSeconds = 0;
-
-  if (typeof arg1 === 'string' || arg1 === null) {
-    revisionId = arg1 || '';
-    revisionUrl = typeof arg2 === 'string' ? arg2 : '';
-    summary = arg3;
-    durationSeconds = arg4;
-  } else {
-    summary = arg1;
-    durationSeconds = arg2;
-  }
-
+function logSyncHistory_(revisionLink, summary, durationSeconds) {
   try {
     const syncHistorySheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SYNC_HISTORY_SHEET_NAME);
     if (!syncHistorySheet) {
@@ -325,6 +310,7 @@ function logSyncHistory_(arg1, arg2, arg3, arg4) {
     const removed = summary ? summary.removed || 0 : 0;
     const failed = summary ? summary.failed || 0 : 0;
     const duration = Math.round(durationSeconds || 0);
+    const status = failed === 0 ? 'Success' : 'Failed';
 
     log_('Attempting to log sync history: +' + added + ' -' + removed + ' !' + failed, 'DEBUG');
 
@@ -333,14 +319,25 @@ function logSyncHistory_(arg1, arg2, arg3, arg4) {
       return;
     }
 
-    const headers = ['Timestamp', 'Revision ID', 'Added', 'Removed', 'Failed', 'Duration (seconds)', 'Revision Link'];
-    let lastRow = syncHistorySheet.getLastRow();
-    const headerRange = syncHistorySheet.getRange(1, 1, 1, headers.length);
-    headerRange.setValues([headers]).setFontWeight('bold');
-
-    if (syncHistorySheet.getFrozenRows() < 1) {
+  let lastRow = syncHistorySheet.getLastRow();
+  const headers = ['Timestamp', 'Status', 'Added', 'Removed', 'Failed', 'Duration (seconds)', 'Revision Link'];
+  
+  // Ensure header row exists and is up to date
+  if (lastRow === 0) {
+      syncHistorySheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
       syncHistorySheet.setFrozenRows(1);
-    }
+      lastRow = 1;
+  } else {
+      const currentHeaders = syncHistorySheet.getRange(1, 1, 1, headers.length).getValues()[0];
+      const needsRefresh = headers.some((header, idx) => currentHeaders[idx] !== header);
+      if (needsRefresh) {
+          syncHistorySheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
+          if (syncHistorySheet.getFrozenRows() < 1) {
+              syncHistorySheet.setFrozenRows(1);
+          }
+          lastRow = Math.max(lastRow, 1);
+      }
+  }
 
     // Reset lastRow if the sheet was empty or headers were just rewritten
     lastRow = Math.max(lastRow, 1);
@@ -352,26 +349,27 @@ function logSyncHistory_(arg1, arg2, arg3, arg4) {
       }
     }
 
-    const nextRow = Math.max(lastRow + 1, 2);
-    const rowValues = [
-      timestamp,
-      revisionId,
-      added,
-      removed,
-      failed,
-      duration,
-      '' // Revision link is stored manually if desired; leave blank by default
-    ];
+  const nextRow = Math.max(lastRow + 1, 2);
+  const rowValues = [
+    timestamp,
+    status,
+    added,
+    removed,
+    failed,
+    duration,
+    revisionLink || '' // Revision Link
+  ];
 
     syncHistorySheet.getRange(nextRow, 1, 1, rowValues.length).setValues([rowValues]);
 
-    // Refresh header notes to help operators interpret the sheet
+  // Add note to header for version history navigation
+  if (nextRow === 2) { // Add notes only once to the header
     syncHistorySheet.getRange('A1:G1').clearNote();
-    syncHistorySheet.getRange('A1').setNote('Timestamp of the sync in the spreadsheet\'s timezone.');
-    syncHistorySheet.getRange('B1').setNote('internal revision ID captured at the start of the sync run.');
-    syncHistorySheet.getRange('G1').setNote('Link to Version history entry, if available.');
+    syncHistorySheet.getRange('A1').setNote('Timestamp of when the sync operation was logged.');
+    syncHistorySheet.getRange('G1').setNote('To view changes for a given sync: Open the spreadsheet, go to File > Version history > See version history, then find the revision matching the Timestamp in this row. Google keeps revisions for 30-100 days.');
+  }
 
-    log_('Logged sync history: Changes: +' + added + ' -' + removed + ' !' + failed + ', Duration: ' + duration + 's', 'INFO');
+    log_('Logged sync history: Status: ' + status + ', Changes: +' + added + ' -' + removed + ' !' + failed + ', Duration: ' + duration + 's', 'INFO');
   } catch (e) {
     log_('ERROR writing to SyncHistory: ' + e.message + '\n' + e.stack, 'ERROR');
   }

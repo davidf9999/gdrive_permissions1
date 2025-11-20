@@ -122,7 +122,7 @@ first time you roll out the tool.
 3. After the sync completes, review the generated sheets and populate the user
    tabs with email addresses.
 4. Use **Sync Adds** and **Sync Deletes** for day-to-day changes. The
-   [`USER_GUIDE.md`](USER_GUIDE.md) file explains the workflow in
+   [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) file explains the workflow in
    detail.
 
 You now have a fully configured Google Workspace administrator account and a

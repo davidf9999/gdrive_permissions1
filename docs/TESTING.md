@@ -108,7 +108,7 @@ The system is designed to be safe by default. The automatic sync will only proce
 
 **Phase 2: Non-Admin User Verification**
 
-This simulates the experience for a volunteer or non-technical user.
+This simulates the experience for a non-technical user.
 
 1.  **Share the Sheet**:
     *   Share the main Google Sheet with a non-admin user (a regular Gmail account is perfect) and give them **Editor** access to the sheet itself.
