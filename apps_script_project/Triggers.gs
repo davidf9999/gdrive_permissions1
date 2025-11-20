@@ -233,8 +233,11 @@ function detectAutoSyncChanges_() {
   }
 
   // Check if previous sync failed - if so, retry regardless of changes
-  // If lastSyncSuccessful is missing (old snapshot), treat as failed for safety
-  if (previousSnapshot && previousSnapshot.lastSyncSuccessful !== true) {
+  if (
+    previousSnapshot &&
+    Object.prototype.hasOwnProperty.call(previousSnapshot, 'lastSyncSuccessful') &&
+    previousSnapshot.lastSyncSuccessful !== true
+  ) {
     shouldRun = true;
     reasons.push('Previous AutoSync run did not complete successfully or status unknown. Retrying.');
   }

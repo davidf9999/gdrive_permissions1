@@ -297,7 +297,7 @@ function log_(message, severity = 'INFO') {
 }
 
 
-function logSyncHistory_(summary, durationSeconds) {
+function logSyncHistory_(revisionId, revisionLink, summary, durationSeconds) {
   try {
     const syncHistorySheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SYNC_HISTORY_SHEET_NAME);
     if (!syncHistorySheet) {
@@ -318,49 +318,54 @@ function logSyncHistory_(summary, durationSeconds) {
       return;
     }
 
-  let lastRow = syncHistorySheet.getLastRow();
-  const headers = ['Timestamp', 'Added', 'Removed', 'Failed', 'Duration (seconds)'];
+    let lastRow = syncHistorySheet.getLastRow();
+    const headers = ['Timestamp', 'Revision ID', 'Added', 'Removed', 'Failed', 'Duration (seconds)', 'Revision Link'];
 
-  // Ensure header row exists and is up to date
-  if (lastRow === 0) {
-    syncHistorySheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
-    syncHistorySheet.setFrozenRows(1);
-    lastRow = 1;
-  } else {
-    const currentHeaders = syncHistorySheet.getRange(1, 1, 1, headers.length).getValues()[0];
-    const needsRefresh = headers.some((header, idx) => currentHeaders[idx] !== header);
-    if (needsRefresh) {
+    // Ensure header row exists and is up to date
+    if (lastRow === 0) {
       syncHistorySheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
-      if (syncHistorySheet.getFrozenRows() < 1) {
-        syncHistorySheet.setFrozenRows(1);
+      syncHistorySheet.setFrozenRows(1);
+      lastRow = 1;
+    } else {
+      const currentHeaders = syncHistorySheet.getRange(1, 1, 1, headers.length).getValues()[0];
+      const needsRefresh = headers.some((header, idx) => currentHeaders[idx] !== header);
+      if (needsRefresh) {
+        syncHistorySheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
+        if (syncHistorySheet.getFrozenRows() < 1) {
+          syncHistorySheet.setFrozenRows(1);
+        }
+        lastRow = Math.max(lastRow, 1);
       }
-      lastRow = Math.max(lastRow, 1);
     }
-  }
 
-  // Check if row 2 is empty (history was cleared) - if so, reset to row 1
-  if (lastRow > 1 && !syncHistorySheet.getRange('A2').getValue()) {
-    lastRow = 1;
-  }
+    // Check if row 2 is empty (history was cleared) - if so, reset to row 1
+    if (lastRow > 1 && !syncHistorySheet.getRange('A2').getValue()) {
+      lastRow = 1;
+    }
 
-  const nextRow = Math.max(lastRow + 1, 2);
+    const nextRow = Math.max(lastRow + 1, 2);
 
-  const rowValues = [
-    timestamp,
-    added,
-    removed,
-    failed,
-    duration
-  ];
+    // Create instructions for viewing revision history
+    // Note: Google Sheets doesn't provide direct URLs to specific revisions
+    const rowValues = [
+      timestamp,
+      revisionId || 'N/A',
+      added,
+      removed,
+      failed,
+      durationSeconds || 0,
+      ''
+    ];
 
-  syncHistorySheet.getRange(nextRow, 1, 1, rowValues.length).setValues([rowValues]);
+    syncHistorySheet.getRange(nextRow, 1, 1, rowValues.length).setValues([rowValues]);
 
-  // Add note to timestamp column for version history navigation
-  if (nextRow === 2) {
-    syncHistorySheet.getRange('A1').setNote('To view this version: Open the spreadsheet, go to File > Version history > See version history, then find the revision matching this timestamp. Google keeps revisions for 30-100 days.');
-  }
+    // Refresh header notes so guidance stays aligned with the new column order
+    syncHistorySheet.getRange('A1:G1').clearNote();
+    syncHistorySheet.getRange('A1').setNote('Timestamp when the sync completed. Use this to find the corresponding revision in version history.');
+    syncHistorySheet.getRange('B1').setNote('Google\'s internal revision ID (for reference only - cannot be used to link directly).');
+    syncHistorySheet.getRange('G1').setNote('To view this version: Open the spreadsheet, go to File > Version history > See version history, then find the revision matching the timestamp in column A. Google keeps revisions for 30-100 days.');
 
-    log_('Logged sync history: Changes: +' + added + ' -' + removed + ' !' + failed + ', Duration: ' + duration + 's', 'INFO');
+    log_('Logged sync history: Revision ' + (revisionId || 'N/A') + ', Changes: +' + added + ' -' + removed + ' !' + failed, 'INFO');
   } catch (e) {
     log_('ERROR writing to SyncHistory: ' + e.message + '\n' + e.stack, 'ERROR');
   }
