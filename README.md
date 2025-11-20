@@ -61,7 +61,7 @@ At a glance, the system combines three moving pieces:
 
 ```mermaid
 flowchart LR
-  Control["Control spreadsheet tabs\n(ManagedFolders, groups, folder-role tabs)"]
+  Control["Control spreadsheet tabs<br>(ManagedFolders, groups, folder-role tabs)"]
   Script["Apps Script automation\n(5-min trigger)"]
   Groups["Google Groups\n(one per folder/role)"]
   Drive["Drive folder permissions\n(Editor / Viewer / etc.)"]
