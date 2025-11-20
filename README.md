@@ -90,7 +90,7 @@ flowchart LR
 For a detailed architectural narrative—including how the control spreadsheet is
 structured, how folder roles fan out to groups and individuals, how the sync
 loop runs, and which personas operate each part—see
-[`gdrive_permissions1.md`](gdrive_permissions1.md).
+[`docs/ARCHITECTURE_OVERVIEW.md`](docs/ARCHITECTURE_OVERVIEW.md).
 
 ---
 
@@ -239,7 +239,7 @@ when multiple administrators collaborate on the same control spreadsheet.
 | Stopping or pausing scripts | [`docs/STOP_SCRIPTS.md`](docs/STOP_SCRIPTS.md) |
 | Workspace + script installation walkthrough | [`docs/WORKSPACE_SETUP.md`](docs/WORKSPACE_SETUP.md) |
 | Spreadsheet and script onboarding checklist | [`docs/ONBOARDING.md`](docs/ONBOARDING.md) |
-| Architecture deep dive | [`gdrive_permissions1.md`](gdrive_permissions1.md) |
+| Architecture deep dive | [`docs/ARCHITECTURE_OVERVIEW.md`](docs/ARCHITECTURE_OVERVIEW.md) |
 | Historical decisions & debugging notes | [`GEMINI.md`](GEMINI.md) |
 
 ---
