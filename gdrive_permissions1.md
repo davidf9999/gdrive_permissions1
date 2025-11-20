@@ -28,8 +28,8 @@ tabs:
 flowchart TD
   subgraph ControlSheet[Control Spreadsheet]
     direction TB
-    ManagedFolders["ManagedFolders\n(Folder IDs + enforced roles)"]
-    ManagedGroups["ManagedGroups\n(Reusable membership lists)"]
+    ManagedFolders["ManagedFolders<br>(Folder IDs + enforced roles)"]
+    ManagedGroups["ManagedGroups<br>(Reusable membership lists)"]
     subgraph GroupTabs[Group Membership Tabs]
       direction LR
       GroupSheet1[Group tab: Marketing Editors]
@@ -42,8 +42,8 @@ flowchart TD
       FolderSheet2[Marketing Drive → Viewer tab]
       FolderSheet3[Finance Reports → Viewer tab]
     end
-    Logs["Logs / Status\n(collapse unless needed)"]
-    Config["Config\n(optional tuning)"]
+    Logs["Logs / Status<br>(collapse unless needed)"]
+    Config["Config<br>(optional tuning)"]
   end
 
   ManagedFolders -. tracks .-> FolderSheet1
