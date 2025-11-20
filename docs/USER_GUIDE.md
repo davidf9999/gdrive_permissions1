@@ -84,15 +84,14 @@ This sheet allows you to configure advanced settings for the script. It also dis
 
 | Setting | Description | Default |
 | :--- | :--- | :--- |
-| **`AutoSyncStatus`** | *(Read-Only)* A visual indicator showing the current status of the AutoSync trigger. Updated automatically when the sheet is opened or when triggers are changed. | `DISABLED ❌` |
 | `EnableAutoSync` | Set to `TRUE` to allow the time-based trigger to run. Set to `FALSE` to pause all automatic syncing without deleting the trigger. | `TRUE` |
-| `AllowAutosyncDeletion` | A critical safety switch. If `FALSE` (the default), AutoSync will only add permissions. If `TRUE`, AutoSync will also remove permissions, which is a destructive action. | `FALSE` |
 | `NotificationEmail` | The email address where important notifications (like errors or pending deletions) will be sent. | The script owner's email |
 | `MaxFileSizeMB` | A safeguard to prevent the spreadsheet from becoming too large. If the file size exceeds this limit, AutoSync is aborted and an admin is notified. | `100` |
 | `EnableGCPLogging` | Set to `TRUE` to send detailed logs to Google Cloud Logging (requires a linked GCP project). | `FALSE` |
 
 **System Information (Read-Only):**
 
+- **`AutoSyncStatus`**: A visual indicator showing the current status of the AutoSync trigger. Updated automatically when the sheet is opened or when triggers are changed.
 - **`AdminGroupEmail`**: Shows the email address of the administrators' Google Group (e.g., `admins-control-panel@yourdomain.com`). This is automatically updated when you run "Sync Admins" and can be used to grant admin access to any managed folder by adding it to that folder's user sheet.
 
 ### 6. `Log` & `TestLog`
@@ -215,6 +214,8 @@ The system fully supports using non-ASCII characters (Hebrew, Arabic, Chinese, e
 ### How to Handle Non-ASCII Names
 
 When you create groups or folders with non-ASCII names, you must **manually specify the group email** using ASCII characters:
+
+(Note: Examples below use Hebrew for demonstration, but apply to any non-ASCII characters.)
 
 #### Example 1: UserGroups Sheet
 

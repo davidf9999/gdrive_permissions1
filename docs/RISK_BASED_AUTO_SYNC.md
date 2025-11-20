@@ -165,7 +165,7 @@ Sent when DESTRUCTIVE operations detected:
 
 ## User/Admin Workflows
 
-### Workflow for Volunteers (Non-Admin Users)
+### Workflow for Standard Users
 
 1. **Add users**: Edit permission sheets, add email addresses to group sheets
    - **Result**: Auto-sync grants access within 5 minutes (no admin action needed)

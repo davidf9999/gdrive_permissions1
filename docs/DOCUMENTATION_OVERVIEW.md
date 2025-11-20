@@ -10,7 +10,6 @@ keep the content current.
 | [`docs/WORKSPACE_SETUP.md`](WORKSPACE_SETUP.md) | Linear walkthrough for creating the Workspace admin and installing the script. | First-time Workspace admins | Update when Google Cloud or Admin Console UI flows change. |
 | [`docs/ONBOARDING.md`](ONBOARDING.md) | Checklist that complements the README setup section. | Workspace admins | Use during training sessions; revise if prerequisites shift. |
 | [`docs/USER_GUIDE.md`](USER_GUIDE.md) | Day-to-day usage guide for the spreadsheet menu. | Spreadsheet operators | Align with the in-sheet menu names and supported workflows. |
-| [`docs/USER_GUIDE_he.md`](USER_GUIDE_he.md) | Hebrew translation of the user guide. | Hebrew-speaking operators | Keep translation in sync with `USER_GUIDE.md`. |
 | [`docs/TESTING.md`](TESTING.md) | Describes the in-sheet testing harness and expected results. | Developers & QA | Update when new tests or diagnostics are added. |
 | [`docs/AUTO_SYNC_GUIDE.md`](AUTO_SYNC_GUIDE.md) | Explains optional AutoSync triggers. | Advanced admins | Validate instructions alongside `RISK_BASED_AUTO_SYNC.md`. |
 | [`docs/RISK_BASED_AUTO_SYNC.md`](RISK_BASED_AUTO_SYNC.md) | Details the risk-based AutoSync safeguards. | Advanced admins | Ensure screenshots and copy match the current script options. |

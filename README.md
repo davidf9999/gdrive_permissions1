@@ -33,7 +33,7 @@ roll out the workflow consistently.
 ## Key features
 
 - **Spreadsheet-first workflow** – Manage Drive access using Google Sheets that
-  anyone in the organisation can edit.
+  team members can edit.
 - **Google Group indirection** – Each folder/role combination receives its own
   Google Group so Drive never hits the per-folder sharing limit.
 - **Safety-first syncs** – Separate menu items for "Sync Adds", "Sync Deletes",
@@ -94,9 +94,7 @@ loop runs, and which personas operate each part—see
 
 ## First-time Google Workspace setup
 
-If you are starting from a brand-new Google Workspace tenant, follow the
-step-by-step guide in [`docs/WORKSPACE_SETUP.md`](docs/WORKSPACE_SETUP.md). It
-walks through:
+If you are starting from a brand-new Google Workspace tenant, or need a step-by-step guide to configure the script within your existing Workspace, follow the comprehensive guide in [`docs/WORKSPACE_SETUP.md`](docs/WORKSPACE_SETUP.md). It walks through:
 
 1. Creating (or reusing) a Workspace tenant and initial Super Admin account.
 2. Turning on Google Groups for Business and confirming Super Admin privileges.
@@ -233,7 +231,6 @@ when multiple administrators collaborate on the same control sheet.
 | Topic | Location |
 | ----- | -------- |
 | End-user how-to guide | [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) |
-| Hebrew user guide | [`docs/USER_GUIDE_he.md`](docs/USER_GUIDE_he.md) |
 | Testing menus and stress scenarios | [`docs/TESTING.md`](docs/TESTING.md) |
 | Edit-only mode walkthrough | [`docs/EDIT_MODE_GUIDE.md`](docs/EDIT_MODE_GUIDE.md) |
 | Auto-sync options & safety levers | [`docs/AUTO_SYNC_GUIDE.md`](docs/AUTO_SYNC_GUIDE.md) & [`docs/RISK_BASED_AUTO_SYNC.md`](docs/RISK_BASED_AUTO_SYNC.md) |
