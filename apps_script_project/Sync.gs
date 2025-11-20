@@ -244,11 +244,8 @@ function syncUserGroups(options = {}) {
           log_('Generated group email for ' + groupName + ': ' + groupEmail);
         }
 
-        const groupSheetName = groupName + '_G';
-        const groupSheet = getOrCreateUserSheet_(groupSheetName);
-        applyUserGroupConnectorIfConfigured_(groupName, groupEmail, groupSheet, options);
-
         if (returnPlanOnly) {
+          const groupSheetName = groupName + '_G';
           const plan = syncGroupMembership_(groupEmail, groupSheetName, options);
           if (plan) {
             deletionPlan.push(plan);
@@ -266,6 +263,8 @@ function syncUserGroups(options = {}) {
             groupEmailCell.setValue(groupEmail);
           }
 
+          const groupSheetName = groupName + '_G';
+          getOrCreateUserSheet_(groupSheetName);
           const groupResult = getOrCreateGroup_(groupEmail, groupName);
           const adminLink = 'https://admin.google.com/ac/groups/' + groupResult.group.id + '/members';
           groupAdminLinkCell.setValue(adminLink);
