@@ -39,9 +39,7 @@ flowchart LR
 (any layout)"] --> Connector["Connector logic
 (Connectors.gs)"]
   Connector --> Target["<GroupName>_G tab
-User Email Address
-Disabled
-optional metadata"]
+User Email Address | Disabled | optional metadata"]
   Target --> Sync["syncUserGroups / syncGroupMembership_
 (reconciles memberships)"]
 ```
@@ -91,11 +89,7 @@ pivots columns → rows
 color → Disabled flag"]
   subgraph TargetSheet["<GroupName>_G sheet headers"]
     Headers["Row 1 headers
-User Email Address
-Disabled
-Name
-Phone
-Comments"]
+User Email Address | Disabled | Name | Phone | Comments"]
   end
   Pivot --> TargetSheet
 ```
@@ -114,17 +108,11 @@ sourceHeader: 'Full Name' }`) is copied into a new column on the `_G` sheet.
 ```mermaid
 flowchart LR
   ColumnSource["Column-aligned source
-Headers: Email
-Enabled
-Full Name
-Notes"] --> ColumnConnector["Column connector
+Headers: Email | Enabled | Full Name | Notes"] --> ColumnConnector["Column connector
 negates Enabled → Disabled
 renames metadata"]
   ColumnConnector --> ColumnTarget["<GroupName>_G headers
-User Email Address
-Disabled
-Name
-Comments"]
+User Email Address | Disabled | Name | Comments"]
 ```
 
 ### 3. Source without disabled information
@@ -142,16 +130,11 @@ by the target sheet.
 ```mermaid
 flowchart LR
   TargetManagedSource["Source sheet
-Headers: Email
-Full Name
-Notes"] --> TargetManagedConnector["Target-managed connector
+Headers: Email | Full Name | Notes"] --> TargetManagedConnector["Target-managed connector
 copies email & metadata
 leaves Disabled column untouched"]
   TargetManagedConnector --> TargetManagedSheet["Existing <GroupName>_G tab
-User Email Address
-Disabled (managed in control sheet)
-Name
-Comments"]
+User Email Address | Disabled (managed in control sheet) | Name | Comments"]
 ```
 
 ## Adding your own connectors
