@@ -35,13 +35,9 @@ membership reconciliation.
 
 ```mermaid
 flowchart LR
-  Source["External source sheet
-(any layout)"] --> Connector["Connector logic
-(Connectors.gs)"]
-  Connector --> Target["<GroupName>_G tab
-User Email Address | Disabled | optional metadata"]
-  Target --> Sync["syncUserGroups / syncGroupMembership_
-(reconciles memberships)"]
+  Source["External source sheet<br/>(any layout)"] --> Connector["Connector logic<br/>(Connectors.gs)"]
+  Connector --> Target["<GroupName>_G tab<br/>User Email Address | Disabled | optional metadata"]
+  Target --> Sync["syncUserGroups / syncGroupMembership_<br/>(reconciles memberships)"]
 ```
 
 ### 1. Transposed sheet with background-color hints
@@ -69,27 +65,13 @@ the user as disabled on the target sheet.
 flowchart TB
   subgraph TransposedSource["Transposed source sheet"]
     direction LR
-    Labels["Column A (row labels)
-Email | Disabled | candidateToBeDisabled | Name | Phone"]
-    UserCol1["Column B
-user1@example.com
-white background
-TRUE
-Alice
-555-0100"]
-    UserCol2["Column C
-user2@example.com
-light gray
-FALSE
-Bob
-555-0101"]
+    Labels["Column A (row labels)<br/>Email | Disabled | candidateToBeDisabled | Name | Phone"]
+    UserCol1["Column B<br/>user1@example.com<br/>white background<br/>TRUE<br/>Alice<br/>555-0100"]
+    UserCol2["Column C<br/>user2@example.com<br/>light gray<br/>FALSE<br/>Bob<br/>555-0101"]
   end
-  TransposedSource --> Pivot["Transposed connector
-pivots columns → rows
-color → Disabled flag"]
+  TransposedSource --> Pivot["Transposed connector<br/>pivots columns → rows<br/>color → Disabled flag"]
   subgraph TargetSheet["<GroupName>_G sheet headers"]
-    Headers["Row 1 headers
-User Email Address | Disabled | Name | Phone | Comments"]
+    Headers["Row 1 headers<br/>User Email Address | Disabled | Name | Phone | Comments"]
   end
   Pivot --> TargetSheet
 ```
@@ -107,12 +89,8 @@ sourceHeader: 'Full Name' }`) is copied into a new column on the `_G` sheet.
 
 ```mermaid
 flowchart LR
-  ColumnSource["Column-aligned source
-Headers: Email | Enabled | Full Name | Notes"] --> ColumnConnector["Column connector
-negates Enabled → Disabled
-renames metadata"]
-  ColumnConnector --> ColumnTarget["<GroupName>_G headers
-User Email Address | Disabled | Name | Comments"]
+  ColumnSource["Column-aligned source<br/>Headers: Email | Enabled | Full Name | Notes"] --> ColumnConnector["Column connector<br/>negates Enabled → Disabled<br/>renames metadata"]
+  ColumnConnector --> ColumnTarget["<GroupName>_G headers<br/>User Email Address | Disabled | Name | Comments"]
 ```
 
 ### 3. Source without disabled information
@@ -129,12 +107,8 @@ by the target sheet.
 
 ```mermaid
 flowchart LR
-  TargetManagedSource["Source sheet
-Headers: Email | Full Name | Notes"] --> TargetManagedConnector["Target-managed connector
-copies email & metadata
-leaves Disabled column untouched"]
-  TargetManagedConnector --> TargetManagedSheet["Existing <GroupName>_G tab
-User Email Address | Disabled (managed in control sheet) | Name | Comments"]
+  TargetManagedSource["Source sheet<br/>Headers: Email | Full Name | Notes"] --> TargetManagedConnector["Target-managed connector<br/>copies email & metadata<br/>leaves Disabled column untouched"]
+  TargetManagedConnector --> TargetManagedSheet["Existing <GroupName>_G tab<br/>User Email Address | Disabled (managed in control sheet) | Name | Comments"]
 ```
 
 ## Adding your own connectors
