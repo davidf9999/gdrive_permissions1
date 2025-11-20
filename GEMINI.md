@@ -201,3 +201,47 @@ A series of improvements were made to the test suite and the `autoSync` feature 
     *   The `runAutoSyncErrorEmailTest` was fixed to prevent it from leaving behind an orphan sheet (`Invalid Folder_Editor`).
     *   The "Testing" menu was reorganized to group tests into logical sub-menus, making it easier to navigate.
     *   The "Run AutoSync Now" menu item now runs silently without intermediate confirmation messages and provides a summary at the end.
+
+### Connectors Feature Removal (November 2025)
+
+The experimental "connectors" feature was fully removed from the `main` branch. This involved:
+*   Carefully reverting a series of commits that introduced the feature.
+*   Preserving the full feature's history in a dedicated `feature/connectors-archived` branch.
+*   Surgically re-applying non-connector-related fixes (such as the sync history logging behavior) that were intertwined with connector-related commits, ensuring no loss of unrelated functionality.
+*   Deleting all connector-specific files (`apps_script_project/Connectors.gs`, `docs/CONNECTORS_GUIDE.md`).
+
+### Mermaid Diagram Rendering Fix (November 2025)
+
+Addressed rendering issues with Mermaid diagrams on GitHub.
+*   Modified the Mermaid diagram in `README.md` to use `<br>` tags instead of `
+` for line breaks within node labels.
+*   Shortened verbose node labels to prevent text truncation by the GitHub Mermaid renderer.
+
+### Documentation Refinement (November 2025)
+
+A comprehensive review and update of all project documentation was performed to improve clarity, inclusivity, and accuracy. Key changes include:
+*   Removed `docs/USER_GUIDE_he.md` (Hebrew User Guide).
+*   Replaced the term 'volunteers' with more inclusive and general terms (e.g., 'users', 'team members', 'non-admin users') across all relevant documentation.
+*   Standardized terminology across all documentation to clearly distinguish between a "spreadsheet" (the file) and a "sheet" (a tab within a spreadsheet).
+*   Added a prominent note to `README.md` to clarify the mandatory Google Workspace prerequisite from the outset.
+*   Updated all menu paths in documentation to consistently include the "Permissions Manager" prefix.
+*   Ensured all documentation correctly describes current functionality and is free of outdated information (e.g., removed `gcloud` CLI note from `AUTO_SYNC_GUIDE.md`).
+
+### Rename 'Admins' Sheet to 'SheetEditors' (November 2025)
+
+The generic 'Admins' control sheet was renamed to 'SheetEditors' for improved clarity and to avoid ambiguity with Google Workspace administrative roles. This refactoring involved:
+*   Updating constants (`ADMINS_SHEET_NAME`, `ADMINS_GROUP_NAME`) in `apps_script_project/Code.js` to `SHEET_EDITORS_SHEET_NAME` and `SHEET_EDITORS_GROUP_NAME`.
+*   Renaming functions like `syncAdmins` to `syncSheetEditors` and `syncAdminsGroup_` to `syncSheetEditorsGroup_` in `apps_script_project/Sync.gs`.
+*   Adjusting sheet creation logic in `apps_script_project/Setup.gs`.
+*   Updating all references in documentation, menu items, and test files (`tests/Sync.test.js`) to reflect the new terminology.
+
+### Performance Optimization: Batch Group Syncing (November 2025)
+
+Identified and addressed a performance bottleneck in `syncGroupMembership_` related to adding/removing users from Google Groups.
+*   Confirmed that while the code already used batch requests for API calls, the logging was performed within the loop that prepared the batch, creating misleading and inefficient sequential log entries.
+*   Refactored `syncGroupMembership_` to perform logging more efficiently: individual user additions/removals are no longer logged; instead, a single message indicates the batch operation, followed by a summary of results. This reduces logging overhead and clarifies batch execution in logs.
+
+### Fix for `logSyncHistory_` Test Failure (November 2025)
+
+Resolved a failing Jest test (`tests/Utils.test.js`) related to `logSyncHistory_`.
+*   The `logSyncHistory_` function in `apps_script_project/Utils.gs` was updated to use the correct header format (`Timestamp`, `Status`, `Added`, `Removed`, `Failed`, `Duration (seconds)`, `Revision Link`) and argument handling, aligning with the intended project behavior and test expectations.
