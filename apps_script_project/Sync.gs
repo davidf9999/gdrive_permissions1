@@ -246,6 +246,7 @@ function syncUserGroups(options = {}) {
 
         const groupSheetName = groupName + '_G';
         const groupSheet = getOrCreateUserSheet_(groupSheetName);
+        applyUserGroupConnectorIfConfigured_(groupName, groupEmail, groupSheet, options);
 
         if (returnPlanOnly) {
           const plan = syncGroupMembership_(groupEmail, groupSheetName, options);
