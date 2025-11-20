@@ -48,8 +48,8 @@ first time you roll out the tool.
 ## 3. Create the control spreadsheet
 
 1. While signed in as the Super Admin, go to Google Drive and create a new
-   Google Sheet. Give it a descriptive name such as `Drive Permissions Control`.
-2. Inside the sheet, open **Extensions → Apps Script** to create a bound Apps
+   Google Spreadsheet. Give it a descriptive name such as `Drive Permissions Control`.
+2. Inside the spreadsheet, open **Extensions → Apps Script** to create a bound Apps
    Script project. Leave the editor open—you will connect the local source files
    shortly.
 3. In the Apps Script editor, open **Project Settings → IDs** and copy the
@@ -127,7 +127,7 @@ first time you roll out the tool.
 
 You now have a fully configured Google Workspace administrator account and a
 working installation of the Google Drive Permission Manager. Keep the Super
-Admin credentials secure and add additional administrators through the `Admins`
+Admin credentials secure and add additional administrators through the `SheetEditors`
 sheet rather than sharing the Super Admin password directly.
 
 ---

@@ -1,6 +1,6 @@
 # Google Drive Permissions Manager: User Guide
 
-Welcome! This guide explains how to use the Google Sheet to manage folder permissions after the initial setup has been completed.
+Welcome! This guide explains how to use the Google Spreadsheet to manage folder permissions after the initial setup has been completed.
 
 ---
 
@@ -8,17 +8,17 @@ Welcome! This guide explains how to use the Google Sheet to manage folder permis
 
 This system works by linking Google Drive folders to Google Groups. Instead of sharing a folder with hundreds of individual email addresses, you share it with a single group (e.g., `my-project-editors@your-domain.com`). You then control who has access by simply adding or removing people from that group.
 
-This spreadsheet is your central control panel for this entire process. The script reads your configuration from these sheets, and then automatically creates the groups, manages their members, and sets the correct permissions on the folders.
+This spreadsheet is your central control panel for this entire process. The script reads your configuration from the sheets (tabs) within this spreadsheet, and then automatically creates the groups, manages their members, and sets the correct permissions on the folders.
 
 ---
 
-## The Control Sheets
+## The Control Sheets (Tabs)
 
-After you initialize the script, several sheets are created automatically. Here is a breakdown of what they do.
+After you initialize the script, several sheets (tabs) are created automatically. Here is a breakdown of what they do.
 
-### 1. `ManagedFolders` (Primary Control Sheet)
+### 1. `ManagedFolders` (Primary Control Tab)
 
-This is the most important sheet. Each row represents a folder you want the script to manage.
+This is the most important tab. Each row represents a folder you want the script to manage.
 
 *   **`FolderName` (Column A):** The name of the Google Drive folder. 
     *   If a folder with this name doesn't exist, the script will create it for you.
@@ -39,17 +39,17 @@ This is the most important sheet. Each row represents a folder you want the scri
 
 ### 2. User Sheets (e.g., `MyProject_Editor`)
 
-For every row in `ManagedFolders`, the script creates a corresponding **user sheet**. The name of this sheet is shown in the `UserSheetName` column.
+For every row in `ManagedFolders`, the script creates a corresponding **user sheet** (tab). The name of this sheet is shown in the `UserSheetName` column.
 
 *   **Purpose:** This is where you list the email addresses of the people who should have the specified role for that folder.
 *   **How to Use:** Enter **exactly one valid email address per row** in Column A (`User Email Address`). If a cell contains multiple addresses or anything other than a single valid email, the script will log an error and ignore that entry. Optional Column B (`Disabled`) lets you temporarily exclude a user from receiving permissions—set it to `TRUE`, `YES`, or check the box to disable the user without deleting their row.
 
 **Important: Duplicate Email Validation**
-- Each email address must appear **only once** per sheet (case-insensitive)
-- The script will automatically detect duplicates and stop processing that folder with a clear error message
-- Example error: `"user@domain.com" appears in rows 2, 5, 8`
-- Use the **"Validate All User Sheets"** menu option to check all sheets at once for duplicates
-- Duplicates prevent sync operations to ensure data integrity
+- Each email address must appear **only once** per sheet (case-insensitive).
+- The script will automatically detect duplicates and stop processing that folder with a clear error message.
+- Example error: `"user@domain.com" appears in rows 2, 5, 8`.
+- Use the **"Validate All User Sheets"** menu option to check all sheets at once for duplicates.
+- Duplicates prevent sync operations to ensure data integrity.
 
 ### 3. `UserGroups`
 
@@ -57,24 +57,24 @@ This sheet allows you to create your own reusable groups of people.
 
 *   **`GroupName` (Column A):** A friendly name for your group (e.g., "Marketing Team", "Project X Developers", "מתאמים").
 *   **`GroupEmail` (Column B):** *Managed by Script or Manual.* The script will generate the email for the Google Group.
-    *   **For ASCII group names** (English, numbers): Leave blank - the script auto-generates (e.g., `marketing-team@yourdomain.com`)
+    *   **For ASCII group names** (English, numbers): Leave blank - the script auto-generates (e.g., `marketing-team@yourdomain.com`).
     *   **For non-ASCII group names** (Hebrew, Arabic, Chinese, etc.): You must manually specify an ASCII email address (e.g., `coordinators@jvact.org`). See [Working with Non-ASCII Characters](#working-with-non-ascii-characters) below.
 *   **How it Works:** For each `GroupName` you define here, the script creates a corresponding sheet with the name `GroupName_G` (the "_G" suffix distinguishes group sheets from folder sheets). You then list the members of that group in that sheet. You can then use the `GroupEmail` in any of your other user sheets to grant access to everyone in that group at once.
-    *   **Example:** Group name "Marketing Team" creates sheet "Marketing Team_G"
-    *   **Note:** The script automatically migrates old sheets without the "_G" suffix when you run sync
+    *   **Example:** Group name "Marketing Team" creates sheet "Marketing Team_G".
+    *   **Note:** The script automatically migrates old sheets without the "_G" suffix when you run a sync.
 
-### 4. `Admins`
+### 4. `SheetEditors`
 
-This sheet controls who has permission to **edit** this spreadsheet itself. Add the email addresses of anyone who should be an administrator of this control panel.
+This sheet controls who has permission to **edit** this spreadsheet itself. Add the email addresses of anyone who should be an editor of this control panel.
 
 **Sheet Structure:**
-- **Column A**: Administrator Emails - List the email addresses of all admins (one per row)
-- **Column B**: Last Synced - Timestamp of the last successful sync
-- **Column C**: Status - Current sync status (OK, Processing..., ERROR, etc.)
+- **Column A**: Sheet Editor Emails - List the email addresses of all editors (one per row).
+- **Column B**: Last Synced - Timestamp of the last successful sync.
+- **Column C**: Status - Current sync status (OK, Processing..., ERROR, etc.).
 
-Each sync also keeps a dedicated Google Group in sync with this list. The admin group email (e.g., `admins-control-panel@yourdomain.com`) is stored in the **Config sheet** under `AdminGroupEmail`. You can use this group email to grant admin access to any managed folder by adding it to that folder's user sheet.
+Each sync also keeps a dedicated Google Group in sync with this list. The editors' group email (e.g., `sheet-editors-control-panel@yourdomain.com`) is stored in the **Config sheet** under `AdminGroupEmail`. You can use this group email to grant editor access to any managed folder by adding it to that folder's user sheet.
 
-**Adding Viewers to the Control Sheet:** If you want to grant some users **view-only** access to the control sheets (without editing permissions), simply use the standard Google Sheets sharing functionality. Click the "Share" button in the top-right corner of the spreadsheet and add users with "Viewer" permissions. This does not need to be managed through the script.
+**Adding Viewers to the Control Spreadsheet:** If you want to grant some users **view-only** access to the control spreadsheet (without editing permissions), simply use the standard Google Sheets sharing functionality. Click the "Share" button in the top-right corner of the spreadsheet and add users with "Viewer" permissions. This does not need to be managed through the script.
 
 ### 5. `Config`
 
@@ -91,8 +91,8 @@ This sheet allows you to configure advanced settings for the script. It also dis
 
 **System Information (Read-Only):**
 
-- **`AutoSyncStatus`**: A visual indicator showing the current status of the AutoSync trigger. Updated automatically when the sheet is opened or when triggers are changed.
-- **`AdminGroupEmail`**: Shows the email address of the administrators' Google Group (e.g., `admins-control-panel@yourdomain.com`). This is automatically updated when you run "Sync Admins" and can be used to grant admin access to any managed folder by adding it to that folder's user sheet.
+- **`AutoSyncStatus`**: A visual indicator showing the current status of the AutoSync trigger. Updated automatically when the spreadsheet is opened or when triggers are changed.
+- **`AdminGroupEmail`**: Shows the email address of the Sheet Editors' Google Group (e.g., `sheet-editors-control-panel@yourdomain.com`). This is automatically updated when you run "Sync Sheet Editors" and can be used to grant editor access to any managed folder by adding it to that folder's user sheet.
 
 ### 6. `Log` & `TestLog`
 
@@ -104,7 +104,7 @@ For more robust logging, especially in production environments, you can enable i
 
 **To enable this:**
 
-1.  First, you must have linked the script to a Google Cloud project. See the instructions in the main [README.md file](../../README.md#upgrading-to-a-production-environment).
+1.  First, you must have linked the script to a Google Cloud project. See the instructions in the main [README.md file](../../README.md).
 2.  In the `Config` sheet, set the value of `EnableGCPLogging` to `TRUE`.
 
 Once enabled, you can view the logs in the [Google Cloud Logs Explorer](https://console.cloud.google.com/logs/viewer), which provides powerful searching and filtering capabilities.
@@ -148,24 +148,24 @@ To maintain data integrity and prevent sync errors, the system automatically val
 ### Automatic Validation
 
 Duplicate email validation happens automatically in these scenarios:
-- **During sync operations**: Before processing any folder, the script validates its user sheet
-- **During folders audit**: Each user sheet is validated before checking group membership
-- **When accessing existing sheets**: If a user sheet already exists with data, it's validated before use
+- **During sync operations**: Before processing any folder, the script validates its user sheet.
+- **During folders audit**: Each user sheet is validated before checking group membership.
+- **When accessing existing sheets**: If a user sheet already exists with data, it's validated before use.
 
 If duplicates are found, the script will:
-- Stop processing that specific folder/group
-- Log a clear error message with exact duplicate emails and row numbers
-- Update the folder status to show the validation error
-- Continue processing other folders normally (non-blocking)
+- Stop processing that specific folder/group.
+- Log a clear error message with exact duplicate emails and row numbers.
+- Update the folder status to show the validation error.
+- Continue processing other folders normally (non-blocking).
 
 ### Manual Validation: "Validate All User Sheets"
 
 You can manually check all user sheets at once using the menu option: **Permissions Manager > Validate All User Sheets**
 
 This will:
-1. Check all user sheets from `ManagedFolders`, `UserGroups`, and `Admins`
-2. Display a summary showing which sheets have errors
-3. Provide detailed information about each duplicate found
+1. Check all user sheets from `ManagedFolders`, `UserGroups`, and `SheetEditors`.
+2. Display a summary showing which sheets have errors.
+3. Provide detailed information about each duplicate found.
 
 **Example Output:**
 ```
@@ -180,17 +180,17 @@ Details:
 ❌ Project_B_Editors: Duplicate emails found: "user@domain.com" appears in rows 3, 7
 ✓ Project_C_Editors: OK
 ❌ Marketing_Team: Duplicate emails found: "admin@company.com" appears in rows 2, 5, 9
-✓ Admins: OK
+✓ SheetEditors: OK
 ...
 ```
 
 ### Fixing Duplicate Email Errors
 
 When you see a validation error:
-1. Note which sheet has the problem
-2. Open that sheet and look at the row numbers mentioned
-3. Remove the duplicate entries (keep only one instance of each email)
-4. Re-run the sync or validation to confirm the issue is resolved
+1. Note which sheet has the problem.
+2. Open that sheet and look at the row numbers mentioned.
+3. Remove the duplicate entries (keep only one instance of each email).
+4. Re-run the sync or validation to confirm the issue is resolved.
 
 **Remember:** Email comparison is case-insensitive, so `user@domain.com`, `USER@domain.com`, and `UsEr@DoMaIn.CoM` are all considered duplicates.
 
@@ -202,20 +202,20 @@ The system fully supports using non-ASCII characters (Hebrew, Arabic, Chinese, e
 
 ### What Works Everywhere
 
-✅ **Folder names**: Hebrew, Arabic, Chinese, etc. are fully supported
-✅ **Group names**: Hebrew, Arabic, Chinese, etc. are fully supported
-✅ **Sheet names**: Any Unicode characters work
-✅ **User email addresses**: Any valid email format (including international domains)
+✅ **Folder names**: Hebrew, Arabic, Chinese, etc. are fully supported.
+✅ **Group names**: Hebrew, Arabic, Chinese, etc. are fully supported.
+✅ **Sheet names**: Any Unicode characters work.
+✅ **User email addresses**: Any valid email format (including international domains).
 
 ### The Email Address Limitation
 
-❌ **Group email addresses**: Must be ASCII only (Google's requirement, not ours)
+❌ **Group email addresses**: Must be ASCII only (Google's requirement, not ours).
 
 ### How to Handle Non-ASCII Names
 
 When you create groups or folders with non-ASCII names, you must **manually specify the group email** using ASCII characters:
 
-(Note: Examples below use Hebrew for demonstration, but apply to any non-ASCII characters.)
+(Note: Examples below use Hebrew for demonstration, but the principle applies to any non-ASCII characters.)
 
 #### Example 1: UserGroups Sheet
 
@@ -315,8 +315,8 @@ Let's say you want to give the "Sales Team" editor access to a new folder called
 6.  The script will now run. It will:
     *   Create the "Q4 Sales Reports" folder in Google Drive.
     *   Create a user sheet named `Q4 Sales Reports_Editor`.
-    *   Create a Google Group for the Sales Team and a sheet named `Sales Team`.
-7.  **Go to the `Sales Team` sheet.** Add the email addresses of your sales team members to Column A. Mark Column B if you want any member to stay listed but not yet receive access.
+    *   Create a Google Group for the Sales Team and a sheet named `Sales Team_G`.
+7.  **Go to the `Sales Team_G` sheet.** Add the email addresses of your sales team members to Column A. Mark Column B if you want any member to stay listed but not yet receive access.
 8.  **Go to the `Q4 Sales Reports_Editor` sheet.** In Column A, add the group email address for the sales team (you can copy this from the `GroupEmail` column in the `UserGroups` sheet).
 9. **Run the final sync.** Click **Permissions Manager > Sync Adds** again.
 

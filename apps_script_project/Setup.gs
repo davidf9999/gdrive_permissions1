@@ -95,7 +95,7 @@ function migrateManagedFoldersColumns_(sheet) {
 }
 
 /**
- * Ensures the control sheets (ManagedFolders, Admins) exist.
+ * Ensures the control sheets (ManagedFolders, SheetEditors) exist.
  */
 function setupControlSheets_() {
   migrateUserGroupSheets_(); // Run migration first
@@ -131,33 +131,33 @@ function setupControlSheets_() {
       roleRange.setDataValidation(rule);
   }
 
-  // Check for Admins sheet
-  let adminSheet = ss.getSheetByName(ADMINS_SHEET_NAME);
-  const adminHeaders = ['Administrator Emails', 'Last Synced', 'Status', 'Disabled'];
-  if (!adminSheet) {
-    adminSheet = ss.insertSheet(ADMINS_SHEET_NAME);
-    adminSheet.getRange(1, 1, 1, adminHeaders.length).setValues([adminHeaders]).setFontWeight('bold');
-    adminSheet.setFrozenRows(1);
-    log_('Created "Admins" sheet.');
+  // Check for SheetEditors sheet
+  let sheetEditorsSheet = ss.getSheetByName(SHEET_EDITORS_SHEET_NAME);
+  const sheetEditorsHeaders = ['Sheet Editor Emails', 'Last Synced', 'Status', 'Disabled'];
+  if (!sheetEditorsSheet) {
+    sheetEditorsSheet = ss.insertSheet(SHEET_EDITORS_SHEET_NAME);
+    sheetEditorsSheet.getRange(1, 1, 1, sheetEditorsHeaders.length).setValues([sheetEditorsHeaders]).setFontWeight('bold');
+    sheetEditorsSheet.setFrozenRows(1);
+    log_('Created "SheetEditors" sheet.');
   } else {
     // Update headers (this will migrate old 4-column format to new 3-column format)
-    const existingHeaders = adminSheet.getRange(1, 1, 1, 4).getValues()[0];
+    const existingHeaders = sheetEditorsSheet.getRange(1, 1, 1, 4).getValues()[0];
 
     // If old format detected (has 'Admins Group Email' in column B), migrate the data
     if (existingHeaders[1] === 'Admins Group Email') {
-      log_('Migrating Admins sheet from old 4-column format to new 3-column format...', 'WARN');
+      log_('Migrating SheetEditors sheet from old 4-column format to new 3-column format...', 'WARN');
       // Delete column B (the old Admins Group Email column)
-      adminSheet.deleteColumn(2);
+      sheetEditorsSheet.deleteColumn(2);
     }
 
     // Set the new headers
-    adminSheet.getRange(1, 1, 1, adminHeaders.length).setValues([adminHeaders]).setFontWeight('bold');
-    adminSheet.getRange('D1').clearDataValidations().clearNote();
-    adminSheet.setFrozenRows(1);
+    sheetEditorsSheet.getRange(1, 1, 1, sheetEditorsHeaders.length).setValues([sheetEditorsHeaders]).setFontWeight('bold');
+    sheetEditorsSheet.getRange('D1').clearDataValidations().clearNote();
+    sheetEditorsSheet.setFrozenRows(1);
   }
   
   // Add checkbox validation for the Disabled column
-  const adminDisabledRange = adminSheet.getRange('D2:D');
+  const adminDisabledRange = sheetEditorsSheet.getRange('D2:D');
   const existingAdminDisabledRule = adminDisabledRange.getDataValidation();
   if (!existingAdminDisabledRule || existingAdminDisabledRule.getCriteriaType() !== SpreadsheetApp.DataValidationCriteria.CHECKBOX) {
     const rule = SpreadsheetApp.newDataValidation().requireCheckbox().build();
@@ -208,7 +208,7 @@ function setupControlSheets_() {
         'EnableGCPLogging': { value: false, description: 'For advanced users. Check to send logs to Google Cloud Logging for better monitoring.' },
     },
     '--- General ---': {
-        'AdminGroupEmail': { value: '', description: 'The email address for the Google Group containing all Admins (editors of this sheet). Auto-generates if blank.' },
+        'AdminGroupEmail': { value: '', description: 'The email address for the Google Group containing all Sheet Editors. Auto-generates if blank.' },
         'EnableToasts': { value: false, description: 'Check to show small pop-up progress messages in the corner of the screen during syncs.' },
         'GitHubRepoURL': { value: 'https://github.com/davidf9999/gdrive_permissions1', description: 'The URL to the GitHub repository for this project. Used in the Help menu.' },
     },

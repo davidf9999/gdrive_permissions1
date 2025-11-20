@@ -53,17 +53,17 @@ To confirm AutoSync is active:
 ### Choose Your Sync Frequency
 
 **5-Minute Sync (Recommended)**
-- Menu: `AutoSync → ⚡ Setup AutoSync (Every 5 Minutes)`
+- Menu: `Permissions Manager → AutoSync → ⚡ Setup AutoSync (Every 5 Minutes)`
 - Runs roughly every five minutes.
 - Good for: Active organizations with frequent changes.
 
 **Daily Sync**
-- Menu: `AutoSync → 📅 Setup Daily Sync`
+- Menu: `Permissions Manager → AutoSync → 📅 Setup Daily Sync`
 - Runs once per day at a specific hour.
 - Good for: Low-activity organizations.
 
 **Custom Interval**
-- Menu: `AutoSync → ⚙️ Setup Custom Interval`
+- Menu: `Permissions Manager → AutoSync → ⚙️ Setup Custom Interval`
 - Choose: 1, 2, 4, 6, 8, or 12 hours.
 - Good for: Specific needs.
 
@@ -132,7 +132,7 @@ After assigning this custom role, the script owner's account will have the neces
 
 1. **You (the script owner/admin) set up AutoSync ONCE:**
    - Install the script (see main README for setup instructions).
-   - Run `Setup AutoSync (Every 5 Minutes)` from the menu.
+   - Run `Permissions Manager → AutoSync → ⚡ Setup AutoSync (Every 5 Minutes)` from the menu.
    - This creates a time-based trigger that runs under your account.
 
 2. **Your team members can now:**
@@ -360,7 +360,7 @@ This design allows team members to edit sheets without needing their own Google 
 AutoSync intelligently detects when changes require a sync:
 
 **When AutoSync Runs:**
-1. **Data Changes** - When `ManagedFolders`, `Admins`, or `UserGroups` sheets are modified.
+1. **Data Changes** - When `ManagedFolders`, `SheetEditors`, or `UserGroups` sheets are modified.
    - The script uses an SHA-256 hash of the actual data content to detect changes.
    - It ignores formatting, validation rules, and status updates, ensuring only meaningful data changes trigger a sync.
 2. **Folder Changes** - When managed Google Drive folders are modified (e.g., renamed, moved).

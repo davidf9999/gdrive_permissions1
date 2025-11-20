@@ -3,8 +3,10 @@
 > **Project status:** Beta — feature complete but still evolving. Expect minor
 > breaking changes while we continue to refine the onboarding flow and tooling.
 
+> **Important Note:** This project requires a **Google Workspace domain**. It does not function with personal @gmail.com accounts due to its reliance on Google Workspace administrative APIs.
+
 The Google Drive Permission Manager automates Drive folder sharing by treating
-one Google Sheet as the source of truth for access. Each folder/role combination
+one Google Spreadsheet as the source of truth for access. Each folder/role combination
 gets its own tab where administrators list email addresses—no scripting
 experience required. A bound Apps Script project runs on a five-minute cadence
 to keep the relevant Google Groups and Drive permissions aligned with those
@@ -32,7 +34,7 @@ roll out the workflow consistently.
 
 ## Key features
 
-- **Spreadsheet-first workflow** – Manage Drive access using Google Sheets that
+- **Spreadsheet-first workflow** – Manage Drive access using a Google Spreadsheet that
   team members can edit.
 - **Google Group indirection** – Each folder/role combination receives its own
   Google Group so Drive never hits the per-folder sharing limit.
@@ -41,7 +43,7 @@ roll out the workflow consistently.
 - **Comprehensive logging** – Operational logs, test logs, and optional email
   notifications make auditing straightforward.
 - **Extensive test helpers** – Built-in stress tests and manual access tests are
-  available directly from the sheet UI.
+  available directly from the spreadsheet UI.
 
 ---
 
@@ -49,23 +51,23 @@ roll out the workflow consistently.
 
 At a glance, the system combines three moving pieces:
 
-1. **Control sheet** – Administrators describe folders, roles, and Google Group
+1. **Control spreadsheet** – Administrators describe folders, roles, and Google Group
    membership using purpose-built tabs.
 2. **Apps Script automation** – A bound script reads those tabs every five
    minutes (or on-demand) and reconciles Workspace to match the plan.
 3. **Google Workspace services** – Drive folders and Google Groups are updated
-   via the Admin SDK and Drive APIs, with results surfaced back to the sheet via
+   via the Admin SDK and Drive APIs, with results surfaced back to the spreadsheet via
    status tabs and optional alerting.
 
 ```mermaid
 flowchart LR
-  Control["Control sheet tabs\n(ManagedFolders, groups, folder-role tabs)"]
-  Script["Apps Script automation\n(5-min trigger)"]
-  Groups["Google Groups\n(one per folder/role)"]
-  Drive["Drive folder permissions\n(Editor / Viewer / etc.)"]
-  Status["Status + Logs tabs\n(for administrators)"]
-  Alerts["Email / Chat alerts\n(on errors)"]
-
+  Control["Control spreadsheet tabs<br>(Control tabs)"]
+  Script["Apps Script automation<br>(5-min trigger)"]
+  Groups["Google Groups<br>(one per folder/role)"]
+  Drive["Drive folder permissions<br>(Editor / Viewer / etc.)"]
+  Status["Status + Logs tabs<br>(for administrators)"]
+  Alerts["Email / Chat alerts<br>(on errors)"]
+ 
   Control -- desired access --> Script
   Script -- enforce membership --> Groups
   Script -- enforce sharing --> Drive
@@ -85,10 +87,10 @@ flowchart LR
   class Alerts alerts;
 ```
 
-For a detailed architectural narrative—including how the control sheet is
+For a detailed architectural narrative—including how the control spreadsheet is
 structured, how folder roles fan out to groups and individuals, how the sync
 loop runs, and which personas operate each part—see
-[`gdrive_permissions1.md`](gdrive_permissions1.md).
+[`docs/ARCHITECTURE_OVERVIEW.md`](docs/ARCHITECTURE_OVERVIEW.md).
 
 ---
 
@@ -143,7 +145,7 @@ push the multi-file Apps Script project to your spreadsheet.
 
 ### 2. Create the control spreadsheet
 
-1. Create a new Google Sheet named something descriptive (e.g., `Drive
+1. Create a new Google Spreadsheet named something descriptive (e.g., `Drive
    Permissions Control`).
 2. Open **Extensions → Apps Script** to create the bound script project.
 3. Copy the **Script ID** from **Project Settings → IDs** — you need it shortly.
@@ -190,7 +192,7 @@ Refreshing the spreadsheet should now reveal a **Permissions Manager** menu.
    - User type: **Internal** (recommended for Workspace domains)
    - Populate the required contact details and add yourself as a test user.
 
-With APIs enabled, you can return to the sheet and run the initial sync.
+With APIs enabled, you can return to the spreadsheet and run the initial sync.
 
 ---
 
@@ -222,7 +224,7 @@ The repository includes optional tooling for larger environments:
   calls during large syncs.
 
 These steps are optional but recommended when managing thousands of folders or
-when multiple administrators collaborate on the same control sheet.
+when multiple administrators collaborate on the same control spreadsheet.
 
 ---
 
@@ -237,7 +239,7 @@ when multiple administrators collaborate on the same control sheet.
 | Stopping or pausing scripts | [`docs/STOP_SCRIPTS.md`](docs/STOP_SCRIPTS.md) |
 | Workspace + script installation walkthrough | [`docs/WORKSPACE_SETUP.md`](docs/WORKSPACE_SETUP.md) |
 | Spreadsheet and script onboarding checklist | [`docs/ONBOARDING.md`](docs/ONBOARDING.md) |
-| Architecture deep dive | [`gdrive_permissions1.md`](gdrive_permissions1.md) |
+| Architecture deep dive | [`docs/ARCHITECTURE_OVERVIEW.md`](docs/ARCHITECTURE_OVERVIEW.md) |
 | Historical decisions & debugging notes | [`GEMINI.md`](GEMINI.md) |
 
 ---
@@ -251,7 +253,7 @@ npm ci
 npm test -- --runInBand
 ```
 
-The Apps Script logic is validated through the in-sheet testing harness. After
+The Apps Script logic is validated through the in-spreadsheet testing harness. After
 pushing updates, open the spreadsheet and run **Permissions Manager → Testing →
 Run All Tests**. See [`docs/TESTING.md`](docs/TESTING.md) for details and
 troubleshooting.
