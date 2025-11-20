@@ -219,14 +219,26 @@ function normalizeBooleanConfigValue_(value) {
     const upperValue = value.toUpperCase().trim();
     if (upperValue.startsWith('ENABLED')) return true;
     if (upperValue.startsWith('DISABLED')) return false;
-    if (upperValue === 'TRUE') return true;
-    if (upperValue === 'FALSE') return false;
   }
   return value;
 }
 
 
-
+function getTestConfiguration_() {
+    const config = getConfiguration_();
+    const testConfig = {
+        folderName: config['TestFolderName'],
+        role: config['TestRole'],
+        email: config['TestEmail'],
+        cleanup: (config['TestCleanup'] === true || config['TestCleanup'] === 'TRUE'),
+        autoConfirm: (config['TestAutoConfirm'] === true || config['TestAutoConfirm'] === 'TRUE'),
+        numFolders: parseInt(config['TestNumFolders'], 10),
+        numUsers: parseInt(config['TestNumUsers'], 10),
+        baseEmail: config['TestBaseEmail']
+    };
+    log_('Test Configuration loaded: ' + JSON.stringify(testConfig), 'INFO');
+    return testConfig;
+}
 
 function getMaxLogLength_() {
   const config = getConfiguration_();
@@ -285,7 +297,22 @@ function log_(message, severity = 'INFO') {
 }
 
 
-function logSyncHistory_(revisionLink, summary, durationSeconds) {
+function logSyncHistory_(arg1, arg2, arg3, arg4) {
+  let revisionId = '';
+  let revisionUrl = '';
+  let summary = null;
+  let durationSeconds = 0;
+
+  if (typeof arg1 === 'string' || arg1 === null) {
+    revisionId = arg1 || '';
+    revisionUrl = typeof arg2 === 'string' ? arg2 : '';
+    summary = arg3;
+    durationSeconds = arg4;
+  } else {
+    summary = arg1;
+    durationSeconds = arg2;
+  }
+
   try {
     const syncHistorySheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SYNC_HISTORY_SHEET_NAME);
     if (!syncHistorySheet) {
@@ -298,7 +325,6 @@ function logSyncHistory_(revisionLink, summary, durationSeconds) {
     const removed = summary ? summary.removed || 0 : 0;
     const failed = summary ? summary.failed || 0 : 0;
     const duration = Math.round(durationSeconds || 0);
-    const status = failed === 0 ? 'Success' : 'Failed';
 
     log_('Attempting to log sync history: +' + added + ' -' + removed + ' !' + failed, 'DEBUG');
 
@@ -307,25 +333,14 @@ function logSyncHistory_(revisionLink, summary, durationSeconds) {
       return;
     }
 
-  let lastRow = syncHistorySheet.getLastRow();
-  const headers = ['Timestamp', 'Status', 'Added', 'Removed', 'Failed', 'Duration (seconds)', 'Revision Link'];
-  
-  // Ensure header row exists and is up to date
-  if (lastRow === 0) {
-      syncHistorySheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
+    const headers = ['Timestamp', 'Revision ID', 'Added', 'Removed', 'Failed', 'Duration (seconds)', 'Revision Link'];
+    let lastRow = syncHistorySheet.getLastRow();
+    const headerRange = syncHistorySheet.getRange(1, 1, 1, headers.length);
+    headerRange.setValues([headers]).setFontWeight('bold');
+
+    if (syncHistorySheet.getFrozenRows() < 1) {
       syncHistorySheet.setFrozenRows(1);
-      lastRow = 1;
-  } else {
-      const currentHeaders = syncHistorySheet.getRange(1, 1, 1, headers.length).getValues()[0];
-      const needsRefresh = headers.some((header, idx) => currentHeaders[idx] !== header);
-      if (needsRefresh) {
-          syncHistorySheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
-          if (syncHistorySheet.getFrozenRows() < 1) {
-              syncHistorySheet.setFrozenRows(1);
-          }
-          lastRow = Math.max(lastRow, 1);
-      }
-  }
+    }
 
     // Reset lastRow if the sheet was empty or headers were just rewritten
     lastRow = Math.max(lastRow, 1);
@@ -337,27 +352,26 @@ function logSyncHistory_(revisionLink, summary, durationSeconds) {
       }
     }
 
-  const nextRow = Math.max(lastRow + 1, 2);
-  const rowValues = [
-    timestamp,
-    status,
-    added,
-    removed,
-    failed,
-    duration,
-    revisionLink || '' // Revision Link
-  ];
+    const nextRow = Math.max(lastRow + 1, 2);
+    const rowValues = [
+      timestamp,
+      revisionId,
+      added,
+      removed,
+      failed,
+      duration,
+      '' // Revision link is stored manually if desired; leave blank by default
+    ];
 
     syncHistorySheet.getRange(nextRow, 1, 1, rowValues.length).setValues([rowValues]);
 
-  // Add note to header for version history navigation
-  if (nextRow === 2) { // Add notes only once to the header
+    // Refresh header notes to help operators interpret the sheet
     syncHistorySheet.getRange('A1:G1').clearNote();
-    syncHistorySheet.getRange('A1').setNote('Timestamp of when the sync operation was logged.');
-    syncHistorySheet.getRange('G1').setNote('To view changes for a given sync: Open the spreadsheet, go to File > Version history > See version history, then find the revision matching the Timestamp in this row. Google keeps revisions for 30-100 days.');
-  }
+    syncHistorySheet.getRange('A1').setNote('Timestamp of the sync in the spreadsheet\'s timezone.');
+    syncHistorySheet.getRange('B1').setNote('internal revision ID captured at the start of the sync run.');
+    syncHistorySheet.getRange('G1').setNote('Link to Version history entry, if available.');
 
-    log_('Logged sync history: Status: ' + status + ', Changes: +' + added + ' -' + removed + ' !' + failed + ', Duration: ' + duration + 's', 'INFO');
+    log_('Logged sync history: Changes: +' + added + ' -' + removed + ' !' + failed + ', Duration: ' + duration + 's', 'INFO');
   } catch (e) {
     log_('ERROR writing to SyncHistory: ' + e.message + '\n' + e.stack, 'ERROR');
   }
@@ -441,65 +455,14 @@ function sendErrorNotification_(errorMessage) {
 }
 
 function showTestMessage_(title, message) {
-    const showPrompts = getConfigValue_('ShowTestPrompts', false);
+    const config = getConfiguration_();
+    const showPrompts = config['ShowTestPrompts'];
 
-    if (showPrompts === true) {
+    if (showPrompts === true || showPrompts === 'TRUE') {
         SpreadsheetApp.getUi().alert(title, message, SpreadsheetApp.getUi().ButtonSet.OK);
     } else {
         log_(`Test Message: ${title} - ${message}`, 'INFO');
     }
-}
-
-/**
- * Shows a confirmation dialog if ShowTestPrompts is ENABLED, otherwise returns default value
- * @param {string} title - The dialog title
- * @param {string} message - The dialog message
- * @param {*} defaultValue - The default value if prompts are disabled (default: ui.Button.YES)
- * @return {*} The user's response or the default value
- */
-function showTestConfirm_(title, message, defaultValue) {
-    const showPrompts = getConfigValue_('ShowTestPrompts', false);
-    const autoConfirm = getConfigValue_('TestAutoConfirm', false);
-    const ui = SpreadsheetApp.getUi();
-
-    // If prompts are disabled, return default silently
-    if (showPrompts !== true) {
-        log_(`Test Confirmation (auto-accepted): ${title} - ${message}`, 'INFO');
-        return defaultValue !== undefined ? defaultValue : ui.Button.YES;
-    }
-
-    // If auto-confirm is enabled, skip the prompt
-    if (autoConfirm === true) {
-        log_(`Test Confirmation (auto-accepted): ${title}`, 'INFO');
-        return defaultValue !== undefined ? defaultValue : ui.Button.YES;
-    }
-
-    // Show the actual confirmation dialog
-    return ui.alert(title, message, ui.ButtonSet.YES_NO);
-}
-
-/**
- * Shows a prompt dialog if ShowTestPrompts is ENABLED, otherwise returns default value
- * @param {string} title - The dialog title
- * @param {string} message - The dialog message
- * @param {string} defaultValue - The value to return if prompts are disabled
- * @return {Object} An object with getSelectedButton() and getResponseText() methods
- */
-function showTestPrompt_(title, message, defaultValue) {
-    const showPrompts = getConfigValue_('ShowTestPrompts', false);
-    const ui = SpreadsheetApp.getUi();
-
-    // If prompts are disabled, return a mock response with the default value
-    if (showPrompts !== true) {
-        log_(`Test Prompt (using default): ${title} - ${defaultValue}`, 'INFO');
-        return {
-            getSelectedButton: function() { return ui.Button.OK; },
-            getResponseText: function() { return defaultValue || ''; }
-        };
-    }
-
-    // Show the actual prompt dialog
-    return ui.prompt(title, message, ui.ButtonSet.OK_CANCEL);
 }
 
 /**
@@ -760,7 +723,7 @@ function validateGroupNesting_() {
   log_('Validating group nesting for circular dependencies...');
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   const groupSheets = spreadsheet.getSheets().filter(s => s.getName().endsWith('_G'));
-  const adminSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(ADMINS_SHEET_NAME);
+  const adminSheet = spreadsheet.getSheetByName(ADMINS_SHEET_NAME);
   if (adminSheet) {
     groupSheets.push(adminSheet);
   }
