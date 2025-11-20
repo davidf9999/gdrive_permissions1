@@ -31,15 +31,6 @@ membership reconciliation.
 
 ## Example connectors
 
-### Visual overview
-
-```mermaid
-flowchart LR
-  Source["External source sheet\n(any layout)"] --> Connector["Connector logic\n(Connectors.gs)"]
-  Connector --> Target["<GroupName>_G tab\nUser Email Address | Disabled | optional metadata"]
-  Target --> Sync["syncUserGroups / syncGroupMembership_\n(reconciles memberships)"]
-```
-
 ### 1. Transposed sheet with background-color hints
 
 **Config object:** `TRANSPOSED_CONNECTOR_CONFIG`
@@ -61,21 +52,6 @@ Set `candidateEnabledBackgrounds` to the background color(s) that represent an
 *active* user (for example `['#ffffff']` for white). Any other color will mark
 the user as disabled on the target sheet.
 
-```mermaid
-flowchart TB
-  subgraph TransposedSource["Transposed source sheet"]
-    direction LR
-    Labels["Column A (row labels)\nEmail | Disabled | candidateToBeDisabled | Name | Phone"]
-    UserCol1["Column B\nuser1@example.com\nwhite background\nTRUE\nAlice\n555-0100"]
-    UserCol2["Column C\nuser2@example.com\nlight gray\nFALSE\nBob\n555-0101"]
-  end
-  TransposedSource --> Pivot["Transposed connector\npivots columns → rows\ncolor → Disabled flag"]
-  subgraph TargetSheet["<GroupName>_G sheet headers"]
-    Headers["Row 1 headers\nUser Email Address | Disabled | Name | Phone | Comments"]
-  end
-  Pivot --> TargetSheet
-```
-
 ### 2. Column-aligned sheet with an “Enabled” column
 
 **Config object:** `COLUMN_CONNECTOR_CONFIG`
@@ -86,12 +62,6 @@ values (`TRUE`, `Yes`, `1`, `enabled`, etc.) in the configured column as “keep
 active” and flips them into the `_G` sheet’s `Disabled` column automatically.
 If you also supply `additionalColumns`, each entry (e.g., `{ header: 'Name',
 sourceHeader: 'Full Name' }`) is copied into a new column on the `_G` sheet.
-
-```mermaid
-flowchart LR
-  ColumnSource["Column-aligned source\nHeaders: Email | Enabled | Full Name | Notes"] --> ColumnConnector["Column connector\nnegates Enabled → Disabled\nrenames metadata"]
-  ColumnConnector --> ColumnTarget["<GroupName>_G headers\nUser Email Address | Disabled | Name | Comments"]
-```
 
 ### 3. Source without disabled information
 
@@ -104,12 +74,6 @@ the control workbook without losing those changes on the next sync. Optional
 `additionalColumns` behave the same as in the column-aligned connector, letting
 you sync metadata such as names or notes while keeping the disabled state owned
 by the target sheet.
-
-```mermaid
-flowchart LR
-  TargetManagedSource["Source sheet\nHeaders: Email | Full Name | Notes"] --> TargetManagedConnector["Target-managed connector\ncopies email & metadata\nleaves Disabled column untouched"]
-  TargetManagedConnector --> TargetManagedSheet["Existing <GroupName>_G tab\nUser Email Address | Disabled (managed in control sheet) | Name | Comments"]
-```
 
 ## Adding your own connectors
 
