@@ -3,6 +3,8 @@
 > **Project status:** Beta — feature complete but still evolving. Expect minor
 > breaking changes while we continue to refine the onboarding flow and tooling.
 
+> **Important Note:** This project requires a **Google Workspace domain**. It does not function with personal @gmail.com accounts due to its reliance on Google Workspace administrative APIs.
+
 The Google Drive Permission Manager automates Drive folder sharing by treating
 one Google Sheet as the source of truth for access. Each folder/role combination
 gets its own tab where administrators list email addresses—no scripting
