@@ -26,99 +26,415 @@ function createSheetLockManager_(enableSheetLocking) {
   };
 }
 
+/**
+ * Processes all folders defined in the ManagedFolders sheet with a batch-oriented approach.
+ *
+ * This function orchestrates the synchronization process in several phases to maximize efficiency:
+ * 1.  **Planning:** Reads the entire sheet and builds a list of "jobs" to be done.
+ * 2.  **Folder Sync:** Finds all existing folders in a single batch query, then creates any missing ones.
+ * 3.  **Group Sync:** Creates any necessary Google Groups (sequentially, as Admin SDK doesn't support batch creation).
+ * 4.  **Permission Sync:** Sets all folder permissions in a single batch API call.
+ * 5.  **Membership Sync:** Iterates through the jobs and calls the (already-optimized) `syncGroupMembership_` for each.
+ *
+ * @param {object} [options={}] - Options for the sync process (e.g., removeOnly, silentMode).
+ * @returns {object|undefined} A summary of changes or a plan for deletions.
+ */
 function processManagedFolders_(options = {}) {
   const returnPlanOnly = options && options.returnPlanOnly !== undefined ? options.returnPlanOnly : false;
+  const removeOnly = options && options.removeOnly !== undefined ? options.removeOnly : false;
   const silentMode = options && options.silentMode !== undefined ? options.silentMode : false;
-  let deletionPlan = [];
   const totalSummary = { added: 0, removed: 0, failed: 0 };
 
-  log_('*** Starting processing of ManagedFolders sheet...');
+  log_('*** Starting batch-oriented processing of ManagedFolders sheet...');
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
   if (!sheet) {
-    if (!returnPlanOnly && !silentMode) SpreadsheetApp.getUi().alert('CRITICAL: Configuration sheet named "' + MANAGED_FOLDERS_SHEET_NAME + '" not found. Aborting.');
-    return returnPlanOnly ? [] : undefined;
+    if (!silentMode) SpreadsheetApp.getUi().alert(`CRITICAL: Configuration sheet named "${MANAGED_FOLDERS_SHEET_NAME}" not found. Aborting.`);
+    return;
   }
 
   if (!returnPlanOnly && !silentMode) setSheetUiStyles_();
 
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) {
-      log_('No data rows to process in ManagedFolders sheet.');
-      return returnPlanOnly ? [] : totalSummary;
+    log_('No data rows to process in ManagedFolders sheet.');
+    return returnPlanOnly ? [] : totalSummary;
   }
 
-  const enableSheetLocking = options.enableSheetLocking !== undefined
-    ? options.enableSheetLocking
-    : (typeof getConfigValue_ === 'function' ? getConfigValue_('EnableSheetLocking', true) : true);
+  const lockManager = createSheetLockManager_(options.enableSheetLocking);
+  const jobs = _buildSyncJobs(sheet, lastRow, silentMode);
+  if (jobs.length === 0) {
+    log_('No valid jobs to process.');
+    return totalSummary;
+  }
 
-  // Get all folder data at once
-  const allFolderData = sheet.getRange(2, 1, lastRow - 1, FOLDER_NAME_COL).getValues();
+  try {
+    if (lockManager.isEnabled) {
+      log_('Locking sheets for sync...', 'INFO');
+      lockManager.lock(sheet);
+      jobs.forEach(job => lockAssociatedUserSheet_({ spreadsheet: ss }, lockManager, job.existingUserSheetName));
+    }
 
-  for (let i = 0; i < allFolderData.length; i++) {
+    if (removeOnly || returnPlanOnly) {
+      log_('Processing in delete-only or planning mode...');
+      jobs.forEach(job => {
+        const result = syncGroupMembership_(job.groupEmail, job.userSheetName, options);
+        if (result) {
+            if (returnPlanOnly) {
+                totalSummary.plan = (totalSummary.plan || []).concat(result);
+            } else {
+                totalSummary.removed += result.removed || 0;
+                totalSummary.failed += result.failed || 0;
+            }
+        }
+      });
+      log_('Delete-only/planning mode finished.');
+      return returnPlanOnly ? totalSummary.plan : totalSummary;
+    }
+
+    // --- Full Batch Sync ---
+    log_('Step 1/5: Finding existing folders...');
+    _batchFindFolders(jobs, sheet);
+
+    log_('Step 2/5: Creating new folders...');
+    _sequentiallyCreateFolders(jobs, sheet, silentMode);
+
+    log_('Step 3/5: Creating groups and user sheets...');
+    _sequentiallyCreateGroupsAndSheets(jobs, sheet, lockManager);
+
+    log_('Step 4/5: Batch-setting folder permissions...');
+    const permSummary = _batchSetPermissions(jobs);
+    totalSummary.failed += permSummary.failed; // Add failures from permission setting
+
+    log_('Step 5/5: Syncing group memberships...');
+    if (!shouldSkipGroupOps_()) {
+        jobs.forEach(job => {
+            if (!job.groupEmail || !job.userSheetName) return;
+            try {
+                showToast_(`Syncing members for ${job.folderName}...`, 'Sync Progress', 10);
+                const syncSummary = syncGroupMembership_(job.groupEmail, job.userSheetName, options);
+                totalSummary.added += syncSummary.added;
+                totalSummary.removed += syncSummary.removed;
+                totalSummary.failed += syncSummary.failed;
+                sheet.getRange(job.rowIndex, STATUS_COL).setValue('OK');
+                sheet.getRange(job.rowIndex, LAST_SYNCED_COL).setValue(formatSpreadsheetTimestamp_(ss));
+            } catch (e) {
+                log_(`Error syncing members for ${job.folderName}: ${e.message}`, 'ERROR');
+                totalSummary.failed++;
+                sheet.getRange(job.rowIndex, STATUS_COL).setValue('Error');
+            }
+        });
+    } else {
+        log_('Skipping group membership sync (Admin SDK not available).', 'WARN');
+        jobs.forEach(job => sheet.getRange(job.rowIndex, STATUS_COL).setValue('SKIPPED (No Admin SDK)'));
+    }
+
+    log_('*** Batch-oriented processing finished.');
+    return totalSummary;
+
+  } catch (e) {
+    log_('FATAL ERROR in processManagedFolders_: ' + e.toString() + ' Stack: ' + e.stack, 'ERROR');
+    throw e;
+  } finally {
+    if (lockManager.isEnabled) {
+      log_('Unlocking all sheets.');
+      lockManager.unlockAll();
+    }
+  }
+}
+
+/**
+ * [HELPER] Reads the ManagedFolders sheet and builds a list of job objects.
+ */
+function _buildSyncJobs(sheet, lastRow, silentMode) {
+  log_('Building sync jobs from ManagedFolders sheet...');
+  const jobs = [];
+  const data = sheet.getRange(2, 1, lastRow - 1, Math.max(FOLDER_NAME_COL, ROLE_COL, GROUP_EMAIL_COL, USER_SHEET_NAME_COL)).getValues();
+  const testConfig = getTestConfiguration_();
+  const manualTestFolderName = testConfig.folderName;
+
+  data.forEach((row, i) => {
     const rowIndex = i + 2;
-    const folderName = allFolderData[i][FOLDER_NAME_COL - 1];
+    const folderName = row[FOLDER_NAME_COL - 1];
+    const folderId = row[FOLDER_ID_COL - 1];
+    const role = row[ROLE_COL - 1];
 
-    // If running in silent mode (AutoSync), skip test folders.
-    if (silentMode) {
-      const testConfig = getTestConfiguration_();
-      const manualTestFolderName = testConfig.folderName;
-      if (folderName.startsWith('StressTestFolder_') || folderName === manualTestFolderName) {
-        log_(`Auto-sync skipping test folder: "${folderName}"`, 'INFO');
-        continue; // Skip this row entirely
-      }
+    if (!folderName && !folderId) return; // Skip empty rows
+
+    if (silentMode && (folderName.startsWith('StressTestFolder_') || folderName === manualTestFolderName)) {
+      log_(`Auto-sync skipping test folder: "${folderName}"`, 'INFO');
+      return;
+    }
+    
+    if (!role) {
+        log_(`Skipping row ${rowIndex} due to missing role for folder "${folderName}".`, 'ERROR');
+        sheet.getRange(rowIndex, STATUS_COL).setValue('Error: Role is missing');
+        return;
     }
 
-    if (!returnPlanOnly && !silentMode) showToast_('Processing row ' + rowIndex + ' of ' + lastRow + '...', 'Sync Progress', 10);
-    try {
-      const rowOptions = Object.assign({}, options, { enableSheetLocking: enableSheetLocking });
-      const result = processRow_(rowIndex, rowOptions);
-      if (returnPlanOnly && result) {
-        deletionPlan.push(result);
-      } else if (!returnPlanOnly && result) {
-        totalSummary.added += result.added;
-        totalSummary.removed += result.removed;
-        totalSummary.failed += result.failed;
+    const job = {
+      rowIndex: rowIndex,
+      folderName: folderName,
+      folderId: folderId,
+      role: role,
+      existingGroupEmail: row[GROUP_EMAIL_COL - 1],
+      existingUserSheetName: row[USER_SHEET_NAME_COL - 1],
+      folder: null // To be populated later
+    };
+    jobs.push(job);
+  });
+  log_(`Built ${jobs.length} valid sync jobs.`);
+  return jobs;
+}
+
+/**
+ * [HELPER] Uses Drive API search to find all existing folders in a single API call.
+ */
+function _batchFindFolders(jobs, sheet) {
+  const folderNamesToFind = jobs.filter(j => j.folderName && !j.folderId).map(j => `'${j.folderName.replace(/'/g, "\'" )}'`);
+  if (folderNamesToFind.length === 0) {
+    log_('No folder names to find, all are specified by ID or none exist.');
+    return;
+  }
+
+  const query = `mimeType = 'application/vnd.google-apps.folder' and trashed = false and (${folderNamesToFind.map(name => `name = ${name}`).join(' or ')})`;
+  const existingFolders = new Map(); // name -> [folder]
+  
+  try {
+    let pageToken = null;
+    do {
+      const response = Drive.Files.list({
+        q: query,
+        fields: 'nextPageToken, files(id, name)',
+        pageToken: pageToken,
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true
+      });
+      response.files.forEach(file => {
+        if (!existingFolders.has(file.name)) {
+          existingFolders.set(file.name, []);
+        }
+        existingFolders.get(file.name).push(file);
+      });
+      pageToken = response.nextPageToken;
+    } while (pageToken);
+
+    jobs.forEach(job => {
+      if (job.folderName && existingFolders.has(job.folderName)) {
+        const found = existingFolders.get(job.folderName);
+        if (found.length > 1) {
+          throw new Error(`Ambiguous: Multiple folders exist with the name "${job.folderName}". Please specify by ID in row ${job.rowIndex}.`);
+        }
+        job.folder = found[0];
+        job.folderId = found[0].id;
+        sheet.getRange(job.rowIndex, FOLDER_ID_COL).setValue(job.folderId);
       }
-    } catch (e) {
-      log_('Error processing row ' + rowIndex + ': ' + e.toString(), 'ERROR');
-      totalSummary.failed++;
+    });
+  } catch(e) {
+    log_('Error during batch folder search: ' + e.message, 'ERROR');
+    throw e;
+  }
+}
+
+/**
+ * [HELPER] Sequentially creates folders that were not found in the batch find operation.
+ */
+function _sequentiallyCreateFolders(jobs, sheet, silentMode) {
+    jobs.forEach(job => {
+        try {
+            if (job.folder) return; // Already found or processed
+            const folder = getOrCreateFolder_(job.folderName, job.folderId, { silentMode: silentMode });
+            job.folder = folder;
+            job.folderId = folder.getId();
+            job.folderName = folder.getName(); // Update name in case it was corrected
+
+            // Write updates to sheet immediately
+            sheet.getRange(job.rowIndex, FOLDER_ID_COL).setValue(job.folderId);
+            sheet.getRange(job.rowIndex, FOLDER_NAME_COL).setValue(job.folderName);
+            sheet.getRange(job.rowIndex, URL_COL).setValue(folder.getUrl());
+        } catch (e) {
+            log_(`Failed to get/create folder for row ${job.rowIndex}: ${e.message}`, 'ERROR');
+            sheet.getRange(job.rowIndex, STATUS_COL).setValue('Error: Folder creation failed');
+            job.error = true; // Mark job as failed
+        }
+    });
+}
+
+/**
+ * [HELPER] Sequentially creates groups and user sheets for jobs that need them.
+ */
+function _sequentiallyCreateGroupsAndSheets(jobs, sheet, lockManager) {
+  if (shouldSkipGroupOps_()) {
+      log_('Skipping group/sheet creation (Admin SDK not available).', 'WARN');
+      return;
+  }
+
+  jobs.forEach(job => {
+    if (job.error || !job.folder) return; // Skip failed or folder-less jobs
+
+    let userSheetName = `${job.folderName}_${job.role}`;
+    if (job.existingUserSheetName && job.existingUserSheetName !== userSheetName) {
+      renameSheetIfExists_(job.existingUserSheetName, userSheetName);
     }
-  }
-  log_('Finished processing all rows.');
+    job.userSheetName = userSheetName;
 
-  if (returnPlanOnly) {
-    return deletionPlan;
-  }
-  return totalSummary;
+    let groupEmail = job.existingGroupEmail;
+    if (!groupEmail) {
+      try {
+        groupEmail = generateGroupEmail_(userSheetName);
+      } catch (e) {
+        log_(`Failed to generate group email for row ${job.rowIndex}: ${e.message}`, 'ERROR');
+        sheet.getRange(job.rowIndex, STATUS_COL).setValue('Error: Bad group name');
+        job.error = true;
+        return;
+      }
+    }
+    job.groupEmail = groupEmail;
+
+    // Write updates to sheet
+    sheet.getRange(job.rowIndex, USER_SHEET_NAME_COL).setValue(job.userSheetName);
+    sheet.getRange(job.rowIndex, GROUP_EMAIL_COL).setValue(job.groupEmail);
+
+    // Create resources
+    const userSheet = getOrCreateUserSheet_(job.userSheetName);
+    if (lockManager.isEnabled) {
+      lockManager.lock(userSheet);
+    }
+    getOrCreateGroup_(job.groupEmail, job.userSheetName);
+  });
 }
 
-function buildManagedFolderRowContext_(spreadsheet, sheet, rowIndex) {
-  const emptyCheck = sheet.getRange(rowIndex, 1, 1, 2).getValues()[0];
-  const folderNameCheck = emptyCheck[0];
-  const folderIdCheck = emptyCheck[1];
+/**
+ * [HELPER] Sets folder permissions for all jobs in a single batch request.
+ */
+function _batchSetPermissions(jobs) {
+    const summary = { failed: 0 };
+    if (shouldSkipGroupOps_()) return summary;
 
-  if (!folderNameCheck && !folderIdCheck) {
-    return null;
-  }
+    const requests = jobs.filter(job => !job.error && job.folderId && job.groupEmail && job.role)
+        .map(job => {
+            const driveApiRole = (job.role.toLowerCase() === 'editor') ? 'writer' : (job.role.toLowerCase() === 'viewer') ? 'reader' : 'commenter';
+            return {
+                method: 'POST',
+                path: `/drive/v3/files/${job.folderId}/permissions?supportsAllDrives=true&sendNotificationEmail=false`,
+                payload: JSON.stringify({ type: 'group', role: driveApiRole, emailAddress: job.groupEmail }),
+                job: job
+            };
+        });
 
-  const context = {
-    spreadsheet: spreadsheet,
-    sheet: sheet,
-    rowIndex: rowIndex,
-    statusCell: sheet.getRange(rowIndex, STATUS_COL),
-    userSheetCell: sheet.getRange(rowIndex, USER_SHEET_NAME_COL),
-    groupEmailCell: sheet.getRange(rowIndex, GROUP_EMAIL_COL)
-  };
+    if (requests.length === 0) return summary;
 
-  context.existingUserSheetName = context.userSheetCell.getValue();
-  context.existingGroupEmail = context.groupEmailCell.getValue();
-  context.folderName = sheet.getRange(rowIndex, FOLDER_NAME_COL).getValue();
-  context.folderId = sheet.getRange(rowIndex, FOLDER_ID_COL).getValue();
-  context.role = sheet.getRange(rowIndex, ROLE_COL).getValue();
+    log_(`Sending batch request with ${requests.length} permission operations...`);
+    const batchResponse = _executeBatchRequest(requests, 'https://www.googleapis.com/batch/drive/v3');
 
-  return context;
+    batchResponse.forEach((part, i) => {
+        const job = requests[i].job;
+        if (part.success) {
+            log_(`Successfully set role "${job.role}" for group "${job.groupEmail}" on folder "${job.folderName}"`, 'INFO');
+        } else {
+            // Ignore "permission already exists" errors, treat as success
+            if (part.body && part.body.includes('duplicate')) {
+                 log_(`Permission for group "${job.groupEmail}" on folder "${job.folderName}" already exists. Skipping.`, 'INFO');
+            } else {
+                summary.failed++;
+                job.error = true;
+                log_(`Batch permission failure for group ${job.groupEmail} on folder ${job.folderName}. Status: ${part.status}. Details: ${part.body}`, 'ERROR');
+            }
+        }
+    });
+    return summary;
 }
+
+/**
+ * [HELPER] Generic function to execute a multipart/mixed batch request.
+ * Implements exponential backoff for 403 rate-limiting errors.
+ * @param {Array<object>} requests - Array of request objects {method, path, payload, ...}.
+ * @param {string} batchUrl - The batch endpoint URL.
+ * @returns {Array<object>} An array of response objects {success, status, body}.
+ */
+function _executeBatchRequest(requests, batchUrl) {
+    const boundary = 'batch_' + new Date().getTime();
+    let requestBody = '';
+    requests.forEach((req, i) => {
+        requestBody += `--${boundary}\n`;
+        requestBody += 'Content-Type: application/http\n';
+        requestBody += `Content-ID: item${i}\n\n`;
+        requestBody += `${req.method} ${req.path}\n`;
+        if (req.payload) {
+            requestBody += 'Content-Type: application/json\n\n';
+            requestBody += req.payload + '\n';
+        } else {
+            requestBody += '\n';
+        }
+    });
+    requestBody += `--${boundary}--`;
+
+    const fetchOptions = {
+        method: 'POST',
+        contentType: `multipart/mixed; boundary=${boundary}`,
+        payload: requestBody,
+        headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
+        muteHttpExceptions: true
+    };
+
+    let response;
+    let retries = 0;
+    const MAX_RETRIES = 5;
+    const INITIAL_DELAY_MS = 1000;
+
+    while (retries < MAX_RETRIES) {
+        response = UrlFetchApp.fetch(batchUrl, fetchOptions);
+        const responseCode = response.getResponseCode();
+        const responseBody = response.getContentText();
+
+        if (responseCode === 403 && responseBody.includes('quotaExceeded')) {
+            retries++;
+            if (retries >= MAX_RETRIES) {
+                log_(`Rate limit still exceeded after ${MAX_RETRIES} attempts for ${batchUrl}. Aborting this batch.`, 'ERROR');
+                throw new Error(`Batch request failed after multiple retries due to rate limits for ${batchUrl}.`);
+            }
+            // Exponential backoff with jitter
+            const delay = INITIAL_DELAY_MS * Math.pow(2, retries - 1) + Math.random() * 1000;
+            log_(`Rate limit exceeded for ${batchUrl}. Retrying in ${Math.round(delay / 1000)}s... (Attempt ${retries}/${MAX_RETRIES})`, 'WARN');
+            Utilities.sleep(delay);
+        } else {
+            // Not a rate limit error, or it was successful. Break the loop and proceed.
+            break;
+        }
+    }
+    
+    const responseCode = response.getResponseCode();
+    const responseBody = response.getContentText();
+
+    if (responseCode < 200 || responseCode >= 300) {
+        log_(`Batch request to ${batchUrl} failed with code ${responseCode}: ${responseBody}`, 'ERROR');
+        throw new Error(`Batch request failed with response code ${responseCode}`);
+    }
+    
+    const contentTypeHeader = response.getHeaders()['Content-Type'];
+    if (!contentTypeHeader || !contentTypeHeader.includes('boundary=')) {
+        throw new Error('Invalid batch response: boundary not found in Content-Type header.');
+    }
+    const responseBoundary = '--' + contentTypeHeader.split('boundary=')[1];
+    const parts = responseBody.split(responseBoundary);
+    const responses = [];
+
+    for (let i = 1; i < parts.length - 1; i++) {
+        const part = parts[i].trim();
+        if (!part) continue;
+        
+        const statusMatch = part.match(/^HTTP\/[12]\.[01] (\d{3})/m);
+        const status = statusMatch ? parseInt(statusMatch[1], 10) : 500;
+        
+        responses.push({
+            success: status >= 200 && status < 300,
+            status: status,
+            body: part
+        });
+    }
+    return responses;
+}
+
 
 function lockAssociatedUserSheet_(context, lockManager, sheetName) {
   if (!lockManager.isEnabled || !sheetName) {
@@ -131,157 +447,14 @@ function lockAssociatedUserSheet_(context, lockManager, sheetName) {
   }
 }
 
-function handlePlanningModeForRow_(context, options) {
-  const existingGroupEmail = context.existingGroupEmail;
-  const existingUserSheetName = context.existingUserSheetName;
-
-  if (existingGroupEmail && existingUserSheetName && !shouldSkipGroupOps_()) {
-    return syncGroupMembership_(existingGroupEmail, existingUserSheetName, options);
-  }
-
-  return null;
-}
-
-function handleRemoveOnlyForRow_(context, options, lockManager) {
-  const rowIndex = context.rowIndex;
-  const groupEmailCell = context.groupEmailCell;
-  const userSheetCell = context.userSheetCell;
-
-  context.statusCell.setValue('Processing Deletions...');
-  const groupEmail = groupEmailCell.getValue();
-  const userSheetName = userSheetCell.getValue();
-
-  lockAssociatedUserSheet_(context, lockManager, userSheetName);
-
-  if (groupEmail && userSheetName && !shouldSkipGroupOps_()) {
-    const deleteSummary = syncGroupMembership_(groupEmail, userSheetName, options);
-    context.statusCell.setValue('OK (Deletions processed)');
-    return deleteSummary;
-  }
-
-  log_('Skipping row ' + rowIndex + ' for deletions: missing group info or Admin SDK.', 'WARN');
-  context.statusCell.setValue('SKIPPED');
-  return null;
-}
-
-function executeFullSyncForRow_(context, options, lockManager) {
-  const sheet = context.sheet;
-  const spreadsheet = context.spreadsheet;
-  const rowIndex = context.rowIndex;
-  const silentMode = options && options.silentMode ? options.silentMode : false;
-
-  context.statusCell.setValue('Processing...');
-
-  const folderName = context.folderName;
-  const folderId = context.folderId;
-  const role = context.role;
-
-  if (!folderName && !folderId) throw new Error('Both FolderName and FolderID are blank.');
-  if (!role) throw new Error('Role is not specified.');
-
-  const folder = getOrCreateFolder_(folderName, folderId, { silentMode: silentMode });
-  sheet.getRange(rowIndex, FOLDER_ID_COL).setValue(folder.getId());
-  sheet.getRange(rowIndex, FOLDER_NAME_COL).setValue(folder.getName());
-  sheet.getRange(rowIndex, URL_COL).setValue(folder.getUrl());
-
-  let userSheetName = folder.getName() + '_' + role;
-  const renameSucceeded = renameSheetIfExists_(context.existingUserSheetName, userSheetName);
-  if (!renameSucceeded && context.existingUserSheetName) {
-    userSheetName = context.existingUserSheetName;
-  }
-  context.userSheetCell.setValue(userSheetName);
-
-  let groupEmail = context.existingGroupEmail;
-  if (groupEmail) {
-    groupEmail = groupEmail.toString().trim();
-  }
-
-  if (!groupEmail) {
-    try {
-      groupEmail = generateGroupEmail_(userSheetName);
-    } catch (e) {
-      throw new Error(
-        'Cannot auto-generate group email for folder "' + folderName + '" with role "' + role + '". ' +
-        'The folder name contains non-ASCII characters (e.g., Hebrew, Arabic, Chinese). ' +
-        'Please manually specify a group email in the "GroupEmail" column (Column D) of the ManagedFolders sheet. ' +
-        'Example: "coordinators-editor@' + Session.getActiveUser().getEmail().split('@')[1] + '"'
-      );
-    }
-  }
-  context.groupEmailCell.setValue(groupEmail);
-
-  const userSheet = getOrCreateUserSheet_(userSheetName);
-  if (lockManager.isEnabled) {
-    lockManager.lock(userSheet);
-  }
-
-  if (shouldSkipGroupOps_()) {
-    log_('Skipping group operations for row ' + rowIndex + ' (Admin SDK not available).', 'WARN');
-    sheet.getRange(rowIndex, LAST_SYNCED_COL).setValue(formatSpreadsheetTimestamp_(spreadsheet));
-    context.statusCell.setValue('SKIPPED (No Admin SDK)');
-    return { added: 0, removed: 0, failed: 0 };
-  }
-
-  getOrCreateGroup_(groupEmail, userSheetName);
-  setFolderPermission_(folder.getId(), groupEmail, role);
-  const syncSummary = syncGroupMembership_(groupEmail, userSheetName, options);
-
-  sheet.getRange(rowIndex, LAST_SYNCED_COL).setValue(formatSpreadsheetTimestamp_(spreadsheet));
-  context.statusCell.setValue('OK');
-  return syncSummary;
-}
-
 function formatSpreadsheetTimestamp_(spreadsheet) {
   return Utilities.formatDate(new Date(), spreadsheet.getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss');
-}
-
-function processRow_(rowIndex, options = {}) {
-  const returnPlanOnly = options && options.returnPlanOnly !== undefined ? options.returnPlanOnly : false;
-  const removeOnly = options && options.removeOnly !== undefined ? options.removeOnly : false;
-  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = spreadsheet.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
-
-  // Gracefully skip empty rows
-  const context = buildManagedFolderRowContext_(spreadsheet, sheet, rowIndex);
-  if (!context) {
-    log_('Skipping empty row ' + rowIndex + ' in ManagedFolders sheet.', 'INFO');
-    return null;
-  }
-
-  const lockManager = createSheetLockManager_(options.enableSheetLocking);
-
-  try {
-    // Handle planning mode separately
-    if (returnPlanOnly) {
-      return handlePlanningModeForRow_(context, options);
-    }
-
-    if (lockManager.isEnabled) {
-      lockManager.lock(context.sheet);
-      lockAssociatedUserSheet_(context, lockManager, context.existingUserSheetName);
-    }
-
-    // Handle delete-only execution mode
-    if (removeOnly) {
-      return handleRemoveOnlyForRow_(context, options, lockManager);
-    }
-
-    // --- Full Sync (Add/Update) Execution Logic ---
-    return executeFullSyncForRow_(context, options, lockManager);
-
-  } catch (e) {
-    log_('Failed to process row ' + rowIndex + '. Error: ' + e.message + ' Stack: ' + e.stack, 'ERROR');
-    context.statusCell.setValue('Error: ' + e.message);
-    throw e;
-  } finally {
-    lockManager.unlockAll();
-  }
 }
 
 function checkForOrphanSheets_() {
   try {
     log_('Checking for orphan sheets...');
-    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
     const allSheets = spreadsheet.getSheets();
     const allSheetNames = allSheets.map(function(s) { return s.getName(); });
 
@@ -343,8 +516,7 @@ function getOrCreateFolder_(folderName, folderId, options = {}) {
             '" is currently named "' +
             originalName +
             '", but the ManagedFolders sheet expects "' +
-            folderName +
-            '". Rename the Drive folder to match the sheet?';
+            folderName + '" Rename the Drive folder to match the sheet?';
             response = ui.alert('Folder name mismatch', message, ui.ButtonSet.YES_NO);
         }
 
@@ -365,8 +537,7 @@ function getOrCreateFolder_(folderName, folderId, options = {}) {
             '". Expected "' +
             folderName +
             '", but found "' +
-            originalName +
-            '". Update the ManagedFolders sheet or rename the Drive folder manually.';
+            originalName + '" Update the ManagedFolders sheet or rename the Drive folder manually.';
           log_(warningMessage, 'WARN');
           const renameDeclinedError = new Error(warningMessage);
           renameDeclinedError.code = 'FOLDER_RENAME_DECLINED';

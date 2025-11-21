@@ -223,3 +223,48 @@ without storing additional hidden configuration.
 This modular layout keeps business logic isolated, improves testability, and
 allows maintainers to enhance specific behaviour (such as automation or logging)
 without editing a monolithic file.
+
+---
+
+## Performance & Scaling Considerations
+
+This project is built on Google Apps Script, a powerful platform that allows for deep integration directly within Google Sheets. This choice provides an "all-in-one" solution where the configuration, controls, and logs all live inside a single, easily managed spreadsheet. However, this convenience comes with performance and scaling characteristics inherent to the Apps Script platform.
+
+### The Apps Script Environment
+
+The entire script runs in a single-threaded, server-side JavaScript environment managed by Google. The most significant platform limitation for large-scale operations is the **maximum script execution time**:
+
+-   **6 minutes** for standard consumer accounts (e.g., `@gmail.com`).
+-   **30 minutes** for most Google Workspace accounts.
+
+If a full sync operation takes longer than this limit, it will be terminated.
+
+### Parallelism vs. Batching
+
+True parallelism (i.e., multi-threading) is not a feature of Google Apps Script. While there are advanced workarounds to simulate concurrent execution, they are highly complex and introduce significant risks of data corruption (race conditions) and are therefore not used in this project.
+
+Instead, the script is architected to use the idiomatic and most effective method for performance on this platform: **API Batching**. Rather than making thousands of individual API calls, the script groups many operations (like adding 1000 users to a group, or setting permissions on 100 folders) into single, large batch requests. This offloads the parallel work to Google's highly efficient backend infrastructure. The recent Performance Optimization further enhances this by batching folder-level operations in addition to the already-batched user syncing.
+
+### Expected Limits and Bottlenecks
+
+The script is designed to handle many thousands of individual user permissions across dozens of folders. The ultimate limit is determined by how many API operations can be completed before the execution time limit is reached.
+
+-   The primary bottleneck is the number of **sequential operations** the script must perform.
+-   With the batch-oriented optimizations, the number of sequential calls per-folder has been drastically reduced.
+-   The main remaining factor is the number of **groups** that need to be synchronized, as each group's membership sync is a distinct batch operation.
+
+As a qualitative guideline: the system performs well for most typical use cases. However, if your configuration involves syncing **several hundred unique folders/groups** in a single run, you may begin to approach the 30-minute execution time limit.
+
+### Alternative for Enterprise-Scale Deployments
+
+For organizations whose needs exceed these platform limits, the logical next step is to re-implement this tool's logic outside of Google Workspace.
+
+-   **Proposed Alternative:** A standalone application, for example a **Python script**, using a Google Cloud Service Account for authentication. This script could be run on a dedicated server, a VM, or within a serverless environment like Google Cloud Functions.
+-   **Advantages:**
+    -   No practical execution time limits.
+    -   Full control over the environment, allowing for true multi-threading and parallel processing.
+    -   Access to more extensive libraries and tools.
+-   **Disadvantages:**
+    -   **Significantly higher complexity.** This approach requires managing a separate application, setting up a Google Cloud project, handling server-side authentication with service accounts and OAuth2, and securing credentials. It is no longer an "all-in-one" worksheet solution.
+
+This project deliberately chose the Apps Script environment to provide a powerful solution with the lowest possible barrier to entry and maintenance, accepting the inherent platform limits in exchange for simplicity and convenience.

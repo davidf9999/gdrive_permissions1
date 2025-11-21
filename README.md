@@ -92,6 +92,11 @@ structured, how folder roles fan out to groups and individuals, how the sync
 loop runs, and which personas operate each part—see
 [`docs/ARCHITECTURE_OVERVIEW.md`](docs/ARCHITECTURE_OVERVIEW.md).
 
+That document also includes important **[Performance & Scaling
+Considerations](docs/ARCHITECTURE_OVERVIEW.md#performance--scaling-considerations)**,
+which explains the expected limits of the Apps Script platform and suggests
+alternatives for enterprise-scale deployments.
+
 ---
 
 ## First-time Google Workspace setup
