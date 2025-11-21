@@ -219,12 +219,18 @@ This test allows you to verify the permission system using your own existing fol
 
 By running these manual tests, you can be confident that the permissions you have defined in the Google Spreadsheet are being correctly applied and enforced by Google Drive.
 
-## Enabling Progress Messages (Toasts)
+## Understanding Test Prompts and Messages
 
-By default, the on-screen progress messages (toasts) are disabled to improve performance. To enable them for debugging or testing, follow these steps:
+During test runs, the script can show two types of messages. You can control these in the **Config** sheet.
 
-1.  Go to the **Config** sheet in your spreadsheet.
-2.  Find the setting named **EnableToasts**.
-3.  Change the value from `FALSE` to `TRUE`.
+### Modal Prompts (Script Pausing)
 
-The script will now display toast messages during synchronization, which can be helpful for monitoring its progress.
+These are dialog boxes that pause the script and wait for you to click "OK" or "Yes/No". They are useful for step-by-step debugging but will cause tests to time out if left unattended.
+
+-   **To disable them:** Set `ShowTestPrompts` to `FALSE` in the `Config` sheet. This is recommended for long-running stress tests or any automated execution.
+
+### Toast Messages (Not Pausing)
+
+These are small, grey messages that appear in the bottom-right corner to show progress (e.g., "Sync in progress..."). They **do not** pause the script and disappear automatically. They have a negligible impact on performance.
+
+-   **To disable them:** Set `EnableToasts` to `FALSE` in the `Config` sheet.

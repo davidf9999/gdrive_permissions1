@@ -209,16 +209,19 @@ function setupControlSheets_() {
     },
     '--- General ---': {
         'AdminGroupEmail': { value: '', description: 'The email address for the Google Group containing all Sheet Editors. Auto-generates if blank.' },
-        'EnableToasts': { value: false, description: 'Check to show small pop-up progress messages in the corner of the screen during syncs.' },
+        'EnableToasts': { value: false, description: 'Check to show small, non-pausing progress messages in the corner of the screen during syncs. These do not affect timeouts.' },
         'GitHubRepoURL': { value: 'https://github.com/davidf9999/gdrive_permissions1', description: 'The URL to the GitHub repository for this project. Used in the Help menu.' },
     },
     '--- Testing ---': {
-            'ShowTestPrompts': { value: true, description: 'Set to false to run tests without UI prompts (e.g., for automated testing).'},
-            'TestUserEmail': { value: '', description: 'The email of a real user IN YOUR WORKSPACE DOMAIN (e.g., your-name@your-domain.com) to be used for all tests. For the stress test, aliases will be generated from this email.' },
-            'TestFolderName': { value: 'ManualAccessTestFolder', description: 'The name of the folder to be created during the Manual Access Test.' },
-            'TestRole': { value: 'Editor', description: 'The role to be tested during the Manual Access Test.' },
-            'TestNumFolders': { value: 2, description: 'The number of folders to create during the Stress Test.' },
-            'TestNumUsers': { value: 5, description: 'The number of users to create PER FOLDER during the Stress Test.' }    }
+        'ShowTestPrompts': { value: true, description: 'Set to FALSE to run tests without UI prompts that pause the script. Required for fully automated test runs.'},
+        'TestAutoConfirm': { value: false, description: 'For automated testing only. Set to TRUE to automatically answer "Yes" to all test verification prompts.' },
+        'TestCleanup': { value: false, description: 'Set to TRUE to automatically delete all folders, groups, and sheets created by a test. If FALSE, you will be prompted manually.' },
+        'TestUserEmail': { value: '', description: 'The email of a real user IN YOUR WORKSPACE DOMAIN (e.g., your-name@your-domain.com) to be used for all tests. For the stress test, aliases will be generated from this email.' },
+        'TestFolderName': { value: 'ManualAccessTestFolder', description: 'The name of the folder to be created during the Manual Access Test.' },
+        'TestRole': { value: 'Editor', description: 'The role to be tested during the Manual Access Test.' },
+        'TestNumFolders': { value: 2, description: 'The number of folders to create during the Stress Test.' },
+        'TestNumUsers': { value: 5, description: 'The number of users to create PER FOLDER during the Stress Test.' }
+    }
   };
 
   let configSheet = ss.getSheetByName(CONFIG_SHEET_NAME);
