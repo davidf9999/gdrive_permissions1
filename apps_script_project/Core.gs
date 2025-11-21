@@ -744,8 +744,15 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
                 if (operation === 'add') summary.added++;
                 if (operation === 'remove') summary.removed++;
             } else {
-                summary.failed++;
-                log_('A batch operation failed for group ' + groupEmail + '. Status: ' + statusCode + '. Details: ' + part, 'ERROR');
+                // During a stress test, 404s for non-existent users are expected and should not be logged as errors.
+                const isStressTest = (typeof SCRIPT_EXECUTION_MODE !== 'undefined' && SCRIPT_EXECUTION_MODE === 'TEST');
+                if (isStressTest && statusCode === 404 && part.includes('Resource Not Found')) {
+                    summary.failed++; // Still count as failed, but log as INFO.
+                    log_('A batch operation failed as expected during stress test (user not found). Status: 404. Group: ' + groupEmail, 'INFO');
+                } else {
+                    summary.failed++;
+                    log_('A batch operation failed for group ' + groupEmail + '. Status: ' + statusCode + '. Details: ' + part, 'ERROR');
+                }
             }
         } else {
             summary.failed++;

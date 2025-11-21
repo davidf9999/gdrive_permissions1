@@ -213,16 +213,12 @@ function setupControlSheets_() {
         'GitHubRepoURL': { value: 'https://github.com/davidf9999/gdrive_permissions1', description: 'The URL to the GitHub repository for this project. Used in the Help menu.' },
     },
     '--- Testing ---': {
-      'ShowTestPrompts': { value: false, description: 'For developers. Check to show UI alerts during automated testing.' },
-      'TestFolderName': { value: 'Test Folder', description: 'The base name for the folder created during the Manual Access Test.' },
-      'TestRole': { value: 'Viewer', description: 'The permission role to test with during the Manual Access Test.' },
-      'TestEmail': { value: 'example@gmail.com', description: 'A test email address to use for the Manual Access Test.' },
-      'TestCleanup': { value: true, description: 'Check to automatically clean up resources created during tests.' },
-      'TestAutoConfirm': { value: false, description: 'For developers. Check to automatically skip confirmation prompts during tests.' },
-      'TestNumFolders': { value: '10', description: 'The number of folders to create during the Stress Test.' },
-      'TestNumUsers': { value: '200', description: 'The number of users to create per folder during the Stress Test.' },
-      'TestBaseEmail': { value: 'example@gmail.com', description: 'The base email address used to generate unique users for the Stress Test.' },
-    }
+            'ShowTestPrompts': { value: true, description: 'Set to false to run tests without UI prompts (e.g., for automated testing).'},
+            'TestUserEmail': { value: '', description: 'The email of a real user IN YOUR WORKSPACE DOMAIN (e.g., your-name@your-domain.com) to be used for all tests. For the stress test, aliases will be generated from this email.' },
+            'TestFolderName': { value: 'ManualAccessTestFolder', description: 'The name of the folder to be created during the Manual Access Test.' },
+            'TestRole': { value: 'Editor', description: 'The role to be tested during the Manual Access Test.' },
+            'TestNumFolders': { value: 2, description: 'The number of folders to create during the Stress Test.' },
+            'TestNumUsers': { value: 5, description: 'The number of users to create PER FOLDER during the Stress Test.' }    }
   };
 
   let configSheet = ss.getSheetByName(CONFIG_SHEET_NAME);
