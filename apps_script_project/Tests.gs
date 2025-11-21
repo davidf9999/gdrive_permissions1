@@ -1266,15 +1266,20 @@ function clearAllTestsData(skipConfirmation = false) {
 }
 
 /**
- * Syncs a single folder from the ManagedFolders sheet.
+ * Syncs a single folder from the ManagedFolders sheet by calling the main batch processor.
  * @param {number} rowIndex The row number of the folder to sync.
  * @param {boolean} addOnly - If true, only perform add operations.
  * @returns {string} The status of the sync.
  */
 function syncSingleFolder_(rowIndex, addOnly = false) {
-  log_('Fast sync for single folder: ' + SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME).getRange(rowIndex, 1).getValue() + ' (row ' + rowIndex + ')');
+  const folderName = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME).getRange(rowIndex, 1).getValue();
+  log_('Fast sync for single folder: ' + folderName + ' (row ' + rowIndex + ')');
   try {
-    processRow_(rowIndex, { addOnly: addOnly, silentMode: true });
+    processManagedFolders_({
+      onlySyncRowIndexes: [rowIndex],
+      addOnly: addOnly,
+      silentMode: true
+    });
     return 'OK';
   } catch (e) {
     const errorMessage = 'Error in syncSingleFolder_ for row ' + rowIndex + ': ' + e.message;
@@ -1284,22 +1289,20 @@ function syncSingleFolder_(rowIndex, addOnly = false) {
 }
 
 /**
- * Syncs only the folders that match the given prefixes.
+ * Syncs only the folders that match the given prefixes by calling the main batch processor.
  * @param {Array<string>} prefixes - An array of folder name prefixes to sync.
  * @param {boolean} addOnly - If true, only perform add operations.
  */
 function testOnlySync_(prefixes, addOnly = false) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
-  const data = sheet.getDataRange().getValues();
-  for (let i = 1; i < data.length; i++) {
-    const folderName = data[i][FOLDER_NAME_COL - 1];
-    if (prefixes.some(function(prefix) { return folderName.startsWith(prefix); })) {
-      try {
-        processRow_(i + 1, { addOnly: addOnly, silentMode: true });
-      } catch (e) {
-        log_('Error in testOnlySync_ for row ' + (i + 1) + ': ' + e.message, 'ERROR');
-      }
-    }
+  try {
+    processManagedFolders_({
+      onlySyncPrefixes: prefixes,
+      addOnly: addOnly,
+      silentMode: true
+    });
+  } catch (e) {
+    // The core processor will log details. This is just a top-level catch.
+    log_('Error during testOnlySync_: ' + e.message, 'ERROR');
   }
 }
 

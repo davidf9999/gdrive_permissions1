@@ -62,7 +62,7 @@ function processManagedFolders_(options = {}) {
   }
 
   const lockManager = createSheetLockManager_(options.enableSheetLocking);
-  const jobs = _buildSyncJobs(sheet, lastRow, silentMode);
+  const jobs = _buildSyncJobs(sheet, lastRow, options);
   if (jobs.length === 0) {
     log_('No valid jobs to process.');
     return totalSummary;
@@ -146,7 +146,11 @@ function processManagedFolders_(options = {}) {
 /**
  * [HELPER] Reads the ManagedFolders sheet and builds a list of job objects.
  */
-function _buildSyncJobs(sheet, lastRow, silentMode) {
+function _buildSyncJobs(sheet, lastRow, options) {
+  const silentMode = options.silentMode;
+  const onlySyncPrefixes = options.onlySyncPrefixes;
+  const onlySyncRowIndexes = options.onlySyncRowIndexes;
+
   log_('Building sync jobs from ManagedFolders sheet...');
   const jobs = [];
   const data = sheet.getRange(2, 1, lastRow - 1, Math.max(FOLDER_NAME_COL, ROLE_COL, GROUP_EMAIL_COL, USER_SHEET_NAME_COL)).getValues();
@@ -161,9 +165,20 @@ function _buildSyncJobs(sheet, lastRow, silentMode) {
 
     if (!folderName && !folderId) return; // Skip empty rows
 
-    if (silentMode && (folderName.startsWith('StressTestFolder_') || folderName === manualTestFolderName)) {
-      log_(`Auto-sync skipping test folder: "${folderName}"`, 'INFO');
-      return;
+    // Filter based on options for testing
+    if (onlySyncPrefixes && !onlySyncPrefixes.some(prefix => folderName.startsWith(prefix))) {
+        return;
+    }
+    if (onlySyncRowIndexes && !onlySyncRowIndexes.includes(rowIndex)) {
+        return;
+    }
+    
+    // Default silent mode behavior for AutoSync
+    if (silentMode && !onlySyncPrefixes && !onlySyncRowIndexes) {
+      if (folderName.startsWith('StressTestFolder_') || folderName === manualTestFolderName) {
+        log_(`Auto-sync skipping test folder: "${folderName}"`, 'INFO');
+        return;
+      }
     }
     
     if (!role) {
@@ -347,7 +362,6 @@ function _batchSetPermissions(jobs) {
 
 /**
  * [HELPER] Generic function to execute a multipart/mixed batch request.
- * Implements exponential backoff for 403 rate-limiting errors.
  * @param {Array<object>} requests - Array of request objects {method, path, payload, ...}.
  * @param {string} batchUrl - The batch endpoint URL.
  * @returns {Array<object>} An array of response objects {success, status, body}.
@@ -377,32 +391,7 @@ function _executeBatchRequest(requests, batchUrl) {
         muteHttpExceptions: true
     };
 
-    let response;
-    let retries = 0;
-    const MAX_RETRIES = 5;
-    const INITIAL_DELAY_MS = 1000;
-
-    while (retries < MAX_RETRIES) {
-        response = UrlFetchApp.fetch(batchUrl, fetchOptions);
-        const responseCode = response.getResponseCode();
-        const responseBody = response.getContentText();
-
-        if (responseCode === 403 && responseBody.includes('quotaExceeded')) {
-            retries++;
-            if (retries >= MAX_RETRIES) {
-                log_(`Rate limit still exceeded after ${MAX_RETRIES} attempts for ${batchUrl}. Aborting this batch.`, 'ERROR');
-                throw new Error(`Batch request failed after multiple retries due to rate limits for ${batchUrl}.`);
-            }
-            // Exponential backoff with jitter
-            const delay = INITIAL_DELAY_MS * Math.pow(2, retries - 1) + Math.random() * 1000;
-            log_(`Rate limit exceeded for ${batchUrl}. Retrying in ${Math.round(delay / 1000)}s... (Attempt ${retries}/${MAX_RETRIES})`, 'WARN');
-            Utilities.sleep(delay);
-        } else {
-            // Not a rate limit error, or it was successful. Break the loop and proceed.
-            break;
-        }
-    }
-    
+    const response = UrlFetchApp.fetch(batchUrl, fetchOptions);
     const responseCode = response.getResponseCode();
     const responseBody = response.getContentText();
 
@@ -827,119 +816,78 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
       return summary;
     }
 
-    const batchRequests = [];
-    const boundary = 'batch_' + new Date().getTime();
-
-    // Create requests for adding members
-    if (!removeOnly && emailsToAdd.length > 0) {
-      emailsToAdd.forEach(function(email) {
-        log_('Adding user "' + email + '" to group "' + groupEmail + '"', 'INFO');
-        const payload = { email: email, role: 'MEMBER' };
-        batchRequests.push({
-          method: 'POST',
-          path: '/admin/directory/v1/groups/' + groupEmail + '/members',
-          payload: JSON.stringify(payload),
-          operation: 'add'
+    let requestsToProcess = [];
+    if (!removeOnly) {
+        emailsToAdd.forEach(function(email) {
+            requestsToProcess.push({
+                method: 'POST',
+                path: `/admin/directory/v1/groups/${groupEmail}/members`,
+                payload: JSON.stringify({ email: email, role: 'MEMBER' }),
+                operation: 'add',
+                email: email
+            });
         });
-      });
     }
-
-    // Create requests for removing members
-    if (!addOnly && emailsToRemove.length > 0) {
-      emailsToRemove.forEach(function(email) {
-        log_('Removing user "' + email + '" from group "' + groupEmail + '"', 'INFO');
-        batchRequests.push({
-          method: 'DELETE',
-          path: '/admin/directory/v1/groups/' + groupEmail + '/members/' + email,
-          operation: 'remove'
+    if (!addOnly) {
+        emailsToRemove.forEach(function(email) {
+            requestsToProcess.push({
+                method: 'DELETE',
+                path: `/admin/directory/v1/groups/${groupEmail}/members/${email}`,
+                operation: 'remove',
+                email: email
+            });
         });
-      });
     }
-
-    if (batchRequests.length === 0) {
+    
+    if (requestsToProcess.length === 0) {
       log_('No changes to apply in this mode.');
       return summary;
     }
 
-    // Build the multipart request body
-    let requestBody = '';
-    batchRequests.forEach(function(request, i) {
-      requestBody += '--' + boundary + '\n';
-      requestBody += 'Content-Type: application/http\n';
-      requestBody += 'Content-ID: item' + i + '\n\n';
-      requestBody += request.method + ' ' + request.path + '\n';
-      if (request.payload) {
-        requestBody += 'Content-Type: application/json\n\n';
-        requestBody += request.payload + '\n';
-      } else {
-        requestBody += '\n';
-      }
-    });
-    requestBody += '--' + boundary + '--';
+    log_(`Starting to process ${requestsToProcess.length} membership changes for ${groupEmail}.`);
 
-    const fetchOptions = {
-      method: 'POST',
-      contentType: 'multipart/mixed; boundary=' + boundary,
-      payload: requestBody,
-      headers: {
-        Authorization: 'Bearer ' + ScriptApp.getOAuthToken()
-      },
-      muteHttpExceptions: true // Important to parse the response manually
-    };
+    let retries = 0;
+    const MAX_RETRIES = 5;
+    const INITIAL_DELAY_MS = 1000;
 
-    log_('Sending batch request with ' + batchRequests.length + ' operations for ' + groupEmail);
-    const response = UrlFetchApp.fetch('https://www.googleapis.com/batch/admin/directory_v1', fetchOptions);
-    const responseCode = response.getResponseCode();
-    const responseBody = response.getContentText();
+    while (requestsToProcess.length > 0 && retries < MAX_RETRIES) {
+        const batchResponses = _executeBatchRequest(requestsToProcess, 'https://www.googleapis.com/batch/admin/directory_v1');
+        const failedRequests = [];
 
-    if (responseCode >= 200 && responseCode < 300) {
-      log_('Batch request processed for group ' + groupEmail + '. Parsing individual responses...');
-      const contentTypeHeader = response.getHeaders()['Content-Type'];
-      if (!contentTypeHeader || !contentTypeHeader.includes('boundary=')) {
-          throw new Error('Invalid batch response: boundary not found in Content-Type header.');
-      }
-      const responseBoundary = '--' + contentTypeHeader.split('boundary=')[1];
-      const parts = responseBody.split(responseBoundary);
-
-      // Start from index 1, end before the last part which is the closing boundary
-      for (let i = 1; i < parts.length - 1; i++) {
-        const part = parts[i].trim();
-        if (!part) continue;
-
-        const statusMatch = part.match(/^HTTP\/[12]\.[01] (\d{3})/m);
-        const operation = batchRequests[i-1].operation; // Get operation from original request
-
-        if (statusMatch) {
-            const statusCode = parseInt(statusMatch[1], 10);
-            if (statusCode >= 200 && statusCode < 300) {
-                if (operation === 'add') summary.added++;
-                if (operation === 'remove') summary.removed++;
+        batchResponses.forEach((part, i) => {
+            const originalRequest = requestsToProcess[i];
+            if (part.success) {
+                if (originalRequest.operation === 'add') summary.added++;
+                if (originalRequest.operation === 'remove') summary.removed++;
             } else {
-                // During a stress test, 404s for non-existent users are expected and should not be logged as errors.
-                const isStressTest = (typeof SCRIPT_EXECUTION_MODE !== 'undefined' && SCRIPT_EXECUTION_MODE === 'TEST');
-                if (isStressTest && statusCode === 404 && part.includes('Resource Not Found')) {
-                    summary.failed++; // Still count as failed, but log as INFO.
-                    log_('A batch operation failed as expected during stress test (user not found). Status: 404. Group: ' + groupEmail, 'INFO');
+                if (part.status === 403 && part.body.includes('quotaExceeded')) {
+                    failedRequests.push(originalRequest);
                 } else {
                     summary.failed++;
-                    log_('A batch operation failed for group ' + groupEmail + '. Status: ' + statusCode + '. Details: ' + part, 'ERROR');
+                    log_(`A batch operation permanently failed for group ${groupEmail} on user ${originalRequest.email}. Status: ${part.status}. Details: ${part.body}`, 'ERROR');
                 }
             }
-        } else {
-            summary.failed++;
-            log_('Could not parse status for a batch operation part for group ' + groupEmail + '. Part: ' + part, 'ERROR');
-        }
-      }
-      log_('Batch processing summary for ' + groupEmail + ': ' + summary.added + ' added, ' + summary.removed + ' removed, ' + summary.failed + ' failed.', 'INFO');
-      if(summary.failed > 0) {
-        log_('WARNING: ' + summary.failed + ' membership operations failed to sync for group ' + groupEmail + '. See logs for details.', 'WARN');
-      }
+        });
 
-    } else {
-      summary.failed = batchRequests.length;
-      log_('ERROR: Batch request failed for group ' + groupEmail + ' with code ' + responseCode, 'ERROR');
-      log_('Response body: ' + responseBody, 'ERROR');
-      throw new Error('Batch membership update failed with response code ' + responseCode);
+        if (failedRequests.length > 0) {
+            requestsToProcess = failedRequests;
+            retries++;
+            if (retries < MAX_RETRIES) {
+                const delay = INITIAL_DELAY_MS * Math.pow(2, retries - 1) + Math.random() * 1000;
+                log_(`Rate limit hit for ${groupEmail}. Retrying ${failedRequests.length} failed operations in ${Math.round(delay / 1000)}s...`, 'WARN');
+                Utilities.sleep(delay);
+            } else {
+                summary.failed += failedRequests.length;
+                log_(`Max retries reached for ${groupEmail}. ${failedRequests.length} operations could not be completed.`, 'ERROR');
+            }
+        } else {
+            requestsToProcess = [];
+        }
+    }
+
+    log_('Batch processing summary for ' + groupEmail + ': ' + summary.added + ' added, ' + summary.removed + ' removed, ' + summary.failed + ' failed.', 'INFO');
+    if(summary.failed > 0) {
+      log_('WARNING: ' + summary.failed + ' membership operations failed to sync for group ' + groupEmail + '. See logs for details.', 'WARN');
     }
 
     log_('Membership sync complete for group "' + groupEmail + '"');
