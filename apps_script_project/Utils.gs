@@ -664,30 +664,61 @@ function getAdminEmails_() {
   return [...new Set(adminEmails)]; // Return unique emails
 }
 
-function lockSheetForEdits_(sheet) {
-  if (!sheet) return;
+const SYNC_LOCK_DESCRIPTION_PREFIX = 'Sync Lock by execution: ';
+
+function removeStaleLocks_(sheets, currentExecutionId) {
+  if (!sheets || sheets.length === 0) {
+    return;
+  }
+  log_('Checking for stale sheet locks from previous runs...');
+  let staleLocksRemoved = 0;
+
+  sheets.forEach(sheet => {
+    if (!sheet) return;
+    try {
+      const protections = sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET);
+      protections.forEach(protection => {
+        const description = protection.getDescription();
+        if (description && description.startsWith(SYNC_LOCK_DESCRIPTION_PREFIX) && !description.endsWith(currentExecutionId)) {
+          log_(`Found stale lock on sheet "${sheet.getName()}" from a previous execution. Removing...`, 'WARN');
+          protection.remove();
+          staleLocksRemoved++;
+        }
+      });
+    } catch (e) {
+      log_(`Could not check/remove stale locks on sheet "${sheet.getName()}": ${e.message}`, 'WARN');
+    }
+  });
+
+  if (staleLocksRemoved > 0) {
+    log_(`Removed ${staleLocksRemoved} stale lock(s).`, 'INFO');
+  }
+}
+
+function lockSheetForEdits_(sheet, executionId) {
+  if (!sheet || !executionId) return;
   try {
-    const protection = sheet.protect().setDescription('Locked for script execution');
+    const protection = sheet.protect().setDescription(SYNC_LOCK_DESCRIPTION_PREFIX + executionId);
     const me = Session.getEffectiveUser();
     protection.addEditor(me);
     protection.removeEditors(protection.getEditors().filter(editor => editor.getEmail() !== me.getEmail()));
     if (protection.canDomainEdit()) {
       protection.setDomainEdit(false);
     }
-    log_(`Sheet "${sheet.getName()}" locked for sync.`, 'INFO');
+    log_(`Sheet "${sheet.getName()}" locked for sync execution: ${executionId}.`, 'INFO');
   } catch (e) {
     log_(`Could not lock sheet "${sheet.getName()}": ${e.message}`, 'WARN');
   }
 }
 
-function unlockSheetForEdits_(sheet) {
-  if (!sheet) return;
+function unlockSheetForEdits_(sheet, executionId) {
+  if (!sheet || !executionId) return;
   try {
     const protections = sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET);
     protections.forEach(protection => {
-      if (protection.getDescription() === 'Locked for script execution') {
+      if (protection.getDescription() === SYNC_LOCK_DESCRIPTION_PREFIX + executionId) {
         protection.remove();
-        log_(`Sheet "${sheet.getName()}" unlocked.`, 'INFO');
+        log_(`Sheet "${sheet.getName()}" unlocked for execution: ${executionId}.`, 'INFO');
       }
     });
   } catch (e) {

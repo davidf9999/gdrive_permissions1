@@ -1,26 +1,33 @@
 const EMAIL_EXTRACTION_REGEX = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 const SINGLE_EMAIL_VALIDATION_REGEX = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
 
-function createSheetLockManager_(enableSheetLocking) {
+function createSheetLockManager_(enableSheetLocking, executionId) {
   const lockingEnabled = enableSheetLocking !== undefined
     ? enableSheetLocking
     : (typeof getConfigValue_ === 'function' ? getConfigValue_('EnableSheetLocking', true) : true);
   const lockedSheets = new Set();
+  const currentExecutionId = executionId;
 
   return {
     isEnabled: lockingEnabled,
+    cleanupStaleLocks(sheets) {
+      if (!lockingEnabled) {
+        return;
+      }
+      removeStaleLocks_(sheets, currentExecutionId);
+    },
     lock(sheet) {
       if (!lockingEnabled || !sheet || lockedSheets.has(sheet)) {
         return;
       }
-      lockSheetForEdits_(sheet);
+      lockSheetForEdits_(sheet, currentExecutionId);
       lockedSheets.add(sheet);
     },
     unlockAll() {
       if (!lockingEnabled) {
         return;
       }
-      lockedSheets.forEach(sheet => unlockSheetForEdits_(sheet));
+      lockedSheets.forEach(sheet => unlockSheetForEdits_(sheet, currentExecutionId));
       lockedSheets.clear();
     }
   };
@@ -61,11 +68,19 @@ function processManagedFolders_(options = {}) {
     return returnPlanOnly ? [] : totalSummary;
   }
 
-  const lockManager = createSheetLockManager_(options.enableSheetLocking);
+  const executionId = new Date().getTime() + '_' + Math.random().toString().substring(2);
+  const lockManager = createSheetLockManager_(options.enableSheetLocking, executionId);
   const jobs = _buildSyncJobs(sheet, lastRow, options);
+  
   if (jobs.length === 0) {
     log_('No valid jobs to process.');
     return totalSummary;
+  }
+  
+  if (lockManager.isEnabled) {
+    const allSheetNamesForSync = [MANAGED_FOLDERS_SHEET_NAME].concat(jobs.map(j => j.existingUserSheetName).filter(Boolean));
+    const sheetObjectsForSync = allSheetNamesForSync.map(name => ss.getSheetByName(name)).filter(Boolean);
+    lockManager.cleanupStaleLocks(sheetObjectsForSync);
   }
 
   try {
@@ -875,7 +890,9 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
             requestsToProcess = failedRequests;
             retries++;
             if (retries < MAX_RETRIES) {
-                const delay = INITIAL_DELAY_MS * Math.pow(2, retries - 1) + Math.random() * 1000;
+                const MAX_SLEEP_MS = 300000; // 5 minutes, the maximum allowed by Apps Script
+                let delay = INITIAL_DELAY_MS * Math.pow(2, retries - 1) + Math.random() * 1000;
+                delay = Math.min(delay, MAX_SLEEP_MS); // Cap the delay at the maximum allowed
                 log_(`Rate limit hit for ${groupEmail}. Retrying ${failedRequests.length} failed operations in ${Math.round(delay / 1000)}s...`, 'WARN');
                 Utilities.sleep(delay);
             } else {
@@ -1037,7 +1054,9 @@ function setFolderPermission_(folderId, groupEmail, role) {
       return; // Success, exit the loop
     } catch (e) {
       if (i < MAX_RETRIES - 1) {
-        const delay = INITIAL_DELAY_MS * Math.pow(2, i);
+        const MAX_SLEEP_MS = 300000; // 5 minutes, the maximum allowed by Apps Script
+        let delay = INITIAL_DELAY_MS * Math.pow(2, i);
+        delay = Math.min(delay, MAX_SLEEP_MS); // Cap the delay at the maximum allowed
         log_(`Failed to set permission for group ${groupEmail} on folder ${folderId}. Retrying in ${delay / 1000} seconds... (Attempt ${i + 1}/${MAX_RETRIES})`, 'WARN');
         Utilities.sleep(delay);
       } else {
