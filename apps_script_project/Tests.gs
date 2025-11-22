@@ -1016,6 +1016,7 @@ function runSheetLockingTest_() {
     const startTime = new Date();
     let success = false;
     const testSheetName = 'SheetLockingTestSheet_' + new Date().getTime();
+    const testExecutionId = 'TEST_EXECUTION_' + new Date().getTime();
     let sheet;
 
     try {
@@ -1024,11 +1025,12 @@ function runSheetLockingTest_() {
         log_('Created temporary sheet: ' + testSheetName, 'INFO');
 
         // 2. Lock the sheet
-        lockSheetForEdits_(sheet);
+        lockSheetForEdits_(sheet, testExecutionId);
 
         // 3. Verify protection is on
         let protections = sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET);
-        if (protections.length !== 1 || protections[0].getDescription() !== 'Locked for script execution') {
+        const expectedDescription = 'Sync Lock by execution: ' + testExecutionId;
+        if (protections.length !== 1 || protections[0].getDescription() !== expectedDescription) {
             throw new Error('VERIFICATION FAILED: Sheet was not locked correctly or description is wrong.');
         }
         log_('VERIFICATION PASSED: Sheet protection is applied.', 'INFO');
@@ -1047,7 +1049,7 @@ function runSheetLockingTest_() {
         // set up correctly, which is the most we can do in an automated test.
 
         // 5. Unlock the sheet
-        unlockSheetForEdits_(sheet);
+        unlockSheetForEdits_(sheet, testExecutionId);
 
         // 6. Verify protection is off
         protections = sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET);
