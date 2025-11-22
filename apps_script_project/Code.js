@@ -1,4 +1,5 @@
 /***** CONFIGURATION CONSTANTS *****/
+const SCRIPT_VERSION = '1.0.0';
 const MANAGED_FOLDERS_SHEET_NAME = 'ManagedFolders';
 const SHEET_EDITORS_SHEET_NAME = 'SheetEditors';
 const LOG_SHEET_NAME = 'Log';
@@ -378,7 +379,13 @@ function createHelpMenu_(ui) {
   return ui.createMenu('Help')
     .addItem('User Guide', 'openUserGuide')
     .addItem('Testing Guide', 'openTestingGuide')
-    .addItem('README', 'openReadme');
+    .addItem('README', 'openReadme')
+    .addSeparator()
+    .addItem('View Version', 'showVersion_');
+}
+
+function showVersion_() {
+  SpreadsheetApp.getUi().alert('Permissions Manager Version', SCRIPT_VERSION, SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 /**

@@ -183,6 +183,7 @@ function setupControlSheets_() {
 
   const defaultConfig = {
     '--- Status ---': {
+      'ScriptVersion': { value: '', description: 'The current version of the installed script. (Read-only)' },
       'AutoSync Trigger Status': { value: 'DISABLED', description: 'A visual indicator of the AutoSync trigger status. (Read-only)' }
     },
     '--- Access Control ---': {
@@ -237,7 +238,9 @@ function setupControlSheets_() {
         newSettings.push([groupName, '', '']);
         for (const key in defaultConfig[groupName]) {
             let finalValue = defaultConfig[groupName][key].value;
-            if (key === 'NotificationEmail' && !finalValue) {
+            if (key === 'ScriptVersion') {
+              finalValue = SCRIPT_VERSION;
+            } else if (key === 'NotificationEmail' && !finalValue) {
                 finalValue = Session.getEffectiveUser().getEmail();
             }
             newSettings.push([key, finalValue, defaultConfig[groupName][key].description]);
@@ -274,7 +277,13 @@ function setupControlSheets_() {
     for (const groupName in defaultConfig) {
         newSettings.push([groupName, '', '']);
         for (const key in defaultConfig[groupName]) {
-            let finalValue = existingSettings.has(key) ? existingSettings.get(key) : defaultConfig[groupName][key].value;
+            let finalValue;
+            if (key === 'ScriptVersion') {
+              finalValue = SCRIPT_VERSION;
+            } else {
+              finalValue = existingSettings.has(key) ? existingSettings.get(key) : defaultConfig[groupName][key].value;
+            }
+            
             if (key === 'NotificationEmail' && !finalValue) {
                 finalValue = Session.getEffectiveUser().getEmail();
             }
