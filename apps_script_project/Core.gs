@@ -765,10 +765,20 @@ function _executeMembershipChunkWithRetries_(requests, groupEmail, config) {
         if (originalRequest.operation === 'add') summary.added++;
         if (originalRequest.operation === 'remove') summary.removed++;
       } else {
-        // Only retry on "quotaExceeded" errors. Other errors are treated as permanent failures for this chunk.
-        if (part.status === 403 && part.body.includes('quotaExceeded')) {
+        // Handle idempotent cases (desired state already achieved)
+        if (originalRequest.operation === 'add' && part.status === 409 && part.body.includes('Member already exists')) {
+          // For add: if member already exists, treat as success (desired state achieved)
+          summary.added++;
+          log_(`Member ${originalRequest.email} already exists in group ${groupEmail}. Treating as success.`, 'INFO');
+        } else if (originalRequest.operation === 'remove' && (part.status === 404 || (part.status === 400 && part.body.includes('Resource Not Found')))) {
+          // For remove: if member not found, treat as success (desired state achieved)
+          summary.removed++;
+          log_(`Member ${originalRequest.email} not found in group ${groupEmail}. Treating as success.`, 'INFO');
+        } else if (part.status === 403 && part.body.includes('quotaExceeded')) {
+          // Only retry on "quotaExceeded" errors
           failedRequests.push(originalRequest);
         } else {
+          // All other errors are permanent failures
           summary.failed++;
           log_(`A batch operation permanently failed for group ${groupEmail} on user ${originalRequest.email}. Status: ${part.status}. Details: ${part.body}`, 'ERROR');
         }
