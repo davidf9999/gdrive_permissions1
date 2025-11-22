@@ -464,6 +464,25 @@ function showTestMessage_(title, message) {
     }
 }
 
+function showTestConfirm_(title, message, defaultButton) {
+  const config = getConfiguration_();
+  const autoConfirm = config['TestAutoConfirm'];
+  const showPrompts = config['ShowTestPrompts'];
+
+  if (autoConfirm === true || autoConfirm === 'TRUE') {
+    log_(`Auto-confirming test prompt: ${title} - ${message}`, 'INFO');
+    return defaultButton || SpreadsheetApp.getUi().Button.YES;
+  }
+  
+  if (showPrompts === true || showPrompts === 'TRUE') {
+    const ui = SpreadsheetApp.getUi();
+    return ui.alert(title, message, ui.ButtonSet.YES_NO);
+  } else {
+    log_(`Test "Confirm" Message Silently Skipped (due to ShowTestPrompts=false): ${title} - ${message}`, 'INFO');
+    return defaultButton || SpreadsheetApp.getUi().Button.YES;
+  }
+}
+
 /**
  * Updates a setting in the Config sheet
  * @param {string} settingName - The name of the setting to update
