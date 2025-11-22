@@ -76,9 +76,32 @@ function processManagedFolders_(options = {}) {
     log_('No valid jobs to process.');
     return totalSummary;
   }
+
+  let jobsToProcess = jobs;
+  // NEW: Filter out test-related jobs if in silentMode (e.g., AutoSync)
+  if (silentMode) {
+      const testConfig = getTestConfiguration_(); // Get test config for filtering
+      const manualTestFolderName = testConfig.folderName; // Manual test folder name
+      const testFolderPrefix = 'StressTestFolder_'; // Prefix for stress test folders
+
+      jobsToProcess = jobs.filter(job => {
+          const isTestFolder = job.folderName.startsWith(testFolderPrefix) || job.folderName === manualTestFolderName;
+          if (isTestFolder) {
+              log_(`Auto-sync skipping test folder: "${job.folderName}" (row ${job.rowIndex})`, 'INFO');
+          }
+          return !isTestFolder; // Keep only non-test folders
+      });
+      if (jobs.length !== jobsToProcess.length) {
+          log_(`Filtered out ${jobs.length - jobsToProcess.length} test-related jobs. ${jobsToProcess.length} non-test jobs remaining.`, 'INFO');
+      }
+      if (jobsToProcess.length === 0) {
+          log_('No non-test jobs remaining to process after filtering.');
+          return totalSummary;
+      }
+  }
   
   if (lockManager.isEnabled) {
-    const allSheetNamesForSync = [MANAGED_FOLDERS_SHEET_NAME].concat(jobs.map(j => j.existingUserSheetName).filter(Boolean));
+    const allSheetNamesForSync = [MANAGED_FOLDERS_SHEET_NAME].concat(jobsToProcess.map(j => j.existingUserSheetName).filter(Boolean));
     const sheetObjectsForSync = allSheetNamesForSync.map(name => ss.getSheetByName(name)).filter(Boolean);
     lockManager.cleanupStaleLocks(sheetObjectsForSync);
   }
@@ -87,12 +110,12 @@ function processManagedFolders_(options = {}) {
     if (lockManager.isEnabled) {
       log_('Locking sheets for sync...', 'INFO');
       lockManager.lock(sheet);
-      jobs.forEach(job => lockAssociatedUserSheet_({ spreadsheet: ss }, lockManager, job.existingUserSheetName));
+      jobsToProcess.forEach(job => lockAssociatedUserSheet_({ spreadsheet: ss }, lockManager, job.existingUserSheetName));
     }
 
     if (removeOnly || returnPlanOnly) {
       log_('Processing in delete-only or planning mode...');
-      jobs.forEach(job => {
+      jobsToProcess.forEach(job => {
         const result = syncGroupMembership_(job.groupEmail, job.userSheetName, options);
         if (result) {
             if (returnPlanOnly) {
@@ -109,21 +132,21 @@ function processManagedFolders_(options = {}) {
 
     // --- Full Batch Sync ---
     log_('Step 1/5: Finding existing folders...');
-    _batchFindFolders(jobs, sheet);
+    _batchFindFolders(jobsToProcess, sheet);
 
     log_('Step 2/5: Creating new folders...');
-    _sequentiallyCreateFolders(jobs, sheet, silentMode);
+    _sequentiallyCreateFolders(jobsToProcess, sheet, silentMode);
 
     log_('Step 3/5: Creating groups and user sheets...');
-    _sequentiallyCreateGroupsAndSheets(jobs, sheet, lockManager);
+    _sequentiallyCreateGroupsAndSheets(jobsToProcess, sheet, lockManager);
 
     log_('Step 4/5: Batch-setting folder permissions...');
-    const permSummary = _batchSetPermissions(jobs);
+    const permSummary = _batchSetPermissions(jobsToProcess);
     totalSummary.failed += permSummary.failed; // Add failures from permission setting
 
     log_('Step 5/5: Syncing group memberships...');
     if (!shouldSkipGroupOps_()) {
-        jobs.forEach(job => {
+        jobsToProcess.forEach(job => {
             if (!job.groupEmail || !job.userSheetName) return;
             try {
                 showToast_(`Syncing members for ${job.folderName}...`, 'Sync Progress', 10);
@@ -141,7 +164,7 @@ function processManagedFolders_(options = {}) {
         });
     } else {
         log_('Skipping group membership sync (Admin SDK not available).', 'WARN');
-        jobs.forEach(job => sheet.getRange(job.rowIndex, STATUS_COL).setValue('SKIPPED (No Admin SDK)'));
+        jobsToProcess.forEach(job => sheet.getRange(job.rowIndex, STATUS_COL).setValue('SKIPPED (No Admin SDK)'));
     }
 
     log_('*** Batch-oriented processing finished.');
@@ -162,15 +185,12 @@ function processManagedFolders_(options = {}) {
  * [HELPER] Reads the ManagedFolders sheet and builds a list of job objects.
  */
 function _buildSyncJobs(sheet, lastRow, options) {
-  const silentMode = options.silentMode;
   const onlySyncPrefixes = options.onlySyncPrefixes;
   const onlySyncRowIndexes = options.onlySyncRowIndexes;
 
   log_('Building sync jobs from ManagedFolders sheet...');
   const jobs = [];
   const data = sheet.getRange(2, 1, lastRow - 1, Math.max(FOLDER_NAME_COL, ROLE_COL, GROUP_EMAIL_COL, USER_SHEET_NAME_COL)).getValues();
-  const testConfig = getTestConfiguration_();
-  const manualTestFolderName = testConfig.folderName;
 
   data.forEach((row, i) => {
     const rowIndex = i + 2;
@@ -180,20 +200,12 @@ function _buildSyncJobs(sheet, lastRow, options) {
 
     if (!folderName && !folderId) return; // Skip empty rows
 
-    // Filter based on options for testing
+    // Filter based on options for testing (e.g., specific prefixes or row indexes for targeted runs)
     if (onlySyncPrefixes && !onlySyncPrefixes.some(prefix => folderName.startsWith(prefix))) {
         return;
     }
     if (onlySyncRowIndexes && !onlySyncRowIndexes.includes(rowIndex)) {
         return;
-    }
-    
-    // Default silent mode behavior for AutoSync
-    if (silentMode && !onlySyncPrefixes && !onlySyncRowIndexes) {
-      if (folderName.startsWith('StressTestFolder_') || folderName === manualTestFolderName) {
-        log_(`Auto-sync skipping test folder: "${folderName}"`, 'INFO');
-        return;
-      }
     }
     
     if (!role) {
