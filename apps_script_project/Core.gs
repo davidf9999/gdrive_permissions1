@@ -732,16 +732,69 @@ function renameSheetIfExists_(oldName, newName) {
   }
 }
 
-function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
-  const config = getConfiguration_();
+function _executeMembershipChunkWithRetries_(requests, groupEmail, config) {
+  const summary = { added: 0, removed: 0, failed: 0 };
+  if (!requests || requests.length === 0) {
+    return summary;
+  }
+
   const MAX_RETRIES = config.RetryMaxRetries || 5;
   const INITIAL_DELAY_MS = config.RetryInitialDelayMs || 1000;
+  let retries = 0;
+  let requestsToProcess = requests;
 
+  while (requestsToProcess.length > 0 && retries < MAX_RETRIES) {
+    const batchResponses = _executeBatchRequest(requestsToProcess, 'https://www.googleapis.com/batch/admin/directory_v1');
+    const failedRequests = [];
+
+    batchResponses.forEach((part, i) => {
+      const originalRequest = requestsToProcess[i];
+      if (part.success) {
+        if (originalRequest.operation === 'add') summary.added++;
+        if (originalRequest.operation === 'remove') summary.removed++;
+      } else {
+        // Only retry on "quotaExceeded" errors. Other errors are treated as permanent failures for this chunk.
+        if (part.status === 403 && part.body.includes('quotaExceeded')) {
+          failedRequests.push(originalRequest);
+        } else {
+          summary.failed++;
+          log_(`A batch operation permanently failed for group ${groupEmail} on user ${originalRequest.email}. Status: ${part.status}. Details: ${part.body}`, 'ERROR');
+        }
+      }
+    });
+
+    if (failedRequests.length > 0) {
+      requestsToProcess = failedRequests;
+      retries++;
+      if (retries < MAX_RETRIES) {
+        const MAX_SLEEP_MS = 300000; // 5 minutes, the maximum allowed by Apps Script
+        let delay = INITIAL_DELAY_MS * Math.pow(2, retries - 1) + Math.random() * 1000;
+        delay = Math.min(delay, MAX_SLEEP_MS); // Cap the delay at the maximum allowed
+        log_(`Rate limit hit for ${groupEmail}. Retrying ${failedRequests.length} failed operations in ${Math.round(delay / 1000)}s... (Attempt ${retries}/${MAX_RETRIES})`, 'WARN');
+        Utilities.sleep(delay);
+      } else {
+        summary.failed += failedRequests.length;
+        log_(`Max retries reached for ${groupEmail}. ${failedRequests.length} operations could not be completed.`, 'ERROR');
+      }
+    } else {
+      requestsToProcess = []; // Success, exit the loop
+    }
+  }
+  return summary;
+}
+
+
+function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
+  const config = getConfiguration_();
   const addOnly = options && options.addOnly !== undefined ? options.addOnly : false;
   const removeOnly = options && options.removeOnly !== undefined ? options.removeOnly : false;
   const returnPlanOnly = options && options.returnPlanOnly !== undefined ? options.returnPlanOnly : false;
+  
+  const MEMBERSHIP_BATCH_SIZE = 15;
+  const INTER_BATCH_DELAY_MS = 1000;
+
   log_('*** Starting membership sync for group "' + groupEmail + '" from sheet "' + userSheetName + '"');
-  const summary = { added: 0, removed: 0, failed: 0 };
+  const totalSummary = { added: 0, removed: 0, failed: 0 };
 
   try {
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(userSheetName);
@@ -749,171 +802,109 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
       throw new Error('User sheet "' + userSheetName + '" not found.');
     }
 
-    // Validate for duplicate emails (case-insensitive)
     const validation = validateUserSheetEmails_(userSheetName);
     if (!validation.valid) {
-      const errorMsg = 'VALIDATION ERROR in sheet "' + userSheetName + '": ' + validation.error;
-      log_(errorMsg, 'ERROR');
-      throw new Error(errorMsg);
+      throw new Error('VALIDATION ERROR in sheet "' + userSheetName + '": ' + validation.error);
     }
 
     const lastRow = sheet.getLastRow();
     const sheetEmails = [];
-    let disabledCount = 0;
     if (lastRow >= 2) {
       const rawValues = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
       rawValues.forEach(function(row, index) {
         const rawValue = row[0];
         const disabledValue = row[1];
-        if (rawValue === null || rawValue === undefined) {
-          return;
-        }
-
-        const cellText = rawValue.toString().trim();
-        if (!cellText) {
-          return;
-        }
+        if (!rawValue || !rawValue.toString().trim()) return;
 
         EMAIL_EXTRACTION_REGEX.lastIndex = 0;
-        const matches = cellText.match(EMAIL_EXTRACTION_REGEX) || [];
-        const sheetRowNumber = index + 2;
-
-        if (matches.length === 0) {
-          return; // No email found; ignore silently per requirements.
+        const matches = rawValue.toString().trim().match(EMAIL_EXTRACTION_REGEX) || [];
+        
+        if (matches.length === 1 && SINGLE_EMAIL_VALIDATION_REGEX.test(matches[0])) {
+          if (!isUserRowDisabled_(disabledValue)) {
+            sheetEmails.push(matches[0].toLowerCase());
+          }
         }
-
-        if (matches.length > 1) {
-          log_('Row ' + sheetRowNumber + ' in sheet "' + userSheetName + '" contains multiple email addresses ("' + cellText + '"). Each row must contain exactly one email. Skipping this entry.', 'ERROR');
-          return;
-        }
-
-        if (!SINGLE_EMAIL_VALIDATION_REGEX.test(cellText)) {
-          log_('Row ' + sheetRowNumber + ' in sheet "' + userSheetName + '" must contain a single valid email address, but found "' + cellText + '". Skipping this entry.', 'ERROR');
-          return;
-        }
-
-        if (isUserRowDisabled_(disabledValue)) {
-          disabledCount++;
-          return;
-        }
-
-        sheetEmails.push(matches[0].toLowerCase());
       });
     }
+    
     const sheetSet = new Set(sheetEmails);
-    if (disabledCount > 0) {
-      log_('Found ' + sheetSet.size + ' active emails in sheet "' + userSheetName + '" (skipped ' + disabledCount + ' disabled entr' +
-          (disabledCount === 1 ? 'y' : 'ies') + ').');
-    } else {
-      log_('Found ' + sheetSet.size + ' active emails in sheet "' + userSheetName + '"');
-    }
+    log_(`Found ${sheetSet.size} active emails in sheet "${userSheetName}".`);
 
     const groupMembers = fetchAllGroupMembers_(groupEmail);
-    const groupEmails = groupMembers.map(function(m) { return m.email.toLowerCase(); });
+    const groupEmails = groupMembers.map(m => m.email.toLowerCase());
     const groupSet = new Set(groupEmails);
-    log_('Found ' + groupSet.size + ' members in group "' + groupEmail + '"');
+    log_(`Found ${groupSet.size} members in group "${groupEmail}".`);
 
-    const emailsToAdd = sheetEmails.filter(function(email) { return !groupSet.has(email); });
-    const membersToRemove = groupMembers.filter(function(m) {
-      return !sheetSet.has(m.email.toLowerCase()) && m.role !== 'OWNER';
-    });
-    const emailsToRemove = membersToRemove.map(function(m) { return m.email; });
+    const emailsToAdd = sheetEmails.filter(email => !groupSet.has(email));
+    const membersToRemove = groupMembers.filter(m => !sheetSet.has(m.email.toLowerCase()) && m.role !== 'OWNER');
+    const emailsToRemove = membersToRemove.map(m => m.email);
 
-    if (returnPlanOnly && removeOnly && emailsToRemove.length > 0) {
-      return {
-        groupEmail: groupEmail,
-        groupName: userSheetName,
-        usersToRemove: emailsToRemove
-      };
-    }
     if (returnPlanOnly) {
-        return null;
+      return (removeOnly && emailsToRemove.length > 0) ? { groupEmail, groupName: userSheetName, usersToRemove: emailsToRemove } : null;
     }
 
     if (emailsToAdd.length === 0 && emailsToRemove.length === 0) {
-      log_('No membership changes required for group "' + groupEmail + '". Sync complete.');
-      return summary;
+      log_(`No membership changes required for group "${groupEmail}". Sync complete.`);
+      return totalSummary;
     }
 
-    let requestsToProcess = [];
-    if (!removeOnly) {
-        emailsToAdd.forEach(function(email) {
-            requestsToProcess.push({
-                method: 'POST',
-                path: `/admin/directory/v1/groups/${groupEmail}/members`,
-                payload: JSON.stringify({ email: email, role: 'MEMBER' }),
-                operation: 'add',
-                email: email
-            });
-        });
-    }
-    if (!addOnly) {
-        emailsToRemove.forEach(function(email) {
-            requestsToProcess.push({
-                method: 'DELETE',
-                path: `/admin/directory/v1/groups/${groupEmail}/members/${email}`,
-                operation: 'remove',
-                email: email
-            });
-        });
-    }
-    
-    if (requestsToProcess.length === 0) {
-      log_('No changes to apply in this mode.');
-      return summary;
-    }
-
-    log_(`Starting to process ${requestsToProcess.length} membership changes for ${groupEmail}.`);
-
-    let retries = 0;
-
-    while (requestsToProcess.length > 0 && retries < MAX_RETRIES) {
-        const batchResponses = _executeBatchRequest(requestsToProcess, 'https://www.googleapis.com/batch/admin/directory_v1');
-        const failedRequests = [];
-
-        batchResponses.forEach((part, i) => {
-            const originalRequest = requestsToProcess[i];
-            if (part.success) {
-                if (originalRequest.operation === 'add') summary.added++;
-                if (originalRequest.operation === 'remove') summary.removed++;
-            } else {
-                if (part.status === 403 && part.body.includes('quotaExceeded')) {
-                    failedRequests.push(originalRequest);
-                } else {
-                    summary.failed++;
-                    log_(`A batch operation permanently failed for group ${groupEmail} on user ${originalRequest.email}. Status: ${part.status}. Details: ${part.body}`, 'ERROR');
-                }
-            }
-        });
-
-        if (failedRequests.length > 0) {
-            requestsToProcess = failedRequests;
-            retries++;
-            if (retries < MAX_RETRIES) {
-                const MAX_SLEEP_MS = 300000; // 5 minutes, the maximum allowed by Apps Script
-                let delay = INITIAL_DELAY_MS * Math.pow(2, retries - 1) + Math.random() * 1000;
-                delay = Math.min(delay, MAX_SLEEP_MS); // Cap the delay at the maximum allowed
-                log_(`Rate limit hit for ${groupEmail}. Retrying ${failedRequests.length} failed operations in ${Math.round(delay / 1000)}s...`, 'WARN');
-                Utilities.sleep(delay);
-            } else {
-                summary.failed += failedRequests.length;
-                log_(`Max retries reached for ${groupEmail}. ${failedRequests.length} operations could not be completed.`, 'ERROR');
-            }
-        } else {
-            requestsToProcess = [];
+    // Process additions in chunks
+    if (!removeOnly && emailsToAdd.length > 0) {
+      log_(`Processing ${emailsToAdd.length} additions in chunks of ${MEMBERSHIP_BATCH_SIZE}...`);
+      for (let i = 0; i < emailsToAdd.length; i += MEMBERSHIP_BATCH_SIZE) {
+        const chunk = emailsToAdd.slice(i, i + MEMBERSHIP_BATCH_SIZE);
+        const requests = chunk.map(email => ({
+          method: 'POST',
+          path: `/admin/directory/v1/groups/${groupEmail}/members`,
+          payload: JSON.stringify({ email: email, role: 'MEMBER' }),
+          operation: 'add',
+          email: email
+        }));
+        
+        log_(`  - Adding chunk ${i / MEMBERSHIP_BATCH_SIZE + 1}: ${chunk.length} users...`);
+        const chunkSummary = _executeMembershipChunkWithRetries_(requests, groupEmail, config);
+        totalSummary.added += chunkSummary.added;
+        totalSummary.failed += chunkSummary.failed;
+        
+        if (i + MEMBERSHIP_BATCH_SIZE < emailsToAdd.length) {
+          Utilities.sleep(INTER_BATCH_DELAY_MS);
         }
+      }
     }
 
-    log_('Batch processing summary for ' + groupEmail + ': ' + summary.added + ' added, ' + summary.removed + ' removed, ' + summary.failed + ' failed.', 'INFO');
-    if(summary.failed > 0) {
-      log_('WARNING: ' + summary.failed + ' membership operations failed to sync for group ' + groupEmail + '. See logs for details.', 'WARN');
+    // Process removals in chunks
+    if (!addOnly && emailsToRemove.length > 0) {
+      log_(`Processing ${emailsToRemove.length} removals in chunks of ${MEMBERSHIP_BATCH_SIZE}...`);
+      for (let i = 0; i < emailsToRemove.length; i += MEMBERSHIP_BATCH_SIZE) {
+        const chunk = emailsToRemove.slice(i, i + MEMBERSHIP_BATCH_SIZE);
+        const requests = chunk.map(email => ({
+          method: 'DELETE',
+          path: `/admin/directory/v1/groups/${groupEmail}/members/${email}`,
+          operation: 'remove',
+          email: email
+        }));
+
+        log_(`  - Removing chunk ${i / MEMBERSHIP_BATCH_SIZE + 1}: ${chunk.length} users...`);
+        const chunkSummary = _executeMembershipChunkWithRetries_(requests, groupEmail, config);
+        totalSummary.removed += chunkSummary.removed;
+        totalSummary.failed += chunkSummary.failed;
+
+        if (i + MEMBERSHIP_BATCH_SIZE < emailsToRemove.length) {
+          Utilities.sleep(INTER_BATCH_DELAY_MS);
+        }
+      }
     }
 
-    log_('Membership sync complete for group "' + groupEmail + '"');
-    return summary;
+    log_(`Batch processing summary for ${groupEmail}: ${totalSummary.added} added, ${totalSummary.removed} removed, ${totalSummary.failed} failed.`, 'INFO');
+    if (totalSummary.failed > 0) {
+      log_(`WARNING: ${totalSummary.failed} membership operations failed to sync for group ${groupEmail}. See logs for details.`, 'WARN');
+    }
+
+    log_(`Membership sync complete for group "${groupEmail}".`);
+    return totalSummary;
 
   } catch (e) {
-    log_('FATAL ERROR in syncGroupMembership for group ' + groupEmail + '. Error: ' + e.toString() + ' Stack: ' + e.stack, 'ERROR');
+    log_(`FATAL ERROR in syncGroupMembership for group ${groupEmail}. Error: ${e.toString()} Stack: ${e.stack}`, 'ERROR');
     throw e;
   }
 }
