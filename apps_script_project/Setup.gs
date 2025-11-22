@@ -194,6 +194,8 @@ function setupControlSheets_() {
       'AutoSyncInterval': { value: 5, description: 'The interval in minutes for the AutoSync trigger. Minimum is 5 minutes. Use the "Enable/Update AutoSync" menu item to apply a new interval.' },
       'AllowAutosyncDeletion': { value: true, description: 'Check to allow AutoSync to automatically delete users. WARNING: If a user is accidentally removed from a sheet, their access will be revoked on the next sync.' },
       'AutoSyncMaxDeletions': { value: 10, description: 'The maximum number of deletions allowed in a single AutoSync run. If exceeded, deletions will be paused and manual intervention required.' },
+      'RetryMaxRetries': { value: 5, description: 'The maximum number of times to retry a failed API call (e.g., due to rate limiting).'},
+      'RetryInitialDelayMs': { value: 1000, description: 'The initial time in milliseconds to wait before the first retry. This delay doubles with each subsequent retry (exponential backoff).'},
     },
     '--- Email Notifications ---': {
       'EnableEmailNotifications': { value: false, description: 'Check to receive emails for errors and other notifications.' },
@@ -219,8 +221,8 @@ function setupControlSheets_() {
         'TestUserEmail': { value: '', description: 'The email of a real user IN YOUR WORKSPACE DOMAIN (e.g., your-name@your-domain.com) to be used for all tests. For the stress test, aliases will be generated from this email.' },
         'TestFolderName': { value: 'ManualAccessTestFolder', description: 'The name of the folder to be created during the Manual Access Test.' },
         'TestRole': { value: 'Editor', description: 'The role to be tested during the Manual Access Test.' },
-        'TestNumFolders': { value: 2, description: 'The number of folders to create during the Stress Test.' },
-        'TestNumUsers': { value: 5, description: 'The number of users to create PER FOLDER during the Stress Test.' }
+        'TestNumFolders': { value: 2, description: 'The number of folders to create during the Stress Test. Total API calls are TestNumFolders * TestNumUsers. High numbers can cause API rate-limiting errors.' },
+        'TestNumUsers': { value: 5, description: 'The number of users to create PER FOLDER during the Stress Test. Total API calls are TestNumFolders * TestNumUsers. High numbers can cause API rate-limiting errors.' }
     }
   };
 

@@ -161,10 +161,55 @@ The testing functions are available in the **Permissions Manager > Testing** men
 ### Stress Test
 
 *   **Menu:** `Permissions Manager > Testing > Run Stress Test`
-*   **Purpose:** This test is designed to evaluate the script's performance and reliability when dealing with a large number of folders and users. It is useful for identifying potential bottlenecks or API rate limit issues.
+*   **Purpose:** This test is designed to evaluate the script's performance and reliability when dealing with a large number of folders and users. More specifically, it tests the script's ability to handle **Google API rate limits** and the effectiveness of its **retry mechanisms**. It is useful for identifying potential bottlenecks in your specific Google Workspace environment.
+
+#### Understanding Stress Test Parameters and API Limits
+
+The `TestNumFolders` and `TestNumUsers` settings in the `Config` sheet directly determine the load applied during the stress test:
+*   **`TestNumFolders`**: The number of temporary Google Drive folders and associated Google Groups to create.
+*   **`TestNumUsers`**: The number of temporary user accounts to add to *each* created Google Group.
+
+The total number of Google Group membership additions is `TestNumFolders × TestNumUsers`. A high value for this product (e.g., 30 folders × 100 users = 3,000 membership additions) represents a significant **burst of API calls**. Google APIs are subject to rate limits (e.g., requests per second, requests per minute), and attempting a large number of operations simultaneously will likely trigger these limits.
+
+#### Role of Retry Configuration
+
+The script includes built-in retry logic with exponential backoff to gracefully handle temporary API errors, such as rate limits. The behavior of this retry mechanism is now configurable:
+*   **`RetryMaxRetries` (Config sheet)**: The maximum number of times the script will attempt to re-execute a failed API call.
+*   **`RetryInitialDelayMs` (Config sheet)**: The initial delay (in milliseconds) before the first retry. This delay doubles with each subsequent retry.
+
+These settings are crucial for the script's robustness under heavy load, allowing it to eventually complete operations even when encountering temporary API throttling. These settings apply to *all* API calls made by the script, not just during tests.
+
+#### Stress Test vs. Real-World Use
+
+It is important to understand that the stress test is designed to simulate a **worst-case scenario** (a massive, concurrent batch operation). The results of a stress test (e.g., encountering API rate limits) do **not** imply a hard limit on the total number of folders and users the system can manage.
+
+In **real-world use**, permission changes are typically incremental and spread out over time (e.g., adding one user, removing another, creating a single new folder). The script is designed to handle these day-to-day operations efficiently and reliably. The stress test primarily validates the script's ability to *recover* from API overloads during extreme events.
+
+#### Guidelines for a Large-Scale Stress Test (e.g., 30 Folders, 100 Users)
+
+To demonstrate the system's capability to gracefully handle a substantial number of folders and users, even when hitting API limits, follow these steps:
+
+1.  **Configure Test Parameters (in `Config` sheet):**
+    *   `TestNumFolders`: Set to **30**
+    *   `TestNumUsers`: Set to **100** (This will attempt 3,000 user additions)
+    *   `RetryMaxRetries`: Increase to **10** (default is 5)
+    *   `RetryInitialDelayMs`: Increase to **3000** (3 seconds; default is 1000ms)
+2.  **Ensure `TestUserEmail` is set** to a valid email in your domain.
+3.  **Run the Test:** Go to `Permissions Manager > Testing > Run Stress Test`.
+4.  **Monitor the `TestLog` sheet:**
+    *   **Expected Behavior:** You will likely see log entries indicating `Rate limit hit` and `Retrying failed operations`. This is normal and demonstrates the retry mechanism in action.
+    *   **Key Success Metric:** The test is successful if, despite these warnings, the script eventually completes and all the temporary users are added to their respective groups. The `TestLog` will show a summary of added, removed, and failed operations.
+5.  **Be Patient:** This test will take a significant amount of time due to the large number of operations and the built-in delays from retries.
+
+#### Best Practices for Real-World Bulk Operations
+
+If you need to perform large-scale changes in a live environment (e.g., initial setup for a large department, a major organizational restructure), consider these strategies to mitigate API rate limits:
+*   **Batching:** Break down the changes into smaller, manageable chunks. Instead of processing 500 users at once, divide them into groups of 50 or 100 and process them sequentially, with a short delay in between.
+*   **Adjust Retry Settings:** Temporarily increase `RetryMaxRetries` and `RetryInitialDelayMs` in the `Config` sheet before running a large bulk operation. Remember to revert them to more conservative values afterward if desired.
+
 *   **Process:**
-    1.  The script will prompt you for the number of temporary folders to create.
-    2.  It will then ask for the number of test users to create for *each* folder.
+    1.  The script will prompt you for the number of temporary folders to create (defaults to `TestNumFolders` from Config).
+    2.  It will then ask for the number of test users to create for *each* folder (defaults to `TestNumUsers` from Config).
     3.  You will provide a base email address, which will be used to generate unique test user emails.
     4.  The script will then create all the necessary test data and run a full sync, measuring the time it takes to complete.
     5.  At the end of the test, you will be given the option to clean up all the test data.

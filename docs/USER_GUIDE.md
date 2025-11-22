@@ -78,23 +78,65 @@ Each sync also keeps a dedicated Google Group in sync with this list. The editor
 
 ### 5. `Config`
 
+
+
 This sheet allows you to configure advanced settings for the script. It also displays important, read-only information that is updated by the script.
+
+
 
 **Key Configuration Settings:**
 
+
+
 | Setting | Description | Default |
+
 | :--- | :--- | :--- |
+
 | `EnableAutoSync` | Set to `TRUE` to allow the time-based trigger to run. Set to `FALSE` to pause all automatic syncing without deleting the trigger. | `TRUE` |
+
 | `NotificationEmail` | The email address where important notifications (like errors or pending deletions) will be sent. | The script owner's email |
+
 | `MaxFileSizeMB` | A safeguard to prevent the spreadsheet from becoming too large. If the file size exceeds this limit, AutoSync is aborted and an admin is notified. | `100` |
+
 | `EnableGCPLogging` | Set to `TRUE` to send detailed logs to Google Cloud Logging (requires a linked GCP project). | `FALSE` |
+
+
 
 **System Information (Read-Only):**
 
-- **`AutoSyncStatus`**: A visual indicator showing the current status of the AutoSync trigger. Updated automatically when the spreadsheet is opened or when triggers are changed.
-- **`AdminGroupEmail`**: Shows the email address of the Sheet Editors' Google Group (e.g., `sheet-editors-control-panel@yourdomain.com`). This is automatically updated when you run "Sync Sheet Editors" and can be used to grant editor access to any managed folder by adding it to that folder's user sheet.
+
+
+-   **`AutoSyncStatus`**: A visual indicator showing the current status of the AutoSync trigger. Updated automatically when the spreadsheet is opened or when triggers are changed.
+
+-   **`AdminGroupEmail`**: Shows the email address of the Sheet Editors' Google Group (e.g., `sheet-editors-control-panel@yourdomain.com`). This is automatically updated when you run "Sync Sheet Editors" and can be used to grant editor access to any managed folder by adding it to that folder's user sheet.
+
+
+
+#### API Retry Settings
+
+
+
+The script is designed with built-in retry mechanisms to handle temporary API errors, such as Google's rate limits. The behavior of these retries can be configured in this sheet:
+
+
+
+| Setting           | Description                                                                                                                                              | Default |
+
+| :---------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------- | :------ |
+
+| `RetryMaxRetries` | The maximum number of times the script will attempt to re-execute a failed API call (e.g., due to rate limiting).                                        | `5`     |
+
+| `RetryInitialDelayMs` | The initial time in milliseconds to wait before the first retry. This delay doubles with each subsequent retry (exponential backoff).                     | `1000`  |
+
+
+
+Adjusting these settings can help the script successfully complete operations under varying API loads. For a deeper understanding of how these settings impact performance, especially during high-volume operations, refer to the [Testing Guide (docs/TESTING.md)](TESTING.md) section on Stress Testing.
+
+
 
 ### 6. `Log` & `TestLog`
+
+
 
 These sheets contain detailed, timestamped logs of all the actions the script performs. They are very useful for troubleshooting if something goes wrong.
 

@@ -718,6 +718,10 @@ function renameSheetIfExists_(oldName, newName) {
 }
 
 function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
+  const config = getConfiguration_();
+  const MAX_RETRIES = config.RetryMaxRetries || 5;
+  const INITIAL_DELAY_MS = config.RetryInitialDelayMs || 1000;
+
   const addOnly = options && options.addOnly !== undefined ? options.addOnly : false;
   const removeOnly = options && options.removeOnly !== undefined ? options.removeOnly : false;
   const returnPlanOnly = options && options.returnPlanOnly !== undefined ? options.returnPlanOnly : false;
@@ -847,8 +851,6 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
     log_(`Starting to process ${requestsToProcess.length} membership changes for ${groupEmail}.`);
 
     let retries = 0;
-    const MAX_RETRIES = 5;
-    const INITIAL_DELAY_MS = 1000;
 
     while (requestsToProcess.length > 0 && retries < MAX_RETRIES) {
         const batchResponses = _executeBatchRequest(requestsToProcess, 'https://www.googleapis.com/batch/admin/directory_v1');
@@ -925,8 +927,9 @@ function fetchAllGroupMembers_(groupEmail) {
 }
 
 function setFolderPermission_(folderId, groupEmail, role) {
-  const MAX_RETRIES = 5;
-  const INITIAL_DELAY_MS = 5000; // 5 seconds
+  const config = getConfiguration_();
+  const MAX_RETRIES = config.RetryMaxRetries || 5;
+  const INITIAL_DELAY_MS = config.RetryInitialDelayMs || 1000;
 
   for (let i = 0; i < MAX_RETRIES; i++) {
     try {
