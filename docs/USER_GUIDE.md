@@ -112,6 +112,19 @@ This sheet allows you to configure advanced settings for the script. It also dis
 
 
 
+#### Logging Verbosity
+
+The `LogLevel` setting controls how much detail is written to the Log sheet. This is especially useful to reduce log clutter from routine AutoSync checks:
+
+| Level | What Gets Logged | Use Case |
+| :---- | :--------------- | :------- |
+| `ERROR` | Critical errors only | Production with minimal logging |
+| `WARN` | Warnings and errors | Production with basic monitoring |
+| `INFO` | Normal operations, warnings, errors (default) | Standard usage |
+| `DEBUG` | Everything including routine AutoSync checks | Troubleshooting or development |
+
+**Recommendation:** Use `INFO` (default) for normal operation. Switch to `DEBUG` only when troubleshooting. With `INFO`, routine "AutoSync skipped: No changes detected" messages won't clutter your logs every 5 minutes.
+
 #### API Retry Settings
 
 

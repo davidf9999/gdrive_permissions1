@@ -253,12 +253,36 @@ function getMaxLogLength_() {
   return DEFAULT_MAX_LOG_LENGTH;
 }
 
+/**
+ * Log level priority mapping (lower number = higher priority)
+ * ERROR: Critical errors only
+ * WARN: Warnings and errors
+ * INFO: Normal operations, warnings, and errors (default)
+ * DEBUG: Detailed debugging including routine checks
+ */
+const LOG_LEVELS = {
+  'ERROR': 0,
+  'WARN': 1,
+  'INFO': 2,
+  'DEBUG': 3
+};
+
 function log_(message, severity = 'INFO') {
   // Filter out spreadsheet errors to prevent #ERROR! from appearing in logs
   const messageStr = String(message);
   if (messageStr.startsWith('#') && (messageStr.includes('ERROR') || messageStr.includes('N/A') || messageStr.includes('VALUE') || messageStr.includes('REF') || messageStr.includes('DIV'))) {
     // Skip logging spreadsheet errors - they're not useful log messages
     return;
+  }
+
+  // Check log level threshold
+  const configuredLevel = getConfigValue_('LogLevel', 'INFO').toUpperCase();
+  const configuredPriority = LOG_LEVELS[configuredLevel] !== undefined ? LOG_LEVELS[configuredLevel] : LOG_LEVELS['INFO'];
+  const messagePriority = LOG_LEVELS[severity.toUpperCase()] !== undefined ? LOG_LEVELS[severity.toUpperCase()] : LOG_LEVELS['INFO'];
+
+  // Only log if message priority is high enough (lower number = higher priority)
+  if (messagePriority > configuredPriority) {
+    return; // Skip this log message
   }
 
   const sheetName = (SCRIPT_EXECUTION_MODE === 'TEST') ? TEST_LOG_SHEET_NAME : LOG_SHEET_NAME;

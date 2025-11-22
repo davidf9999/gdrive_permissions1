@@ -77,19 +77,20 @@ function autoSync(options = {}) {
 
   try {
     if (isInEditMode_()) {
-      log_('AutoSync skipped: spreadsheet is in Edit Mode.', 'INFO');
+      log_('AutoSync skipped: spreadsheet is in Edit Mode.', 'DEBUG');
       return;
     }
-
-    log_('*** Starting scheduled AutoSync...');
 
     // Detect if changes warrant a sync
     const changeDetection = detectAutoSyncChanges_();
 
     if (!changeDetection.shouldRun) {
-      log_('AutoSync skipped: No changes detected since last run.', 'INFO');
+      log_('AutoSync skipped: No changes detected since last run.', 'DEBUG');
       return { skipped: true, added: 0, removed: 0, failed: 0 };
     }
+
+    // Only log start message if sync will actually run
+    log_('*** Starting scheduled AutoSync...');
 
     // Log reasons for sync
     log_('AutoSync triggered. Reasons:', 'INFO');

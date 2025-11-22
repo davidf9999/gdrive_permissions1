@@ -206,6 +206,7 @@ function setupControlSheets_() {
       'NotifyDeletionsPending': { value: true, description: 'Check to receive an email alert when an AutoSync detects that a user needs to be manually removed. (This is ignored if AllowAutosyncDeletion is checked).' },
     },
     '--- Auditing & Limits ---': {
+        'LogLevel': { value: 'INFO', description: 'Controls log verbosity. ERROR: critical errors only. WARN: warnings and errors. INFO: normal operations (default). DEBUG: detailed debugging including routine AutoSync checks.' },
         'MaxLogLength': { value: DEFAULT_MAX_LOG_LENGTH, description: 'The maximum number of rows to keep in the Log and TestLog sheets.' },
         'MaxFileSizeMB': { value: 100, description: 'The maximum file size in MB for the spreadsheet. If exceeded, AutoSync will be aborted and an alert sent. This prevents uncontrolled growth of version history.' },
         '_SyncHistory': { value: 'Always enabled', description: 'Sync history is automatically tracked in the SyncHistory sheet with revision links (30-100 days retention).' },
@@ -305,6 +306,21 @@ function applyConfigValidation_() {
     'EnableEmailNotifications', 'NotifyOnSyncSuccess', 'NotifyDeletionsPending',
     'EnableGCPLogging', 'EnableToasts', 'ShowTestPrompts', 'TestCleanup', 'TestAutoConfirm'
   ];
+
+  // Add dropdown validation for LogLevel
+  const allSettings = configSheet.getDataRange().getValues();
+  for (let i = 0; i < allSettings.length; i++) {
+    if (allSettings[i][0] === 'LogLevel') {
+      const logLevelCell = configSheet.getRange(i + 1, 2); // Column B
+      const logLevelRule = SpreadsheetApp.newDataValidation()
+        .requireValueInList(['ERROR', 'WARN', 'INFO', 'DEBUG'], true)
+        .setAllowInvalid(false)
+        .setHelpText('Select logging verbosity: ERROR (critical only), WARN (warnings+errors), INFO (normal operations), DEBUG (detailed including routine checks)')
+        .build();
+      logLevelCell.setDataValidation(logLevelRule);
+      break;
+    }
+  }
 
   const data = configSheet.getDataRange().getValues();
 
