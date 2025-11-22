@@ -790,7 +790,7 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
   const removeOnly = options && options.removeOnly !== undefined ? options.removeOnly : false;
   const returnPlanOnly = options && options.returnPlanOnly !== undefined ? options.returnPlanOnly : false;
   
-  const MEMBERSHIP_BATCH_SIZE = 15;
+  const MEMBERSHIP_BATCH_SIZE = config.MembershipBatchSize || 15;
   const INTER_BATCH_DELAY_MS = 1000;
 
   log_('*** Starting membership sync for group "' + groupEmail + '" from sheet "' + userSheetName + '"');

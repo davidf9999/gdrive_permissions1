@@ -196,6 +196,7 @@ function setupControlSheets_() {
       'AutoSyncMaxDeletions': { value: 10, description: 'The maximum number of deletions allowed in a single AutoSync run. If exceeded, deletions will be paused and manual intervention required.' },
       'RetryMaxRetries': { value: 5, description: 'The maximum number of times to retry a failed API call (e.g., due to rate limiting).'},
       'RetryInitialDelayMs': { value: 1000, description: 'The initial time in milliseconds to wait before the first retry. This delay doubles with each subsequent retry (exponential backoff).'},
+      'MembershipBatchSize': { value: 15, description: 'The number of users to process in a single batch for group membership changes. Helps avoid API rate limits.'},
     },
     '--- Email Notifications ---': {
       'EnableEmailNotifications': { value: false, description: 'Check to receive emails for errors and other notifications.' },
