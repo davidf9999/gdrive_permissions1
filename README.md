@@ -223,18 +223,6 @@ deployment path simple and avoid shipping untested automation. The remaining
 recommendation is to use `ProductionOptimizations.gs` (optional helpers that
 reduce API calls during large syncs).
 
-If you want to experiment with the previous Docker/Terraform workflow, you can
-restore the files from the last revision that contained them:
-
-```bash
-git restore -s 9c1e981f4d34ce3a50fc0e1b706ad86143f206ff -- \
-  Dockerfile docker-compose.yml terraform scripts/setup.sh setup.conf.example
-```
-
-After restoring, run the usual `docker compose build && docker compose up` or
-`cd terraform && terraform init && terraform plan` commands, but expect to
-review and update versions before relying on them in production.
-
 ---
 
 ## Documentation map
