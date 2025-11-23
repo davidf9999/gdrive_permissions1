@@ -1,7 +1,9 @@
 # Google Drive Permission Manager
 
-> **Project status:** Beta — feature complete but still evolving. Expect minor
+> <!-- 
+**Project status:** Beta — feature complete but still evolving. Expect minor
 > breaking changes while we continue to refine the onboarding flow and tooling.
+-->
 
 > **Important Note:** This project requires a **Google Workspace domain**. It does not function with personal @gmail.com accounts due to its reliance on Google Workspace administrative APIs.
 
