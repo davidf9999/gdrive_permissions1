@@ -218,18 +218,22 @@ risk-based auto sync), consult the guides in the `docs/` directory.
 
 ## Automation & production deployment
 
-The repository includes optional tooling for larger environments:
+Infrastructure helpers are currently **archived** from `main` to keep the
+deployment path simple and avoid shipping untested automation. The remaining
+recommendation is to use `ProductionOptimizations.gs` (optional helpers that
+reduce API calls during large syncs).
 
-- **Docker setup wizard** — see `Dockerfile` and `docker-compose.yml` for a
-  containerised helper that validates prerequisites and provisions Google Cloud
-  resources.
-- **Terraform modules** — the `terraform/` directory automates API enablement,
-  service accounts, and quota configuration for production.
-- **ProductionOptimizations.gs** — optional Apps Script helpers that reduce API
-  calls during large syncs.
+If you want to experiment with the previous Docker/Terraform workflow, you can
+restore the files from the last revision that contained them:
 
-These steps are optional but recommended when managing thousands of folders or
-when multiple administrators collaborate on the same control spreadsheet.
+```bash
+git restore -s 9c1e981f4d34ce3a50fc0e1b706ad86143f206ff -- \
+  Dockerfile docker-compose.yml terraform scripts/setup.sh setup.conf.example
+```
+
+After restoring, run the usual `docker compose build && docker compose up` or
+`cd terraform && terraform init && terraform plan` commands, but expect to
+review and update versions before relying on them in production.
 
 ---
 
