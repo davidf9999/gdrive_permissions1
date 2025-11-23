@@ -21,16 +21,19 @@ roll out the workflow consistently.
 ## Table of contents
 
 1. [Key features](#key-features)
-2. [Architecture overview](#architecture-overview)
-3. [First-time Google Workspace setup](#first-time-google-workspace-setup)
-4. [Before you begin](#before-you-begin)
-5. [Manual setup with clasp](#manual-setup-with-clasp)
-6. [Daily usage](#daily-usage)
-7. [Automation & production deployment](#automation--production-deployment)
-8. [Documentation map](#documentation-map)
-9. [Testing](#testing)
-10. [Tearing down the project](#tearing-down-the-project)
-11. [Community](#community)
+2. [Example use cases](#example-use-cases)
+3. [✋ Stop! Do you have these requirements?](#-stop-do-you-have-these-requirements)
+4. [Architecture overview](#architecture-overview)
+5. [First-time Google Workspace setup](#first-time-google-workspace-setup)
+6. [Manual setup with clasp](#manual-setup-with-clasp)
+7. [Daily usage](#daily-usage)
+8. [Cost transparency](#cost-transparency)
+9. [Security & privacy](#security--privacy)
+10. [Automation & production deployment](#automation--production-deployment)
+11. [Documentation map](#documentation-map)
+12. [Testing](#testing)
+13. [Tearing down the project](#tearing-down-the-project)
+14. [Community](#community)
 
 ---
 
@@ -46,6 +49,30 @@ roll out the workflow consistently.
   notifications make auditing straightforward.
 - **Extensive test helpers** – Built-in stress tests and manual access tests are
   available directly from the spreadsheet UI.
+
+---
+
+## Example use cases
+
+- **Educational institution** – 500 students across 20 courses where each
+  course has shared folders for instructors, teaching assistants, and students.
+- **Consulting firm** – 50 active client projects that each require separate
+  Editor and Viewer groups to isolate deliverables and engagement records.
+
+---
+
+## ✋ Stop! Do you have these requirements?
+
+This tool **requires** all of the following before you start setup:
+
+- [ ] Google Workspace domain (personal @gmail.com accounts are not supported)
+- [ ] Super Admin access to the Workspace tenant
+- [ ] Registered domain name
+- [ ] Google Cloud billing account (free tier is sufficient for most users)
+
+If you are missing any prerequisite, review
+[`docs/WORKSPACE_SETUP.md`](docs/WORKSPACE_SETUP.md) for alternatives and
+next steps.
 
 ---
 
@@ -114,26 +141,6 @@ If you are starting from a brand-new Google Workspace tenant, or need a step-by-
 
 Keep that guide open alongside this README when onboarding new administrators—it
 captures every click needed for the initial deployment.
-
----
-
-## Before you begin
-
-These prerequisites must be in place before you deploy the script:
-
-1. **Google Workspace domain** — personal @gmail accounts cannot access the
-   Admin SDK or Drive API required for automation.
-2. **Super Admin privileges** — the user performing the setup must be able to
-   manage Google Groups and enable Google Cloud APIs.
-3. **Registered domain name** — needed for Google Workspace. You can purchase a
-   domain during Workspace sign-up if necessary.
-4. **Google Cloud billing account** — Apps Script links to a Google Cloud
-   project. Enable billing for that project to unlock Admin SDK quota. You can
-   create or reuse a billing account from the
-   [Cloud Console](https://console.cloud.google.com/billing).
-
-Once these are ready, clone this repository locally and continue with the manual
-setup.
 
 ---
 
@@ -218,6 +225,36 @@ risk-based auto sync), consult the guides in the `docs/` directory.
 
 ---
 
+## Cost transparency
+
+- **Google Workspace**: typically **$6–18/user/month** depending on your plan
+  ([pricing details](https://workspace.google.com/pricing.html)).
+- **Google Cloud APIs**: Admin SDK and Drive API usage for this tool generally
+  stays within the free tier; costs scale with very large deployments. Use the
+  [Google Cloud pricing calculator](https://cloud.google.com/products/calculator)
+  if you expect high volumes.
+- **Domain registration**: varies by provider (commonly **~$20/year**).
+
+Most small to medium deployments remain within free quotas; billing is still
+required to unlock Admin SDK limits.
+
+---
+
+## Security & privacy
+
+- **Permissions requested**: the script uses Admin SDK scopes to manage Google
+  Groups and Drive scopes to share folders on your behalf.
+- **Data location**: all managed data (folder metadata, group membership, and
+  logs) stays inside your Google Spreadsheet and Workspace tenant; nothing is
+  sent to external services.
+- **Access to your data**: neither the script authors nor contributors can see
+  your spreadsheet contents because everything runs within your domain.
+- **Compliance**: administrators should review organisational requirements (e.g.
+  GDPR or FERPA) and ensure only authorised users have edit access to the control
+  spreadsheet and Apps Script project.
+
+---
+
 ## Automation & production deployment
 
 Infrastructure helpers are currently **archived** from `main` to keep the
@@ -238,8 +275,10 @@ reduce API calls during large syncs).
 | Stopping or pausing scripts | [`docs/STOP_SCRIPTS.md`](docs/STOP_SCRIPTS.md) |
 | Workspace + script installation walkthrough | [`docs/WORKSPACE_SETUP.md`](docs/WORKSPACE_SETUP.md) |
 | Spreadsheet and script onboarding checklist | [`docs/ONBOARDING.md`](docs/ONBOARDING.md) |
+| Frequently asked questions | [`FAQ.md`](FAQ.md) |
 | Architecture deep dive | [`docs/ARCHITECTURE_OVERVIEW.md`](docs/ARCHITECTURE_OVERVIEW.md) |
 | Historical decisions & debugging notes | [`GEMINI.md`](GEMINI.md) |
+| Release history | [`CHANGELOG.md`](CHANGELOG.md) |
 
 ---
 
