@@ -5,7 +5,7 @@
 > breaking changes while we continue to refine the onboarding flow and tooling.
 -->
 
-> **Important Note:** This project requires a **Google Workspace domain**. It does not function with personal @gmail.com accounts due to its reliance on Google Workspace administrative APIs.
+> **Important Note:** This project requires a **Google Workspace domain**. While personal @gmail.com accounts can be managed by this system, they cannot be used by administrators to directly run the Apps Script due to its reliance on Google Workspace administrative APIs.
 
 The Google Drive Permission Manager automates Drive folder sharing by treating
 one Google Spreadsheet as the source of truth for access. Each folder/role combination
