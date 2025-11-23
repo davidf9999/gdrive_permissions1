@@ -19,11 +19,22 @@ first time you roll out the tool.
    the username and password handy—you will use this account for the rest of the
    setup.
 4. Verify the domain ownership when prompted (usually by adding a TXT record to
-   your DNS provider). Google provides step-by-step instructions for the most
-   common registrars.
+   your DNS provider). Follow the official
+   [domain verification steps](https://support.google.com/a/answer/183895) and
+   use a record similar to:
+
+   | Type | Name/Host | Value |
+   | ---- | --------- | ----- |
+   | TXT  | @         | google-site-verification=abc123example |
 
 > **Tip:** If your organisation already has Workspace, sign into the Admin
 > console with an existing Super Admin instead of creating a brand new tenant.
+
+**Common issues at this step:**
+- ❌ Domain verification fails → Double-check that the TXT record value matches
+  exactly and allow DNS propagation (can take up to an hour).
+- ❌ Wrong domain appears in Admin Console → Confirm you started signup with the
+  domain you intend to manage.
 
 ---
 
@@ -43,6 +54,17 @@ first time you roll out the tool.
    and accept the Terms of Service so the account can manage Google Cloud
    resources.
 
+> **Why Super Admin?** Admin SDK calls that create and manage Google Groups
+> require Super Admin privileges. Delegated roles typically cannot grant the
+> scopes needed for the script to function, so perform setup with a Super
+> Admin account.
+
+**Common issues at this step:**
+- ❌ Groups for Business not available → Ensure the service is enabled for the
+  entire organisation, not just an OU subset.
+- ❌ Cannot access Cloud Console → Accept the Terms of Service while signed in
+  with the Super Admin account and retry.
+
 ---
 
 ## 3. Create the control spreadsheet
@@ -55,6 +77,12 @@ first time you roll out the tool.
 3. In the Apps Script editor, open **Project Settings → IDs** and copy the
    **Script ID** value. You will paste it into `.clasp.json` when configuring the
    CLI.
+
+**Common issues at this step:**
+- ❌ Script ID not found → Open **Extensions → Apps Script**, then **Project
+  Settings** to reveal the ID.
+- ❌ Wrong Google account → Confirm you are signed in with the Super Admin
+  before copying the Script ID or running later steps.
 
 ---
 
@@ -93,6 +121,13 @@ first time you roll out the tool.
 7. Return to the spreadsheet and refresh. The **Permissions Manager** menu will
    appear once the push completes.
 
+**Common issues at this step:**
+- ❌ `clasp: command not found` → Run `npm install -g @google/clasp`.
+- ❌ `Unauthorized` when `clasp push` → Ensure you ran `clasp login` with the
+  Super Admin account before pushing.
+- ❌ `Script ID not found` → Double-check `.clasp.json` points to the Script ID
+  from the bound Apps Script project.
+
 ---
 
 ## 5. Enable APIs and grant consent
@@ -111,6 +146,23 @@ first time you roll out the tool.
    - App name: something descriptive such as `Drive Permission Manager`
    - Add the Super Admin account as a test user
    - Save and publish
+
+| Apps Script Services | Cloud Console APIs |
+| -------------------- | ------------------ |
+| Enable **AdminDirectory API** and **Drive API (v3)** under **Services** in the Apps Script editor. | Enable **Admin SDK API** and **Google Drive API** in the linked Google Cloud project. |
+
+> **Why these scopes?** Admin SDK permissions let the script create and manage
+> Google Groups, while Drive scopes allow folder sharing updates. Both are
+> required for the sync loop to align Drive with the spreadsheet.
+
+**Common issues at this step:**
+- ❌ Cannot add advanced services → Make sure you are using the bound script
+  project created earlier and are logged in as Super Admin.
+- ❌ Consent screen shows unfamiliar scopes → The Admin SDK and Drive scopes are
+  necessary for creating groups and updating folder permissions on behalf of the
+  domain. Scopes are limited to your tenant.
+- ❌ APIs still appear disabled → Verify you enabled them both in Apps Script
+  **and** the Cloud Console.
 
 ---
 
