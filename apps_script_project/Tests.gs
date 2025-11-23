@@ -1280,7 +1280,8 @@ function syncSingleFolder_(rowIndex, addOnly = false) {
     processManagedFolders_({
       onlySyncRowIndexes: [rowIndex],
       addOnly: addOnly,
-      silentMode: true
+      silentMode: true,
+      executionSource: 'TEST'
     });
     return 'OK';
   } catch (e) {
@@ -1300,7 +1301,8 @@ function testOnlySync_(prefixes, addOnly = false) {
     processManagedFolders_({
       onlySyncPrefixes: prefixes,
       addOnly: addOnly,
-      silentMode: true
+      silentMode: true,
+      executionSource: 'TEST'
     });
   } catch (e) {
     // The core processor will log details. This is just a top-level catch.

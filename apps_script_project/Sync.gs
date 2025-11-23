@@ -357,7 +357,11 @@ function syncAdds(options = {}) {
     }
 
     // 3. Process Managed Folders (creates folders, permissions, adds members)
-    const managedFoldersSummary = processManagedFolders_({ addOnly: true, silentMode: silentMode });
+    const managedFoldersSummary = processManagedFolders_({
+      addOnly: true,
+      silentMode: silentMode,
+      executionSource: options.executionSource
+    });
     if (managedFoldersSummary) {
       totalSummary.added += managedFoldersSummary.added;
       totalSummary.failed += managedFoldersSummary.failed;

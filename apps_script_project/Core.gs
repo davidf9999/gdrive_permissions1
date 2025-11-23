@@ -50,6 +50,7 @@ function processManagedFolders_(options = {}) {
   const returnPlanOnly = options && options.returnPlanOnly !== undefined ? options.returnPlanOnly : false;
   const removeOnly = options && options.removeOnly !== undefined ? options.removeOnly : false;
   const silentMode = options && options.silentMode !== undefined ? options.silentMode : false;
+  const executionSource = options && options.executionSource !== undefined ? options.executionSource : 'MANUAL';
   const totalSummary = { added: 0, removed: 0, failed: 0 };
 
   log_('*** Starting batch-oriented processing of ManagedFolders sheet...');
@@ -78,8 +79,8 @@ function processManagedFolders_(options = {}) {
   }
 
   let jobsToProcess = jobs;
-  // NEW: Filter out test-related jobs if in silentMode (e.g., AutoSync)
-  if (silentMode) {
+  // NEW: Filter out test-related jobs if this is an AutoSync run
+  if (executionSource === 'AUTO_SYNC') {
       const testConfig = getTestConfiguration_(); // Get test config for filtering
       const manualTestFolderName = testConfig.folderName; // Manual test folder name
       const testFolderPrefix = 'StressTestFolder_'; // Prefix for stress test folders

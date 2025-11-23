@@ -105,10 +105,10 @@ function autoSync(options = {}) {
     let syncResult;
     if (allowDeletions) {
       log_('AutoSync with deletions enabled (max: ' + maxDeletions + '). Performing full sync...');
-      syncResult = fullSync({ silentMode: silentMode, skipSetup: true });
+      syncResult = fullSync({ silentMode: silentMode, skipSetup: true, executionSource: 'AUTO_SYNC' });
     } else {
       log_('Performing SAFE operations (additions only)...');
-      syncResult = syncAdds({ silentMode: silentMode, skipSetup: true });
+      syncResult = syncAdds({ silentMode: silentMode, skipSetup: true, executionSource: 'AUTO_SYNC' });
     }
 
     // Save snapshot with success/failure status
