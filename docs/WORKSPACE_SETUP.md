@@ -1,6 +1,6 @@
 # Google Workspace setup & installation guide
 
-This walkthrough expands on the quick checklist in the [README](../README.md) so
+This walkthrough expands on the quick checklist in the [README](../README.md#-stop-prerequisites) so
 first-time administrators can stand up a Google Workspace tenant, create the
 required Super Admin user, and deploy the Google Drive Permission Manager from a
 fresh spreadsheet. Each step is short and sequential—follow them in order the
