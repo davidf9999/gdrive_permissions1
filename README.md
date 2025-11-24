@@ -56,18 +56,16 @@ roll out the workflow consistently.
 
 ---
 
-## ✋ Stop! Do you have these requirements?
+## ✋ Stop! Prerequisites
 
-This tool **requires** all of the following before you start setup:
+This tool has a few requirements to get started:
 
-- [ ] Google Workspace domain (personal @gmail.com accounts are not supported)
-- [ ] Super Admin access to the Workspace tenant
-- [ ] Registered domain name
-- [ ] Google Cloud billing account (free tier is sufficient for most users)
+- [ ] **Google Workspace:** You need a Google Workspace subscription for your organization. The script is not compatible with personal `@gmail.com` accounts.
+- [ ] **Super Admin Access:** You must have a user account with Super Admin privileges for your Google Workspace tenant (i.e., your organization's entire Google environment). This is required for the initial setup.
+- [ ] **Domain Name:** You need a registered domain name that you own and have connected to your Google Workspace account.
+- [ ] **Billing Account:** A Google Cloud billing account is needed. For most use cases, the free tier will be sufficient.
 
-If you are missing any prerequisite, review
-[`docs/WORKSPACE_SETUP.md`](docs/WORKSPACE_SETUP.md) for alternatives and
-next steps.
+If you are missing any of these, please review the [`docs/WORKSPACE_SETUP.md`](docs/WORKSPACE_SETUP.md) guide for detailed instructions on how to set them up.
 
 ---
 
