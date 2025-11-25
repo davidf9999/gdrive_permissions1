@@ -15,6 +15,11 @@ function validateUserSheets_() {
     return false;
   }
 
+  if (managedFoldersSheet.getLastRow() < 2) {
+    log_('No folders found in ManagedFolders sheet. Skipping user sheet validation.');
+    return true; // No folders to validate
+  }
+
   const userSheetNames = managedFoldersSheet.getRange(2, USER_SHEET_NAME_COL, managedFoldersSheet.getLastRow() - 1, 1).getValues().flat();
   let isValid = true;
 
@@ -82,7 +87,10 @@ function foldersAudit() {
     if (!auditSheet) {
       throw new Error('FoldersAuditLog sheet not found. Please run the setup again.');
     }
-    auditSheet.getRange(2, 1, auditSheet.getMaxRows() - 1, 5).clearContent();
+    // Clear audit log content if there are rows to clear
+    if (auditSheet.getMaxRows() > 1) {
+      auditSheet.getRange(2, 1, auditSheet.getMaxRows() - 1, 5).clearContent();
+    }
 
     // 1. Check for duplicate group emails
     const emailValidation = validateUniqueGroupEmails_();
