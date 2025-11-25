@@ -113,7 +113,7 @@ function validateUniqueGroupEmails_() {
 
 function assertAdminDirectoryAvailable_() {
   // Provides a clear message if Admin Directory advanced service/API is not enabled.
-  if (typeof AdminDirectory === 'undefined') {
+  if (typeof AdminDirectory === 'undefined' || typeof AdminDirectory.Groups === 'undefined') {
     const msg = 'Admin Directory service is not available. Enable it in Apps Script (Services > Admin Directory API) and in Google Cloud (APIs & Services > Library > Admin SDK). Requires Google Workspace.';
     log_(msg, 'ERROR');
     throw new Error(msg);
@@ -121,7 +121,11 @@ function assertAdminDirectoryAvailable_() {
 }
 
 function isAdminDirectoryAvailable_() {
-  try { return typeof AdminDirectory !== 'undefined'; } catch (e) { return false; }
+  try { 
+    return typeof AdminDirectory !== 'undefined' && typeof AdminDirectory.Groups !== 'undefined';
+   } catch (e) { 
+    return false; 
+  }
 }
 
 function isPersonalGmail_() {

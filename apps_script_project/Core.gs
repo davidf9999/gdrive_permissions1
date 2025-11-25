@@ -477,7 +477,7 @@ function checkForOrphanSheets_() {
 
     const requiredSheetNames = new Set();
     requiredSheetNames.add(MANAGED_FOLDERS_SHEET_NAME);
-    requiredSheetNames.add(ADMINS_SHEET_NAME);
+    requiredSheetNames.add(SHEET_EDITORS_SHEET_NAME);
     requiredSheetNames.add(USER_GROUPS_SHEET_NAME);
     requiredSheetNames.add(CONFIG_SHEET_NAME);
     requiredSheetNames.add(LOG_SHEET_NAME);
