@@ -507,9 +507,20 @@ function checkForOrphanSheets_() {
         }
     }
 
-    return allSheetNames.filter(function(name) {
+    const orphanSheetNames = allSheetNames.filter(function(name) {
         return !requiredSheetNames.has(name) && !isTestSheet_(name);
     });
+
+    if (orphanSheetNames.includes('Sheet1')) {
+      const sheet1 = spreadsheet.getSheetByName('Sheet1');
+      if (sheet1) {
+        log_('Default "Sheet1" found. Deleting it now.', 'INFO');
+        spreadsheet.deleteSheet(sheet1);
+        return orphanSheetNames.filter(name => name !== 'Sheet1');
+      }
+    }
+    
+    return orphanSheetNames;
 
   } catch (e) {
     log_('Error during orphan sheet check: ' + e.message, 'ERROR');
