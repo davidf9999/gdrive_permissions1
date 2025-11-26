@@ -72,10 +72,10 @@ function processManagedFolders_(options = {}) {
   const executionId = new Date().getTime() + '_' + Math.random().toString().substring(2);
   const lockManager = createSheetLockManager_(options.enableSheetLocking, executionId);
   const jobs = _buildSyncJobs(sheet, lastRow, options);
-  
+
   if (jobs.length === 0) {
     log_('No valid jobs to process.');
-    return totalSummary;
+    return returnPlanOnly ? [] : totalSummary;
   }
 
   let jobsToProcess = jobs;
@@ -97,7 +97,7 @@ function processManagedFolders_(options = {}) {
       }
       if (jobsToProcess.length === 0) {
           log_('No non-test jobs remaining to process after filtering.');
-          return totalSummary;
+          return returnPlanOnly ? [] : totalSummary;
       }
   }
   
