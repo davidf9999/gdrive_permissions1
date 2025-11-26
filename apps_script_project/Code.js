@@ -381,6 +381,7 @@ function createHelpMenu_(ui) {
     .addItem('User Guide', 'openUserGuide')
     .addItem('Testing Guide', 'openTestingGuide')
     .addItem('README', 'openReadme')
+    .addItem('All Documentation', 'openAllDocumentation')
     .addSeparator()
     .addItem('View Version', 'showVersion_');
 }

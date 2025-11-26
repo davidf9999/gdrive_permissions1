@@ -1126,11 +1126,11 @@ function setSheetUiStyles_() {
       });
 
       // Clear old backgrounds
-      const clearBgRange = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 4);
+      const clearBgRange = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 5);
       clearBgRange.setBackground(null);
 
       // Apply new protection and styling
-      const range = userGroupsSheet.getRange(2, 2, userGroupsSheet.getLastRow() - 1, 3);
+      const range = userGroupsSheet.getRange(2, 3, userGroupsSheet.getLastRow() - 1, 3);
       range.setBackground('#f3f3f3');
       const protection = range.protect().setDescription('These columns are managed by the script.');
       protection.setWarningOnly(true);
