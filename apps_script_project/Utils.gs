@@ -924,6 +924,120 @@ function findGroupEmailByName_(groupName) {
             }
         }
     }
-    
+
     return null;
+}
+
+/**
+ * Finds all groups that contain a specific member (for detecting nested groups).
+ * Used to warn when deleting a group that is nested in other groups.
+ * @param {string} memberEmail - Email address to search for
+ * @return {Array<string>} Array of group names that contain this member
+ */
+function findGroupsContainingMember_(memberEmail) {
+  if (!memberEmail) return [];
+
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const groupsContainingMember = [];
+
+  // Check all user sheets (including group sheets ending in _G)
+  const allSheets = spreadsheet.getSheets();
+  allSheets.forEach(function(sheet) {
+    const sheetName = sheet.getName();
+
+    // Skip system sheets
+    if (sheetName === MANAGED_FOLDERS_SHEET_NAME ||
+        sheetName === USER_GROUPS_SHEET_NAME ||
+        sheetName === SHEET_EDITORS_SHEET_NAME ||
+        sheetName === CONFIG_SHEET_NAME ||
+        sheetName === LOG_SHEET_NAME ||
+        sheetName === TEST_LOG_SHEET_NAME ||
+        sheetName === FOLDER_AUDIT_LOG_SHEET_NAME ||
+        sheetName === SYNC_HISTORY_SHEET_NAME ||
+        sheetName === 'DeepFolderAuditLog' ||
+        sheetName === 'Help') {
+      return;
+    }
+
+    // Check if this sheet contains the member
+    if (sheet.getLastRow() < 2) return;
+
+    const emails = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).getValues();
+    const found = emails.some(function(row) {
+      return row[0] && row[0].toString().trim().toLowerCase() === memberEmail.toLowerCase();
+    });
+
+    if (found) {
+      // Remove _G suffix if present for cleaner display
+      const displayName = sheetName.endsWith('_G') ? sheetName.slice(0, -2) : sheetName;
+      groupsContainingMember.push(displayName);
+    }
+  });
+
+  return groupsContainingMember;
+}
+
+/**
+ * Sends email notification about deleted groups and folders.
+ * @param {Object} summary - Deletion summary with counts and errors
+ */
+function notifyDeletions_(summary) {
+  const config = getConfiguration_();
+  const notifyEnabled = getConfigValue_('NotifyOnGroupFolderDeletion', true);
+  const emailNotificationsEnabled = getConfigValue_('EnableEmailNotifications', false);
+
+  if (!notifyEnabled || !emailNotificationsEnabled) {
+    return; // Notifications disabled
+  }
+
+  const recipientEmail = config['NotificationEmail'] || Session.getEffectiveUser().getEmail();
+  if (!recipientEmail) {
+    log_('Cannot send deletion notification: no recipient email configured', 'WARN');
+    return;
+  }
+
+  const totalDeleted = summary.userGroupsDeleted + summary.foldersDeleted;
+  const subject = `[Permissions Manager] ${totalDeleted} Resource(s) Deleted`;
+
+  let body = 'The following resources were deleted during sync:\n\n';
+  body += '='.repeat(60) + '\n\n';
+
+  if (summary.userGroupsDeleted > 0) {
+    body += `✓ User Groups Deleted: ${summary.userGroupsDeleted}\n`;
+  }
+
+  if (summary.foldersDeleted > 0) {
+    body += `✓ Folder-Role Bindings Deleted: ${summary.foldersDeleted}\n`;
+  }
+
+  body += '\n';
+
+  if (summary.errors && summary.errors.length > 0) {
+    body += '⚠️ ERRORS ENCOUNTERED:\n\n';
+    summary.errors.forEach(function(error) {
+      body += `  • ${error.type}: "${error.name}"\n`;
+      body += `    Error: ${error.error}\n\n`;
+    });
+  }
+
+  body += '='.repeat(60) + '\n\n';
+  body += 'Details:\n\n';
+  body += '• Google Groups: Deleted from Google Workspace\n';
+  body += '• Folder Permissions: Group access removed\n';
+  body += '• User Sheets: Deleted from spreadsheet\n';
+  body += '• Configuration Rows: Removed\n';
+  body += '• Folders: NOT deleted (remain in Drive)\n\n';
+
+  body += 'To review:\n';
+  body += `• Check SyncHistory sheet for full details\n`;
+  body += `• Check Log sheet for operation logs\n\n`;
+
+  body += 'Note: This is an automated notification from the Google Drive Permissions Manager.\n';
+
+  try {
+    MailApp.sendEmail(recipientEmail, subject, body);
+    log_(`Deletion notification sent to ${recipientEmail}`, 'INFO');
+  } catch (e) {
+    log_(`Failed to send deletion notification: ${e.message}`, 'ERROR');
+  }
 }
