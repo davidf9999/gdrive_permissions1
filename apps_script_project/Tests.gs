@@ -1474,6 +1474,9 @@ function runUserGroupDeletionTest() {
     log_('========================================', 'INFO');
 
     let success = true;
+    let testGroupName = '';
+    let testGroupEmail = '';
+
     try {
         SCRIPT_EXECUTION_MODE = 'TEST';
 
@@ -1494,8 +1497,8 @@ function runUserGroupDeletionTest() {
         }
 
         // 1. Setup: Create test UserGroup
-        const testGroupName = 'TestDeleteGroup_' + new Date().getTime();
-        const testGroupEmail = testGroupName.toLowerCase().replace(/[^a-z0-9]/g, '') + '@' + Session.getActiveUser().getEmail().split('@')[1];
+        testGroupName = 'TestDeleteGroup_' + new Date().getTime();
+        testGroupEmail = testGroupName.toLowerCase().replace(/[^a-z0-9]/g, '') + '@' + Session.getActiveUser().getEmail().split('@')[1];
 
         const ss = SpreadsheetApp.getActiveSpreadsheet();
         const userGroupsSheet = ss.getSheetByName('UserGroups');
@@ -1519,7 +1522,7 @@ function runUserGroupDeletionTest() {
 
         // Run sync to create actual Google Group
         log_('Running sync to create Google Group...', 'INFO');
-        syncUserGroups_({ dryRun: false });
+        syncUserGroups({ dryRun: false });
 
         // Verify group was created
         const groupData = userGroupsSheet.getDataRange().getValues();
@@ -1646,6 +1649,7 @@ function runFolderRoleDeletionTest() {
     let success = true;
     let testFolderId = null;
     let testFolderName = null;
+    let testUserSheetName = '';
 
     try {
         SCRIPT_EXECUTION_MODE = 'TEST';
@@ -1676,7 +1680,7 @@ function runFolderRoleDeletionTest() {
         const ss = SpreadsheetApp.getActiveSpreadsheet();
         const managedFoldersSheet = ss.getSheetByName('ManagedFolders');
         const testRole = 'reader';
-        const testUserSheetName = 'TestDeleteFolderUsers';
+        testUserSheetName = 'TestDeleteFolderUsers';
 
         // Create user sheet
         const testUserSheet = ss.insertSheet(testUserSheetName);
