@@ -370,6 +370,7 @@ function createAdvancedMenu_(ui) {
     .addItem('Clear Cache', 'clearCache')
     .addItem('Update User Sheet Headers', 'updateUserSheetHeaders_')
     .addSeparator()
+    .addItem('Delete Orphan Sheets', 'deleteOrphanSheets')
     .addItem('Clean up folder...', 'cleanupFolderByName')
     .addItem('Remove Blank Rows', 'removeBlankRows')
     .addSeparator()

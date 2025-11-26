@@ -221,7 +221,7 @@ function setupControlSheets_() {
         'ShowTestPrompts': { value: true, description: 'Set to FALSE to run tests without UI prompts that pause the script. Required for fully automated test runs.'},
         'TestAutoConfirm': { value: false, description: 'For automated testing only. Set to TRUE to automatically answer "Yes" to all test verification prompts.' },
         'TestCleanup': { value: false, description: 'Set to TRUE to automatically delete all folders, groups, and sheets created by a test. If FALSE, you will be prompted manually.' },
-        'TestUserEmail': { value: '', description: 'The email of a real user IN YOUR WORKSPACE DOMAIN (e.g., your-name@your-domain.com) to be used for all tests. For the stress test, aliases will be generated from this email.' },
+        'TestUserEmail': { value: currentUserEmail, description: 'The email of a real user IN YOUR WORKSPACE DOMAIN (e.g., your-name@your-domain.com) to be used for all tests. For the stress test, aliases will be generated from this email.' },
         'TestFolderName': { value: 'ManualAccessTestFolder', description: 'The name of the folder to be created during the Manual Access Test.' },
         'TestRole': { value: 'Editor', description: 'The role to be tested during the Manual Access Test.' },
         'TestNumFolders': { value: 2, description: 'The number of folders to create during the Stress Test. Total API calls are TestNumFolders * TestNumUsers. High numbers can cause API rate-limiting errors.' },

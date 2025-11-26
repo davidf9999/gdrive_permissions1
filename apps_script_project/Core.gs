@@ -528,6 +528,58 @@ function checkForOrphanSheets_() {
   }
 }
 
+/**
+ * Deletes orphan sheets that are not part of the configuration.
+ * Shows a confirmation dialog before deleting.
+ */
+function deleteOrphanSheets() {
+  try {
+    const orphanSheets = checkForOrphanSheets_();
+
+    if (!orphanSheets || orphanSheets.length === 0) {
+      SpreadsheetApp.getUi().alert('No orphan sheets found', 'All sheets are properly configured.', SpreadsheetApp.getUi().ButtonSet.OK);
+      log_('No orphan sheets to delete.', 'INFO');
+      return;
+    }
+
+    const ui = SpreadsheetApp.getUi();
+    const sheetList = orphanSheets.join('\n  - ');
+    const response = ui.alert(
+      'Delete Orphan Sheets?',
+      `Found ${orphanSheets.length} orphan sheet(s) that are not in your configuration:\n  - ${sheetList}\n\nDo you want to delete these sheets?`,
+      ui.ButtonSet.YES_NO
+    );
+
+    if (response !== ui.Button.YES) {
+      log_('User cancelled orphan sheet deletion.', 'INFO');
+      return;
+    }
+
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    let deletedCount = 0;
+
+    orphanSheets.forEach(sheetName => {
+      try {
+        const sheet = spreadsheet.getSheetByName(sheetName);
+        if (sheet) {
+          spreadsheet.deleteSheet(sheet);
+          log_(`Deleted orphan sheet: "${sheetName}"`, 'INFO');
+          deletedCount++;
+        }
+      } catch (e) {
+        log_(`Failed to delete sheet "${sheetName}": ${e.message}`, 'ERROR');
+      }
+    });
+
+    ui.alert('Orphan Sheets Deleted', `Successfully deleted ${deletedCount} orphan sheet(s).`, ui.ButtonSet.OK);
+    log_(`Deleted ${deletedCount} orphan sheet(s).`, 'INFO');
+
+  } catch (e) {
+    log_('Error during orphan sheet deletion: ' + e.message, 'ERROR');
+    SpreadsheetApp.getUi().alert('Error', 'Failed to delete orphan sheets: ' + e.message, SpreadsheetApp.getUi().ButtonSet.OK);
+  }
+}
+
 function getOrCreateFolder_(folderName, folderId, options = {}) {
   const silentMode = options && options.silentMode !== undefined ? options.silentMode : false;
   if (folderId) {
