@@ -546,7 +546,9 @@ function deleteOrphanSheets() {
     const sheetList = orphanSheets.join('\n  - ');
     const response = ui.alert(
       'Delete Orphan Sheets?',
-      `Found ${orphanSheets.length} orphan sheet(s) that are not in your configuration:\n  - ${sheetList}\n\nDo you want to delete these sheets?`,
+      `Found ${orphanSheets.length} orphan sheet(s) that are not in your configuration:\n  - ${sheetList}\n\n` +
+      `Do you want to delete these sheets?\n\n` +
+      `⚠️ Important: This only deletes the sheets. You may need to manually delete related Google Groups from the Google Workspace Admin console.`,
       ui.ButtonSet.YES_NO
     );
 
@@ -571,7 +573,12 @@ function deleteOrphanSheets() {
       }
     });
 
-    ui.alert('Orphan Sheets Deleted', `Successfully deleted ${deletedCount} orphan sheet(s).`, ui.ButtonSet.OK);
+    ui.alert(
+      'Orphan Sheets Deleted',
+      `Successfully deleted ${deletedCount} orphan sheet(s).\n\n` +
+      `⚠️ Reminder: If these sheets had associated Google Groups, you may need to manually delete them from the Google Workspace Admin console (admin.google.com → Directory → Groups).`,
+      ui.ButtonSet.OK
+    );
     log_(`Deleted ${deletedCount} orphan sheet(s).`, 'INFO');
 
   } catch (e) {
