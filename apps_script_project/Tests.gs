@@ -1130,7 +1130,11 @@ function runAllTests() {
             { name: 'Add/Delete Separation Test', func: runAddDeleteSeparationTest },
             { name: 'AutoSync Error Email Test', func: runAutoSyncErrorEmailTest },
             { name: 'Sheet Locking Test', func: runSheetLockingTest_ },
-            { name: 'Circular Dependency Test', func: runCircularDependencyTest_ }
+            { name: 'Circular Dependency Test', func: runCircularDependencyTest_ },
+            { name: 'UserGroup Deletion Test', func: runUserGroupDeletionTest },
+            { name: 'Folder-Role Deletion Test', func: runFolderRoleDeletionTest },
+            { name: 'Deletion Disabled Test', func: runDeletionDisabledTest },
+            { name: 'Idempotent Deletion Test', func: runIdempotentDeletionTest }
         ];
 
         const testResults = [];
@@ -2192,4 +2196,132 @@ function runAllDeletionTests() {
     log_('', 'INFO');
 
     return results.failed === 0;
+}
+
+/**
+ * Cleanup function for deletion test data
+ * Removes any orphaned test data left by failed deletion tests.
+ */
+function cleanupDeletionTestData() {
+    SCRIPT_EXECUTION_MODE = 'TEST';
+    try {
+        const ui = SpreadsheetApp.getUi();
+        const response = ui.alert(
+            'Cleanup Deletion Test Data',
+            'This will remove any leftover test data from deletion tests:\n\n' +
+            '• Test groups starting with "TestDelete", "TestDisabled", "TestIdempotent"\n' +
+            '• Test sheets with those prefixes\n' +
+            '• Test folders in Drive starting with "TestDeleteFolder_"\n\n' +
+            'Continue?',
+            ui.ButtonSet.YES_NO
+        );
+
+        if (response !== ui.Button.YES) {
+            log_('Deletion test cleanup cancelled by user.', 'INFO');
+            return;
+        }
+
+        log_('Starting deletion test data cleanup...', 'INFO');
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        let cleanupCount = 0;
+
+        // 1. Clean up test groups from UserGroups sheet
+        const userGroupsSheet = ss.getSheetByName('UserGroups');
+        if (userGroupsSheet) {
+            const data = userGroupsSheet.getDataRange().getValues();
+            for (let i = data.length - 1; i >= 1; i--) {
+                const groupName = data[i][0];
+                const groupEmail = data[i][1];
+                if (groupName && (
+                    groupName.startsWith('TestDeleteGroup_') ||
+                    groupName.startsWith('TestDisabledDeleteGroup_') ||
+                    groupName.startsWith('TestIdempotentDelete_')
+                )) {
+                    // Try to delete Google Group
+                    if (groupEmail) {
+                        try {
+                            AdminDirectory.Groups.remove(groupEmail);
+                            log_('Deleted test Google Group: ' + groupEmail, 'INFO');
+                        } catch (e) {
+                            log_('Could not delete Google Group ' + groupEmail + ': ' + e.message, 'WARN');
+                        }
+                    }
+                    // Delete row
+                    userGroupsSheet.deleteRow(i + 1);
+                    cleanupCount++;
+                    log_('Removed test group row: ' + groupName, 'INFO');
+                }
+            }
+        }
+
+        // 2. Clean up test folder rows from ManagedFolders sheet
+        const managedFoldersSheet = ss.getSheetByName('ManagedFolders');
+        if (managedFoldersSheet) {
+            const data = managedFoldersSheet.getDataRange().getValues();
+            for (let i = data.length - 1; i >= 1; i--) {
+                const folderName = data[i][0];
+                const groupEmail = data[i][3];
+                if (folderName && folderName.startsWith('TestDeleteFolder_')) {
+                    // Try to delete Google Group
+                    if (groupEmail) {
+                        try {
+                            AdminDirectory.Groups.remove(groupEmail);
+                            log_('Deleted test Google Group: ' + groupEmail, 'INFO');
+                        } catch (e) {
+                            log_('Could not delete Google Group ' + groupEmail + ': ' + e.message, 'WARN');
+                        }
+                    }
+                    // Delete row
+                    managedFoldersSheet.deleteRow(i + 1);
+                    cleanupCount++;
+                    log_('Removed test folder row: ' + folderName, 'INFO');
+                }
+            }
+        }
+
+        // 3. Clean up test sheets
+        const sheets = ss.getSheets();
+        for (let i = 0; i < sheets.length; i++) {
+            const sheet = sheets[i];
+            const name = sheet.getName();
+            if (name.startsWith('TestDeleteGroup_') ||
+                name.startsWith('TestDisabledDeleteGroup_') ||
+                name.startsWith('TestIdempotentDelete_') ||
+                name.startsWith('TestDeleteFolder')) {
+                try {
+                    ss.deleteSheet(sheet);
+                    cleanupCount++;
+                    log_('Deleted test sheet: ' + name, 'INFO');
+                } catch (e) {
+                    log_('Could not delete sheet ' + name + ': ' + e.message, 'WARN');
+                }
+            }
+        }
+
+        // 4. Clean up test folders from Drive
+        const folderIterator = DriveApp.getFoldersByName('TestDeleteFolder_');
+        while (folderIterator.hasNext()) {
+            const folder = folderIterator.next();
+            const folderName = folder.getName();
+            if (folderName.startsWith('TestDeleteFolder_')) {
+                try {
+                    folder.setTrashed(true);
+                    cleanupCount++;
+                    log_('Trashed test folder from Drive: ' + folderName, 'INFO');
+                } catch (e) {
+                    log_('Could not trash folder ' + folderName + ': ' + e.message, 'WARN');
+                }
+            }
+        }
+
+        log_('Deletion test cleanup complete. Cleaned up ' + cleanupCount + ' items.', 'INFO');
+        ui.alert('Cleanup Complete', 'Cleaned up ' + cleanupCount + ' deletion test items.\n\nCheck TestLog for details.', ui.ButtonSet.OK);
+
+    } catch (err) {
+        log_('Deletion test cleanup failed: ' + err.message, 'ERROR');
+        log_(err.stack, 'ERROR');
+        SpreadsheetApp.getUi().alert('Cleanup Failed', 'An error occurred during cleanup. Check TestLog for details.', SpreadsheetApp.getUi().ButtonSet.OK);
+    } finally {
+        SCRIPT_EXECUTION_MODE = 'DEFAULT';
+    }
 }

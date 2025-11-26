@@ -34,7 +34,11 @@ function isTestSheet_(sheetName) {
         /^Invalid Folder_Editor$/,
         /^TestCycleA_G$/,
         /^TestCycleB_G$/,
-        /^SheetLockingTestSheet_.*/
+        /^SheetLockingTestSheet_.*/,
+        /^TestDeleteGroup_.*/,
+        /^TestDisabledDeleteGroup_.*/,
+        /^TestIdempotentDelete_.*/,
+        /^TestDeleteFolder.*/
     ];
 
     return testSheetPatterns.some(pattern => pattern.test(sheetName));

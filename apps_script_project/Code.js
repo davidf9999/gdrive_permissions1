@@ -102,7 +102,10 @@ function validateEnvironment_() {
 
 /**
  * Trigger fired when a user edits a cell in the spreadsheet.
- * Warns users if they try to delete rows from ManagedFolders or UserGroups.
+ * Handles multiple edit scenarios:
+ * 1. Warns users if they try to delete rows from ManagedFolders or UserGroups
+ * 2. Protects Config sheet Description column from edits
+ * 3. Prevents edits to read-only Config status indicators
  * @param {Event} e The onEdit event object
  */
 function onEdit(e) {
@@ -110,37 +113,72 @@ function onEdit(e) {
 
   const sheet = e.source.getActiveSheet();
   const sheetName = sheet.getName();
+  const range = e.range;
+  const oldValue = e.oldValue;
 
-  // Only monitor ManagedFolders and UserGroups sheets
-  if (sheetName !== MANAGED_FOLDERS_SHEET_NAME && sheetName !== USER_GROUPS_SHEET_NAME) {
+  // --- Handle ManagedFolders and UserGroups row deletion warning ---
+  if (sheetName === MANAGED_FOLDERS_SHEET_NAME || sheetName === USER_GROUPS_SHEET_NAME) {
+    if (!range || range.getRow() <= 1) {
+      return; // Skip header row
+    }
+
+    // Check if user might be deleting a row (first 3 columns are empty)
+    const row = range.getRow();
+    const firstCols = sheet.getRange(row, 1, 1, 3).getValues()[0];
+
+    // If first columns are empty, might be a deleted row
+    if (!firstCols[0] && !firstCols[1] && !firstCols[2]) {
+      try {
+        SpreadsheetApp.getUi().alert(
+          'Use Delete Checkbox Instead',
+          'To delete a folder or group, please check the "Delete" checkbox in the last column and run sync.\n\n' +
+          'Why? Manual row deletion:\n' +
+          '• Leaves orphaned resources (groups, sheets)\n' +
+          '• Causes sync to abort with errors\n' +
+          '• Bypasses safety mechanisms\n\n' +
+          'The Delete checkbox ensures proper cleanup of all related resources.',
+          SpreadsheetApp.getUi().ButtonSet.OK
+        );
+      } catch (alertError) {
+        // If alert fails, just log
+        log_('Warning: User may be deleting rows in ' + sheetName + '. Use Delete checkbox instead.', 'WARN');
+      }
+    }
     return;
   }
 
-  const range = e.range;
-  if (!range || range.getRow() <= 1) {
-    return; // Skip header row
-  }
+  // --- Handle Config sheet protection ---
+  if (sheetName === CONFIG_SHEET_NAME) {
+    const editedRow = range.getRow();
+    const editedCol = range.getColumn();
 
-  // Check if user might be deleting a row (first 3 columns are empty)
-  const row = range.getRow();
-  const firstCols = sheet.getRange(row, 1, 1, 3).getValues()[0];
+    // Protect Description Column (column 3)
+    if (editedCol === 3) {
+      range.setValue(oldValue);
+      SpreadsheetApp.getActiveSpreadsheet().toast('The description column is not editable.', 'Edit Reverted', 10);
+      return;
+    }
 
-  // If first columns are empty, might be a deleted row
-  if (!firstCols[0] && !firstCols[1] && !firstCols[2]) {
-    try {
-      SpreadsheetApp.getUi().alert(
-        'Use Delete Checkbox Instead',
-        'To delete a folder or group, please check the "Delete" checkbox in the last column and run sync.\n\n' +
-        'Why? Manual row deletion:\n' +
-        '• Leaves orphaned resources (groups, sheets)\n' +
-        '• Causes sync to abort with errors\n' +
-        '• Bypasses safety mechanisms\n\n' +
-        'The Delete checkbox ensures proper cleanup of all related resources.',
-        SpreadsheetApp.getUi().ButtonSet.OK
-      );
-    } catch (alertError) {
-      // If alert fails, just log
-      log_('Warning: User may be deleting rows in ' + sheetName + '. Use Delete checkbox instead.', 'WARN');
+    // Exit if more than one cell is edited at once
+    if (range.getNumRows() > 1 || range.getNumColumns() > 1) {
+      return;
+    }
+
+    // Only act on edits in the "Value" column (column B/2)
+    if (editedCol !== 2) {
+      return;
+    }
+
+    const settingCell = sheet.getRange(editedRow, 1);
+    const valueCell = sheet.getRange(editedRow, 2);
+    const settingName = settingCell.getValue();
+
+    // Handle Read-Only Status Indicator
+    if (settingName === 'AutoSync Trigger Status') {
+      // Revert the change and inform the user
+      valueCell.setValue(oldValue);
+      SpreadsheetApp.getActiveSpreadsheet().toast('This is a read-only status indicator.', 'Edit Reverted', 10);
+      return;
     }
   }
 }
@@ -419,7 +457,13 @@ function createTestingMenu_(ui) {
     .addItem('Run Add/Delete Separation Test', 'runAddDeleteSeparationTest')
     .addItem('Run AutoSync Error Email Test', 'runAutoSyncErrorEmailTest')
     .addItem('Run Sheet Locking Test', 'runSheetLockingTest_')
-    .addItem('Run Circular Dependency Test', 'runCircularDependencyTest_');
+    .addItem('Run Circular Dependency Test', 'runCircularDependencyTest_')
+    .addSeparator()
+    .addItem('Run UserGroup Deletion Test', 'runUserGroupDeletionTest')
+    .addItem('Run Folder-Role Deletion Test', 'runFolderRoleDeletionTest')
+    .addItem('Run Deletion Disabled Test', 'runDeletionDisabledTest')
+    .addItem('Run Idempotent Deletion Test', 'runIdempotentDeletionTest')
+    .addItem('Run All Deletion Tests', 'runAllDeletionTests');
 
   const standaloneTestsMenu = ui.createMenu('Standalone Tests')
     .addItem('Run Email Capability Test', 'runEmailCapabilityTest');
@@ -428,6 +472,7 @@ function createTestingMenu_(ui) {
     .addItem('Cleanup Manual Test Data', 'cleanupManualTestData')
     .addItem('Cleanup Stress Test Data', 'cleanupStressTestData')
     .addItem('Cleanup Add/Delete Test Data', 'cleanupAddDeleteSeparationTestData')
+    .addItem('Cleanup Deletion Test Data', 'cleanupDeletionTestData')
     .addSeparator()
     .addItem('Clear All Test Data', 'clearAllTestsData');
 
@@ -489,52 +534,6 @@ function runAutoSyncNow() {
     SpreadsheetApp.getUi().alert('Manual AutoSync did not complete successfully. Check logs for details.');
   }
 }
-
-function onEdit(e) {
-  const range = e.range;
-  const sheet = range.getSheet();
-  const oldValue = e.oldValue;
-
-  // Exit if the edited sheet is not the Config sheet
-  if (sheet.getName() !== CONFIG_SHEET_NAME) {
-    return;
-  }
-
-  const editedRow = range.getRow();
-  const editedCol = range.getColumn();
-
-  // --- Protect Description Column ---
-  if (editedCol === 3) {
-    range.setValue(oldValue);
-    SpreadsheetApp.getActiveSpreadsheet().toast('The description column is not editable.', 'Edit Reverted', 10);
-    return;
-  }
-
-  // Exit if more than one cell is edited at once
-  if (range.getNumRows() > 1 || range.getNumColumns() > 1) {
-    return;
-  }
-
-  const settingCell = sheet.getRange(editedRow, 1);
-  const valueCell = sheet.getRange(editedRow, 2);
-
-  // Only act on edits in the "Value" column (column B)
-  if (editedCol !== 2) {
-    return;
-  }
-
-  const settingName = settingCell.getValue();
-
-  // --- Handle Read-Only Status Indicator ---
-  if (settingName === 'AutoSync Trigger Status') {
-    // Revert the change and inform the user
-    valueCell.setValue(oldValue);
-    SpreadsheetApp.getActiveSpreadsheet().toast('This is a read-only status indicator.', 'Edit Reverted', 10);
-    return;
-  }
-}
-
-
 
 function getActiveUserEmail_() {
   try {
