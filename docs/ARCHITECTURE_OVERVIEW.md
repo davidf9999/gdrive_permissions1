@@ -137,9 +137,12 @@ sequenceDiagram
 
 | Persona / role | What they configure | Day-to-day usage |
 | --- | --- | --- |
-| **Workspace Super Admin** (a.k.a. Google Workspace Super Administrator) | Creates the Workspace tenant, enables Admin SDK + Drive APIs, authorises the Apps Script project, and grants the automation account least-privilege access. | Periodically reviews audit logs, monitors email alerts, and unblocks escalations that require domain-wide privileges. |
-| **Spreadsheet Administrator** | Maintains the control spreadsheet, edits ManagedFolders, ManagedGroups, and Config tabs, and runs the "Sync Adds" / "Sync Deletes" / "Full Sync" menu items. | Updates membership tabs in response to business changes, checks the Status sheet to verify sync recency, and triages any errors surfaced via the Logs or email notifications. |
+| **Workspace Super Admin** (a.k.a. Google Workspace Super Administrator) | Creates the Workspace tenant, enables Admin SDK + Drive APIs in Google Cloud Console, authorizes the Apps Script project, and grants necessary API access. This is a Google Workspace system role. | Rarely involved after initial setup. May periodically review audit logs, monitor email alerts, and unblock escalations that require domain-wide API privileges. |
+| **Super Admin** (listed in Config > SuperAdminEmails) | Runs sync operations, manages Config settings, runs tests, and troubleshoots errors. Has full menu access in the spreadsheet. This is a script-level permission. | Runs manual sync when needed, monitors SyncHistory and Logs, updates configuration settings, marks items for deletion, and handles escalations. Can also edit sheets. |
+| **Sheet Editor** (spreadsheet collaborator with Edit access) | Edits ManagedFolders, UserGroups, and user membership sheets. Marks items for deletion via Delete checkbox. Cannot run scripts or access menu functions. | Updates user lists, adds/removes folders, checks Status column, marks resources for deletion. Changes are applied when a Super Admin runs the next sync. |
 | **Managed User** (anyone granted access to a folder) | No configuration; they are represented by rows within the relevant group or folder-role tab. | Receives Drive access once the next sync completes, and may use the sheet read-only to confirm which folders they should expect. |
+
+**Note**: A single person can have multiple roles. For example, in small organizations, the same person may be the Workspace Super Admin, a Super Admin in the script, and a Sheet Editor.
 
 ---
 

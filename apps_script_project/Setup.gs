@@ -105,21 +105,30 @@ function setupControlSheets_() {
   let managedSheet = ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
   if (!managedSheet) {
     managedSheet = ss.insertSheet(MANAGED_FOLDERS_SHEET_NAME, 0);
-    const headers = ['FolderName', 'FolderID', 'Role', 'GroupEmail', 'UserSheetName', 'Last Synced', 'Status', 'URL'];
+    const headers = ['FolderName', 'FolderID', 'Role', 'GroupEmail', 'UserSheetName', 'Last Synced', 'Status', 'URL', 'Delete'];
     managedSheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
     managedSheet.setFrozenRows(1);
     log_('Created "ManagedFolders" sheet.');
   } else {
     // Migrate old column order if needed
     migrateManagedFoldersColumns_(managedSheet);
-    
+
     // Ensure the URL column exists for older setups
-    const headerRange = managedSheet.getRange(1, 1, 1, managedSheet.getLastColumn());
-    const headers = headerRange.getValues()[0];
+    let headerRange = managedSheet.getRange(1, 1, 1, managedSheet.getLastColumn());
+    let headers = headerRange.getValues()[0];
     if (headers.indexOf('URL') === -1) {
       const newHeaderCol = headers.length + 1;
       managedSheet.getRange(1, newHeaderCol).setValue('URL').setFontWeight('bold');
       log_('Added missing "URL" column to ManagedFolders sheet.');
+    }
+
+    // Ensure the Delete column exists
+    headerRange = managedSheet.getRange(1, 1, 1, managedSheet.getLastColumn());
+    headers = headerRange.getValues()[0];
+    if (headers.indexOf('Delete') === -1) {
+      const newHeaderCol = headers.length + 1;
+      managedSheet.getRange(1, newHeaderCol).setValue('Delete').setFontWeight('bold');
+      log_('Added "Delete" column to ManagedFolders sheet.');
     }
   }
 
@@ -129,6 +138,14 @@ function setupControlSheets_() {
   if (!existingRoleRule || existingRoleRule.getCriteriaType() !== SpreadsheetApp.DataValidationCriteria.VALUE_IN_LIST) {
       const rule = SpreadsheetApp.newDataValidation().requireValueInList(['Editor', 'Viewer', 'Commenter'], true).build();
       roleRange.setDataValidation(rule);
+  }
+
+  // Add checkbox validation for the Delete column (column I)
+  const deleteRange = managedSheet.getRange('I2:I');
+  const existingDeleteRule = deleteRange.getDataValidation();
+  if (!existingDeleteRule || existingDeleteRule.getCriteriaType() !== SpreadsheetApp.DataValidationCriteria.CHECKBOX) {
+    const checkboxRule = SpreadsheetApp.newDataValidation().requireCheckbox().build();
+    deleteRange.setDataValidation(checkboxRule);
   }
 
   // Check for SheetEditors sheet
@@ -164,14 +181,29 @@ function setupControlSheets_() {
     adminDisabledRange.setDataValidation(rule);
   }
 
-    // Check for UserGroups sheet
+  // Check for UserGroups sheet
   let userGroupsSheet = ss.getSheetByName(USER_GROUPS_SHEET_NAME);
   if (!userGroupsSheet) {
     userGroupsSheet = ss.insertSheet(USER_GROUPS_SHEET_NAME);
     log_('Created "UserGroups" sheet.');
   }
-  userGroupsSheet.getRange('A1:E1').setValues([['GroupName', 'GroupEmail', 'Group Admin Link', 'Last Synced', 'Status']]).setFontWeight('bold');
+
+  // Update headers (adding Delete column if needed)
+  const userGroupsHeaderRange = userGroupsSheet.getRange(1, 1, 1, Math.max(6, userGroupsSheet.getLastColumn()));
+  const userGroupsHeaders = userGroupsHeaderRange.getValues()[0];
+  if (userGroupsHeaders.length < 6 || userGroupsHeaders[5] !== 'Delete') {
+    userGroupsSheet.getRange('A1:F1').setValues([['GroupName', 'GroupEmail', 'Group Admin Link', 'Last Synced', 'Status', 'Delete']]).setFontWeight('bold');
+    log_('Updated UserGroups headers with Delete column.');
+  }
   userGroupsSheet.setFrozenRows(1);
+
+  // Add checkbox validation for the Delete column (column F)
+  const userGroupsDeleteRange = userGroupsSheet.getRange('F2:F');
+  const existingUserGroupsDeleteRule = userGroupsDeleteRange.getDataValidation();
+  if (!existingUserGroupsDeleteRule || existingUserGroupsDeleteRule.getCriteriaType() !== SpreadsheetApp.DataValidationCriteria.CHECKBOX) {
+    const checkboxRule = SpreadsheetApp.newDataValidation().requireCheckbox().build();
+    userGroupsDeleteRange.setDataValidation(checkboxRule);
+  }
   
   // Check for Config sheet
   let currentUserEmail = '';
@@ -193,8 +225,8 @@ function setupControlSheets_() {
       'EnableSheetLocking': { value: true, description: 'Check to enable the sheet locking mechanism during sync operations. This is recommended to prevent data inconsistencies.' },
       'EnableCircularDependencyCheck': { value: true, description: 'Check to enable circular dependency validation during sync. This prevents infinite loops when groups contain each other.' },
       'AutoSyncInterval': { value: 5, description: 'The interval in minutes for the AutoSync trigger. Minimum is 5 minutes. Use the "Enable/Update AutoSync" menu item to apply a new interval.' },
-      'AllowAutosyncDeletion': { value: true, description: 'Check to allow AutoSync to automatically delete users. WARNING: If a user is accidentally removed from a sheet, their access will be revoked on the next sync.' },
-      'AutoSyncMaxDeletions': { value: 10, description: 'The maximum number of deletions allowed in a single AutoSync run. If exceeded, deletions will be paused and manual intervention required.' },
+      'AllowAutosyncDeletion': { value: true, description: 'Check to allow AutoSync to automatically remove users from groups. WARNING: If a user is accidentally removed from a sheet, their access will be revoked on the next sync.' },
+      'AllowGroupFolderDeletion': { value: false, description: 'Master switch: Enable deletion of groups and folder-role bindings via Delete checkbox. Google Drive folders are never deleted. When disabled, Delete checkboxes are ignored and sync aborts on orphan sheets.' },
       'RetryMaxRetries': { value: 5, description: 'The maximum number of times to retry a failed API call (e.g., due to rate limiting).'},
       'RetryInitialDelayMs': { value: 1000, description: 'The initial time in milliseconds to wait before the first retry. This delay doubles with each subsequent retry (exponential backoff).'},
       'MembershipBatchSize': { value: 10, description: 'The number of users to process in a single batch for group membership changes. Helps avoid API rate limits.'},
@@ -204,6 +236,7 @@ function setupControlSheets_() {
       'NotificationEmail': { value: '', description: 'The email address to send notifications to. Defaults to the script owner if left blank.' },
       'NotifyOnSyncSuccess': { value: false, description: 'Check to receive a summary email after each successful AutoSync.' },
       'NotifyDeletionsPending': { value: true, description: 'Check to receive an email alert when an AutoSync detects that a user needs to be manually removed. (This is ignored if AllowAutosyncDeletion is checked).' },
+      'NotifyOnGroupFolderDeletion': { value: true, description: 'Send email notification when groups or folder-role bindings are deleted during sync. Recommended to keep enabled for audit purposes.' },
     },
     '--- Auditing & Limits ---': {
         'LogLevel': { value: 'INFO', description: 'Controls log verbosity. ERROR: critical errors only. WARN: warnings and errors. INFO: normal operations (default). DEBUG: detailed debugging including routine AutoSync checks.' },
@@ -302,8 +335,8 @@ function applyConfigValidation_() {
   if (!configSheet) return;
 
   const booleanSettings = [
-    'EnableSheetLocking', 'AllowAutosyncDeletion', 'EnableCircularDependencyCheck',
-    'EnableEmailNotifications', 'NotifyOnSyncSuccess', 'NotifyDeletionsPending',
+    'EnableSheetLocking', 'AllowAutosyncDeletion', 'AllowGroupFolderDeletion', 'EnableCircularDependencyCheck',
+    'EnableEmailNotifications', 'NotifyOnSyncSuccess', 'NotifyDeletionsPending', 'NotifyOnGroupFolderDeletion',
     'EnableGCPLogging', 'EnableToasts', 'ShowTestPrompts', 'TestCleanup', 'TestAutoConfirm'
   ];
 

@@ -21,6 +21,10 @@ const USER_SHEET_NAME_COL = 5;    // Managed by script
 const LAST_SYNCED_COL = 6;         // Managed by script
 const STATUS_COL = 7;              // Managed by script
 const URL_COL = 8;                 // Managed by script
+const DELETE_COL = 9;              // User-editable: mark for deletion
+
+// Column mapping for the UserGroups sheet
+const USERGROUPS_DELETE_COL = 6;   // User-editable: mark for deletion
 
 const ADMINS_LAST_SYNC_CELL = 'B2';
 const ADMINS_STATUS_CELL = 'C2';
