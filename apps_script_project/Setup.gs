@@ -448,6 +448,7 @@ function setupHelpSheet_() {
     ['AutoSync Guide:', repoUrl + '/blob/main/docs/AUTO_SYNC_GUIDE.md'],
     ['Edit Mode Guide:', repoUrl + '/blob/main/docs/EDIT_MODE_GUIDE.md'],
     ['Main README:', repoUrl + '/blob/main/README.md'],
+    ['All Documentation:', repoUrl + '/blob/main/docs/'],
     ['', ''],
     ['📧 NEED HELP?', ''],
     ['', ''],

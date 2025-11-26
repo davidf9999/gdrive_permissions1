@@ -27,6 +27,13 @@ first time you roll out the tool.
    | ---- | --------- | ----- |
    | TXT  | @         | google-site-verification=abc123example |
 
+<details>
+<summary>Visual aid: Domain verification TXT record</summary>
+
+![Example of a TXT record for domain verification in a DNS provider's interface.](./images/workspace_setup/01-domain-verification.png)
+
+</details>
+
 > **Tip:** If your organisation already has Workspace, sign into the Admin
 > console with an existing Super Admin instead of creating a brand new tenant.
 
@@ -45,6 +52,14 @@ first time you roll out the tool.
 2. Confirm the account has the **Super Admin** role by visiting
    **Directory → Users → [your user] → Admin roles and privileges**. If the role
    is missing, assign it now.
+
+<details>
+<summary>Visual aid: Super Admin role assignment</summary>
+
+![Screenshot showing the 'Admin roles and privileges' section for a user in the Google Admin console.](./images/workspace_setup/02-super-admin-role.png)
+
+</details>
+
 3. Enable the Google Groups service if it is not already active:
    - Navigate to **Apps → Google Workspace → Groups for Business**.
    - Click **On for everyone** and save.
@@ -77,6 +92,13 @@ first time you roll out the tool.
 3. In the Apps Script editor, open **Project Settings → IDs** and copy the
    **Script ID** value. You will paste it into `.clasp.json` when configuring the
    CLI.
+
+<details>
+<summary>Visual aid: Finding the Apps Script ID</summary>
+
+![Screenshot of the Apps Script editor showing Project Settings and the location of the Script ID.](./images/workspace_setup/03-script-id.png)
+
+</details>
 
 **Common issues at this step:**
 - ❌ Script ID not found → Open **Extensions → Apps Script**, then **Project
@@ -121,6 +143,13 @@ first time you roll out the tool.
 7. Return to the spreadsheet and refresh. The **Permissions Manager** menu will
    appear once the push completes.
 
+<details>
+<summary>Visual aid: Permissions Manager menu</summary>
+
+![Screenshot of the Google Sheet interface with the 'Permissions Manager' menu visible after a successful 'clasp push'.](./images/workspace_setup/04-permissions-manager-menu.png)
+
+</details>
+
 **Common issues at this step:**
 - ❌ `clasp: command not found` → Run `npm install -g @google/clasp`.
 - ❌ `Unauthorized` when `clasp push` → Ensure you ran `clasp login` with the
@@ -136,6 +165,14 @@ first time you roll out the tool.
    the following advanced services:
    - **AdminDirectory API**
    - **Drive API (v3)**
+
+<details>
+<summary>Visual aid: Enabling advanced services</summary>
+
+![Screenshot of the Apps Script editor showing the '+' button next to Services and the 'AdminDirectory API' and 'Drive API' being added.](./images/workspace_setup/05-advanced-services.png)
+
+</details>
+
 2. From **Project Settings**, open the associated Google Cloud project in a new
    tab.
 3. In the Cloud Console, enable these APIs if they are not already active:
@@ -171,6 +208,14 @@ first time you roll out the tool.
 1. Back in the spreadsheet, open **Permissions Manager → ManualSync → Full Sync**.
 2. Grant the script permissions when asked—the prompts will appear twice: once
    for Admin SDK access and once for Drive access.
+
+<details>
+<summary>Visual aid: Authorization prompt</summary>
+
+![Screenshot of the Google authorization prompt asking for permission to access Admin SDK and Drive APIs.](./images/workspace_setup/06-authorization-prompt.png)
+
+</details>
+
 3. After the sync completes, review the generated sheets and populate the user
    tabs with email addresses.
 4. Use **Add Users to Groups** and **Remove Users from Groups** (under the ManualSync menu) for day-to-day changes. The

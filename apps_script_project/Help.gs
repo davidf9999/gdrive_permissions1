@@ -32,6 +32,13 @@ function openReadme() {
     }
 }
 
+function openAllDocumentation() {
+    const repoUrl = getGitHubRepoUrl_();
+    if (repoUrl) {
+        openUrl(repoUrl + '/blob/main/docs/');
+    }
+}
+
 function openUrl(url) {
   log_('Attempting to open URL: ' + url);
   const html = '<html><body><a href="' + url + '" target="_blank">Click here to open the documentation</a><br/><br/><input type="button" value="Close" onclick="google.script.host.close()" /></body></html>';
