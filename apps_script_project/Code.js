@@ -43,6 +43,11 @@ let SCRIPT_EXECUTION_MODE = 'DEFAULT'; // Can be 'DEFAULT' or 'TEST'
  * Adds a custom menu to the spreadsheet UI.
  */
 function onOpen() {
+  // Validate environment first (Google Workspace with Admin SDK required)
+  if (!validateEnvironment_()) {
+    return; // Abort setup if environment is not suitable
+  }
+
   const superAdmin = isSuperAdmin_();
   const ui = SpreadsheetApp.getUi();
   const menu = ui.createMenu('Permissions Manager');
@@ -64,6 +69,79 @@ function onOpen() {
   } else {
     applyRestrictedView_();
     ensureHelpSheetVisible_();
+  }
+}
+
+/**
+ * Validates that the environment meets requirements for this tool.
+ * Requires Google Workspace with Admin SDK enabled.
+ * @return {boolean} True if environment is valid, false otherwise
+ */
+function validateEnvironment_() {
+  if (!isAdminDirectoryAvailable_()) {
+    try {
+      const ui = SpreadsheetApp.getUi();
+      ui.alert(
+        'Google Workspace Required',
+        'This tool requires Google Workspace with Admin SDK enabled.\n\n' +
+        'Without Admin SDK, this tool cannot:\n' +
+        '• Create or manage Google Groups\n' +
+        '• Manage group membership\n' +
+        '• Perform permission synchronization\n\n' +
+        'Please see docs/WORKSPACE_SETUP.md for setup instructions.',
+        ui.ButtonSet.OK
+      );
+    } catch (e) {
+      // If UI not available, just log
+      console.log('Admin SDK not available. This tool requires Google Workspace.');
+    }
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Trigger fired when a user edits a cell in the spreadsheet.
+ * Warns users if they try to delete rows from ManagedFolders or UserGroups.
+ * @param {Event} e The onEdit event object
+ */
+function onEdit(e) {
+  if (!e || !e.source) return;
+
+  const sheet = e.source.getActiveSheet();
+  const sheetName = sheet.getName();
+
+  // Only monitor ManagedFolders and UserGroups sheets
+  if (sheetName !== MANAGED_FOLDERS_SHEET_NAME && sheetName !== USER_GROUPS_SHEET_NAME) {
+    return;
+  }
+
+  const range = e.range;
+  if (!range || range.getRow() <= 1) {
+    return; // Skip header row
+  }
+
+  // Check if user might be deleting a row (first 3 columns are empty)
+  const row = range.getRow();
+  const firstCols = sheet.getRange(row, 1, 1, 3).getValues()[0];
+
+  // If first columns are empty, might be a deleted row
+  if (!firstCols[0] && !firstCols[1] && !firstCols[2]) {
+    try {
+      SpreadsheetApp.getUi().alert(
+        'Use Delete Checkbox Instead',
+        'To delete a folder or group, please check the "Delete" checkbox in the last column and run sync.\n\n' +
+        'Why? Manual row deletion:\n' +
+        '• Leaves orphaned resources (groups, sheets)\n' +
+        '• Causes sync to abort with errors\n' +
+        '• Bypasses safety mechanisms\n\n' +
+        'The Delete checkbox ensures proper cleanup of all related resources.',
+        SpreadsheetApp.getUi().ButtonSet.OK
+      );
+    } catch (alertError) {
+      // If alert fails, just log
+      log_('Warning: User may be deleting rows in ' + sheetName + '. Use Delete checkbox instead.', 'WARN');
+    }
   }
 }
 
