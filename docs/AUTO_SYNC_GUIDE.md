@@ -171,7 +171,7 @@ By default, AutoSync is designed to be **non-destructive** when removing individ
 
 -   **Auto-sync only performs additions:** It will process new users added to sheets, but it will **not** automatically remove users or revoke permissions.
 -   **User deletions require manual action:** When the script detects that a user should be removed from a group (e.g., their email was removed from a user sheet), it does not perform the deletion automatically. Instead, it sends an email notification to the administrator (configured in the `Config` sheet) with the subject "⚠️ Manual Action Required: Permission Deletions Pending".
--   **Manual Deletion Step:** To execute the pending user removals, you (the administrator) must run **Permissions Manager → Sync Deletes** from the menu. This allows you to review and confirm the changes before they are applied.
+-   **Manual Deletion Step:** To execute the pending user removals, you (the administrator) must run **Permissions Manager → ManualSync → Remove Users from Groups** from the menu. This allows you to review and confirm the changes before they are applied.
 
 This "Risk-Based" approach ensures a human is always in the loop for removing user access, preventing accidental lockouts or data exposure.
 

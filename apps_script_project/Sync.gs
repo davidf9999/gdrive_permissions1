@@ -586,24 +586,24 @@ function fullSync(options = {}) {
       // Track deletions separately (not in totalSummary which is for user additions/removals)
     }
 
-    // 1. Sync Sheet Editors
-    const adminSummary = syncSheetEditors(options);
+    // 1. Sync Sheet Editors (run silently - fullSync will show final summary)
+    const adminSummary = syncSheetEditors(Object.assign({}, options, { silentMode: true }));
     if (adminSummary) {
       totalSummary.added += adminSummary.added;
       totalSummary.removed += adminSummary.removed;
       totalSummary.failed += adminSummary.failed;
     }
 
-    // 2. Sync User Groups
-    const userGroupsSummary = syncUserGroups(options);
+    // 2. Sync User Groups (run silently - fullSync will show final summary)
+    const userGroupsSummary = syncUserGroups(Object.assign({}, options, { silentMode: true }));
     if (userGroupsSummary) {
       totalSummary.added += userGroupsSummary.added;
       totalSummary.removed += userGroupsSummary.removed;
       totalSummary.failed += userGroupsSummary.failed;
     }
 
-    // 3. Process Managed Folders
-    const managedFoldersSummary = processManagedFolders_(options);
+    // 3. Process Managed Folders (run silently - fullSync will show final summary)
+    const managedFoldersSummary = processManagedFolders_(Object.assign({}, options, { silentMode: true }));
     if (managedFoldersSummary) {
       totalSummary.added += managedFoldersSummary.added;
       totalSummary.removed += managedFoldersSummary.removed;

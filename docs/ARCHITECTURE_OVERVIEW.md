@@ -200,7 +200,7 @@ without storing additional hidden configuration.
 
 1. **Menu initialisation** — When the spreadsheet opens, `onOpen()` inserts the
    `Permissions Manager` menu. The Setup module ensures required sheets exist.
-2. **Sync invocation** — Administrators choose `Sync Adds`, `Sync Deletes`, or
+2. **Sync invocation** — Administrators choose `Add Users to Groups`, `Remove Users from Groups`, or
    `Full Sync`. These menu handlers lock the spreadsheet to avoid concurrent
    edits and then call into `Core.gs`.
 3. **Row processing** — `Core.gs` reads `ManagedFolders`, resolves folder IDs via

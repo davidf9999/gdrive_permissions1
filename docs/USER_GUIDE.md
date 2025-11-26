@@ -372,14 +372,14 @@ Let's say you want to give the "Sales Team" editor access to a new folder called
 3.  **Go to the `UserGroups` sheet.**
 4.  In a new row, enter:
     *   `GroupName`: `Sales Team`
-5.  **Run the creation sync.** From the spreadsheet menu, click **Permissions Manager > Sync Adds**.
+5.  **Run the creation sync.** From the spreadsheet menu, click **Permissions Manager > ManualSync > Add Users to Groups**.
 6.  The script will now run. It will:
     *   Create the "Q4 Sales Reports" folder in Google Drive.
     *   Create a user sheet named `Q4 Sales Reports_Editor`.
     *   Create a Google Group for the Sales Team and a sheet named `Sales Team_G`.
 7.  **Go to the `Sales Team_G` sheet.** Add the email addresses of your sales team members to Column A. Mark Column B if you want any member to stay listed but not yet receive access.
 8.  **Go to the `Q4 Sales Reports_Editor` sheet.** In Column A, add the group email address for the sales team (you can copy this from the `GroupEmail` column in the `UserGroups` sheet).
-9. **Run the final sync.** Click **Permissions Manager > Sync Adds** again.
+9. **Run the final sync.** Click **Permissions Manager > ManualSync > Add Users to Groups** again.
 
 The script will now add all the members from the `Sales Team` group to the `Q4 Sales Reports_Editor` group, granting them all editor access to the folder.
 
@@ -387,15 +387,15 @@ The script will now add all the members from the `Sales Team` group to the `Q4 S
 
 1.  Find the correct user sheet for the folder and role you want to change (e.g., `Q4 Sales Reports_Editor`).
 2.  To add a user, add their email address to a new row in Column A. You can temporarily disable access later by marking Column B.
-3.  Run **Permissions Manager > Sync Adds**.
+3.  Run **Permissions Manager > ManualSync > Add Users to Groups**.
 
 ### How to Remove a User
 
 1.  Find the correct user sheet for the folder and role you want to change.
 2.  To remove a user, delete the row containing their email address.
-3.  Run **Permissions Manager > Sync Deletes**. You will be asked to confirm the deletion.
+3.  Run **Permissions Manager > ManualSync > Remove Users from Groups**. You will be asked to confirm the removal.
 
-**Note on `Sync Deletes`**: This function only *revokes permissions* by removing users from the Google Groups associated with your folders. It does **not** delete the Google Group itself, the Google Drive folder, or the user sheet from your spreadsheet. This is a safety feature to prevent accidental data loss. See the next section for how to handle obsolete resources.
+**Note on `Remove Users from Groups`**: This function only *revokes permissions* by removing users from the Google Groups associated with your folders. It does **not** delete the Google Group itself, the Google Drive folder, or the user sheet from your spreadsheet. This is a safety feature to prevent accidental data loss. See the next section for how to handle obsolete resources.
 
 ---
 

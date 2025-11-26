@@ -29,7 +29,7 @@ The system uses **three risk levels** based on consequence of error and reversib
 | Risk Level | Operations | Impact if Wrong | AutoSync Treatment | Admin Action |
 |:-----------|:-----------|:----------------|:--------------------|:-------------|
 | **SAFE**<br>*(Additive)* | • Add users to groups<br>• Create folders & share with groups<br>• Add spreadsheet editors<br>• Create Google Groups<br>• All `syncAdds()` operations including sheet editors | Users get unintended access (easily reverted and detected) | ✅ **Automatic**<br>Runs every 5 minutes with post-notification email | Review summary email; revert if needed |
-| **DESTRUCTIVE**<br>*(Reversible Removals)* | • Remove users from groups<br>• Remove spreadsheet editors<br>• Revoke folder permissions<br>• All `syncDeletes()` operations | Users lose access they need, work blocked, requires restoration | 🛑 **Manual Only**<br>Notifies admin, does NOT execute | Run "Sync Deletes" manually after review |
+| **DESTRUCTIVE**<br>*(Reversible Removals)* | • Remove users from groups<br>• Remove spreadsheet editors<br>• Revoke folder permissions<br>• All `syncDeletes()` operations | Users lose access they need, work blocked, requires restoration | 🛑 **Manual Only**<br>Notifies admin, does NOT execute | Run "Remove Users from Groups" manually after review |
 | **CRITICAL**<br>*(Irreversible)* | • `mergeSync()` - Approve manual changes<br>• Delete Google Groups (permanent)<br>• Delete Drive folders (data loss)<br>• Domain-wide bulk changes | Permanent data loss or inadvertent approval of unauthorized access | 🚫 **Always Manual**<br>Never automated, requires human judgment | Run manually with full context |
 
 ### Why This Model is Safe
@@ -131,7 +131,7 @@ Sent after each successful AutoSync:
 Sent when DESTRUCTIVE operations detected:
 - **Subject**: "⚠️ Manual Action Required: Permission Deletions Pending"
 - **Content**: Summary of pending deletions with step-by-step instructions
-- **Action**: Admin must run "Sync Deletes" manually
+- **Action**: Admin must run "Remove Users from Groups" (under ManualSync menu) manually
 
 ### Phase 5: Sync History & Audit Trail
 
@@ -182,7 +182,7 @@ Sent when DESTRUCTIVE operations detected:
 | Scenario | What Happens Automatically | Admin Action Required |
 |:---------|:---------------------------|:---------------------|
 | **Users added to sheets** | Auto-sync grants access within 5 minutes | ✅ None (review summary email periodically) |
-| **Users removed from sheets** | Auto-sync detects, sends "Action Required" email | ⚠️ Check email → Run "Sync Deletes" manually → Review → Confirm |
+| **Users removed from sheets** | Auto-sync detects, sends "Action Required" email | ⚠️ Check email → Run "Remove Users from Groups" manually → Review → Confirm |
 | **Sheet Editor list changed in SheetEditors sheet** | Auto-sync detects, sends "Action Required" email | ⚠️ Check email → Run "Sync Sheet Editors" manually → Review → Confirm |
 | **Manual changes in Google Groups** | Auto-sync continues normal operations | ⚠️ Run "Merge & Reconcile" to document manual changes |
 | **Auto-sync error occurs** | Error email sent with details | ⚠️ Check logs, fix issue, optionally run manual sync |
@@ -221,7 +221,7 @@ From Group 'ProjectY-Viewers':
 
 To execute these deletions:
 1. Open the control spreadsheet
-2. Go to: Permissions Manager → Sync Deletes
+2. Go to: Permissions Manager → ManualSync → Remove Users from Groups
 3. Review the deletion list carefully
 4. Confirm to proceed
 

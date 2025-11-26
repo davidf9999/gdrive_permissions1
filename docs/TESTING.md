@@ -104,7 +104,7 @@ The system is designed to be safe by default. The automatic sync will only proce
     *   **Verification**:
         *   The user will **NOT** be removed from the Google Group. This is the expected safe behavior.
         *   Check your email. You should receive a **"MANUAL ACTION REQUIRED"** notification listing the pending deletion.
-        *   To complete the deletion, you must manually run **Permissions Manager → Sync Deletes**.
+        *   To complete the deletion, you must manually run **Permissions Manager → ManualSync → Remove Users from Groups**.
 
 **Phase 2: Standard User Verification**
 
