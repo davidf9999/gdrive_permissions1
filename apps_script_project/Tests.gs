@@ -1467,6 +1467,8 @@ function runCircularDependencyTest_() {
  * Verifies: group deleted, sheet deleted, row removed, summary correct.
  */
 function runUserGroupDeletionTest() {
+    SCRIPT_EXECUTION_MODE = 'TEST';  // Set mode FIRST before any logging
+
     const testName = 'UserGroup Deletion Test';
     log_('', 'INFO');
     log_('========================================', 'INFO');
@@ -1478,7 +1480,6 @@ function runUserGroupDeletionTest() {
     let testGroupEmail = '';
 
     try {
-        SCRIPT_EXECUTION_MODE = 'TEST';
 
         // Prerequisites
         const deletionEnabled = getConfigValue_('AllowGroupFolderDeletion', false);
@@ -1640,6 +1641,8 @@ function runUserGroupDeletionTest() {
  * Verifies: group deleted, sheet deleted, row removed, folder NOT deleted, summary correct.
  */
 function runFolderRoleDeletionTest() {
+    SCRIPT_EXECUTION_MODE = 'TEST';  // Set mode FIRST before any logging
+
     const testName = 'Folder-Role Deletion Test';
     log_('', 'INFO');
     log_('========================================', 'INFO');
@@ -1652,7 +1655,6 @@ function runFolderRoleDeletionTest() {
     let testUserSheetName = '';
 
     try {
-        SCRIPT_EXECUTION_MODE = 'TEST';
 
         // Prerequisites
         const deletionEnabled = getConfigValue_('AllowGroupFolderDeletion', false);
@@ -1846,6 +1848,8 @@ function runFolderRoleDeletionTest() {
  * Verifies: deletion skipped, row remains, status shows warning.
  */
 function runDeletionDisabledTest() {
+    SCRIPT_EXECUTION_MODE = 'TEST';  // Set mode FIRST before any logging
+
     const testName = 'Deletion Disabled Test';
     log_('', 'INFO');
     log_('========================================', 'INFO');
@@ -1856,7 +1860,6 @@ function runDeletionDisabledTest() {
     const testGroupName = 'TestDisabledDeleteGroup_' + new Date().getTime();
 
     try {
-        SCRIPT_EXECUTION_MODE = 'TEST';
 
         // 1. Ensure AllowGroupFolderDeletion is FALSE
         const configSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Config');
@@ -1979,6 +1982,8 @@ function runDeletionDisabledTest() {
  * Verifies: no errors, row still removed, logs warning not error.
  */
 function runIdempotentDeletionTest() {
+    SCRIPT_EXECUTION_MODE = 'TEST';  // Set mode FIRST before any logging
+
     const testName = 'Idempotent Deletion Test';
     log_('', 'INFO');
     log_('========================================', 'INFO');
@@ -1990,7 +1995,6 @@ function runIdempotentDeletionTest() {
     const testGroupEmail = testGroupName.toLowerCase().replace(/[^a-z0-9]/g, '') + '@' + Session.getActiveUser().getEmail().split('@')[1];
 
     try {
-        SCRIPT_EXECUTION_MODE = 'TEST';
 
         // Prerequisites
         const deletionEnabled = getConfigValue_('AllowGroupFolderDeletion', false);
