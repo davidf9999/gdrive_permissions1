@@ -322,7 +322,15 @@ function log_(message, severity = 'INFO') {
 
     // Always write to at least row 2 (never overwrite the header)
     const nextRow = Math.max(lastRow + 1, 2);
-    logSheet.getRange(nextRow, 1, 1, 3).setValues([[timestamp, severity.toUpperCase(), messageStr]]);
+
+    // Prevent Google Sheets from interpreting messages starting with = as formulas
+    // by prefixing them with a single quote
+    let safeMessage = messageStr;
+    if (messageStr.startsWith('=') || messageStr.startsWith('+') || messageStr.startsWith('-') || messageStr.startsWith('@')) {
+      safeMessage = "'" + messageStr;
+    }
+
+    logSheet.getRange(nextRow, 1, 1, 3).setValues([[timestamp, severity.toUpperCase(), safeMessage]]);
 
     // --- Log Trimming Logic ---
     // Clear the cache for 'config' to ensure getMaxLogLength_ reads the latest value
