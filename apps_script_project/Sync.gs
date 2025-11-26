@@ -338,9 +338,9 @@ function syncAdds(options = {}) {
 
   try {
     validateManagedFolders_();
-    if (!silentMode) showToast_('Starting non-destructive sync (adds only)...', 'Sync Adds', -1);
+    if (!silentMode) showToast_('Adding users to groups...', 'Add Users', -1);
     showSyncInProgress_();
-    log_('*** Starting non-destructive synchronization (adds only)...');
+    log_('*** Starting user addition synchronization...');
 
     // 1. Sync Sheet Editors (SAFE mode: additions only, silent for AutoSync)
     const adminSummary = syncSheetEditors({ addOnly: true, silentMode: true });
@@ -367,7 +367,7 @@ function syncAdds(options = {}) {
       totalSummary.failed += managedFoldersSummary.failed;
     }
 
-    const summaryMessage = 'Add-only sync complete. Total changes: ' + totalSummary.added + ' added, ' + totalSummary.failed + ' failed.';
+    const summaryMessage = 'User addition complete. Total changes: ' + totalSummary.added + ' added, ' + totalSummary.failed + ' failed.';
     log_(summaryMessage, 'INFO');
 
     // Log to SyncHistory
@@ -376,7 +376,7 @@ function syncAdds(options = {}) {
     logSyncHistory_(null, totalSummary, durationSeconds);
 
     if (SCRIPT_EXECUTION_MODE === 'TEST') {
-      showTestMessage_('Add-only Sync', summaryMessage);
+      showTestMessage_('Add Users', summaryMessage);
     } else if (!silentMode) {
       SpreadsheetApp.getUi().alert(summaryMessage + '\n\nCheck the \'Status\' column in the sheets for details.');
     }
@@ -386,8 +386,8 @@ function syncAdds(options = {}) {
   } catch (e) {
     const errorMessage = 'FATAL ERROR in syncAdds: ' + e.toString() + '\n' + e.stack;
     log_(errorMessage, 'ERROR');
-    if (!silentMode) showToast_('Add-only sync failed with a fatal error.', 'Sync Adds', 5);
-    if (!silentMode) SpreadsheetApp.getUi().alert('A fatal error occurred during add-only sync: ' + e.message);
+    if (!silentMode) showToast_('User addition failed with a fatal error.', 'Add Users', 5);
+    if (!silentMode) SpreadsheetApp.getUi().alert('A fatal error occurred during user addition: ' + e.message);
     sendErrorNotification_(errorMessage);
   } finally {
     lock.releaseLock();
@@ -399,8 +399,8 @@ function syncDeletes() {
   const ui = SpreadsheetApp.getUi();
   
   // --- Phase 1: Planning ---
-  log_('*** Starting deletion planning phase...');
-  showToast_('Planning deletions...', 'Sync Deletes', 10);
+  log_('*** Starting user removal planning phase...');
+  showToast_('Planning user removals...', 'Remove Users', 10);
   
   let deletionPlan = [];
   try {
@@ -409,22 +409,22 @@ function syncDeletes() {
     const folderDeletions = processManagedFolders_(planOptions);
     deletionPlan = (groupDeletions || []).concat(folderDeletions || []);
   } catch (e) {
-    const errorMessage = 'FATAL ERROR during deletion planning: ' + e.toString() + '\n' + e.stack;
+    const errorMessage = 'FATAL ERROR during user removal planning: ' + e.toString() + '\n' + e.stack;
     log_(errorMessage, 'ERROR');
-    showToast_('Deletion planning failed with a fatal error.', 'Sync Deletes', 5);
-    ui.alert('A fatal error occurred during the deletion planning phase: ' + e.message);
+    showToast_('User removal planning failed with a fatal error.', 'Remove Users', 5);
+    ui.alert('A fatal error occurred during the user removal planning phase: ' + e.message);
     sendErrorNotification_(errorMessage);
     return;
   }
 
   if (deletionPlan.length === 0) {
-    log_('No deletions are pending.');
-    ui.alert('No pending deletions found.');
+    log_('No user removals are pending.');
+    ui.alert('No pending user removals found.');
     return;
   }
 
   // --- Phase 2: Confirmation ---
-  let confirmationMessage = 'This will process deletions and remove the following users from groups:\n';
+  let confirmationMessage = 'This will remove the following users from groups:\n';
   deletionPlan.forEach(plan => {
     confirmationMessage += '\nFrom Group \'' + plan.groupName + '\':\n';
     plan.usersToRemove.forEach(user => {
@@ -434,21 +434,21 @@ function syncDeletes() {
   confirmationMessage += '\nAre you sure you want to continue?';
 
   const response = ui.alert(
-    'Confirm Destructive Sync',
+    'Confirm User Removal',
     confirmationMessage,
     ui.ButtonSet.YES_NO
   );
 
   if (response !== ui.Button.YES) {
-    ui.alert('Delete sync cancelled.');
+    ui.alert('User removal cancelled.');
     return;
   }
 
   // --- Re-run Phase 1: Planning (after user confirmation) ---
-  // This ensures the deletion plan is based on the most up-to-date sheet data
+  // This ensures the removal plan is based on the most up-to-date sheet data
   // in case the user made changes during the confirmation dialog.
-  log_('*** Re-running deletion planning phase after user confirmation...');
-  showToast_('Re-planning deletions...', 'Sync Deletes', 10);
+  log_('*** Re-running user removal planning phase after user confirmation...');
+  showToast_('Re-planning user removals...', 'Remove Users', 10);
   
   deletionPlan = []; // Clear previous plan
   try {
@@ -457,17 +457,17 @@ function syncDeletes() {
     const folderDeletions = processManagedFolders_(planOptions);
     deletionPlan = (groupDeletions || []).concat(folderDeletions || []);
   } catch (e) {
-    const errorMessage = 'FATAL ERROR during re-planning deletion after confirmation: ' + e.toString() + '\n' + e.stack;
+    const errorMessage = 'FATAL ERROR during re-planning user removal after confirmation: ' + e.toString() + '\n' + e.stack;
     log_(errorMessage, 'ERROR');
-    showToast_('Deletion re-planning failed with a fatal error.', 'Sync Deletes', 5);
-    ui.alert('A fatal error occurred during the deletion re-planning phase: ' + e.message);
+    showToast_('User removal re-planning failed with a fatal error.', 'Remove Users', 5);
+    ui.alert('A fatal error occurred during the user removal re-planning phase: ' + e.message);
     sendErrorNotification_(errorMessage);
     return;
   }
 
   if (deletionPlan.length === 0) {
-    log_('No deletions are pending after re-planning. This might happen if changes were reverted.');
-    ui.alert('No pending deletions found after re-planning. Sync cancelled.');
+    log_('No user removals are pending after re-planning. This might happen if changes were reverted.');
+    ui.alert('No pending user removals found after re-planning. Operation cancelled.');
     return;
   }
 
@@ -482,9 +482,9 @@ function syncDeletes() {
   const totalSummary = { added: 0, removed: 0, failed: 0 };
 
   try {
-    showToast_('Starting destructive sync (deletes only)...', 'Sync Deletes', -1);
+    showToast_('Removing users from groups...', 'Remove Users', -1);
     showSyncInProgress_();
-    log_('*** Starting destructive synchronization (deletes only)...');
+    log_('*** Starting user removal synchronization...');
 
     const execOptions = { removeOnly: true };
     const userGroupsSummary = syncUserGroups(execOptions);
@@ -499,10 +499,10 @@ function syncDeletes() {
       totalSummary.failed += managedFoldersSummary.failed;
     }
 
-    const summaryMessage = 'Delete-only sync complete. Total changes: ' + totalSummary.removed + ' removed, ' + totalSummary.failed + ' failed.';
+    const summaryMessage = 'User removal complete. Total changes: ' + totalSummary.removed + ' removed, ' + totalSummary.failed + ' failed.';
     log_(summaryMessage, 'INFO');
 
-    showToast_('Delete-only sync complete!', 'Sync Deletes', 5);
+    showToast_('User removal complete!', 'Remove Users', 5);
     ui.alert(summaryMessage + '\n\nCheck the \'Status\' column in the sheets for details.');
 
   } catch (e) {
@@ -555,7 +555,11 @@ function fullSync(options = {}) {
     if (orphanSheets && orphanSheets.length > 0) {
       const errorMessage = 'SYNC ABORTED: Found orphan sheets that are not in the configuration: ' +
                            orphanSheets.join(', ') +
-                           '. Please either delete these sheets or add them to the ManagedFolders/UserGroups sheets to resolve the conflict.';
+                           '.\n\n' +
+                           'To resolve this:\n' +
+                           '1. Go to: Permissions Manager → Advanced → Delete Orphan Sheets\n' +
+                           '2. Or add these sheets to ManagedFolders/UserGroups configuration\n\n' +
+                           'Note: You may also need to manually delete related Google Groups from the Google Workspace Admin console.';
       log_(errorMessage, 'ERROR');
       if (!silentMode) {
         SpreadsheetApp.getUi().alert(errorMessage);
@@ -574,31 +578,46 @@ function fullSync(options = {}) {
       throw new Error('Duplicate group emails detected. Sync aborted.');
     }
 
-    // 1. Sync Sheet Editors
-    const adminSummary = syncSheetEditors(options);
+    // --- PROCESS DELETION REQUESTS ---
+    // Process groups and folders marked for deletion BEFORE regular sync
+    const deletionSummary = processDeletionRequests_(options);
+    if (deletionSummary && !deletionSummary.skipped) {
+      log_(`Deletions processed: ${deletionSummary.userGroupsDeleted} group(s), ${deletionSummary.foldersDeleted} folder-binding(s)`, 'INFO');
+      // Track deletions separately (not in totalSummary which is for user additions/removals)
+    }
+
+    // 1. Sync Sheet Editors (run silently - fullSync will show final summary)
+    const adminSummary = syncSheetEditors(Object.assign({}, options, { silentMode: true }));
     if (adminSummary) {
       totalSummary.added += adminSummary.added;
       totalSummary.removed += adminSummary.removed;
       totalSummary.failed += adminSummary.failed;
     }
 
-    // 2. Sync User Groups
-    const userGroupsSummary = syncUserGroups(options);
+    // 2. Sync User Groups (run silently - fullSync will show final summary)
+    const userGroupsSummary = syncUserGroups(Object.assign({}, options, { silentMode: true }));
     if (userGroupsSummary) {
       totalSummary.added += userGroupsSummary.added;
       totalSummary.removed += userGroupsSummary.removed;
       totalSummary.failed += userGroupsSummary.failed;
     }
 
-    // 3. Process Managed Folders
-    const managedFoldersSummary = processManagedFolders_(options);
+    // 3. Process Managed Folders (run silently - fullSync will show final summary)
+    const managedFoldersSummary = processManagedFolders_(Object.assign({}, options, { silentMode: true }));
     if (managedFoldersSummary) {
       totalSummary.added += managedFoldersSummary.added;
       totalSummary.removed += managedFoldersSummary.removed;
       totalSummary.failed += managedFoldersSummary.failed;
     }
 
-    const summaryMessage = 'Full synchronization completed. Total changes: ' + totalSummary.added + ' added, ' + totalSummary.removed + ' removed, ' + totalSummary.failed + ' failed.';
+    // Build summary message including deletions if any
+    let summaryMessage = 'Full synchronization completed. Total changes: ' + totalSummary.added + ' added, ' + totalSummary.removed + ' removed, ' + totalSummary.failed + ' failed.';
+    if (deletionSummary && !deletionSummary.skipped) {
+      const totalDeleted = deletionSummary.userGroupsDeleted + deletionSummary.foldersDeleted;
+      if (totalDeleted > 0) {
+        summaryMessage += '\nDeletions: ' + deletionSummary.userGroupsDeleted + ' group(s), ' + deletionSummary.foldersDeleted + ' folder-binding(s).';
+      }
+    }
     log_(summaryMessage, 'INFO');
 
     // Log to SyncHistory

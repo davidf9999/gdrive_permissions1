@@ -72,10 +72,10 @@ function processManagedFolders_(options = {}) {
   const executionId = new Date().getTime() + '_' + Math.random().toString().substring(2);
   const lockManager = createSheetLockManager_(options.enableSheetLocking, executionId);
   const jobs = _buildSyncJobs(sheet, lastRow, options);
-  
+
   if (jobs.length === 0) {
     log_('No valid jobs to process.');
-    return totalSummary;
+    return returnPlanOnly ? [] : totalSummary;
   }
 
   let jobsToProcess = jobs;
@@ -97,7 +97,7 @@ function processManagedFolders_(options = {}) {
       }
       if (jobsToProcess.length === 0) {
           log_('No non-test jobs remaining to process after filtering.');
-          return totalSummary;
+          return returnPlanOnly ? [] : totalSummary;
       }
   }
   
@@ -525,6 +525,326 @@ function checkForOrphanSheets_() {
   } catch (e) {
     log_('Error during orphan sheet check: ' + e.message, 'ERROR');
     return [];
+  }
+}
+
+/**
+ * Deletes orphan sheets that are not part of the configuration.
+ * Shows a confirmation dialog before deleting.
+ */
+function deleteOrphanSheets() {
+  try {
+    const orphanSheets = checkForOrphanSheets_();
+
+    if (!orphanSheets || orphanSheets.length === 0) {
+      SpreadsheetApp.getUi().alert('No orphan sheets found', 'All sheets are properly configured.', SpreadsheetApp.getUi().ButtonSet.OK);
+      log_('No orphan sheets to delete.', 'INFO');
+      return;
+    }
+
+    const ui = SpreadsheetApp.getUi();
+    const sheetList = orphanSheets.join('\n  - ');
+    const response = ui.alert(
+      'Delete Orphan Sheets?',
+      `Found ${orphanSheets.length} orphan sheet(s) that are not in your configuration:\n  - ${sheetList}\n\n` +
+      `Do you want to delete these sheets?\n\n` +
+      `⚠️ Important: This only deletes the sheets. You may need to manually delete related Google Groups from the Google Workspace Admin console.`,
+      ui.ButtonSet.YES_NO
+    );
+
+    if (response !== ui.Button.YES) {
+      log_('User cancelled orphan sheet deletion.', 'INFO');
+      return;
+    }
+
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    let deletedCount = 0;
+
+    orphanSheets.forEach(sheetName => {
+      try {
+        const sheet = spreadsheet.getSheetByName(sheetName);
+        if (sheet) {
+          spreadsheet.deleteSheet(sheet);
+          log_(`Deleted orphan sheet: "${sheetName}"`, 'INFO');
+          deletedCount++;
+        }
+      } catch (e) {
+        log_(`Failed to delete sheet "${sheetName}": ${e.message}`, 'ERROR');
+      }
+    });
+
+    ui.alert(
+      'Orphan Sheets Deleted',
+      `Successfully deleted ${deletedCount} orphan sheet(s).\n\n` +
+      `⚠️ Reminder: If these sheets had associated Google Groups, you may need to manually delete them from the Google Workspace Admin console (admin.google.com → Directory → Groups).`,
+      ui.ButtonSet.OK
+    );
+    log_(`Deleted ${deletedCount} orphan sheet(s).`, 'INFO');
+
+  } catch (e) {
+    log_('Error during orphan sheet deletion: ' + e.message, 'ERROR');
+    SpreadsheetApp.getUi().alert('Error', 'Failed to delete orphan sheets: ' + e.message, SpreadsheetApp.getUi().ButtonSet.OK);
+  }
+}
+
+/**
+ * Main deletion coordinator - processes deletion requests for groups and folders.
+ * Called during sync operations to handle resources marked for deletion.
+ * @param {Object} options - Options object with silentMode flag
+ * @return {Object} Summary of deletions: {userGroupsDeleted, foldersDeleted, errors, skipped}
+ */
+function processDeletionRequests_(options) {
+  options = options || {};
+  const silentMode = options.silentMode || false;
+
+  // Check master switch
+  const deletionEnabled = getConfigValue_('AllowGroupFolderDeletion', false);
+  if (!deletionEnabled) {
+    log_('Group/folder deletion disabled in Config. Delete checkboxes will be ignored.', 'INFO');
+    updateDeleteStatusWarnings_();
+    return { userGroupsDeleted: 0, foldersDeleted: 0, skipped: true, reason: 'disabled' };
+  }
+
+  // Initialize summary
+  const summary = {
+    userGroupsDeleted: 0,
+    foldersDeleted: 0,
+    errors: []
+  };
+
+  log_('Processing deletion requests...', 'INFO');
+
+  // Delete UserGroups first (to avoid orphan references)
+  processUserGroupDeletions_(summary);
+
+  // Delete ManagedFolders second
+  processManagedFolderDeletions_(summary);
+
+  // Send notification if deletions occurred
+  if (summary.userGroupsDeleted > 0 || summary.foldersDeleted > 0) {
+    notifyDeletions_(summary);
+  }
+
+  log_(`Deletion complete: ${summary.userGroupsDeleted} group(s), ${summary.foldersDeleted} folder-binding(s) deleted.`, 'INFO');
+
+  return summary;
+}
+
+/**
+ * Processes deletion requests for UserGroups.
+ * Deletes Google Groups, user sheets, and removes rows from UserGroups sheet.
+ * @param {Object} summary - Summary object to track deletions and errors
+ */
+function processUserGroupDeletions_(summary) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(USER_GROUPS_SHEET_NAME);
+  if (!sheet || sheet.getLastRow() < 2) return;
+
+  const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, USERGROUPS_DELETE_COL).getValues();
+  const rowsToDelete = [];
+
+  for (let i = data.length - 1; i >= 0; i--) {
+    const groupName = data[i][0];
+    const groupEmail = data[i][1];
+    const deleteFlag = data[i][USERGROUPS_DELETE_COL - 1]; // Column F
+
+    if (!deleteFlag) continue; // Skip unchecked
+
+    const rowNum = i + 2;
+
+    try {
+      log_(`Deleting UserGroup: "${groupName}" (${groupEmail})`, 'INFO');
+      sheet.getRange(rowNum, 5).setValue('🗑️ DELETING...'); // Status column
+      SpreadsheetApp.flush();
+
+      // 1. Delete Google Group
+      if (groupEmail && !shouldSkipGroupOps_()) {
+        try {
+          AdminDirectory.Groups.remove(groupEmail);
+          log_(`✓ Deleted Google Group: ${groupEmail}`, 'INFO');
+        } catch (e) {
+          if (e.message.includes('Resource Not Found') || e.message.includes('notFound')) {
+            log_(`Group ${groupEmail} already deleted or doesn't exist.`, 'WARN');
+          } else {
+            throw e;
+          }
+        }
+      }
+
+      // 2. Delete user sheet (GroupName_G)
+      const userSheetName = groupName + '_G';
+      const userSheet = ss.getSheetByName(userSheetName);
+      if (userSheet) {
+        ss.deleteSheet(userSheet);
+        log_(`✓ Deleted sheet: ${userSheetName}`, 'INFO');
+      }
+
+      // 3. Check for nested group usage and log warning
+      const nestedInGroups = findGroupsContainingMember_(groupEmail);
+      if (nestedInGroups.length > 0) {
+        log_(`⚠️ Warning: Group "${groupName}" was nested in other groups: ${nestedInGroups.join(', ')}. Members may have lost indirect access.`, 'WARN');
+      }
+
+      // 4. Mark row for deletion
+      rowsToDelete.push(rowNum);
+      summary.userGroupsDeleted++;
+
+      log_(`✓ Successfully deleted UserGroup: "${groupName}"`, 'INFO');
+
+    } catch (e) {
+      log_(`✗ Failed to delete UserGroup "${groupName}": ${e.message}`, 'ERROR');
+      sheet.getRange(rowNum, 5).setValue(`❌ Deletion failed: ${e.message}`);
+      summary.errors.push({ type: 'UserGroup', name: groupName, error: e.message });
+    }
+  }
+
+  // Delete rows from bottom to top (preserve row numbers)
+  rowsToDelete.forEach(function(rowNum) {
+    sheet.deleteRow(rowNum);
+  });
+}
+
+/**
+ * Processes deletion requests for ManagedFolders (folder-role bindings).
+ * Removes group from folder permissions, deletes Google Groups, user sheets, and rows.
+ * Folders are never deleted (by design).
+ * @param {Object} summary - Summary object to track deletions and errors
+ */
+function processManagedFolderDeletions_(summary) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+  if (!sheet || sheet.getLastRow() < 2) return;
+
+  const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, DELETE_COL).getValues();
+  const rowsToDelete = [];
+
+  // Track folders to detect when last binding is deleted
+  const folderBindingCounts = {};
+  for (let i = 0; i < data.length; i++) {
+    const folderId = data[i][FOLDER_ID_COL - 1];
+    const deleteFlag = data[i][DELETE_COL - 1];
+    if (folderId) {
+      if (!folderBindingCounts[folderId]) {
+        folderBindingCounts[folderId] = { total: 0, toDelete: 0 };
+      }
+      folderBindingCounts[folderId].total++;
+      if (deleteFlag) {
+        folderBindingCounts[folderId].toDelete++;
+      }
+    }
+  }
+
+  for (let i = data.length - 1; i >= 0; i--) {
+    const folderName = data[i][FOLDER_NAME_COL - 1];
+    const folderId = data[i][FOLDER_ID_COL - 1];
+    const role = data[i][ROLE_COL - 1];
+    const groupEmail = data[i][GROUP_EMAIL_COL - 1];
+    const userSheetName = data[i][USER_SHEET_NAME_COL - 1];
+    const deleteFlag = data[i][DELETE_COL - 1]; // Column I
+
+    if (!deleteFlag) continue; // Skip unchecked
+
+    const rowNum = i + 2;
+
+    try {
+      log_(`Deleting folder-role binding: "${folderName}" (${role})`, 'INFO');
+      sheet.getRange(rowNum, STATUS_COL).setValue('🗑️ DELETING...'); // Status column
+      SpreadsheetApp.flush();
+
+      // 1. Remove group from folder permissions
+      if (folderId && groupEmail) {
+        try {
+          const folder = DriveApp.getFolderById(folderId);
+          folder.removeEditor(groupEmail);
+          folder.removeViewer(groupEmail);
+          // Note: removeCommenter not available in Apps Script, handled via removeEditor
+          log_(`✓ Removed ${groupEmail} from folder permissions`, 'INFO');
+        } catch (e) {
+          if (e.message.includes('not found') || e.message.includes('cannot find')) {
+            log_(`Folder ${folderId} not found (may be already deleted).`, 'WARN');
+          } else {
+            throw e;
+          }
+        }
+      }
+
+      // 2. Delete Google Group
+      if (groupEmail && !shouldSkipGroupOps_()) {
+        try {
+          AdminDirectory.Groups.remove(groupEmail);
+          log_(`✓ Deleted Google Group: ${groupEmail}`, 'INFO');
+        } catch (e) {
+          if (e.message.includes('Resource Not Found') || e.message.includes('notFound')) {
+            log_(`Group ${groupEmail} already deleted or doesn't exist.`, 'WARN');
+          } else {
+            throw e;
+          }
+        }
+      }
+
+      // 3. Delete user sheet
+      const userSheet = ss.getSheetByName(userSheetName);
+      if (userSheet) {
+        ss.deleteSheet(userSheet);
+        log_(`✓ Deleted sheet: ${userSheetName}`, 'INFO');
+      }
+
+      // 4. Check if this is the last binding for this folder
+      if (folderId && folderBindingCounts[folderId]) {
+        const bindingInfo = folderBindingCounts[folderId];
+        if (bindingInfo.toDelete === bindingInfo.total) {
+          log_(`ℹ️ All managed access to folder "${folderName}" has been removed. Folder remains in Drive.`, 'INFO');
+        }
+      }
+
+      // 5. Mark row for deletion
+      rowsToDelete.push(rowNum);
+      summary.foldersDeleted++;
+
+      log_(`✓ Successfully deleted folder-role binding: "${folderName}" (${role})`, 'INFO');
+
+    } catch (e) {
+      log_(`✗ Failed to delete folder-role binding "${folderName}" (${role}): ${e.message}`, 'ERROR');
+      sheet.getRange(rowNum, STATUS_COL).setValue(`❌ Deletion failed: ${e.message}`);
+      summary.errors.push({ type: 'FolderRole', name: `${folderName} (${role})`, error: e.message });
+    }
+  }
+
+  // Delete rows from bottom to top (preserve row numbers)
+  rowsToDelete.forEach(function(rowNum) {
+    sheet.deleteRow(rowNum);
+  });
+}
+
+/**
+ * Updates Status column for Delete-marked items when deletion is disabled in config.
+ * Shows warning message so users know why deletions aren't happening.
+ */
+function updateDeleteStatusWarnings_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  // Update ManagedFolders sheet
+  const managedSheet = ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+  if (managedSheet && managedSheet.getLastRow() >= 2) {
+    const data = managedSheet.getRange(2, 1, managedSheet.getLastRow() - 1, DELETE_COL).getValues();
+    for (let i = 0; i < data.length; i++) {
+      const deleteFlag = data[i][DELETE_COL - 1];
+      if (deleteFlag) {
+        managedSheet.getRange(i + 2, STATUS_COL).setValue('⚠️ Deletion disabled in Config');
+      }
+    }
+  }
+
+  // Update UserGroups sheet
+  const userGroupsSheet = ss.getSheetByName(USER_GROUPS_SHEET_NAME);
+  if (userGroupsSheet && userGroupsSheet.getLastRow() >= 2) {
+    const data = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, USERGROUPS_DELETE_COL).getValues();
+    for (let i = 0; i < data.length; i++) {
+      const deleteFlag = data[i][USERGROUPS_DELETE_COL - 1];
+      if (deleteFlag) {
+        userGroupsSheet.getRange(i + 2, 5).setValue('⚠️ Deletion disabled in Config'); // Status column
+      }
+    }
   }
 }
 

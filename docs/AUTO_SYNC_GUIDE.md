@@ -163,13 +163,54 @@ Note: This manual trigger requires you (the script owner/admin) to be logged in 
 
 ### How AutoSync Handles Deletions
 
-By default, AutoSync is designed to be **non-destructive**. This is a critical safety feature to prevent accidental removal of user permissions.
+The system distinguishes between two types of deletions, each handled differently:
+
+#### 1. Removing Users from Groups (User Deletions)
+
+By default, AutoSync is designed to be **non-destructive** when removing individual users from groups. This is a critical safety feature to prevent accidental removal of user permissions.
 
 -   **Auto-sync only performs additions:** It will process new users added to sheets, but it will **not** automatically remove users or revoke permissions.
--   **Deletions require manual action:** When the script detects that a user should be removed or a permission revoked, it does not perform the deletion automatically. Instead, it sends an email notification to the administrator (configured in the `Config` sheet) with the subject "⚠️ Manual Action Required: Permission Deletions Pending".
--   **Manual Deletion Step:** To execute the pending deletions, you (the administrator) must run **Permissions Manager → Sync Deletes** from the menu. This allows you to review and confirm the changes before they are applied.
+-   **User deletions require manual action:** When the script detects that a user should be removed from a group (e.g., their email was removed from a user sheet), it does not perform the deletion automatically. Instead, it sends an email notification to the administrator (configured in the `Config` sheet) with the subject "⚠️ Manual Action Required: Permission Deletions Pending".
+-   **Manual Deletion Step:** To execute the pending user removals, you (the administrator) must run **Permissions Manager → ManualSync → Remove Users from Groups** from the menu. This allows you to review and confirm the changes before they are applied.
 
-This "Risk-Based" approach ensures a human is always in the loop for destructive operations, preventing accidental lockouts or data exposure.
+This "Risk-Based" approach ensures a human is always in the loop for removing user access, preventing accidental lockouts or data exposure.
+
+#### 2. Deleting Groups and Folder-Role Bindings (Resource Deletion)
+
+The system also supports explicitly deleting entire groups and folder-role bindings via the **Delete checkbox** feature. This is a separate operation from removing individual users.
+
+**How it works with AutoSync:**
+
+-   **Explicit deletion via checkbox:** To delete a group or folder-role binding, mark the Delete checkbox (Column F in UserGroups, Column I in ManagedFolders).
+-   **Master switch required:** The `AllowGroupFolderDeletion` config setting must be TRUE for deletions to process.
+-   **Processes during AutoSync:** If both conditions are met, AutoSync will process the deletion automatically during its scheduled run.
+-   **What gets deleted:** The Google Group, user sheet, folder permissions (for folder-roles), and the control sheet row.
+-   **What doesn't get deleted:** Google Drive folders are NEVER deleted, even when all roles are removed.
+-   **Email notifications:** If enabled (`NotifyOnGroupFolderDeletion` = TRUE), you'll receive an email notification when deletions occur.
+
+**Safety mechanisms:**
+
+1. **Explicit action required:** Must check the Delete checkbox - no accidental deletions from row removal
+2. **Master switch:** Must be explicitly enabled in Config by a Super Admin
+3. **Status warnings:** If Delete is checked but feature is disabled, Status shows "⚠️ Deletion disabled in Config"
+4. **Audit trail:** All deletions logged to Log sheet with timestamps
+5. **Email alerts:** Optional notifications when deletions occur
+
+**Example scenario:**
+
+1. Team member marks a group for deletion (checks Delete checkbox in UserGroups)
+2. Next AutoSync run detects the Delete checkbox
+3. If `AllowGroupFolderDeletion` is TRUE:
+   - Google Group is deleted
+   - User sheet is deleted
+   - Row is removed from UserGroups
+   - Email notification sent (if enabled)
+4. If `AllowGroupFolderDeletion` is FALSE:
+   - Deletion is skipped
+   - Status column shows warning
+   - Row remains in sheet
+
+For complete details on the deletion feature, see the [User Guide section on Deleting Groups and Folder-Role Bindings](USER_GUIDE.md#deleting-groups-and-folder-role-bindings).
 
 ### Auditing and File Size Management
 

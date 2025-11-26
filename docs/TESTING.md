@@ -104,7 +104,7 @@ The system is designed to be safe by default. The automatic sync will only proce
     *   **Verification**:
         *   The user will **NOT** be removed from the Google Group. This is the expected safe behavior.
         *   Check your email. You should receive a **"MANUAL ACTION REQUIRED"** notification listing the pending deletion.
-        *   To complete the deletion, you must manually run **Permissions Manager → Sync Deletes**.
+        *   To complete the deletion, you must manually run **Permissions Manager → ManualSync → Remove Users from Groups**.
 
 **Phase 2: Standard User Verification**
 
@@ -220,6 +220,153 @@ If you need to manually clean up test data, you can use the following functions 
 
 *   **Cleanup Manual Test Data:** This will prompt you for the name of a manual test folder and then delete the corresponding folder, group, and sheet.
 *   **Cleanup Stress Test Data:** This will automatically find and delete all folders, groups, and sheets that were created by the stress test (identified by the `StressTestFolder_` prefix).
+
+## Deletion Feature Tests
+
+The deletion feature allows you to explicitly delete Google Groups and folder-role bindings via Delete checkboxes in the `UserGroups` and `ManagedFolders` sheets. The following automated tests verify this functionality works correctly.
+
+### Prerequisites
+
+1. **Google Workspace Required:** These tests require a Google Workspace account with Admin SDK enabled.
+2. **Config Setting:** The tests will automatically enable `AllowGroupFolderDeletion` in Config during test execution.
+3. **Time:** Each test creates real Google resources (groups, folders) and can take 1-3 minutes to complete.
+
+### Available Tests
+
+Four individual test functions are available, plus one combined test suite:
+
+#### 1. UserGroup Deletion Test (`runUserGroupDeletionTest`)
+
+Tests basic UserGroup deletion functionality.
+
+**What it does:**
+- Creates a test group with a user sheet
+- Syncs to create the actual Google Group
+- Marks the group for deletion via the Delete checkbox
+- Processes the deletion
+- Verifies: Google Group deleted, sheet deleted, row removed, summary correct
+
+**How to run from Apps Script Editor:**
+```javascript
+runUserGroupDeletionTest();
+```
+
+#### 2. Folder-Role Deletion Test (`runFolderRoleDeletionTest`)
+
+Tests deletion of folder-role bindings with the critical requirement that **folders are never deleted**.
+
+**What it does:**
+- Creates a test folder in Google Drive
+- Creates a folder-role binding with a user group
+- Syncs to create group and permissions
+- Marks the binding for deletion
+- Processes the deletion
+- Verifies: Group deleted, permissions revoked, sheet deleted, row removed, **folder still exists in Drive**
+
+**How to run from Apps Script Editor:**
+```javascript
+runFolderRoleDeletionTest();
+```
+
+**Critical Verification:** This test includes a specific check to ensure the Google Drive folder was NOT deleted, which is a core design requirement.
+
+#### 3. Deletion Disabled Test (`runDeletionDisabledTest`)
+
+Tests that the master switch prevents deletions when disabled.
+
+**What it does:**
+- Sets `AllowGroupFolderDeletion` to `false`
+- Marks a group for deletion
+- Processes deletion requests
+- Verifies: Deletion skipped, row remains, Status shows "⚠️ Deletion disabled in Config"
+
+**How to run from Apps Script Editor:**
+```javascript
+runDeletionDisabledTest();
+```
+
+#### 4. Idempotent Deletion Test (`runIdempotentDeletionTest`)
+
+Tests graceful handling of already-deleted resources.
+
+**What it does:**
+- Creates a group row WITHOUT creating the actual Google Group
+- Marks it for deletion
+- Processes the deletion
+- Verifies: No exceptions thrown, row still removed, warning logged (not error)
+
+**How to run from Apps Script Editor:**
+```javascript
+runIdempotentDeletionTest();
+```
+
+#### 5. Run All Deletion Tests (`runAllDeletionTests`)
+
+Runs all four tests in sequence and provides a comprehensive summary.
+
+**How to run from Apps Script Editor:**
+```javascript
+runAllDeletionTests();
+```
+
+**Output:** The test suite will log detailed results to the Log sheet, including:
+- Total tests run
+- Pass/fail status for each test
+- Overall test suite status
+
+### Running the Tests
+
+**From Apps Script Editor:**
+
+1. Open your Google Spreadsheet
+2. Go to **Extensions > Apps Script**
+3. In the script editor, select the function you want to run from the dropdown at the top
+4. Click the "Run" (▶️) button
+5. Monitor the **Log sheet** for detailed test output
+
+**Best Practice:** Run `runAllDeletionTests()` after making changes to deletion-related code to ensure all scenarios still work correctly.
+
+### Understanding Test Results
+
+All test functions return a boolean:
+- `true` = Test PASSED
+- `false` = Test FAILED
+
+Detailed logs are written to the **Log sheet** with the following format:
+- `>>> RUNNING TEST: [Test Name]` - Test start
+- `✓` markers - Individual verification steps passed
+- `✗` markers - Failures
+- `>>> TEST RESULT: [Test Name] ✓ PASSED` or `✗ FAILED` - Final result
+
+### Important Notes
+
+1. **Cleanup:** Tests clean up after themselves, but if a test fails, some resources may remain. Check the Log sheet for cleanup messages.
+
+2. **Test Isolation:** These tests use the deletion feature being tested. This is different from other tests in the system which bypass the delete feature and use direct cleanup functions.
+
+3. **Real Resources:** These tests create actual Google Groups, Drive folders, and spreadsheet sheets. They are not mocked.
+
+4. **Time:** Be patient - creating and deleting Google Groups involves API calls with rate limits and delays.
+
+5. **Conflicts:** Avoid running multiple deletion tests simultaneously to prevent conflicts with the same Config settings.
+
+### Troubleshooting
+
+**Test fails with "Admin SDK not available":**
+- Verify Admin SDK is enabled in both Apps Script advanced services AND Google Cloud Console
+- Confirm you're using a Google Workspace account (not personal Gmail)
+
+**Test times out:**
+- Increase script execution timeout in Apps Script settings
+- Check for API rate limits in the Log sheet
+- Consider running tests individually instead of the full suite
+
+**Test cleanup incomplete:**
+- Check the Log sheet for specific cleanup error messages
+- Manually remove any remaining test resources:
+  - Sheets starting with `TestDelete*` or `TestDisabled*` or `TestIdempotent*`
+  - Groups in Google Workspace admin console with similar naming
+  - Folders in Drive starting with `TestDeleteFolder_`
 
 ## Manual Testing with Existing Resources
 

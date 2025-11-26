@@ -36,6 +36,8 @@ This is the most important tab. Each row represents a folder you want the script
     *   **For non-ASCII folder names** (Hebrew, Arabic, Chinese, etc.): You must manually specify an ASCII email address (e.g., `coordinators-editor@jvact.org`). See [Working with Non-ASCII Characters](#working-with-non-ascii-characters) below.
 *   **`Last Synced` (Column F):** *Managed by Script.* A timestamp of the last time the script successfully processed this row.
 *   **`Status` (Column G):** *Managed by Script.* Shows the status of the last sync (`OK`, `Processing...`, or an error message).
+*   **`URL` (Column H):** *Managed by Script.* A direct link to the folder in Google Drive.
+*   **`Delete` (Column I):** *User-editable.* Check this checkbox to mark the folder-role binding for deletion. See [Deleting Groups and Folder-Role Bindings](#deleting-groups-and-folder-role-bindings) for details.
 
 ### 2. User Sheets (e.g., `MyProject_Editor`)
 
@@ -59,6 +61,10 @@ This sheet allows you to create your own reusable groups of people.
 *   **`GroupEmail` (Column B):** *Managed by Script or Manual.* The script will generate the email for the Google Group.
     *   **For ASCII group names** (English, numbers): Leave blank - the script auto-generates (e.g., `marketing-team@yourdomain.com`).
     *   **For non-ASCII group names** (Hebrew, Arabic, Chinese, etc.): You must manually specify an ASCII email address (e.g., `coordinators@jvact.org`). See [Working with Non-ASCII Characters](#working-with-non-ascii-characters) below.
+*   **`Group Admin Link` (Column C):** *Managed by Script.* A direct link to manage the Google Group.
+*   **`Last Synced` (Column D):** *Managed by Script.* A timestamp of the last time the script successfully processed this row.
+*   **`Status` (Column E):** *Managed by Script.* Shows the status of the last sync (`OK`, `Processing...`, or an error message).
+*   **`Delete` (Column F):** *User-editable.* Check this checkbox to mark the user group for deletion. See [Deleting Groups and Folder-Role Bindings](#deleting-groups-and-folder-role-bindings) for details.
 *   **How it Works:** For each `GroupName` you define here, the script creates a corresponding sheet with the name `GroupName_G` (the "_G" suffix distinguishes group sheets from folder sheets). You then list the members of that group in that sheet. You can then use the `GroupEmail` in any of your other user sheets to grant access to everyone in that group at once.
     *   **Example:** Group name "Marketing Team" creates sheet "Marketing Team_G".
     *   **Note:** The script automatically migrates old sheets without the "_G" suffix when you run a sync.
@@ -366,14 +372,14 @@ Let's say you want to give the "Sales Team" editor access to a new folder called
 3.  **Go to the `UserGroups` sheet.**
 4.  In a new row, enter:
     *   `GroupName`: `Sales Team`
-5.  **Run the creation sync.** From the spreadsheet menu, click **Permissions Manager > Sync Adds**.
+5.  **Run the creation sync.** From the spreadsheet menu, click **Permissions Manager > ManualSync > Add Users to Groups**.
 6.  The script will now run. It will:
     *   Create the "Q4 Sales Reports" folder in Google Drive.
     *   Create a user sheet named `Q4 Sales Reports_Editor`.
     *   Create a Google Group for the Sales Team and a sheet named `Sales Team_G`.
 7.  **Go to the `Sales Team_G` sheet.** Add the email addresses of your sales team members to Column A. Mark Column B if you want any member to stay listed but not yet receive access.
 8.  **Go to the `Q4 Sales Reports_Editor` sheet.** In Column A, add the group email address for the sales team (you can copy this from the `GroupEmail` column in the `UserGroups` sheet).
-9. **Run the final sync.** Click **Permissions Manager > Sync Adds** again.
+9. **Run the final sync.** Click **Permissions Manager > ManualSync > Add Users to Groups** again.
 
 The script will now add all the members from the `Sales Team` group to the `Q4 Sales Reports_Editor` group, granting them all editor access to the folder.
 
@@ -381,47 +387,165 @@ The script will now add all the members from the `Sales Team` group to the `Q4 S
 
 1.  Find the correct user sheet for the folder and role you want to change (e.g., `Q4 Sales Reports_Editor`).
 2.  To add a user, add their email address to a new row in Column A. You can temporarily disable access later by marking Column B.
-3.  Run **Permissions Manager > Sync Adds**.
+3.  Run **Permissions Manager > ManualSync > Add Users to Groups**.
 
 ### How to Remove a User
 
 1.  Find the correct user sheet for the folder and role you want to change.
 2.  To remove a user, delete the row containing their email address.
-3.  Run **Permissions Manager > Sync Deletes**. You will be asked to confirm the deletion.
+3.  Run **Permissions Manager > ManualSync > Remove Users from Groups**. You will be asked to confirm the removal.
 
-**Note on `Sync Deletes`**: This function only *revokes permissions* by removing users from the Google Groups associated with your folders. It does **not** delete the Google Group itself, the Google Drive folder, or the user sheet from your spreadsheet. This is a safety feature to prevent accidental data loss. See the next section for how to handle obsolete resources.
+**Note on `Remove Users from Groups`**: This function only *revokes permissions* by removing users from the Google Groups associated with your folders. It does **not** delete the Google Group itself, the Google Drive folder, or the user sheet from your spreadsheet. This is a safety feature to prevent accidental data loss. See the next section for how to handle obsolete resources.
 
 ---
 
-## Handling Obsolete Permissions (Manual Deletion)
+## Deleting Groups and Folder-Role Bindings
 
-When you no longer need to manage a folder or a group, you might remove its corresponding row from the `ManagedFolders` or `UserGroups` sheet. It is important to understand what happens when you do this.
+When you no longer need to manage a group or a folder-role binding, you can explicitly request deletion using the **Delete checkbox** feature.
 
-**The script does not automatically delete any resources.**
+### Understanding What Gets Deleted (and What Doesn't)
 
-Removing a row from a control sheet simply tells the script to *stop managing* that resource. The actual Google Drive folder, the Google Group, and the associated user sheet from your spreadsheet will **not** be deleted automatically. This is a critical safety feature to prevent accidental deletion of important data.
+**What the deletion feature deletes:**
+- ✅ Google Groups (from Google Workspace)
+- ✅ User sheets (from the spreadsheet)
+- ✅ Folder permissions (group removed from folder)
+- ✅ Control sheet rows (from ManagedFolders or UserGroups)
 
-After you have removed a folder or group from your control sheets and run a sync, you will need to manually clean up the obsolete resources if you wish to remove them completely.
+**What is NEVER deleted:**
+- ❌ **Google Drive folders** - Folders remain in Drive even when all roles are deleted
 
-### Manual Deletion Checklist
+This asymmetric design (folders auto-created but never deleted) is intentional. The system manages **permissions**, not folder lifecycle. Deleting a folder by mistake could cause major data loss, so folders must be deleted manually if truly no longer needed.
 
-1.  **Delete the Google Drive Folder:**
-    *   Go to [Google Drive](https://drive.google.com).
-    *   Navigate to the folder you no longer need.
-    *   Right-click the folder and select **Move to trash**.
+### Prerequisites
 
-2.  **Delete the Google Group:**
-    *   Go to [Google Groups](https://groups.google.com/my-groups).
-    *   Find the group associated with the folder/role you removed (the group email is visible in the `ManagedFolders` or `UserGroups` sheet before you delete the row).
-    *   Open the group, go to **Group settings**, and look for an option to **Delete group**.
-    *   *Note: You must be an owner of the group to delete it. The script automatically makes the script owner an owner of each group it creates.*
+Before you can use the deletion feature, it must be enabled by a Super Admin:
 
-3.  **Delete the User Sheet:**
-    *   In your control spreadsheet, find the user sheet associated with the folder/role you removed (e.g., `MyProject_Editor`).
-    *   Right-click on the sheet tab at the bottom of the screen.
-    *   Select **Delete**. You will be asked to confirm.
+1. Go to the **Config** sheet
+2. Find the setting **`AllowGroupFolderDeletion`**
+3. Set it to **`TRUE`**
 
-By following these steps, you can ensure that your Google Drive and Google Groups environment stays clean and free of obsolete items.
+When this setting is `FALSE`, the Delete checkboxes are visible but non-functional. Any rows marked for deletion will show a status warning: "⚠️ Deletion disabled in Config".
+
+### How to Delete a UserGroup
+
+UserGroups are standalone groups defined in the `UserGroups` sheet.
+
+**Steps:**
+1. Go to the **UserGroups** sheet
+2. Find the group you want to delete (e.g., "Marketing Team")
+3. Check the **Delete** checkbox (Column F) for that row
+4. Run **Permissions Manager > Full Sync**
+
+**What happens:**
+- The Google Group is deleted from Google Workspace
+- The user sheet (e.g., "Marketing Team_G") is deleted
+- The row is removed from the UserGroups sheet
+- Email notification sent (if enabled in Config)
+
+**⚠️ Warning:** If this group is used as a member in other groups (nested), you'll receive a warning in the Status column showing where it's still in use.
+
+### How to Delete a Folder-Role Binding
+
+Folder-role bindings are defined in the `ManagedFolders` sheet. Each binding represents one role (e.g., Editor) for one folder.
+
+**Steps:**
+1. Go to the **ManagedFolders** sheet
+2. Find the folder-role binding you want to delete (e.g., "Project A" with role "Editor")
+3. Check the **Delete** checkbox (Column I) for that row
+4. Run **Permissions Manager > Full Sync**
+
+**What happens:**
+- The Google Group for that folder-role is deleted
+- The group is removed from the folder's permissions
+- The user sheet (e.g., "Project A_Editor") is deleted
+- The row is removed from ManagedFolders
+- Email notification sent (if enabled in Config)
+- **The folder itself remains in Drive** (by design)
+
+**ℹ️ Important:** If this is the last binding for a folder (e.g., you delete "Project A_Editor" and it was the only role), the Log sheet will note that you're deleting the last binding for that folder. The folder will remain in Drive but will no longer be managed by the script.
+
+### Using the Delete Checkbox
+
+The Delete column appears in:
+- **ManagedFolders** sheet - Column I
+- **UserGroups** sheet - Column F
+
+**To mark for deletion:**
+- Click the cell
+- Check the checkbox (or type TRUE)
+- The Status column will update on next sync
+
+**To cancel deletion:**
+- Uncheck the checkbox before running sync
+- If already synced, the row will be gone (deletion complete)
+
+### Delete Triggers and Safety
+
+**When deletion happens:**
+- Deletions are processed during **Full Sync** only
+- Deletions happen AFTER validation, BEFORE regular sync operations
+- Deletions require the `AllowGroupFolderDeletion` config setting to be TRUE
+
+**Safety mechanisms:**
+1. **Master Switch:** Must be explicitly enabled in Config
+2. **Explicit Checkbox:** No accidental deletions from row removal
+3. **Super Admin Approval:** Only Super Admins can run Full Sync
+4. **Email Notifications:** Optional alerts when deletions occur (Config: `NotifyOnGroupFolderDeletion`)
+5. **Audit Trail:** All deletions logged to Log sheet with timestamps
+6. **Status Visibility:** Status column shows deletion pending/warnings
+7. **Nested Group Detection:** Warns if deleting a group that's used elsewhere
+8. **Last Binding Detection:** Warns when removing the last role from a folder
+
+**⚠️ Preventing Manual Row Deletion:**
+
+The script includes an `onEdit` trigger that monitors the ManagedFolders and UserGroups sheets. If you try to delete a row manually (by clearing the first 3 columns), you'll see a warning message:
+
+```
+⚠️ Warning: Did you delete a row in ManagedFolders or UserGroups?
+
+If you want to delete a group or folder-role binding, please use the
+Delete checkbox in column I (ManagedFolders) or column F (UserGroups)
+instead of manually deleting rows.
+
+Manual row deletion may cause orphaned resources (groups, sheets, permissions).
+```
+
+This is a warning only - manual deletion is not blocked. However, the Delete checkbox is the recommended approach.
+
+### Email Notifications
+
+When groups or folder-roles are deleted, Super Admins can optionally receive email notifications.
+
+**To enable notifications:**
+1. Config sheet: Set `EnableEmailNotifications` = TRUE
+2. Config sheet: Set `NotifyOnGroupFolderDeletion` = TRUE (default)
+3. Config sheet: Verify `NotificationEmail` is correct
+
+**Email includes:**
+- Number of groups deleted
+- Number of folder-role bindings deleted
+- List of what was deleted
+- Confirmation that folders remain in Drive
+- Links to Log and SyncHistory sheets
+
+### Troubleshooting Deletion
+
+**Status shows "⚠️ Deletion disabled in Config":**
+- The Delete checkbox is marked, but `AllowGroupFolderDeletion` is FALSE
+- Go to Config sheet and set it to TRUE to enable deletions
+
+**Status shows "⚠️ Group used in [OtherGroup1, OtherGroup2]":**
+- You're trying to delete a group that's nested inside other groups
+- Remove this group from those other groups first, or delete those groups first
+
+**Group already deleted but row still exists:**
+- If you manually deleted the Google Group outside the script, marking Delete checkbox will still clean up the sheet and row
+- The script handles already-deleted groups gracefully (idempotent operation)
+
+**I want to delete the folder too:**
+- Folders are never deleted by the script (by design - safety feature)
+- After deleting all roles for a folder, manually delete the folder in Google Drive if needed
+- Go to [Google Drive](https://drive.google.com), find the folder, right-click, select "Move to trash"
 
 ---
 

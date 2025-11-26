@@ -168,12 +168,12 @@ first time you roll out the tool.
 
 ## 6. Run the first sync
 
-1. Back in the spreadsheet, open **Permissions Manager → Full Sync (Add & Delete)**.
+1. Back in the spreadsheet, open **Permissions Manager → ManualSync → Full Sync**.
 2. Grant the script permissions when asked—the prompts will appear twice: once
    for Admin SDK access and once for Drive access.
 3. After the sync completes, review the generated sheets and populate the user
    tabs with email addresses.
-4. Use **Sync Adds** and **Sync Deletes** for day-to-day changes. The
+4. Use **Add Users to Groups** and **Remove Users from Groups** (under the ManualSync menu) for day-to-day changes. The
    [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) file explains the workflow in
    detail.
 

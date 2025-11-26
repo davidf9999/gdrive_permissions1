@@ -1130,7 +1130,11 @@ function runAllTests() {
             { name: 'Add/Delete Separation Test', func: runAddDeleteSeparationTest },
             { name: 'AutoSync Error Email Test', func: runAutoSyncErrorEmailTest },
             { name: 'Sheet Locking Test', func: runSheetLockingTest_ },
-            { name: 'Circular Dependency Test', func: runCircularDependencyTest_ }
+            { name: 'Circular Dependency Test', func: runCircularDependencyTest_ },
+            { name: 'UserGroup Deletion Test', func: runUserGroupDeletionTest },
+            { name: 'Folder-Role Deletion Test', func: runFolderRoleDeletionTest },
+            { name: 'Deletion Disabled Test', func: runDeletionDisabledTest },
+            { name: 'Idempotent Deletion Test', func: runIdempotentDeletionTest }
         ];
 
         const testResults = [];
@@ -1455,4 +1459,877 @@ function runCircularDependencyTest_() {
         SCRIPT_EXECUTION_MODE = 'DEFAULT';
     }
     return success;
+}
+
+/**
+ * Test: UserGroup Deletion
+ * Tests that a UserGroup can be deleted via the Delete checkbox.
+ * Verifies: group deleted, sheet deleted, row removed, summary correct.
+ */
+function runUserGroupDeletionTest() {
+    SCRIPT_EXECUTION_MODE = 'TEST';  // Set mode FIRST before any logging
+
+    const testName = 'UserGroup Deletion Test';
+    log_('', 'INFO');
+    log_('========================================', 'INFO');
+    log_('>>> RUNNING TEST: ' + testName, 'INFO');
+    log_('========================================', 'INFO');
+
+    let success = true;
+    let testGroupName = '';
+    let testGroupEmail = '';
+
+    try {
+
+        // Prerequisites
+        const deletionEnabled = getConfigValue_('AllowGroupFolderDeletion', false);
+        if (!deletionEnabled) {
+            log_('⚠️ Test requires AllowGroupFolderDeletion=true in Config', 'WARN');
+            log_('Setting AllowGroupFolderDeletion=true for test...', 'INFO');
+            const configSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Config');
+            const configData = configSheet.getDataRange().getValues();
+            for (let i = 1; i < configData.length; i++) {
+                if (configData[i][0] === 'AllowGroupFolderDeletion') {
+                    configSheet.getRange(i + 1, 2).setValue(true);
+                    log_('✓ Set AllowGroupFolderDeletion=true', 'INFO');
+                    break;
+                }
+            }
+        }
+
+        // 1. Setup: Create test UserGroup
+        testGroupName = 'TestDeleteGroup_' + new Date().getTime();
+        testGroupEmail = testGroupName.toLowerCase().replace(/[^a-z0-9]/g, '') + '@' + Session.getActiveUser().getEmail().split('@')[1];
+
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        const userGroupsSheet = ss.getSheetByName('UserGroups');
+
+        // Add group row
+        const lastRow = userGroupsSheet.getLastRow();
+        userGroupsSheet.getRange(lastRow + 1, 1, 1, 6).setValues([[
+            testGroupName,
+            testGroupEmail,
+            '', // Admin link (will be populated by sync)
+            '', // Last Synced
+            '', // Status
+            false // Delete checkbox
+        ]]);
+        log_('✓ Added test group to UserGroups: ' + testGroupName, 'INFO');
+
+        // Create group sheet with test member
+        const testSheet = ss.insertSheet(testGroupName + '_G');
+        testSheet.getRange('A1:A2').setValues([['Email'], ['test.member@example.com']]);
+        log_('✓ Created group sheet: ' + testGroupName + '_G', 'INFO');
+
+        // Run sync to create actual Google Group
+        log_('Running sync to create Google Group...', 'INFO');
+        syncUserGroups({ dryRun: false });
+
+        // Verify group was created
+        const groupData = userGroupsSheet.getDataRange().getValues();
+        let groupRow = -1;
+        for (let i = 1; i < groupData.length; i++) {
+            if (groupData[i][0] === testGroupName) {
+                groupRow = i;
+                break;
+            }
+        }
+
+        if (groupRow === -1) {
+            throw new Error('Test group row not found after sync');
+        }
+
+        const groupStatus = groupData[groupRow][4]; // Status column
+        if (groupStatus && groupStatus.includes('ERROR')) {
+            throw new Error('Group sync failed: ' + groupStatus);
+        }
+
+        log_('✓ Group synced successfully', 'INFO');
+
+        // 2. Mark for deletion
+        userGroupsSheet.getRange(groupRow + 1, USERGROUPS_DELETE_COL).setValue(true);
+        log_('✓ Marked group for deletion (Delete checkbox = true)', 'INFO');
+
+        // 3. Process deletions
+        log_('Processing deletion requests...', 'INFO');
+        const deletionSummary = processDeletionRequests_({ dryRun: false });
+
+        // 4. Verify deletion
+        if (deletionSummary.skipped) {
+            throw new Error('Deletion was skipped (feature disabled?)');
+        }
+
+        if (deletionSummary.userGroupsDeleted !== 1) {
+            throw new Error('Expected 1 group deleted, got: ' + deletionSummary.userGroupsDeleted);
+        }
+
+        log_('✓ Deletion summary correct: 1 group deleted', 'INFO');
+
+        // Verify Google Group is deleted
+        try {
+            AdminDirectory.Groups.get(testGroupEmail);
+            throw new Error('Google Group still exists after deletion');
+        } catch (e) {
+            if (e.message.includes('Resource Not Found') || e.message.includes('notFound')) {
+                log_('✓ Google Group deleted successfully', 'INFO');
+            } else {
+                throw e;
+            }
+        }
+
+        // Verify sheet is deleted
+        const sheetStillExists = ss.getSheetByName(testGroupName + '_G');
+        if (sheetStillExists) {
+            throw new Error('Group sheet still exists after deletion');
+        }
+        log_('✓ Group sheet deleted', 'INFO');
+
+        // Verify row removed from UserGroups
+        const updatedData = userGroupsSheet.getDataRange().getValues();
+        let rowStillExists = false;
+        for (let i = 1; i < updatedData.length; i++) {
+            if (updatedData[i][0] === testGroupName) {
+                rowStillExists = true;
+                break;
+            }
+        }
+
+        if (rowStillExists) {
+            throw new Error('Group row still exists in UserGroups after deletion');
+        }
+        log_('✓ Group row removed from UserGroups', 'INFO');
+
+        log_('✓ All verifications passed', 'INFO');
+
+    } catch (err) {
+        success = false;
+        log_('✗ TEST FAILED: ' + err.message, 'ERROR');
+        log_(err.stack, 'ERROR');
+
+        // Cleanup on error
+        try {
+            const ss = SpreadsheetApp.getActiveSpreadsheet();
+            const testSheet = ss.getSheetByName(testGroupName + '_G');
+            if (testSheet) {
+                ss.deleteSheet(testSheet);
+                log_('Cleaned up test sheet', 'INFO');
+            }
+
+            const userGroupsSheet = ss.getSheetByName('UserGroups');
+            const data = userGroupsSheet.getDataRange().getValues();
+            for (let i = data.length - 1; i >= 1; i--) {
+                if (data[i][0] && data[i][0].startsWith('TestDeleteGroup_')) {
+                    userGroupsSheet.deleteRow(i + 1);
+                }
+            }
+            log_('Cleaned up test group rows', 'INFO');
+        } catch (cleanupErr) {
+            log_('Cleanup error: ' + cleanupErr.message, 'WARN');
+        }
+    } finally {
+        const testStatus = success ? '✓ PASSED' : '✗ FAILED';
+        log_('>>> TEST RESULT: ' + testName + ' ' + testStatus, success ? 'INFO' : 'ERROR');
+        log_('', 'INFO');
+        SCRIPT_EXECUTION_MODE = 'DEFAULT';
+    }
+    return success;
+}
+
+/**
+ * Test: Folder-Role Deletion
+ * Tests that a folder-role binding can be deleted via the Delete checkbox.
+ * Verifies: group deleted, sheet deleted, row removed, folder NOT deleted, summary correct.
+ */
+function runFolderRoleDeletionTest() {
+    SCRIPT_EXECUTION_MODE = 'TEST';  // Set mode FIRST before any logging
+
+    const testName = 'Folder-Role Deletion Test';
+    log_('', 'INFO');
+    log_('========================================', 'INFO');
+    log_('>>> RUNNING TEST: ' + testName, 'INFO');
+    log_('========================================', 'INFO');
+
+    let success = true;
+    let testFolderId = null;
+    let testFolderName = null;
+    let testUserSheetName = '';
+
+    try {
+
+        // Prerequisites
+        const deletionEnabled = getConfigValue_('AllowGroupFolderDeletion', false);
+        if (!deletionEnabled) {
+            log_('⚠️ Test requires AllowGroupFolderDeletion=true in Config', 'WARN');
+            log_('Setting AllowGroupFolderDeletion=true for test...', 'INFO');
+            const configSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Config');
+            const configData = configSheet.getDataRange().getValues();
+            for (let i = 1; i < configData.length; i++) {
+                if (configData[i][0] === 'AllowGroupFolderDeletion') {
+                    configSheet.getRange(i + 1, 2).setValue(true);
+                    log_('✓ Set AllowGroupFolderDeletion=true', 'INFO');
+                    break;
+                }
+            }
+        }
+
+        // 1. Setup: Create test folder in Drive
+        testFolderName = 'TestDeleteFolder_' + new Date().getTime();
+        const testFolder = DriveApp.createFolder(testFolderName);
+        testFolderId = testFolder.getId();
+        log_('✓ Created test folder in Drive: ' + testFolderName + ' (ID: ' + testFolderId + ')', 'INFO');
+
+        // 2. Add folder-role to ManagedFolders
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        const managedFoldersSheet = ss.getSheetByName('ManagedFolders');
+        const testRole = 'reader';
+        testUserSheetName = 'TestDeleteFolderUsers';
+
+        // Create user sheet
+        const testUserSheet = ss.insertSheet(testUserSheetName);
+        testUserSheet.getRange('A1:A2').setValues([['Email'], ['test.user@example.com']]);
+        log_('✓ Created user sheet: ' + testUserSheetName, 'INFO');
+
+        // Add to ManagedFolders
+        const lastRow = managedFoldersSheet.getLastRow();
+        managedFoldersSheet.getRange(lastRow + 1, 1, 1, 9).setValues([[
+            testFolderName,
+            testFolderId,
+            testRole,
+            '', // GroupEmail (will be populated by sync)
+            testUserSheetName,
+            '', // Last Synced
+            '', // Status
+            '', // URL
+            false // Delete checkbox
+        ]]);
+        log_('✓ Added folder-role to ManagedFolders', 'INFO');
+
+        // Run sync to create group and permissions
+        log_('Running sync to create group and permissions...', 'INFO');
+        processManagedFolders_({ dryRun: false });
+
+        // Verify sync succeeded
+        const folderData = managedFoldersSheet.getDataRange().getValues();
+        let folderRow = -1;
+        for (let i = 1; i < folderData.length; i++) {
+            if (folderData[i][1] === testFolderId) {
+                folderRow = i;
+                break;
+            }
+        }
+
+        if (folderRow === -1) {
+            throw new Error('Test folder row not found after sync');
+        }
+
+        const folderStatus = folderData[folderRow][6]; // Status column
+        if (folderStatus && folderStatus.includes('ERROR')) {
+            throw new Error('Folder sync failed: ' + folderStatus);
+        }
+
+        const groupEmail = folderData[folderRow][3];
+        if (!groupEmail) {
+            throw new Error('Group email not populated after sync');
+        }
+
+        log_('✓ Folder-role synced successfully, group email: ' + groupEmail, 'INFO');
+
+        // 3. Mark for deletion
+        managedFoldersSheet.getRange(folderRow + 1, DELETE_COL).setValue(true);
+        log_('✓ Marked folder-role for deletion (Delete checkbox = true)', 'INFO');
+
+        // 4. Process deletions
+        log_('Processing deletion requests...', 'INFO');
+        const deletionSummary = processDeletionRequests_({ dryRun: false });
+
+        // 5. Verify deletion
+        if (deletionSummary.skipped) {
+            throw new Error('Deletion was skipped (feature disabled?)');
+        }
+
+        if (deletionSummary.foldersDeleted !== 1) {
+            throw new Error('Expected 1 folder-binding deleted, got: ' + deletionSummary.foldersDeleted);
+        }
+
+        log_('✓ Deletion summary correct: 1 folder-binding deleted', 'INFO');
+
+        // Verify Google Group is deleted
+        try {
+            AdminDirectory.Groups.get(groupEmail);
+            throw new Error('Google Group still exists after deletion');
+        } catch (e) {
+            if (e.message.includes('Resource Not Found') || e.message.includes('notFound')) {
+                log_('✓ Google Group deleted successfully', 'INFO');
+            } else {
+                throw e;
+            }
+        }
+
+        // Verify user sheet is deleted
+        const userSheetStillExists = ss.getSheetByName(testUserSheetName);
+        if (userSheetStillExists) {
+            throw new Error('User sheet still exists after deletion');
+        }
+        log_('✓ User sheet deleted', 'INFO');
+
+        // Verify row removed from ManagedFolders
+        const updatedData = managedFoldersSheet.getDataRange().getValues();
+        let rowStillExists = false;
+        for (let i = 1; i < updatedData.length; i++) {
+            if (updatedData[i][1] === testFolderId) {
+                rowStillExists = true;
+                break;
+            }
+        }
+
+        if (rowStillExists) {
+            throw new Error('Folder-role row still exists in ManagedFolders after deletion');
+        }
+        log_('✓ Folder-role row removed from ManagedFolders', 'INFO');
+
+        // CRITICAL: Verify folder still exists in Drive
+        try {
+            const folder = DriveApp.getFolderById(testFolderId);
+            log_('✓ CRITICAL VERIFICATION PASSED: Folder still exists in Drive (ID: ' + testFolderId + ')', 'INFO');
+        } catch (e) {
+            throw new Error('CRITICAL FAILURE: Folder was deleted from Drive! This violates the design requirement.');
+        }
+
+        log_('✓ All verifications passed', 'INFO');
+
+    } catch (err) {
+        success = false;
+        log_('✗ TEST FAILED: ' + err.message, 'ERROR');
+        log_(err.stack, 'ERROR');
+
+        // Cleanup on error
+        try {
+            const ss = SpreadsheetApp.getActiveSpreadsheet();
+            const testUserSheet = ss.getSheetByName(testUserSheetName);
+            if (testUserSheet) {
+                ss.deleteSheet(testUserSheet);
+                log_('Cleaned up test user sheet', 'INFO');
+            }
+
+            const managedFoldersSheet = ss.getSheetByName('ManagedFolders');
+            const data = managedFoldersSheet.getDataRange().getValues();
+            for (let i = data.length - 1; i >= 1; i--) {
+                if (data[i][0] && data[i][0].startsWith('TestDeleteFolder_')) {
+                    managedFoldersSheet.deleteRow(i + 1);
+                }
+            }
+            log_('Cleaned up test folder rows', 'INFO');
+        } catch (cleanupErr) {
+            log_('Cleanup error: ' + cleanupErr.message, 'WARN');
+        }
+    } finally {
+        // Cleanup test folder from Drive
+        if (testFolderId) {
+            try {
+                const folder = DriveApp.getFolderById(testFolderId);
+                folder.setTrashed(true);
+                log_('Cleaned up test folder from Drive', 'INFO');
+            } catch (e) {
+                log_('Could not cleanup test folder: ' + e.message, 'WARN');
+            }
+        }
+
+        const testStatus = success ? '✓ PASSED' : '✗ FAILED';
+        log_('>>> TEST RESULT: ' + testName + ' ' + testStatus, success ? 'INFO' : 'ERROR');
+        log_('', 'INFO');
+        SCRIPT_EXECUTION_MODE = 'DEFAULT';
+    }
+    return success;
+}
+
+/**
+ * Test: Deletion Disabled in Config
+ * Tests that deletions are skipped when AllowGroupFolderDeletion is false.
+ * Verifies: deletion skipped, row remains, status shows warning.
+ */
+function runDeletionDisabledTest() {
+    SCRIPT_EXECUTION_MODE = 'TEST';  // Set mode FIRST before any logging
+
+    const testName = 'Deletion Disabled Test';
+    log_('', 'INFO');
+    log_('========================================', 'INFO');
+    log_('>>> RUNNING TEST: ' + testName, 'INFO');
+    log_('========================================', 'INFO');
+
+    let success = true;
+    const testGroupName = 'TestDisabledDeleteGroup_' + new Date().getTime();
+
+    try {
+
+        // 1. Ensure AllowGroupFolderDeletion is FALSE
+        const configSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Config');
+        const configData = configSheet.getDataRange().getValues();
+        let configRow = -1;
+        for (let i = 1; i < configData.length; i++) {
+            if (configData[i][0] === 'AllowGroupFolderDeletion') {
+                configRow = i;
+                break;
+            }
+        }
+
+        if (configRow === -1) {
+            throw new Error('AllowGroupFolderDeletion setting not found in Config');
+        }
+
+        const originalValue = configData[configRow][1];
+        configSheet.getRange(configRow + 1, 2).setValue(false);
+        log_('✓ Set AllowGroupFolderDeletion=false', 'INFO');
+
+        // 2. Add test group row marked for deletion
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        const userGroupsSheet = ss.getSheetByName('UserGroups');
+
+        const lastRow = userGroupsSheet.getLastRow();
+        userGroupsSheet.getRange(lastRow + 1, 1, 1, 6).setValues([[
+            testGroupName,
+            testGroupName.toLowerCase() + '@example.com',
+            '',
+            '',
+            '',
+            true // Delete checkbox = true
+        ]]);
+        log_('✓ Added test group with Delete=true', 'INFO');
+
+        // 3. Process deletions (should skip)
+        log_('Processing deletion requests (should skip)...', 'INFO');
+        const deletionSummary = processDeletionRequests_({ dryRun: false });
+
+        // 4. Verify deletion was skipped
+        if (!deletionSummary.skipped) {
+            throw new Error('Deletion was not skipped when AllowGroupFolderDeletion=false');
+        }
+
+        if (deletionSummary.reason !== 'disabled') {
+            throw new Error('Expected skip reason "disabled", got: ' + deletionSummary.reason);
+        }
+
+        log_('✓ Deletion correctly skipped (feature disabled)', 'INFO');
+
+        // 5. Verify row still exists
+        const data = userGroupsSheet.getDataRange().getValues();
+        let rowFound = false;
+        let statusValue = '';
+        for (let i = 1; i < data.length; i++) {
+            if (data[i][0] === testGroupName) {
+                rowFound = true;
+                statusValue = data[i][4]; // Status column
+                break;
+            }
+        }
+
+        if (!rowFound) {
+            throw new Error('Test group row was removed despite feature being disabled');
+        }
+        log_('✓ Group row still exists (not deleted)', 'INFO');
+
+        // 6. Verify status shows warning
+        if (!statusValue || !statusValue.includes('Deletion disabled')) {
+            throw new Error('Expected status to show deletion disabled warning, got: ' + statusValue);
+        }
+        log_('✓ Status correctly shows "⚠️ Deletion disabled in Config"', 'INFO');
+
+        // 7. Cleanup
+        for (let i = data.length - 1; i >= 1; i--) {
+            if (data[i][0] === testGroupName) {
+                userGroupsSheet.deleteRow(i + 1);
+                break;
+            }
+        }
+        log_('✓ Cleaned up test group row', 'INFO');
+
+        // Restore original config value
+        configSheet.getRange(configRow + 1, 2).setValue(originalValue);
+        log_('✓ Restored AllowGroupFolderDeletion to original value', 'INFO');
+
+        log_('✓ All verifications passed', 'INFO');
+
+    } catch (err) {
+        success = false;
+        log_('✗ TEST FAILED: ' + err.message, 'ERROR');
+        log_(err.stack, 'ERROR');
+
+        // Cleanup on error
+        try {
+            const ss = SpreadsheetApp.getActiveSpreadsheet();
+            const userGroupsSheet = ss.getSheetByName('UserGroups');
+            const data = userGroupsSheet.getDataRange().getValues();
+            for (let i = data.length - 1; i >= 1; i--) {
+                if (data[i][0] && data[i][0].startsWith('TestDisabledDeleteGroup_')) {
+                    userGroupsSheet.deleteRow(i + 1);
+                }
+            }
+            log_('Cleaned up test group rows', 'INFO');
+        } catch (cleanupErr) {
+            log_('Cleanup error: ' + cleanupErr.message, 'WARN');
+        }
+    } finally {
+        const testStatus = success ? '✓ PASSED' : '✗ FAILED';
+        log_('>>> TEST RESULT: ' + testName + ' ' + testStatus, success ? 'INFO' : 'ERROR');
+        log_('', 'INFO');
+        SCRIPT_EXECUTION_MODE = 'DEFAULT';
+    }
+    return success;
+}
+
+/**
+ * Test: Idempotent Deletion
+ * Tests that attempting to delete an already-deleted group is handled gracefully.
+ * Verifies: no errors, row still removed, logs warning not error.
+ */
+function runIdempotentDeletionTest() {
+    SCRIPT_EXECUTION_MODE = 'TEST';  // Set mode FIRST before any logging
+
+    const testName = 'Idempotent Deletion Test';
+    log_('', 'INFO');
+    log_('========================================', 'INFO');
+    log_('>>> RUNNING TEST: ' + testName, 'INFO');
+    log_('========================================', 'INFO');
+
+    let success = true;
+    const testGroupName = 'TestIdempotentDelete_' + new Date().getTime();
+    const testGroupEmail = testGroupName.toLowerCase().replace(/[^a-z0-9]/g, '') + '@' + Session.getActiveUser().getEmail().split('@')[1];
+
+    try {
+
+        // Prerequisites
+        const deletionEnabled = getConfigValue_('AllowGroupFolderDeletion', false);
+        if (!deletionEnabled) {
+            log_('⚠️ Test requires AllowGroupFolderDeletion=true in Config', 'WARN');
+            log_('Setting AllowGroupFolderDeletion=true for test...', 'INFO');
+            const configSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Config');
+            const configData = configSheet.getDataRange().getValues();
+            for (let i = 1; i < configData.length; i++) {
+                if (configData[i][0] === 'AllowGroupFolderDeletion') {
+                    configSheet.getRange(i + 1, 2).setValue(true);
+                    log_('✓ Set AllowGroupFolderDeletion=true', 'INFO');
+                    break;
+                }
+            }
+        }
+
+        // 1. Add group row WITHOUT creating the actual Google Group
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        const userGroupsSheet = ss.getSheetByName('UserGroups');
+
+        const lastRow = userGroupsSheet.getLastRow();
+        userGroupsSheet.getRange(lastRow + 1, 1, 1, 6).setValues([[
+            testGroupName,
+            testGroupEmail,
+            '',
+            '',
+            '',
+            true // Delete checkbox = true
+        ]]);
+        log_('✓ Added test group row (without creating actual Google Group)', 'INFO');
+
+        // 2. Verify group does NOT exist in Google
+        let groupExistsInitially = false;
+        try {
+            AdminDirectory.Groups.get(testGroupEmail);
+            groupExistsInitially = true;
+        } catch (e) {
+            if (e.message.includes('Resource Not Found') || e.message.includes('notFound')) {
+                log_('✓ Confirmed: Google Group does not exist initially', 'INFO');
+            } else {
+                throw e;
+            }
+        }
+
+        if (groupExistsInitially) {
+            throw new Error('Test group already exists in Google (test setup failed)');
+        }
+
+        // 3. Process deletions (should handle gracefully)
+        log_('Processing deletion requests (group does not exist)...', 'INFO');
+        const deletionSummary = processDeletionRequests_({ dryRun: false });
+
+        // 4. Verify no exceptions were thrown (we got here!)
+        log_('✓ Deletion processing completed without exceptions', 'INFO');
+
+        // 5. Verify deletion summary shows the attempt
+        if (deletionSummary.userGroupsDeleted !== 1) {
+            throw new Error('Expected deletion count of 1, got: ' + deletionSummary.userGroupsDeleted);
+        }
+        log_('✓ Deletion summary correct: 1 group deletion processed', 'INFO');
+
+        // 6. Verify row was removed despite group not existing
+        const data = userGroupsSheet.getDataRange().getValues();
+        let rowStillExists = false;
+        for (let i = 1; i < data.length; i++) {
+            if (data[i][0] === testGroupName) {
+                rowStillExists = true;
+                break;
+            }
+        }
+
+        if (rowStillExists) {
+            throw new Error('Group row still exists after deletion attempt');
+        }
+        log_('✓ Group row removed successfully', 'INFO');
+
+        // 7. Check logs to verify warning (not error) was logged
+        // This is a manual verification - the test passes if we got here without exceptions
+        log_('✓ Idempotent deletion handled gracefully (check Log sheet for warning message)', 'INFO');
+
+        log_('✓ All verifications passed', 'INFO');
+
+    } catch (err) {
+        success = false;
+        log_('✗ TEST FAILED: ' + err.message, 'ERROR');
+        log_(err.stack, 'ERROR');
+
+        // Cleanup on error
+        try {
+            const ss = SpreadsheetApp.getActiveSpreadsheet();
+            const userGroupsSheet = ss.getSheetByName('UserGroups');
+            const data = userGroupsSheet.getDataRange().getValues();
+            for (let i = data.length - 1; i >= 1; i--) {
+                if (data[i][0] && data[i][0].startsWith('TestIdempotentDelete_')) {
+                    userGroupsSheet.deleteRow(i + 1);
+                }
+            }
+            log_('Cleaned up test group rows', 'INFO');
+
+            // Try to cleanup Google Group if it somehow was created
+            try {
+                AdminDirectory.Groups.remove(testGroupEmail);
+                log_('Cleaned up test Google Group', 'INFO');
+            } catch (e) {
+                // Expected if group doesn't exist
+            }
+        } catch (cleanupErr) {
+            log_('Cleanup error: ' + cleanupErr.message, 'WARN');
+        }
+    } finally {
+        const testStatus = success ? '✓ PASSED' : '✗ FAILED';
+        log_('>>> TEST RESULT: ' + testName + ' ' + testStatus, success ? 'INFO' : 'ERROR');
+        log_('', 'INFO');
+        SCRIPT_EXECUTION_MODE = 'DEFAULT';
+    }
+    return success;
+}
+
+/**
+ * Run all deletion-related tests
+ * Provides a comprehensive test suite for the deletion feature.
+ */
+function runAllDeletionTests() {
+    log_('', 'INFO');
+    log_('════════════════════════════════════════', 'INFO');
+    log_('>>> DELETION FEATURE TEST SUITE', 'INFO');
+    log_('════════════════════════════════════════', 'INFO');
+    log_('', 'INFO');
+
+    const results = {
+        total: 0,
+        passed: 0,
+        failed: 0,
+        tests: []
+    };
+
+    // Test 1: UserGroup Deletion
+    log_('Starting Test 1/4: UserGroup Deletion...', 'INFO');
+    const test1 = runUserGroupDeletionTest();
+    results.total++;
+    if (test1) {
+        results.passed++;
+        results.tests.push({ name: 'UserGroup Deletion', passed: true });
+    } else {
+        results.failed++;
+        results.tests.push({ name: 'UserGroup Deletion', passed: false });
+    }
+
+    // Test 2: Folder-Role Deletion
+    log_('Starting Test 2/4: Folder-Role Deletion...', 'INFO');
+    const test2 = runFolderRoleDeletionTest();
+    results.total++;
+    if (test2) {
+        results.passed++;
+        results.tests.push({ name: 'Folder-Role Deletion', passed: true });
+    } else {
+        results.failed++;
+        results.tests.push({ name: 'Folder-Role Deletion', passed: false });
+    }
+
+    // Test 3: Deletion Disabled
+    log_('Starting Test 3/4: Deletion Disabled...', 'INFO');
+    const test3 = runDeletionDisabledTest();
+    results.total++;
+    if (test3) {
+        results.passed++;
+        results.tests.push({ name: 'Deletion Disabled', passed: true });
+    } else {
+        results.failed++;
+        results.tests.push({ name: 'Deletion Disabled', passed: false });
+    }
+
+    // Test 4: Idempotent Deletion
+    log_('Starting Test 4/4: Idempotent Deletion...', 'INFO');
+    const test4 = runIdempotentDeletionTest();
+    results.total++;
+    if (test4) {
+        results.passed++;
+        results.tests.push({ name: 'Idempotent Deletion', passed: true });
+    } else {
+        results.failed++;
+        results.tests.push({ name: 'Idempotent Deletion', passed: false });
+    }
+
+    // Summary
+    log_('', 'INFO');
+    log_('════════════════════════════════════════', 'INFO');
+    log_('>>> TEST SUITE SUMMARY', 'INFO');
+    log_('════════════════════════════════════════', 'INFO');
+    log_('Total Tests: ' + results.total, 'INFO');
+    log_('Passed: ' + results.passed + ' ✓', 'INFO');
+    log_('Failed: ' + results.failed + (results.failed > 0 ? ' ✗' : ''), results.failed > 0 ? 'ERROR' : 'INFO');
+    log_('', 'INFO');
+
+    log_('Test Results:', 'INFO');
+    for (let i = 0; i < results.tests.length; i++) {
+        const test = results.tests[i];
+        const status = test.passed ? '✓ PASSED' : '✗ FAILED';
+        log_('  ' + (i + 1) + '. ' + test.name + ': ' + status, test.passed ? 'INFO' : 'ERROR');
+    }
+
+    log_('', 'INFO');
+    const overallStatus = results.failed === 0 ? '✓ ALL TESTS PASSED' : '✗ SOME TESTS FAILED';
+    log_('>>> ' + overallStatus, results.failed === 0 ? 'INFO' : 'ERROR');
+    log_('════════════════════════════════════════', 'INFO');
+    log_('', 'INFO');
+
+    return results.failed === 0;
+}
+
+/**
+ * Cleanup function for deletion test data
+ * Removes any orphaned test data left by failed deletion tests.
+ */
+function cleanupDeletionTestData() {
+    SCRIPT_EXECUTION_MODE = 'TEST';
+    try {
+        const ui = SpreadsheetApp.getUi();
+        const response = ui.alert(
+            'Cleanup Deletion Test Data',
+            'This will remove any leftover test data from deletion tests:\n\n' +
+            '• Test groups starting with "TestDelete", "TestDisabled", "TestIdempotent"\n' +
+            '• Test sheets with those prefixes\n' +
+            '• Test folders in Drive starting with "TestDeleteFolder_"\n\n' +
+            'Continue?',
+            ui.ButtonSet.YES_NO
+        );
+
+        if (response !== ui.Button.YES) {
+            log_('Deletion test cleanup cancelled by user.', 'INFO');
+            return;
+        }
+
+        log_('Starting deletion test data cleanup...', 'INFO');
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        let cleanupCount = 0;
+
+        // 1. Clean up test groups from UserGroups sheet
+        const userGroupsSheet = ss.getSheetByName('UserGroups');
+        if (userGroupsSheet) {
+            const data = userGroupsSheet.getDataRange().getValues();
+            for (let i = data.length - 1; i >= 1; i--) {
+                const groupName = data[i][0];
+                const groupEmail = data[i][1];
+                if (groupName && (
+                    groupName.startsWith('TestDeleteGroup_') ||
+                    groupName.startsWith('TestDisabledDeleteGroup_') ||
+                    groupName.startsWith('TestIdempotentDelete_')
+                )) {
+                    // Try to delete Google Group
+                    if (groupEmail) {
+                        try {
+                            AdminDirectory.Groups.remove(groupEmail);
+                            log_('Deleted test Google Group: ' + groupEmail, 'INFO');
+                        } catch (e) {
+                            log_('Could not delete Google Group ' + groupEmail + ': ' + e.message, 'WARN');
+                        }
+                    }
+                    // Delete row
+                    userGroupsSheet.deleteRow(i + 1);
+                    cleanupCount++;
+                    log_('Removed test group row: ' + groupName, 'INFO');
+                }
+            }
+        }
+
+        // 2. Clean up test folder rows from ManagedFolders sheet
+        const managedFoldersSheet = ss.getSheetByName('ManagedFolders');
+        if (managedFoldersSheet) {
+            const data = managedFoldersSheet.getDataRange().getValues();
+            for (let i = data.length - 1; i >= 1; i--) {
+                const folderName = data[i][0];
+                const groupEmail = data[i][3];
+                if (folderName && folderName.startsWith('TestDeleteFolder_')) {
+                    // Try to delete Google Group
+                    if (groupEmail) {
+                        try {
+                            AdminDirectory.Groups.remove(groupEmail);
+                            log_('Deleted test Google Group: ' + groupEmail, 'INFO');
+                        } catch (e) {
+                            log_('Could not delete Google Group ' + groupEmail + ': ' + e.message, 'WARN');
+                        }
+                    }
+                    // Delete row
+                    managedFoldersSheet.deleteRow(i + 1);
+                    cleanupCount++;
+                    log_('Removed test folder row: ' + folderName, 'INFO');
+                }
+            }
+        }
+
+        // 3. Clean up test sheets
+        const sheets = ss.getSheets();
+        for (let i = 0; i < sheets.length; i++) {
+            const sheet = sheets[i];
+            const name = sheet.getName();
+            if (name.startsWith('TestDeleteGroup_') ||
+                name.startsWith('TestDisabledDeleteGroup_') ||
+                name.startsWith('TestIdempotentDelete_') ||
+                name.startsWith('TestDeleteFolder')) {
+                try {
+                    ss.deleteSheet(sheet);
+                    cleanupCount++;
+                    log_('Deleted test sheet: ' + name, 'INFO');
+                } catch (e) {
+                    log_('Could not delete sheet ' + name + ': ' + e.message, 'WARN');
+                }
+            }
+        }
+
+        // 4. Clean up test folders from Drive
+        const folderIterator = DriveApp.getFoldersByName('TestDeleteFolder_');
+        while (folderIterator.hasNext()) {
+            const folder = folderIterator.next();
+            const folderName = folder.getName();
+            if (folderName.startsWith('TestDeleteFolder_')) {
+                try {
+                    folder.setTrashed(true);
+                    cleanupCount++;
+                    log_('Trashed test folder from Drive: ' + folderName, 'INFO');
+                } catch (e) {
+                    log_('Could not trash folder ' + folderName + ': ' + e.message, 'WARN');
+                }
+            }
+        }
+
+        log_('Deletion test cleanup complete. Cleaned up ' + cleanupCount + ' items.', 'INFO');
+        ui.alert('Cleanup Complete', 'Cleaned up ' + cleanupCount + ' deletion test items.\n\nCheck TestLog for details.', ui.ButtonSet.OK);
+
+    } catch (err) {
+        log_('Deletion test cleanup failed: ' + err.message, 'ERROR');
+        log_(err.stack, 'ERROR');
+        SpreadsheetApp.getUi().alert('Cleanup Failed', 'An error occurred during cleanup. Check TestLog for details.', SpreadsheetApp.getUi().ButtonSet.OK);
+    } finally {
+        SCRIPT_EXECUTION_MODE = 'DEFAULT';
+    }
 }
