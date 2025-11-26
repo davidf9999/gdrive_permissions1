@@ -574,6 +574,14 @@ function fullSync(options = {}) {
       throw new Error('Duplicate group emails detected. Sync aborted.');
     }
 
+    // --- PROCESS DELETION REQUESTS ---
+    // Process groups and folders marked for deletion BEFORE regular sync
+    const deletionSummary = processDeletionRequests_(options);
+    if (deletionSummary && !deletionSummary.skipped) {
+      log_(`Deletions processed: ${deletionSummary.userGroupsDeleted} group(s), ${deletionSummary.foldersDeleted} folder-binding(s)`, 'INFO');
+      // Track deletions separately (not in totalSummary which is for user additions/removals)
+    }
+
     // 1. Sync Sheet Editors
     const adminSummary = syncSheetEditors(options);
     if (adminSummary) {
@@ -598,7 +606,14 @@ function fullSync(options = {}) {
       totalSummary.failed += managedFoldersSummary.failed;
     }
 
-    const summaryMessage = 'Full synchronization completed. Total changes: ' + totalSummary.added + ' added, ' + totalSummary.removed + ' removed, ' + totalSummary.failed + ' failed.';
+    // Build summary message including deletions if any
+    let summaryMessage = 'Full synchronization completed. Total changes: ' + totalSummary.added + ' added, ' + totalSummary.removed + ' removed, ' + totalSummary.failed + ' failed.';
+    if (deletionSummary && !deletionSummary.skipped) {
+      const totalDeleted = deletionSummary.userGroupsDeleted + deletionSummary.foldersDeleted;
+      if (totalDeleted > 0) {
+        summaryMessage += '\nDeletions: ' + deletionSummary.userGroupsDeleted + ' group(s), ' + deletionSummary.foldersDeleted + ' folder-binding(s).';
+      }
+    }
     log_(summaryMessage, 'INFO');
 
     // Log to SyncHistory
