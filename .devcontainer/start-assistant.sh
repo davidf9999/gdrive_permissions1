@@ -4,10 +4,15 @@
 # Clear the terminal to provide a clean slate for the user.
 clear
 
+# Welcome message
 echo "==============================================="
 echo "Welcome to the gdrive-permissions1 Setup Assistant!"
 echo "==============================================="
 echo ""
+
+# Wait for 10 seconds to allow VS Code and extensions to fully initialize.
+echo "--> Finalizing environment setup (10s)..."
+sleep 10
 
 # Check if gcloud is authenticated by seeing if an active account exists.
 # The `gcloud auth list` command will exit with a non-zero status if no account is active.
