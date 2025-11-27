@@ -4,8 +4,7 @@
   "features": {
     "ghcr.io/devcontainers/features/node:1": {
       "version": "20"
-    },
-    "ghcr.io/devcontainers/features/google-cloud-cli:1": {}
+    }
   },
   "postCreateCommand": ".devcontainer/post-create.sh",
   "postAttachCommand": {
