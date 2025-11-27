@@ -13,7 +13,8 @@
   "customizations": {
     "vscode": {
       "extensions": [
-        "dbaeumer.vscode-eslint"
+        "dbaeumer.vscode-eslint",
+        "google.gemini-cli-companion"
       ]
     }
   }
