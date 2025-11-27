@@ -32,6 +32,18 @@ roll out the workflow consistently.
 
 ---
 
+## AI-Assisted Setup (Quick Start)
+
+For the easiest and fastest setup experience, you can use our AI-powered assistant inside a pre-configured cloud environment. This requires **zero installation** on your local machine.
+
+Click the button below to launch the AI Setup Assistant in GitHub Codespaces.
+
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/davidf9999/gdrive_permissions1?ref=feature/ai-setup-assistant)
+
+The assistant will guide you through every step of the process in an interactive terminal.
+
+---
+
 ## Key features
 
 - **Spreadsheet-first workflow** – Manage Drive access using a Google Spreadsheet that
