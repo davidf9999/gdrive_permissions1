@@ -13,4 +13,4 @@ echo ""
 
 # Launch the Gemini CLI with the master prompt file.
 # The AI will take over the interaction from here.
-gemini --prompt-file AI_ASSISTANT_PROMPT.md
+gemini -i "$(cat AI_ASSISTANT_PROMPT.md)"
