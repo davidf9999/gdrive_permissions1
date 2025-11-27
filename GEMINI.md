@@ -245,3 +245,43 @@ Identified and addressed a performance bottleneck in `syncGroupMembership_` rela
 
 Resolved a failing Jest test (`tests/Utils.test.js`) related to `logSyncHistory_`.
 *   The `logSyncHistory_` function in `apps_script_project/Utils.gs` was updated to use the correct header format (`Timestamp`, `Status`, `Added`, `Removed`, `Failed`, `Duration (seconds)`, `Revision Link`) and argument handling, aligning with the intended project behavior and test expectations.
+
+## AI Assistant Setup Planning (November 2025)
+
+This section summarizes the ongoing discussion and planning for an AI agent to assist users in setting up the `gdrive_permissions` system. The goal is to provide step-by-step guidance, automate where feasible, and simplify the process for non-technical users.
+
+### Feasibility Analysis
+
+*   **Highly Feasible (Automated by AI):** `clasp` installation/execution (except initial OAuth), configuration file generation, prerequisite checking (Node.js, npm, clasp), generating shell scripts.
+*   **Partially Feasible (Requires Human Intervention):** Enabling GCP APIs via `gcloud` (API enablement is possible, but OAuth consent screen config is manual), running the first sync (execution is possible, but first-time OAuth approval is manual).
+*   **Not Feasible (Must Remain Manual):** Google Workspace Tenant creation (payment, domain verification), Super Admin account preparation (security, UI-based), Control Spreadsheet creation (authenticated session, UI navigation).
+
+### Agent Execution Strategy
+
+The most effective approach is an **AI-assisted interactive setup wizard** where the AI (this CLI agent) drives the process, automating CLI/file system operations, and providing clear instructions for manual browser-based steps.
+
+*   **CLI Agent Advantages:** Direct access to the local filesystem and shell (via `run_shell_command`, `write_file`, etc.) allows for automated prerequisite checking, config file generation, command execution, and direct log analysis, significantly reducing user effort and errors compared to a web-based AI.
+*   **Browser Blind Spot:** Neither the CLI nor web-based AI can directly see or interact with the user's web browser for manual steps (e.g., OAuth consent, GCP Console navigation).
+
+### Enhancing AI "Vision" (Screenshot Handling)
+
+To address the "Browser Blind Spot," methods for providing visual context to the AI were explored:
+
+1.  **User-Provided Screenshots (Primary Method):**
+    *   **Recommendation:** For reliability and user-friendliness, the most robust method is for the user to take screenshots using their preferred native OS tools (Print Screen, Snipping Tool, macOS shortcuts) and upload them to the AI assistant.
+    *   **Reasoning:** This leverages familiar user tools and avoids complex technical issues with CLI-based screenshot utilities across diverse operating systems and display environments.
+
+2.  **Exploration of Automated CLI Screenshot Tools (Unsuccessful):**
+    *   **Goal:** To find a CLI tool that could capture a screenshot and output it as Base64 to `stdout`, allowing the AI to "see" it directly.
+    *   **Attempts:**
+        *   **`screenshot-desktop` (Node.js library):** Found to be a Node.js library relying on external system tools (like ImageMagick's `import` command on Linux) which caused `X window` access errors, making it unreliable.
+        *   **`mss` (Python library):** Failed with `XGetImage() failed` due to underlying display server interaction issues, indicating similar robustness problems across varying Linux environments.
+    *   **Conclusion:** Developing or relying on a reliable, cross-platform CLI tool for screenshot capture and Base64 output proved too complex and prone to environment-specific failures for a non-technical user setup.
+
+3.  **Local "Validation" Server (Future Consideration):**
+    *   **Concept:** A small, local Python server could provide API endpoints for the AI to query, verifying manual step completion (e.g., "GCP billing setup complete").
+    *   **Screenshot Integration:** This server could potentially offer endpoints for triggering screenshots or retrieving screenshot data, acting as a secure bridge between the AI and the user's desktop, but this is a more complex, long-term development. A standardized "Agent-to-OS bridge" or "MCP server" for this purpose does not yet exist.
+
+### Current Plan for Setup Assistant
+
+The immediate strategy is to proceed with the CLI agent driving the setup process. When manual browser interaction is required, the AI will provide clear instructions, and the user will manually take and upload screenshots as needed for troubleshooting and verification.
