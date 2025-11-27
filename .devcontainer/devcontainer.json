@@ -14,7 +14,7 @@
     "vscode": {
       "extensions": [
         "dbaeumer.vscode-eslint",
-        "google.gemini-cli-companion"
+        "Google.gemini-cli-vscode-ide-companion"
       ]
     }
   }

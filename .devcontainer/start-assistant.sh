@@ -10,10 +10,6 @@ echo "Welcome to the gdrive-permissions1 Setup Assistant!"
 echo "==============================================="
 echo ""
 
-# Wait for 10 seconds to allow VS Code and extensions to fully initialize.
-echo "--> Finalizing environment setup (10s)..."
-sleep 10
-
 # Check if gcloud is authenticated by seeing if an active account exists.
 # The `gcloud auth list` command will exit with a non-zero status if no account is active.
 if ! gcloud auth list --filter=status:ACTIVE --format="value(account)" | grep -q .; then
