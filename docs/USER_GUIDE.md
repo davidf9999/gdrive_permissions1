@@ -560,3 +560,10 @@ This is a common and complex issue that can have several causes:
 2.  **Browser/Gmail Notification Settings:** Notification delivery depends heavily on the user's own client-side settings. For notifications to appear, the user must have granted Gmail permission to show notifications in their browser. They can typically check this by looking for a prompt from their browser when in Gmail or by checking their browser's site settings for `mail.google.com`.
 
 3.  **Google Workspace / Account Settings:** Notification behavior can sometimes vary based on your organization's Google Workspace settings or a user's individual Google account settings.
+
+### How do I share a new document with everyone who already has access to a managed folder?
+
+Each managed folder is shared through a Google Group (the `GroupEmail` shown on the `ManagedFolders` tab), even if Drive shows the folder was shared by a Super Admin. To make a document available to the same audience:
+
+- **Preferred:** Create or move the file into the managed folder so it inherits the folder’s group permission automatically.
+- **Alternative:** If the file must stay elsewhere, share it directly with the folder’s `GroupEmail` so the whole group gains access. Sharing with the Super Admin account will only grant that person access and will not reach the rest of the group.
