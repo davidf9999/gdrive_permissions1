@@ -285,3 +285,37 @@ To address the "Browser Blind Spot," methods for providing visual context to the
 ### Current Plan for Setup Assistant
 
 The immediate strategy is to proceed with the CLI agent driving the setup process. When manual browser interaction is required, the AI will provide clear instructions, and the user will manually take and upload screenshots as needed for troubleshooting and verification.
+
+## AI Assistant CDE Implementation & Debugging (November 2025)
+
+This section details the implementation and debugging of the Cloud Development Environment (CDE) for the AI Setup Assistant, which was created on the `feature/ai-setup-assistant` branch.
+
+### Initial Implementation
+
+The chosen architecture uses a CDE (like GitHub Codespaces) to provide a zero-install, consistent environment for the user. The initial implementation involved:
+1.  Creating a `.devcontainer/` directory with `devcontainer.json` to define the environment.
+2.  Configuring the environment to install `node`, `gcloud`, `clasp`, and `gemini-cli`.
+3.  Creating `post-create.sh` and `start-assistant.sh` scripts to handle installation and auto-launch the AI assistant.
+4.  Adding an `AI_ASSISTANT_PROMPT.md` file to instruct the AI.
+5.  Updating `README.md` with a "Launch in Codespaces" button.
+
+### Debugging Journey
+
+Several issues were encountered and fixed during the initial testing of the CDE:
+
+1.  **Issue: `gcloud` Feature Failure**
+    *   **Symptom:** The Codespace failed to build because the `ghcr.io/devcontainers/features/google-cloud-cli:1` feature could not be processed.
+    *   **Fix:** The feature was removed from `devcontainer.json` and replaced with a manual `gcloud` installation command in the `post-create.sh` script.
+
+2.  **Issue: `gemini-cli` Startup Argument Error**
+    *   **Symptom:** The `gemini-cli` failed to start with an "Unknown arguments: prompt-file" error.
+    *   **Fix:** The command in `start-assistant.sh` was corrected from `gemini --prompt-file ...` to `gemini -i "$(cat AI_ASSISTANT_PROMPT.md)"` to properly pass the prompt content.
+
+3.  **Issue: Extension Not Installing**
+    *   **Symptom:** The `gemini-cli` complained that the "Gemini CLI Companion" extension was not installed.
+    *   **Diagnosis:** The extension ID used in `devcontainer.json` (`google.gemini-cli-companion`) was incorrect.
+    *   **Fix:** The ID was corrected to the official `Google.gemini-cli-vscode-ide-companion`. A `sleep 10` command added as a temporary workaround for a suspected race condition was also removed.
+
+4.  **Issue: Persistent Startup Problems**
+    *   **Symptom:** Even with the correct extension installed, the `gemini-cli` still shows a cosmetic error about the extension. More importantly, the AI was not handling the `gcloud` installation and authentication gracefully. The `gcloud` command was not found because the manual installation I added to `post-create.sh` was not robust and didn't correctly add `gcloud` to the PATH for the session.
+    *   **Current State:** The user is manually walking the AI through installing and authenticating `gcloud`. The immediate blocker is the user having difficulty copying the long, wrapped `gcloud auth login` URL from the terminal. The next step is to get the user authenticated and then make the `gcloud` installation in `post-create.sh` more robust.
