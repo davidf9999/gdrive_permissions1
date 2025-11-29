@@ -16,10 +16,7 @@ Yes. Start by populating the control tabs with the current groups or users and r
 Create tabs for each managed folder, list the intended members, and run **Full Sync (Add & Delete)**. This provisions the groups and cleans up any lingering manual access via **Sync Deletes**.
 
 ## How do I share a new document with everyone who can already access a managed folder?
-Each managed folder is shared through a Google Group (the `GroupEmail` shown on the `ManagedFolders` tab). The folder may appear in **Shared with me** as being shared by a Super Admin, but that is only the account that applied the permission. To reach the same audience for a specific file:
-
-- **Preferred:** Move or create the file inside the managed folder so it inherits the folder’s group permission automatically.
-- **Alternative:** Share the file directly with the folder’s `GroupEmail` if you need it to stay elsewhere. Sharing with the Super Admin account alone will not propagate access to the rest of the group.
+See the detailed guidance in the [User Guide](docs/USER_GUIDE.md#how-do-i-share-a-new-document-with-everyone-who-already-has-access-to-a-managed-folder) for the recommended approach (copy/move into the managed folder) and when to use the group email instead.
 
 ## What API quotas should I expect? Will I hit them?
 The Admin SDK and Drive API quotas are sufficient for most small to medium deployments. Very large organisations should enable billing and monitor Admin SDK quotas in the Google Cloud Console.
