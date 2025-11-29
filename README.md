@@ -36,7 +36,7 @@ roll out the workflow consistently.
 
 For the easiest and fastest setup experience, you can use our AI-powered assistant.
 
-**Note:** The assistant runs in a pre-configured cloud environment. We strongly recommend this method to avoid manual installation of tools. For more details, see our [AI Assistant Environment Guide](GEMINI.md#recommended-environment-github-codespaces).
+**Note:** The assistant runs in a pre-configured cloud environment. We strongly recommend this method to avoid manual installation of tools. For more details, see our [AI Assistant Guide](docs/AI_ASSISTANT_GUIDE.md).
 
 Click the button below to launch the AI Setup Assistant in GitHub Codespaces.
 
@@ -275,6 +275,7 @@ reduce API calls during large syncs).
 
 | Topic | Location |
 | ----- | -------- |
+| AI assistant setup & development | [`docs/AI_ASSISTANT_GUIDE.md`](docs/AI_ASSISTANT_GUIDE.md) |
 | End-user how-to guide | [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) |
 | Testing menus and stress scenarios | [`docs/TESTING.md`](docs/TESTING.md) |
 | Edit-only mode walkthrough | [`docs/EDIT_MODE_GUIDE.md`](docs/EDIT_MODE_GUIDE.md) |
