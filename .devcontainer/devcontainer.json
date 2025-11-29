@@ -1,0 +1,21 @@
+{
+  "name": "gdrive-permissions1 AI Setup Assistant",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-22.04",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "20"
+    }
+  },
+  "postCreateCommand": ".devcontainer/post-create.sh",
+  "postAttachCommand": {
+    "server": ".devcontainer/start-assistant.sh"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "Google.gemini-cli-vscode-ide-companion"
+      ]
+    }
+  }
+}
