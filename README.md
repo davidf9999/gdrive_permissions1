@@ -19,16 +19,17 @@ roll out the workflow consistently.
 2. [Example use cases](#example-use-cases)
 3. [✋ Stop! Do you have these requirements?](#-stop-do-you-have-these-requirements)
 4. [Architecture overview](#architecture-overview)
-5. [First-time Google Workspace setup](#first-time-google-workspace-setup)
-6. [Manual setup with clasp](#manual-setup-with-clasp)
-7. [Daily usage](#daily-usage)
-8. [Cost transparency](#cost-transparency)
-9. [Security & privacy](#security--privacy)
-10. [Automation & production deployment](#automation--production-deployment)
-11. [Documentation map](#documentation-map)
-12. [Testing](#testing)
-13. [Tearing down the project](#tearing-down-the-project)
-14. [Community](#community)
+5. [Conceptual comparison: Google Drive vs. SharePoint](#conceptual-comparison-google-drive-vs-sharepoint)
+6. [First-time Google Workspace setup](#first-time-google-workspace-setup)
+7. [Manual setup with clasp](#manual-setup-with-clasp)
+8. [Daily usage](#daily-usage)
+9. [Cost transparency](#cost-transparency)
+10. [Security & privacy](#security--privacy)
+11. [Automation & production deployment](#automation--production-deployment)
+12. [Documentation map](#documentation-map)
+13. [Testing](#testing)
+14. [Tearing down the project](#tearing-down-the-project)
+15. [Community](#community)
 
 ---
 
@@ -118,6 +119,10 @@ That document also includes important **[Performance & Scaling
 Considerations](docs/ARCHITECTURE_OVERVIEW.md#performance--scaling-considerations)**,
 which explains the expected limits of the Apps Script platform and suggests
 alternatives for enterprise-scale deployments.
+
+## Conceptual comparison: Google Drive vs. SharePoint
+
+SharePoint is a helpful analogy for readers coming from Microsoft ecosystems, but it is not a supported backend for this tool. For the full explanation—including a feature-by-feature comparison table—see [`docs/sharepoint_comparison.md`](docs/sharepoint_comparison.md), which is also linked from the [FAQ](FAQ.md#can-sharepoint-replace-google-drive-for-this-project).
 
 ---
 
@@ -268,6 +273,7 @@ reduce API calls during large syncs).
 | Stopping or pausing scripts | [`docs/STOP_SCRIPTS.md`](docs/STOP_SCRIPTS.md) |
 | Workspace + script installation walkthrough | [`docs/WORKSPACE_SETUP.md`](docs/WORKSPACE_SETUP.md) |
 | Spreadsheet and script onboarding checklist | [`docs/ONBOARDING.md`](docs/ONBOARDING.md) |
+| SharePoint conceptual comparison | [`docs/sharepoint_comparison.md`](docs/sharepoint_comparison.md) |
 | Frequently asked questions | [`FAQ.md`](FAQ.md) |
 | Architecture deep dive | [`docs/ARCHITECTURE_OVERVIEW.md`](docs/ARCHITECTURE_OVERVIEW.md) |
 | Historical decisions & debugging notes | [`GEMINI.md`](GEMINI.md) |
