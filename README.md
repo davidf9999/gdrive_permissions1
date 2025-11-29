@@ -122,34 +122,7 @@ alternatives for enterprise-scale deployments.
 
 ## Conceptual comparison: Google Drive vs. SharePoint
 
-SharePoint is a helpful analogy for readers coming from Microsoft ecosystems, but it is not a supported backend for this tool. For details on why, see the [FAQ entry](FAQ.md#can-sharepoint-replace-google-drive-for-this-project).
-
-### ✔ SharePoint as a conceptual guide
-- Hierarchical permission inheritance
-- Role-based access control
-- Centralized management and auditing
-
-`gdrive_permissions1` brings similar governance to Google Drive using:
-- Google Sheets as a source of truth
-- Google Groups for ACL definitions
-- Automated synchronization and reporting
-
-### ❌ Why SharePoint cannot replace Google Drive here
-- Requires Microsoft accounts for every user and restricts guests
-- Per-user licensing increases cost
-- No spreadsheet-driven permission engine for external Gmail users
-
-### 📊 Google Drive vs. SharePoint at a glance
-
-| Feature | Google Drive + Workspace | Microsoft SharePoint |
-|--------|---------------------------|-----------------------|
-| External users | Free Gmail fully supported | Guest users restricted |
-| Identity requirement | Google account | Microsoft account |
-| Spreadsheet source of truth | Native | Not available |
-| Group-based ACL | Google Groups | M365 Groups (limited external support) |
-| Automation | Apps Script | Graph API / Power Automate |
-| Cost model | One admin license → unlimited external users | Per-user licensing |
-| Fit for this project | **Excellent** | **Not suitable** |
+SharePoint is a helpful analogy for readers coming from Microsoft ecosystems, but it is not a supported backend for this tool. For the full explanation—including a feature-by-feature comparison table—see [`docs/sharepoint_comparison.md`](docs/sharepoint_comparison.md), which is also linked from the [FAQ](FAQ.md#can-sharepoint-replace-google-drive-for-this-project).
 
 ---
 
@@ -300,6 +273,7 @@ reduce API calls during large syncs).
 | Stopping or pausing scripts | [`docs/STOP_SCRIPTS.md`](docs/STOP_SCRIPTS.md) |
 | Workspace + script installation walkthrough | [`docs/WORKSPACE_SETUP.md`](docs/WORKSPACE_SETUP.md) |
 | Spreadsheet and script onboarding checklist | [`docs/ONBOARDING.md`](docs/ONBOARDING.md) |
+| SharePoint conceptual comparison | [`docs/sharepoint_comparison.md`](docs/sharepoint_comparison.md) |
 | Frequently asked questions | [`FAQ.md`](FAQ.md) |
 | Architecture deep dive | [`docs/ARCHITECTURE_OVERVIEW.md`](docs/ARCHITECTURE_OVERVIEW.md) |
 | Historical decisions & debugging notes | [`GEMINI.md`](GEMINI.md) |

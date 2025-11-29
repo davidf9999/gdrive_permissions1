@@ -25,7 +25,4 @@ Removing a row and running **Sync Deletes** revokes the corresponding Google Gro
 Yes. Managing Google Groups through the Admin SDK requires Super Admin privileges; delegated roles cannot grant the scopes needed for the script to function.
 
 ## Can SharePoint replace Google Drive for this project?
-No. SharePoint is only a helpful point of comparison. It requires Microsoft identities, limits guest access, charges per user, and does not offer a spreadsheet-driven permission model that works for large numbers of external Gmail users.
-
-## Why mention SharePoint at all?
-SharePoint is widely known among enterprise teams and models structured permissions, inheritance, and access governance workflows. Referencing it gives Microsoft-oriented readers a fast mental model for what this tool delivers on Google Drive.
+No. SharePoint is only a helpful point of comparison. It requires Microsoft identities, limits guest access, charges per user, and does not offer a spreadsheet-driven permission model that works for large numbers of external Gmail users. It is mentioned because many enterprise teams know SharePoint well, so referencing it gives Microsoft-oriented readers a fast mental model for the structured permissions, inheritance, and governance this tool brings to Google Drive.
