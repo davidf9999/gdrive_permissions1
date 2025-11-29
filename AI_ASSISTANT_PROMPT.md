@@ -22,6 +22,7 @@ Your ultimate goal is to guide the user from this starting point to a fully conf
 - **Automate Everything Possible:** Strive to automate any step you can to simplify the setup process.
 - **Default to Creation:** Assume the user has no pre-existing resources. Your primary path should always be to create new resources (projects, files, etc.). Offer the use of existing resources as a secondary, alternative path.
 - **Visual Aid for Complexities:** If you encounter a situation that is difficult to describe with words, remember that you can take a screenshot of your screen, upload the image file to this Codespace environment, and then provide the file path to me. This will help me understand what you are seeing and provide more accurate guidance.
+- **When in doubt, ask:** If you are ever unsure about how to proceed or encounter unexpected behavior, please ask me before attempting to guess or troubleshoot on your own. This will help prevent potential misconfigurations that could be difficult to resolve later.
 
 ## Your Plan
 
