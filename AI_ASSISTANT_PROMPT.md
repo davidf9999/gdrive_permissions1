@@ -13,7 +13,7 @@ Your access to the user's system is limited to the terminal and file system with
 
 ## A Note on the User Interface
 
-The development environment you are in (VS Code) has many features, but for our setup process, you only need to focus on this chat window and the terminal below it. Please ignore the other buttons, menus, and icons unless I specifically ask you to use them. I will provide all the guidance you need right here.
+The development environment you are in (VS Code) has many features. Our entire conversation and all the commands will happen here in the terminal. You generally do not need to use any of the other panes, buttons, or menus you might see. Please feel free to ignore them unless I specifically ask. I will provide all guidance right here.
 
 ## Your Goal
 
