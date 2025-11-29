@@ -19,16 +19,17 @@ roll out the workflow consistently.
 2. [Example use cases](#example-use-cases)
 3. [✋ Stop! Do you have these requirements?](#-stop-do-you-have-these-requirements)
 4. [Architecture overview](#architecture-overview)
-5. [First-time Google Workspace setup](#first-time-google-workspace-setup)
-6. [Manual setup with clasp](#manual-setup-with-clasp)
-7. [Daily usage](#daily-usage)
-8. [Cost transparency](#cost-transparency)
-9. [Security & privacy](#security--privacy)
-10. [Automation & production deployment](#automation--production-deployment)
-11. [Documentation map](#documentation-map)
-12. [Testing](#testing)
-13. [Tearing down the project](#tearing-down-the-project)
-14. [Community](#community)
+5. [Conceptual comparison: Google Drive vs. SharePoint](#conceptual-comparison-google-drive-vs-sharepoint)
+6. [First-time Google Workspace setup](#first-time-google-workspace-setup)
+7. [Manual setup with clasp](#manual-setup-with-clasp)
+8. [Daily usage](#daily-usage)
+9. [Cost transparency](#cost-transparency)
+10. [Security & privacy](#security--privacy)
+11. [Automation & production deployment](#automation--production-deployment)
+12. [Documentation map](#documentation-map)
+13. [Testing](#testing)
+14. [Tearing down the project](#tearing-down-the-project)
+15. [Community](#community)
 
 ---
 
@@ -118,6 +119,37 @@ That document also includes important **[Performance & Scaling
 Considerations](docs/ARCHITECTURE_OVERVIEW.md#performance--scaling-considerations)**,
 which explains the expected limits of the Apps Script platform and suggests
 alternatives for enterprise-scale deployments.
+
+## Conceptual comparison: Google Drive vs. SharePoint
+
+SharePoint is a helpful analogy for readers coming from Microsoft ecosystems, but it is not a supported backend for this tool. For details on why, see the [FAQ entry](FAQ.md#can-sharepoint-replace-google-drive-for-this-project).
+
+### ✔ SharePoint as a conceptual guide
+- Hierarchical permission inheritance
+- Role-based access control
+- Centralized management and auditing
+
+`gdrive_permissions1` brings similar governance to Google Drive using:
+- Google Sheets as a source of truth
+- Google Groups for ACL definitions
+- Automated synchronization and reporting
+
+### ❌ Why SharePoint cannot replace Google Drive here
+- Requires Microsoft accounts for every user and restricts guests
+- Per-user licensing increases cost
+- No spreadsheet-driven permission engine for external Gmail users
+
+### 📊 Google Drive vs. SharePoint at a glance
+
+| Feature | Google Drive + Workspace | Microsoft SharePoint |
+|--------|---------------------------|-----------------------|
+| External users | Free Gmail fully supported | Guest users restricted |
+| Identity requirement | Google account | Microsoft account |
+| Spreadsheet source of truth | Native | Not available |
+| Group-based ACL | Google Groups | M365 Groups (limited external support) |
+| Automation | Apps Script | Graph API / Power Automate |
+| Cost model | One admin license → unlimited external users | Per-user licensing |
+| Fit for this project | **Excellent** | **Not suitable** |
 
 ---
 
