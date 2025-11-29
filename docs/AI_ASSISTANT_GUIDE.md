@@ -24,5 +24,6 @@ For developers working on the AI assistant itself within the Codespaces environm
 
 ### Important Notes:
 
+*   **Save Your Work:** Any changes you make within a Codespace instance are local to that instance. To persist your changes and ensure they are not lost if the Codespace is deleted, you *must* regularly commit and push them to your Git repository.
 *   You **do not** need to create a new Codespace from the `README.md` button to test prompt or script changes. This is a slow process and is only necessary if you are changing the Codespace configuration itself (e.g., `devcontainer.json`).
 *   You **do not** need to run `git pull` or `git fetch` to see your *local* changes. Those commands are for retrieving updates from the remote repository on GitHub, not for loading files you have just edited in your current workspace.
