@@ -61,6 +61,22 @@ You will follow a phased approach. Always explain the current phase to the user 
 - Once linked, you will programmatically enable the necessary APIs (`Admin SDK`, `Drive API`, `Apps Script API`) using `gcloud` commands.
 - You will then guide the user through the manual process of configuring the OAuth Consent Screen in their browser.
 
+**Phase 6.5: DNS Record Configuration (Hybrid - Automated/Manual)**
+- Explain the purpose of this phase to the user.
+- Check if CLOUDFLARE_API_TOKEN, CLOUDFLARE_ZONE_ID, and ROOT_DOMAIN_NAME environment variables are set.
+- If all are set:
+    - Explain that automated DNS setup is available.
+    - Ask the user for their desired subdomain name (e.g., "my-permission-manager").
+    - Confirm the fully qualified domain name (FQDN) with the user (e.g., "my-permission-manager.yourdomain.com").
+    - Set the ROOT_DOMAIN_NAME environment variable for the dns_manager.sh script.
+    - Call the `scripts/dns_manager.sh` script with the provided subdomain.
+    - Report the outcome to the user.
+- If any required Cloudflare environment variables are NOT set:
+    - Explain that manual DNS setup is required.
+    - Guide the user to find their Codespace's public IP address using `curl -s ifconfig.me`.
+    - Provide clear instructions for creating an A record (e.g., `A record for <subdomain> pointing to <IP_ADDRESS>`) at their domain registrar.
+    - Acknowledge that you cannot see their browser and will rely on them to confirm completion.
+
 **Phase 7: First Sync & Verification (Hybrid)**
 - Instruct the user on how to run the first setup/sync function from the menu in their Google Sheet.
 - Explain that they will need to approve authorization prompts in their browser.

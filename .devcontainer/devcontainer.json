@@ -17,5 +17,6 @@
         "Google.gemini-cli-vscode-ide-companion"
       ]
     }
-  }
+  },
+  "ports": [8000]
 }
