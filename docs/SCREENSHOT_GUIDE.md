@@ -10,14 +10,15 @@ First, you need to capture what's on your screen and save it as an image file (l
 
 **Windows:**
 
-*   **Capture a selected area (Recommended):**
-    1.  Press `Win + Shift + S` to open the Snipping Tool.
+*   **Capture a selected area (Recommended - generates a file after saving):**
+    1.  Press `Win + Shift + S` to open the Snipping Tool. Your screen will dim, and you'll get crosshairs.
     2.  Drag the cursor to select the part of the screen you want to capture.
-    3.  The capture is copied to your clipboard. Click the notification that appears to open the Snipping Tool editor.
-    4.  Click the **Save** icon and save the file to a memorable location, like your Desktop or Downloads folder.
-*   **Capture the full screen:**
-    1.  Press `Win + PrtSc`. Your screen will briefly dim.
-    2.  The screenshot is automatically saved as a PNG file in `C:\Users\<your-username>\Pictures\Screenshots`.
+    3.  The capture is automatically copied to your clipboard. A notification will pop up; click it to open the Snipping Tool editor.
+    4.  In the editor, click the **Save** icon (looks like a floppy disk) and choose a memorable location, like your Desktop or Downloads folder, to save the screenshot as a PNG file.
+*   **Capture the full screen (Automatically saves to a file):**
+    1    Press `Win + PrtSc`. Your screen will briefly dim.
+    2    The screenshot is automatically saved as a PNG file in `C:\Users\<your-username>\Pictures\Screenshots`.
+*   **Note on clipboard-only captures:** Pressing `PrtSc` (Print Screen key alone) or `Alt + PrtSc` (active window) will copy the screenshot directly to your clipboard but will *not* automatically save it as a file. For use with the AI assistant, you need a saved file.
 
 **macOS:**
 
