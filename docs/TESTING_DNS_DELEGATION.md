@@ -23,7 +23,7 @@ This is the most critical step, ensuring the tester receives a token with limite
 *   **Create a placeholder record:** Manually create an `A` record for the subdomain you plan to delegate.
     *   **Type:** `A`
     *   **Name:** `tester-u` (or any unique name for your test subdomain, e.g., `ai-test`)
-    *   **IPv4 address:** `192.0.2.1` (this is a reserved IP for documentation, perfect for a placeholder that will be updated by the AI Assistant. Do not use `1.1.1.1` as it is blocked by Cloudflare for proxied records.)
+    *   **IPv4 address:** `192.0.2.1` (this is a reserved IP for documentation, perfect for a placeholder that will be updated by the AI Assistant).
     *   **Proxy status:** Ensure it's orange-clouded (proxied) if you want Cloudflare's CDN/security features.
 *   **Create the API Token:**
     *   Go to **My Profile** (from the top right icon) -> **API Tokens**.
