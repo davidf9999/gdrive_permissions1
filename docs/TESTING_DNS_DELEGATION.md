@@ -67,6 +67,7 @@ Now, put on your tester hat. You are User `U`, who has just been given access an
 **1. Launch a Fresh Codespace:**
 
 *   To ensure you get a clean environment with the new secrets, you *must* launch a new Codespace. Go to your repository's main page on GitHub, click the **"< > Code"** button, switch to the **Codespaces** tab, and create a **new Codespace** for the repository. This will ensure your newly added Codespaces secrets are injected into the environment.
+    > **Note on Secrets for Testers:** When the Administrator configures repository secrets, these are automatically and securely injected into any Codespace launched from that repository. As a Tester, you do not need to manually configure these secrets; GitHub handles the secure injection into your environment. This is a core part of testing the seamless onboarding experience.
 
 **2. Start the AI Assistant:**
 

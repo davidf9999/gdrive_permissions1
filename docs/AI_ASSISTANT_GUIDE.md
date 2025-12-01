@@ -20,7 +20,7 @@ This section is for you if your goal is to get the `gdrive-permissions` project 
 
 ### Recommended Environment: GitHub Codespaces
 
-For setting up this project, we **strongly recommend** using the provided GitHub Codespaces environment. Launching a Codespace gives you a pre-configured, zero-installation environment where the AI Assistant can guide you through the setup process seamlessly. All instructions from the AI assistant assume you are operating within this environment.
+For setting up this project, we **strongly recommend** using the provided GitHub Codespaces environment. Launching a Codespace gives you a pre-configured, zero-installation environment where the AI Assistant can guide you through the setup process seamlessly. **You do not need to manually clone the repository; this is handled automatically by Codespaces.** All instructions from the AI assistant assume you are operating within this environment.
 
 You can launch it from the main `README.md` file of the project.
 
