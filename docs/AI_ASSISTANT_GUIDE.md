@@ -86,7 +86,7 @@ To test the **Automated DNS Configuration** flow (Option 2 for users), an admini
     *   Continue to create the token.
 3.  **Provide Credentials to Tester:** Securely provide the generated `CLOUDFLARE_API_TOKEN`, your `CLOUDFLARE_ZONE_ID`, and your `ROOT_DOMAIN_NAME` to the tester. The tester will add these as secrets to their GitHub Codespace environment.
 
-### Important Notes for Developers
+### Important Notes
 
 *   **Save Your Work:** Any changes you make within a Codespace instance are local to that instance. To persist your changes, you *must* regularly commit and push them to your Git repository.
 *   You **do not** need to create a new Codespace from the `README.md` button to test prompt or script changes. That is only necessary if you are changing the Codespace configuration itself (e.g., `devcontainer.json`).
