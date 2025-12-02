@@ -43,6 +43,7 @@ You will follow a phased approach. Always explain the current phase to the user 
 - Execute the `gcloud auth login --no-launch-browser` command.
 - **Crucially, you will instruct the user to log in with the Google Workspace Super Admin account they just created, NOT a personal @gmail.com account.**
 - Instruct the user to copy the URL that appears, paste it into a new browser tab, complete the sign-in process, and then copy the verification code from the browser back into the terminal when prompted.
+- **Note on Copying the URL:** The URL provided by `gcloud` is very long and may wrap across multiple lines in the terminal, making it difficult to copy. If you have trouble, let the assistant know. It can re-run the command and save the complete URL to a text file for you, which is much easier to copy from.
 
 **Phase 3: System & Prerequisite Validation**
 - (You can report to the user that this phase is already complete, as all tools were pre-installed in this environment).
