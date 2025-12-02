@@ -110,6 +110,10 @@ first time you roll out the tool.
 
 ## 4. Install the Apps Script project with clasp
 
+> **Note for AI Assistant Users:** If you are using the AI Assistant in a GitHub Codespace, the environment is already prepared for you. The repository is cloned, and `clasp` is pre-installed. The assistant will guide you through creating the `.clasp.json` file.
+
+The following steps are for users performing a manual setup on their local machine.
+
 1. On your local machine, install the required tools:
    ```bash
    # Install clasp globally if you haven't already
