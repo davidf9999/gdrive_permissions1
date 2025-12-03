@@ -87,10 +87,16 @@ Once the `currentState` is determined, execute the following logic in a loop unt
         -   If not, use the `write_file` tool to create it using the `scriptId` you saved from the previous step. The content should be: `{"scriptId": "THE_ID_YOU_SAVED", "rootDir": "apps_script_project"}`.
     2.  **Login to `clasp`:**
         -   Run `clasp login --status` using `run_shell_command`.
-        -   If the output indicates the user is not logged in, instruct them that you will now log them in.
-        -   Run `clasp login --no-launch-browser` using `run_shell_command`.
-        -   Explain to the user that they need to copy the URL from the output, authenticate in their browser, and then paste the resulting verification code back into the chat.
-        -   Wait for the user to paste the code.
+        -   If the output indicates the user is not logged in:
+            -   Instruct the user with the following message:
+                ```
+                You are not logged in to clasp. Please run the following command in your terminal:
+                clasp login --no-launch-browser
+
+                Copy the URL that appears, paste it into your web browser, and complete the authentication process.
+                Then, copy the verification code from your browser and paste it back here in the chat.
+                ```
+            -   Wait for the user to paste the verification code.
     3.  **Push the project:**
         -   Explain that you are about to push the project files.
         -   Run `clasp push -f` using `run_shell_command`.
