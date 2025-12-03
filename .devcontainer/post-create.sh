@@ -12,14 +12,16 @@ npm install -g @google/clasp @google/gemini-cli
 # Manually install Google Cloud CLI
 echo "Installing Google Cloud CLI..."
 curl -sSL https://sdk.cloud.google.com > gcloud_installer.sh
-bash gcloud_installer.sh -- --disable-prompts --install-component-dir=.gcloud > gcloud_install.log 2>&1
+
+# Execute the installer, specifying the installation directory
+# This will install to ~/.gcloud/google-cloud-sdk
+bash gcloud_installer.sh -- --disable-prompts --install-dir="$HOME/.gcloud" > gcloud_install.log 2>&1
 rm gcloud_installer.sh # Clean up the installer script
 
 # Check for successful installation by looking for the directory
-if [ -d "$HOME/.gcloud" ]; then
-  echo 'source ~/.gcloud/path.bash.inc' >> ~/.bashrc
-  # Source the file for the current session to make gcloud available immediately
-  source ~/.gcloud/path.bash.inc
+if [ -d "$HOME/.gcloud/google-cloud-sdk" ]; then # Corrected path to check
+  echo 'source ~/.gcloud/google-cloud-sdk/path.bash.inc' >> ~/.bashrc # Corrected path to source
+  source ~/.gcloud/google-cloud-sdk/path.bash.inc # Corrected path to source
   echo "Google Cloud CLI installed and sourced successfully."
 else
   echo "---"
