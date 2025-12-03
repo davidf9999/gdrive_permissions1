@@ -255,9 +255,9 @@ const ACTION_MAP = {
 // =================================================================================================
 
 async function discoverStartingState() {
-  console.log('Welcome to the gdrive-permissions setup assistant!');
-  console.log('---');
-  console.log('Please choose where you would like to start:');
+  let menu = 'Welcome to the gdrive-permissions setup assistant!\n';
+  menu += '---\n';
+  menu += 'Please choose where you would like to start:\n';
 
   const stepDescriptions = {
     [STATES.WORKSPACE_TENANT_CREATED]: 'Create or reuse a Google Workspace tenant',
@@ -270,12 +270,13 @@ async function discoverStartingState() {
 
   STATE_ORDER.forEach((state, index) => {
     if (stepDescriptions[state]) {
-      console.log(`${index + 1}. ${stepDescriptions[state]}`);
+      menu += `${index + 1}. ${stepDescriptions[state]}\n`;
     }
   });
 
-  console.log('s. I\'m not sure, please scan my system for me.');
-  console.log('---');
+  menu += 's. I\'m not sure, please scan my system for me.\n';
+  menu += '---\n';
+  console.log(menu);
 
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   const answer = await new Promise(resolve => {
