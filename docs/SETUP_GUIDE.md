@@ -2,11 +2,7 @@
 
 > **Note for AI Assistant Users:** Welcome! You've been directed here from the AI Assistant. This document is the master guide for all setup steps. The AI Assistant in your terminal will automate many of these steps for you. Follow the interactive prompts from the assistant, and use this guide as a reference for the manual steps you'll need to perform in your web browser. The assistant will tell you when you need to refer to this guide.
 
-This walkthrough expands on the quick checklist in the [README](../README.md#-stop-prerequisites) so
-first-time administrators can stand up a Google Workspace tenant, create the
-required Super Admin user, and deploy the Google Drive Permission Manager from a
-fresh spreadsheet. Each step is short and sequential—follow them in order the
-first time you roll out the tool.
+This document is the comprehensive, step-by-step guide for setting up the Google Drive Permission Manager. It covers every required action, from creating a Google Workspace tenant to deploying the script and running the first sync. For a successful deployment, follow these steps in the presented order.
 
 ---
 

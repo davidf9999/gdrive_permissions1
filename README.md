@@ -36,9 +36,9 @@ roll out the workflow consistently.
 
 For the easiest and fastest setup experience, you can use our AI-powered assistant.
 
-**Note:** The assistant runs in a pre-configured cloud environment. We strongly recommend this method to avoid manual installation of tools. For more details, see our [Setup Guide](docs/SETUP_GUIDE.md).
+**Note:** The assistant runs in a pre-configured cloud environment (GitHub Codespaces). We strongly recommend this method to avoid manual installation of tools. For more details, see our [Setup Guide](docs/SETUP_GUIDE.md).
 
-First, ensure you are logged into the correct GitHub user account. Then, click the button below to launch the AI Setup Assistant in GitHub Codespaces.
+To launch the assistant, you will need a GitHub account. Once you are logged in to GitHub, click the button below to start the setup process in a new Codespace.
 
 [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/davidf9999/gdrive_permissions1?ref=feature/ai-setup-assistant)
 
