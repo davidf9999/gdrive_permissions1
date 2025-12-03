@@ -63,10 +63,10 @@ The assistant will guide you through every step of the process in an interactive
 
 ## Example use cases
 
-- **Educational institution** – 500 students across 20 courses where each
-  course has shared folders for instructors, teaching assistants, and students.
-- **Consulting firm** – 50 active client projects that each require separate
-  Editor and Viewer groups to isolate deliverables and engagement records.
+This tool is most effective for managing access for ad-hoc teams and projects that exist outside of an organization's primary, automated systems (like an HR database or a student enrollment system).
+
+- **University Research Lab** – A lab includes professors, post-docs, and a rotating group of graduate students and visiting scholars. They need tiered access to shared folders for raw data (PIs only), analysis scripts (lab members), and manuscript drafts (lab members + external collaborators). These groups are not formal university "classes," making them ideal for spreadsheet-based management.
+- **Consulting Firm** – 50 active client projects that each require separate Editor and Viewer groups to isolate deliverables from engagement records. As consultants join or leave a project team, an administrator can quickly update the relevant spreadsheet tab to grant or revoke access in minutes.
 
 ---
 
