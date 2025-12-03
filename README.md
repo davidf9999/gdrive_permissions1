@@ -46,6 +46,8 @@ The assistant will guide you through every step of the process in an interactive
 
 **A Note on Approving Commands:** During the setup, the assistant will ask for your permission before it runs commands. For the smoothest experience, we recommend choosing option **2. Yes, allow always** when prompted. This will allow the assistant to complete the setup without asking for approval at every single step.
 
+**Troubleshooting:** The Codespace environment will attempt to install all necessary tools automatically. If an installation fails, a log file (e.g., `gcloud_install.log`) will be created in your project's root directory. The contents of this log will be displayed to help diagnose the issue.
+
 ---
 
 ## Key features
