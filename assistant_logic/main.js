@@ -1,39 +1,5 @@
 /* eslint-disable no-console */
 
-// =================================================================================================
-// State Machine for the AI Setup Assistant
-// =================================================================================================
-
-// --- State Definitions ---
-const STATES = {
-  START: 'START',
-  WORKSPACE_TENANT_CREATED: 'WORKSPACE_TENANT_CREATED',
-  SUPER_ADMIN_PREPARED: 'SUPER_ADMIN_PREPARED',
-  CONTROL_SPREADSHEET_CREATED: 'CONTROL_SPREADSHEET_CREATED',
-  CLASP_PROJECT_SETUP: 'CLASP_PROJECT_SETUP',
-  APIS_ENABLED_AND_CONSENT_GRANTED: 'APIS_ENABLED_AND_CONSENT_GRANTED',
-  FIRST_SYNC_COMPLETE: 'FIRST_SYNC_COMPLETE',
-  DONE: 'DONE',
-};
-
-// The order of states is crucial for the discovery loop.
-const STATE_ORDER = [
-  STATES.WORKSPACE_TENANT_CREATED,
-  STATES.SUPER_ADMIN_PREPARED,
-  STATES.CONTROL_SPREADSHEET_CREATED,
-  STATES.CLASP_PROJECT_SETUP,
-  STATES.APIS_ENABLED_AND_CONSENT_GRANTED,
-  STATES.FIRST_SYNC_COMPLETE,
-  STATES.DONE,
-];
-
-// --- In-Memory State ---
-// This will hold data collected during the session, like scriptId.
-const sessionState = {
-  scriptId: null,
-  gcpProjectNumber: null,
-};
-
 const fs = require('fs');
 const { exec } = require('child_process');
 const readline = require('readline');
@@ -100,6 +66,7 @@ const sessionState = {
   scriptId: null,
   gcpProjectNumber: null,
 };
+
 
 // =================================================================================================
 // Verification Functions (`verify_`)
