@@ -44,6 +44,8 @@ To launch the assistant, you will need a GitHub account. Once you are logged in 
 
 The assistant will guide you through every step of the process in an interactive terminal.
 
+**A Note on Approving Commands:** During the setup, the assistant will ask for your permission before it runs commands. For the smoothest experience, we recommend choosing option **2. Yes, allow always** when prompted. This will allow the assistant to complete the setup without asking for approval at every single step.
+
 ---
 
 ## Key features
