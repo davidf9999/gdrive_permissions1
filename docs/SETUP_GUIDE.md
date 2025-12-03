@@ -1,5 +1,7 @@
 # Google Workspace setup & installation guide
 
+> **Note for AI Assistant Users:** Welcome! You've been directed here from the AI Assistant. This document is the master guide for all setup steps. The AI Assistant in your terminal will automate many of these steps for you. Follow the interactive prompts from the assistant, and use this guide as a reference for the manual steps you'll need to perform in your web browser. The assistant will tell you when you need to refer to this guide.
+
 This walkthrough expands on the quick checklist in the [README](../README.md#-stop-prerequisites) so
 first-time administrators can stand up a Google Workspace tenant, create the
 required Super Admin user, and deploy the Google Drive Permission Manager from a
@@ -10,14 +12,14 @@ first time you roll out the tool.
 
 ## Understanding Roles
 
-Before you begin, it's important to understand the different "hats" you might wear during this setup process. A single person (likely you) will perform most of these roles initially, but the system is designed to delegate responsibilities later on.
+Before you begin, it's important to understand the different "hats" you might wear. During setup, you will primarily act as the **Script Executor**, and you will use a **Google Workspace Super Admin** account to perform privileged actions.
 
-| Role | Responsibilities | Key Actions |
-| :--- | :--- | :--- |
-| **Google Workspace Super Admin** | The highest-level administrator for your Google Workspace domain. | Creates Google Groups, enables APIs, grants initial permissions to the script. |
-| **Script Executor / You** | The person running the setup commands (like `clasp login`). | Authenticates the command-line tools, pushes code to Apps Script, runs the first sync. |
-| **Sheet Editor** | A trusted user who can manage permissions *after* setup is complete. | Adds or removes users from the control spreadsheet (`SheetEditors` and user group sheets). Does not need Super Admin rights. |
-| **End User** | A regular user in your organization. | Is granted access to folders based on the rules configured by Sheet Editors. |
+| Role | Account Type | Relevance | Responsibilities |
+| :--- | :--- | :--- | :--- |
+| **Script Executor / You** | Standard Google Account (e.g., `you@gmail.com`) or Workspace Account. | **Setup-critical** | The user running the commands in the terminal. You will launch the AI Assistant and follow its guidance. |
+| **Google Workspace Super Admin** | Workspace Account (`admin@your-domain.com`). **Cannot** be a personal `@gmail.com` account. | **Setup-critical** | The administrative account used to authorize the script, create groups, and perform actions inside the Google Workspace Admin Console. |
+| **Sheet Editor** | Any Google Account. | Post-setup | A trusted user who manages folder permissions day-to-day by editing the control spreadsheet. This role does not need Super Admin rights. |
+| **End User** | Any Google Account. | Post-setup | A regular user who is granted access to folders by the system. |
 
 ---
 

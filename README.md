@@ -36,7 +36,7 @@ roll out the workflow consistently.
 
 For the easiest and fastest setup experience, you can use our AI-powered assistant.
 
-**Note:** The assistant runs in a pre-configured cloud environment. We strongly recommend this method to avoid manual installation of tools. For more details, see our [AI Assistant Guide](docs/AI_ASSISTANT_GUIDE.md).
+**Note:** The assistant runs in a pre-configured cloud environment. We strongly recommend this method to avoid manual installation of tools. For more details, see our [Setup Guide](docs/SETUP_GUIDE.md).
 
 First, ensure you are logged into the correct GitHub user account. Then, click the button below to launch the AI Setup Assistant in GitHub Codespaces.
 
