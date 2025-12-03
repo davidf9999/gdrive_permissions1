@@ -110,6 +110,10 @@ first time you roll out the tool.
 
 ## 4. Install the Apps Script project with clasp
 
+> **Note for AI Assistant Users:** If you are using the AI Assistant in a GitHub Codespace, the environment is already prepared for you. The repository is cloned, and `clasp` is pre-installed. The assistant will guide you through creating the `.clasp.json` file.
+
+The following steps are for users performing a manual setup on their local machine.
+
 1. On your local machine, install the required tools:
    ```bash
    # Install clasp globally if you haven't already
@@ -120,11 +124,7 @@ first time you roll out the tool.
    git clone https://github.com/<your-org>/gdrive-permission-manager.git
    cd gdrive-permission-manager
    ```
-3. Authenticate clasp with the same Super Admin account:
-   ```bash
-   clasp login
-   ```
-4. Create `.clasp.json` in the repository root pointing at the bound Apps Script
+3. Create `.clasp.json` in the repository root pointing at the bound Apps Script
    project:
    ```json
    {
@@ -132,15 +132,15 @@ first time you roll out the tool.
      "rootDir": "apps_script_project"
    }
    ```
-5. Pull the remote project once so clasp knows about the manifest:
+4. Authenticate clasp with the same Super Admin account:
    ```bash
-   clasp pull
+   clasp login
    ```
-6. Push the repository sources into Apps Script:
+5. Push the repository sources into Apps Script:
    ```bash
    clasp push
    ```
-7. Return to the spreadsheet and refresh. The **Permissions Manager** menu will
+6. Return to the spreadsheet and refresh. The **Permissions Manager** menu will
    appear once the push completes.
 
 <details>
