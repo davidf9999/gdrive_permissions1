@@ -21,6 +21,17 @@ Before you begin, it's important to understand the different "hats" you might we
 
 ---
 
+## Setup Steps Overview
+
+1.  [Create or reuse a Google Workspace tenant](#1-create-or-reuse-a-google-workspace-tenant)
+2.  [Prepare the Super Admin account](#2-prepare-the-super-admin-account)
+3.  [Create the control spreadsheet](#3-create-the-control-spreadsheet)
+4.  [Install the Apps Script project with clasp](#4-install-the-apps-script-project-with-clasp)
+5.  [Enable APIs and grant consent](#5-enable-apis-and-grant-consent)
+6.  [Run the first sync](#6-run-the-first-sync)
+
+---
+
 
 ## 1. Create or reuse a Google Workspace tenant
 

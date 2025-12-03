@@ -70,16 +70,15 @@ The assistant will guide you through every step of the process in an interactive
 
 ---
 
-## ✋ Stop! Prerequisites
+## ✋ Stop! Prerequisites for the AI Assistant
 
-This tool has a few requirements to get started:
+Before you launch the AI-powered setup assistant, please ensure you have the following ready. The assistant will guide you, but it cannot create these for you.
 
-- [ ] **Google Workspace:** You need a Google Workspace subscription for your organization. The script is not compatible with personal `@gmail.com` accounts.
-- [ ] **Super Admin Access:** You must have a user account with Super Admin privileges for your Google Workspace tenant (i.e., your organization's entire Google environment). This is required for the initial setup.
+- [ ] **Google Workspace:** You need a Google Workspace subscription. The tool is not compatible with personal `@gmail.com` accounts for administration.
+- [ ] **Super Admin Access:** You must have a user account with Super Admin privileges for your Google Workspace tenant.
 - [ ] **Domain Name:** You need a registered domain name that you own and have connected to your Google Workspace account.
-- [ ] **Billing Account:** A Google Cloud billing account is needed. For most use cases, the free tier will be sufficient.
 
-If you are missing any of these, please review the [`docs/WORKSPACE_SETUP.md`](docs/WORKSPACE_SETUP.md) guide for detailed instructions on how to set them up.
+If you need help with these initial steps, the assistant will point you to our comprehensive [Setup Guide](docs/SETUP_GUIDE.md).
 
 ---
 
@@ -132,22 +131,6 @@ That document also includes important **[Performance & Scaling
 Considerations](docs/ARCHITECTURE_OVERVIEW.md#performance--scaling-considerations)**,
 which explains the expected limits of the Apps Script platform and suggests
 alternatives for enterprise-scale deployments.
-
----
-
-## First-time Google Workspace setup
-
-If you are starting from a brand-new Google Workspace tenant, or need a step-by-step guide to configure the script within your existing Workspace, follow the comprehensive guide in [`docs/WORKSPACE_SETUP.md`](docs/WORKSPACE_SETUP.md). It walks through:
-
-1. Creating (or reusing) a Workspace tenant and initial Super Admin account.
-2. Turning on Google Groups for Business and confirming Super Admin privileges.
-3. Creating the control spreadsheet and binding an Apps Script project.
-4. Installing this repository with [`clasp`](https://github.com/google/clasp).
-5. Enabling the Admin SDK and Drive APIs, granting OAuth consent, and running the
-   first sync.
-
-Keep that guide open alongside this README when onboarding new administrators—it
-captures every click needed for the initial deployment.
 
 ---
 
@@ -281,7 +264,7 @@ reduce API calls during large syncs).
 | Edit-only mode walkthrough | [`docs/EDIT_MODE_GUIDE.md`](docs/EDIT_MODE_GUIDE.md) |
 | Auto-sync options & safety levers | [`docs/AUTO_SYNC_GUIDE.md`](docs/AUTO_SYNC_GUIDE.md) & [`docs/RISK_BASED_AUTO_SYNC.md`](docs/RISK_BASED_AUTO_SYNC.md) |
 | Stopping or pausing scripts | [`docs/STOP_SCRIPTS.md`](docs/STOP_SCRIPTS.md) |
-| Workspace + script installation walkthrough | [`docs/WORKSPACE_SETUP.md`](docs/WORKSPACE_SETUP.md) |
+| Full setup walkthrough (Workspace, Cloud, Script) | [`docs/SETUP_GUIDE.md`](docs/SETUP_GUIDE.md) |
 | Spreadsheet and script onboarding checklist | [`docs/ONBOARDING.md`](docs/ONBOARDING.md) |
 | Frequently asked questions | [`FAQ.md`](FAQ.md) |
 | Architecture deep dive | [`docs/ARCHITECTURE_OVERVIEW.md`](docs/ARCHITECTURE_OVERVIEW.md) |
