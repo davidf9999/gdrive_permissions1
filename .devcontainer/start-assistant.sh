@@ -35,4 +35,4 @@ echo "Starting Cloudflare DNS backend..."
 echo "Cloudflare DNS backend started (PID $!)."
 
 # Now that auth is handled, launch the Gemini CLI with the master prompt.
-gemini -i "$(cat AI_ASSISTANT_PROMPT.md)"
+gemini -i "$(cat AI_ASSISTANT_V2_PROMPT.md)"

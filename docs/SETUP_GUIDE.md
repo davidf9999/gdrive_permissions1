@@ -8,6 +8,20 @@ first time you roll out the tool.
 
 ---
 
+## Understanding Roles
+
+Before you begin, it's important to understand the different "hats" you might wear during this setup process. A single person (likely you) will perform most of these roles initially, but the system is designed to delegate responsibilities later on.
+
+| Role | Responsibilities | Key Actions |
+| :--- | :--- | :--- |
+| **Google Workspace Super Admin** | The highest-level administrator for your Google Workspace domain. | Creates Google Groups, enables APIs, grants initial permissions to the script. |
+| **Script Executor / You** | The person running the setup commands (like `clasp login`). | Authenticates the command-line tools, pushes code to Apps Script, runs the first sync. |
+| **Sheet Editor** | A trusted user who can manage permissions *after* setup is complete. | Adds or removes users from the control spreadsheet (`SheetEditors` and user group sheets). Does not need Super Admin rights. |
+| **End User** | A regular user in your organization. | Is granted access to folders based on the rules configured by Sheet Editors. |
+
+---
+
+
 ## 1. Create or reuse a Google Workspace tenant
 
 1. Visit [workspace.google.com](https://workspace.google.com/) and start a free
