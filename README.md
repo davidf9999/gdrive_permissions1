@@ -70,15 +70,15 @@ The assistant will guide you through every step of the process in an interactive
 
 ---
 
-## ✋ Stop! Prerequisites for the AI Assistant
+## ✋ Getting Started with the AI Assistant
 
-Before you launch the AI-powered setup assistant, please ensure you have the following ready. The assistant will guide you, but it cannot create these for you.
+The AI Assistant is designed to guide you through the entire setup process from start to finish. Here are the core components the assistant will help you create and configure:
 
-- [ ] **Google Workspace:** You need a Google Workspace subscription. The tool is not compatible with personal `@gmail.com` accounts for administration.
-- [ ] **Super Admin Access:** You must have a user account with Super Admin privileges for your Google Workspace tenant.
-- [ ] **Domain Name:** You need a registered domain name that you own and have connected to your Google Workspace account.
+-   **A Google Workspace Tenant:** The foundation of the system. The assistant will guide you on how to sign up for a new Workspace trial.
+-   **A Super Admin User:** You will create or designate a user with Super Admin privileges to manage the Workspace.
+-   **A Registered Domain Name:** The assistant will instruct you on how to connect your domain to Google Workspace.
 
-If you need help with these initial steps, the assistant will point you to our comprehensive [Setup Guide](docs/SETUP_GUIDE.md).
+Even if you have none of these items ready, the assistant will start at the very beginning and walk you through each step. Just launch the assistant to get started.
 
 ---
 
