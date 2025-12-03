@@ -19,6 +19,8 @@ if ! gcloud auth list --filter=status:ACTIVE --format="value(account)" | grep -q
   
   # This command is blocking and will wait for the user to authenticate in their browser.
   gcloud auth login --no-launch-browser
+  echo "--> Setting up Application Default Credentials for clasp and other tools..."
+  gcloud auth application-default login
 fi
 
 echo ""
