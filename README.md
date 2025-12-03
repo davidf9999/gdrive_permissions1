@@ -82,6 +82,14 @@ Even if you have none of these items ready, the assistant will start at the very
 
 ---
 
+## Understanding the Roles
+
+This system involves a few key user roles, from the Super Admin who performs the initial setup to the Sheet Editors who manage permissions day-to-day. Before you begin, it's helpful to understand who does what.
+
+**➡️ See our [Roles and Responsibilities Guide](docs/ROLES_AND_RESPONSIBILITIES.md) for a full breakdown.**
+
+---
+
 ## Architecture overview
 
 At a glance, the system combines three moving pieces:
