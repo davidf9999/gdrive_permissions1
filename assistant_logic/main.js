@@ -254,54 +254,100 @@ const ACTION_MAP = {
 // The Main State Machine Loop
 // =================================================================================================
 
-async function runStateMachine() {
-  console.log('Starting AI Assistant v2...');
+async function discoverStartingState() {
+  console.log('Welcome to the gdrive-permissions setup assistant!');
+  console.log('---');
+  console.log('Please choose where you would like to start:');
+
+  const stepDescriptions = {
+    [STATES.WORKSPACE_TENANT_CREATED]: 'Create or reuse a Google Workspace tenant',
+    [STATES.SUPER_ADMIN_PREPARED]: 'Prepare the Super Admin account',
+    [STATES.CONTROL_SPREADSHEET_CREATED]: 'Create the control spreadsheet and get the Script ID',
+    [STATES.CLASP_PROJECT_SETUP]: 'Set up the Apps Script project with clasp',
+    [STATES.APIS_ENABLED_AND_CONSENT_GRANTED]: 'Enable APIs and grant consent',
+    [STATES.FIRST_SYNC_COMPLETE]: 'Run the first sync',
+  };
+
+  STATE_ORDER.forEach((state, index) => {
+    if (stepDescriptions[state]) {
+      console.log(`${index + 1}. ${stepDescriptions[state]}`);
+    }
+  });
+
+  console.log('s. I\'m not sure, please scan my system for me.');
   console.log('---');
 
-  // --- 1. State Discovery ---
-  console.log('Discovering current setup state...');
-  let currentState = STATES.START;
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  const answer = await new Promise(resolve => {
+    rl.question('Enter the number of the step to start at (e.g., 1): ', resolve);
+  });
+  rl.close();
 
-  for (const state of STATE_ORDER) {
-    const verifyFn = VERIFY_MAP[state];
-    const isComplete = await verifyFn();
-    if (!isComplete) {
-      currentState = state;
-      break;
+  if (answer.toLowerCase() === 's') {
+    console.log('Scanning system to find the correct starting step...');
+    for (const state of STATE_ORDER) {
+      const verifyFn = VERIFY_MAP[state];
+      if (!verifyFn) continue;
+      const isComplete = await verifyFn();
+      if (!isComplete) {
+        return state;
+      }
     }
-    // If the loop completes, all states are verified and the state will be DONE.
-    currentState = STATES.DONE;
+    return STATES.DONE;
   }
 
+  const choice = parseInt(answer, 10);
+  if (choice > 0 && choice <= STATE_ORDER.length) {
+    return STATE_ORDER[choice - 1];
+  }
+
+  console.log('Invalid choice. Defaulting to a full system scan.');
+  return discoverStartingState(); // Re-prompt on invalid input, could also scan
+}
+
+
+async function runStateMachine() {
+  // --- 1. State Discovery ---
+  const currentState = await discoverStartingState();
+
   console.log(`---`);
-  console.log(`Initial state detected: ${currentState}`);
+  console.log(`Starting at state: ${currentState}`);
   console.log(`---`);
 
   // --- 2. Execute State Actions ---
-  while (currentState !== STATES.DONE) {
-    const actionFn = ACTION_MAP[currentState];
-    await actionFn();
-
+  let activeState = currentState;
+  while (activeState !== STATES.DONE) {
+    const actionFn = ACTION_MAP[activeState];
+    if (actionFn) {
+        await actionFn();
+    } else {
+        console.log(`No action function implemented for state: ${activeState}`);
+    }
+    
     // After the action, verify the state again to ensure it's complete
-    const verifyFn = VERIFY_MAP[currentState];
-    const isComplete = await verifyFn();
+    const verifyFn = VERIFY_MAP[activeState];
+    let isComplete = false;
+    if (verifyFn) {
+        isComplete = await verifyFn();
+    } else {
+        console.log(`No verification function implemented for state: ${activeState}`);
+        isComplete = await confirmWithUser(`Did you manually complete the step for ${activeState}?`);
+    }
 
     if (isComplete) {
-      const currentIndex = STATE_ORDER.indexOf(currentState);
-      currentState = STATE_ORDER[currentIndex + 1];
+      const currentIndex = STATE_ORDER.indexOf(activeState);
+      activeState = STATE_ORDER[currentIndex + 1];
        console.log(`---`);
-      console.log(`Transitioning to next state: ${currentState}`);
+      console.log(`Transitioning to next state: ${activeState}`);
       console.log(`---`);
     } else {
       console.log(`---`);
-      console.log(`State ${currentState} is not yet complete. Retrying action or waiting for user.`);
-      // In a real implementation, we might retry or offer help here.
-      // For now, we'll just break the loop to avoid infinite loops.
+      console.log(`State ${activeState} is not yet complete. Please try the step again or restart the assistant.`);
       break;
     }
   }
 
-  if (currentState === STATES.DONE) {
+  if (activeState === STATES.DONE) {
     await do_done();
   }
 
