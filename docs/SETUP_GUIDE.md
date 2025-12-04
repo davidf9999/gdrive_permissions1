@@ -21,7 +21,7 @@ This document is the comprehensive, step-by-step guide for setting up the Google
 
 ## Understanding Roles
 
-Before starting the setup, it's important to understand the different roles involved, such as the *Script Executor* (you) and the *Google Workspace Super Admin*. We have created a dedicated guide for this.
+Before starting the setup, it's important to understand the different roles involved. You will primarily act as the **Installer**, using a **Google Workspace Super Admin** account to perform the privileged actions. We have created a dedicated guide for this.
 
 **➡️ See [Roles and Responsibilities](ROLES_AND_RESPONSIBILITIES.md) for a full breakdown.**
 
@@ -102,6 +102,8 @@ Before starting the setup, it's important to understand the different roles invo
 
 ## 3. Create the control spreadsheet
 
+This step must be performed while signed in as the **Google Workspace Super Admin**.
+
 1. While signed in as the Super Admin, go to Google Drive and create a new
    Google Spreadsheet. Give it a descriptive name such as `Drive Permissions Control`.
 2. Inside the spreadsheet, open **Extensions → Apps Script** to create a bound Apps
@@ -133,7 +135,7 @@ Authentication for `clasp` is best handled by the Google Cloud CLI (`gcloud`). T
 
 1. **Verify `gcloud` installation.** In your terminal, run `gcloud --version`. If the command is not found, you must install the [Google Cloud SDK](https://cloud.google.com/sdk/docs/install) first. In the recommended Codespaces environment, it should be pre-installed.
 
-2. **Authenticate with Google.** Use the same Super Admin account from the previous steps. You will be asked to visit a URL in your browser and paste back a verification code.
+2. **Authenticate with Google.** Use the **Google Workspace Super Admin** account from the previous steps. You will be asked to visit a URL in your browser and paste back a verification code.
    ```bash
    gcloud auth login --no-launch-browser
    ```
@@ -152,7 +154,7 @@ Authentication for `clasp` is best handled by the Google Cloud CLI (`gcloud`). T
 
 ## 5. Enable APIs and grant consent
 
-The script requires the Apps Script API to be enabled in two places: for your GCP project and for your user account.
+The script requires the Apps Script API to be enabled in two places: for your GCP project and for the Super Admin's user account.
 
 1.  **Enable the Project-Level API.** In your terminal, run the following `gcloud` command to enable the Apps Script API for your project:
     ```bash

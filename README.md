@@ -79,7 +79,7 @@ This tool is most effective for managing access for ad-hoc teams and projects th
 The AI Assistant is designed to guide you through the entire setup process from start to finish. Here are the core components the assistant will help you create and configure:
 
 -   **A Google Workspace Tenant:** The foundation of the system. The assistant will guide you on how to sign up for a new Workspace trial.
--   **A Super Admin User:** You will create or designate a user with Super Admin privileges to manage the Workspace.
+-   **A Google Workspace Super Admin User:** You will create or designate a user with Super Admin privileges. This account is essential for creating the control spreadsheet and authorizing the script.
 -   **A Registered Domain Name:** The assistant will instruct you on how to connect your domain to Google Workspace.
 
 Even if you have none of these items ready, the assistant will start at the very beginning and walk you through each step. Just launch the assistant to get started.

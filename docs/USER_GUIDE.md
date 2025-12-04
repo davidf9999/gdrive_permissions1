@@ -1,5 +1,7 @@
 # Google Drive Permissions Manager: User Guide
 
+> **Who is this guide for?** This guide is for **Sheet Editors**, the people who manage permissions day-to-day by editing this spreadsheet. It is also a useful reference for **Managed Users**, who can use it to understand how their access is managed. This guide does **not** cover the initial setup of the system.
+
 Welcome! This guide explains how to use the Google Spreadsheet to manage folder permissions after the initial setup has been completed.
 
 ---
@@ -71,7 +73,7 @@ This sheet allows you to create your own reusable groups of people.
 
 ### 4. `SheetEditors`
 
-This sheet controls who has permission to **edit** this spreadsheet itself. Add the email addresses of anyone who should be an editor of this control panel.
+This sheet controls who is a **Sheet Editor** for this spreadsheet. Add the email addresses of anyone who should have permission to edit this control panel.
 
 **Sheet Structure:**
 - **Column A**: Sheet Editor Emails - List the email addresses of all editors (one per row).

@@ -101,7 +101,7 @@ function validateEnvironment_() {
 }
 
 /**
- * Trigger fired when a user edits a cell in the spreadsheet.
+ * Trigger fired when a Sheet Editor edits a cell in the spreadsheet.
  * Handles multiple edit scenarios:
  * 1. Warns users if they try to delete rows from ManagedFolders or UserGroups
  * 2. Protects Config sheet Description column from edits
@@ -141,7 +141,7 @@ function onEdit(e) {
         );
       } catch (alertError) {
         // If alert fails, just log
-        log_('Warning: User may be deleting rows in ' + sheetName + '. Use Delete checkbox instead.', 'WARN');
+        log_('Warning: A Sheet Editor may be deleting rows in ' + sheetName + '. Use Delete checkbox instead.', 'WARN');
       }
     }
     return;
@@ -365,7 +365,7 @@ function shouldHideSheetForRestrictedView_(sheetName, config) {
 }
 
 /**
- * Ensures the Help sheet is visible for non-admin users
+ * Ensures the Help sheet is visible for Sheet Editors
  */
 function ensureHelpSheetVisible_() {
   try {

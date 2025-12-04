@@ -6,15 +6,15 @@ This document provides guidance for using and developing the AI-powered assistan
 
 First, it's important to understand the roles within this project's context.
 
-*   **User:** A **User** is typically an administrator who wants to set up and manage the `gdrive-permissions` system for their organization. Your primary goal is to use the AI Assistant to get the project running. You do not intend to modify the assistant's code.
+*   **Installer:** An **Installer** is the person who runs the initial setup of the `gdrive-permissions` system for their organization. Your primary goal is to use the AI Assistant to get the project running. You will interact with a **Google Workspace Super Admin** account to perform privileged actions. Once set up, **Sheet Editors** will manage permissions day-to-day, and **Managed Users** will be the ones granted access. You do not intend to modify the assistant's code.
 
 *   **Developer:** A **Developer** is someone who wants to modify, extend, or contribute to the AI Assistant itself. Your goal is to work on the codebase of the assistant.
 
-> **Prerequisite:** A GitHub account is required for all users and developers. The recommended setup process uses GitHub Codespaces, which is tied to your GitHub identity.
+> **Prerequisite:** A GitHub account is required for all installers and developers. The recommended setup process uses GitHub Codespaces, which is tied to your GitHub identity.
 
 ---
 
-## For Users: Setting Up the Project with the AI Assistant
+## For Installers: Setting Up the Project with the AI Assistant
 
 This section is for you if your goal is to get the `gdrive-permissions` project up and running.
 
@@ -32,14 +32,14 @@ Your `gdrive-permissions1` instance needs a web address (DNS record) to be acces
 
 This is the default path if you are setting up the project for your own domain.
 
-*   **Who it's for:** Users who have their own domain and manage their DNS records through a registrar like GoDaddy, Namecheap, Google Domains, etc.
+*   **Who it's for:** Installers who have their own domain and manage their DNS records through a registrar like GoDaddy, Namecheap, Google Domains, etc.
 *   **How it works:** The AI assistant will guide you through finding the public IP address of your Codespace environment. It will then provide you with clear instructions to manually create an `A` record at your domain registrar, pointing to your Codespace's IP.
 
 #### Option 2: Automated DNS Configuration
 
 This path provides a seamless, automated experience if an administrator has assigned you a specific subdomain.
 
-*   **Who it's for:** Users or testers who have been provided with a pre-configured subdomain (e.g., `tester1.yourdomain.com`) and special credentials from a project administrator.
+*   **Who it's for:** Installers or testers who have been provided with a pre-configured subdomain (e.g., `tester1.yourdomain.com`) and special credentials from a project administrator.
 *   **How it works:** If you add the provided Cloudflare credentials to your Codespace environment, the AI assistant will detect them. It will then prompt you for your assigned subdomain and automatically create or update the necessary DNS records for you.
 
 ### Testing the Assistant for Free
@@ -85,7 +85,7 @@ The Codespace environment contains all the necessary dependencies and tools (`no
 
 ### Administrator Setup for Automated DNS
 
-To test the **Automated DNS Configuration** flow (Option 2 for users), an administrator or developer must first perform this one-time setup for a tester.
+To test the **Automated DNS Configuration** flow (Option 2 for installers), an administrator or developer must first perform this one-time setup for a tester.
 
 1.  **Create Initial DNS Record:** In your Cloudflare account, manually create a placeholder `A` record for the tester's assigned subdomain (e.g., `tester1.yourdomain.com`) pointing to a temporary, non-Cloudflare IP (e.g., `192.0.2.1`). This record must exist before you can scope an API token to it.
 2.  **Generate a Sandboxed API Token:**
