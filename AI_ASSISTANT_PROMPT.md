@@ -79,9 +79,9 @@ Once the `currentState` is determined, execute the following logic in a loop unt
 ### If `currentState` is `GCLOUD_CLI_CONFIGURED`:
 -   **ACTION (Sub-steps):**
     1.  **Verify `gcloud` installation:** Run `gcloud --version`.
-    2.  **Authenticate and Authorize:**
-        -   Explain that this step will authenticate the command-line tools (`gcloud` and `clasp`) to manage their Google Workspace and Google Cloud resources. It's important to distinguish between you, the **Installer** running this setup, and the **Google account credentials** you are about to provide.
-        -   **Instruction:** "For this critical step, you **must** sign in as the **Google Workspace Super Admin** (e.g., `admin@your-domain.com`). This is because the tools we are using (`gcloud` and `clasp`) need Super Admin permissions to manage your Apps Script project and Google Groups. This account must have 2-Step Verification (2SV) enabled. This single login will grant all necessary permissions for the rest of the setup."
+    2.  **Authenticate the CLI:**
+        -   Explain that this step authorizes the command-line tools to act on their behalf. I will refer to the guide on roles and responsibilities to clarify the difference between the person running the commands (the **Installer**) and the account used for authentication (the **CLI Authenticator**).
+        -   **Instruction:** "For this critical authentication step, you must use the Google Account that is the **Google Workspace Super Admin**. We call this the **CLI Authenticator** role. Even if you, the Installer, have multiple Google accounts, you **must** use the Super Admin account here. This is because the tools we are using (`gcloud` and `clasp`) need Super Admin permissions to manage your Apps Script project and Google Groups. This account must have 2-Step Verification (2SV) enabled."
         -   Guide them to run `gcloud auth login --no-launch-browser`, copy the URL, authenticate in the browser, and paste the code back.
     3.  **Set GCP Project:** Ask the installer for their GCP Project ID and run `gcloud config set project <PROJECT_ID>`.
 -   **VERIFICATION:**
