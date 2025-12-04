@@ -12,9 +12,10 @@ This document is the comprehensive, step-by-step guide for setting up the Google
 1.  [Create or reuse a Google Workspace tenant](#1-create-or-reuse-a-google-workspace-tenant)
 2.  [Prepare the Super Admin account](#2-prepare-the-super-admin-account)
 3.  [Create the control spreadsheet](#3-create-the-control-spreadsheet)
-4.  [Install the Apps Script project with clasp](#4-install-the-apps-script-project-with-clasp)
+4.  [Configure the Google Cloud CLI (gcloud)](#4-configure-the-google-cloud-cli-gcloud)
 5.  [Enable APIs and grant consent](#5-enable-apis-and-grant-consent)
-6.  [Run the first sync](#6-run-the-first-sync)
+6.  [Deploy the Apps Script project with clasp](#6-deploy-the-apps-script-project-with-clasp)
+7.  [Run the first sync](#7-run-the-first-sync)
 
 ---
 
@@ -80,8 +81,8 @@ Before starting the setup, it's important to understand the different roles invo
 3. Enable the Google Groups service if it is not already active:
    - Navigate to **Apps → Google Workspace → Groups for Business**.
    - Click **On for everyone** and save.
-4. Optional but recommended: enable 2-Step Verification for the admin account in
-   **Security → 2-step verification** to protect API access.
+4. **Crucial:** Enable 2-Step Verification (2SV) for the admin account in
+   **Security → 2-step verification**. Google Cloud enforces this, and you will be blocked from proceeding without it.
 5. Open a new tab to [console.cloud.google.com](https://console.cloud.google.com)
    and accept the Terms of Service so the account can manage Google Cloud
    resources.
@@ -107,8 +108,7 @@ Before starting the setup, it's important to understand the different roles invo
    Script project. Leave the editor open—you will connect the local source files
    shortly.
 3. In the Apps Script editor, open **Project Settings → IDs** and copy the
-   **Script ID** value. You will paste it into `.clasp.json` when configuring the
-   CLI.
+   **Script ID** value. You will need this for the `clasp` configuration in a later step.
 
 <details>
 <summary>Visual aid: Finding the Apps Script ID</summary>
@@ -125,40 +125,72 @@ Before starting the setup, it's important to understand the different roles invo
 
 ---
 
-## 4. Install the Apps Script project with clasp
+## 4. Configure the Google Cloud CLI (gcloud)
 
-> **Note for AI Assistant Users:** If you are using the AI Assistant in a GitHub Codespace, the environment is already prepared for you. The repository is cloned, and `clasp` is pre-installed. The assistant will guide you through creating the `.clasp.json` file.
+> **Note for AI Assistant Users:** The assistant will now handle these command-line steps for you.
 
-The following steps are for users performing a manual setup on their local machine.
+Authentication for `clasp` is best handled by the Google Cloud CLI (`gcloud`). This is a more robust method than `clasp login`, especially in cloud development environments.
 
-1. On your local machine, install the required tools:
+1. **Verify `gcloud` installation.** In your terminal, run `gcloud --version`. If the command is not found, you must install the [Google Cloud SDK](https://cloud.google.com/sdk/docs/install) first. In the recommended Codespaces environment, it should be pre-installed.
+
+2. **Authenticate with Google.** Use the same Super Admin account from the previous steps. You will be asked to visit a URL in your browser and paste back a verification code.
    ```bash
-   # Install clasp globally if you haven't already
-   npm install -g @google/clasp
+   gcloud auth login --no-launch-browser
    ```
-2. Clone this repository and change into the project directory:
+   > **Important:** Your Google account must have **2-Step Verification (2SV)** enabled for this to work.
+
+3. **Set your GCP Project.** Tell `gcloud` which project you are working on. Replace `YOUR_PROJECT_ID` with your actual Google Cloud Project ID.
    ```bash
-   git clone https://github.com/<your-org>/gdrive-permission-manager.git
-   cd gdrive-permission-manager
+   gcloud config set project YOUR_PROJECT_ID
    ```
-3. Create `.clasp.json` in the repository root pointing at the bound Apps Script
-   project:
+
+**Common issues at this step:**
+- ❌ `gcloud: command not found` → Ensure the Google Cloud SDK is installed and that its `bin` directory is in your system's PATH.
+- ❌ `Access blocked` during login → Verify that 2-Step Verification is enabled on your Google account.
+
+---
+
+## 5. Enable APIs and grant consent
+
+The script requires the Apps Script API to be enabled in two places: for your GCP project and for your user account.
+
+1.  **Enable the Project-Level API.** In your terminal, run the following `gcloud` command to enable the Apps Script API for your project:
+    ```bash
+    gcloud services enable script.googleapis.com
+    ```
+2.  **Enable the User-Level API.** This is a manual step.
+    -   Visit **[script.google.com/home/usersettings](https://script.google.com/home/usersettings)**.
+    -   Find the setting for "Google Apps Script API" and toggle it **ON**.
+
+    > **Note:** If you have just enabled these APIs, it may take a few minutes for the changes to propagate through Google's systems.
+
+3.  **Configure the OAuth Consent Screen.** If you have not done so already for this project:
+    -   In the [Cloud Console](https://console.cloud.google.com), navigate to **APIs & Services → OAuth consent screen**.
+    -   User type: **Internal** (recommended for most Workspace tenants).
+    -   App name: something descriptive such as `Drive Permission Manager`.
+    -   Add the Super Admin account as a test user, then save and publish.
+
+**Common issues at this step:**
+- ❌ API errors during a later step → Verify you enabled the API in both the Cloud Console (`gcloud` command) **and** the Apps Script user settings page.
+
+---
+
+## 6. Deploy the Apps Script project with clasp
+
+Now we will push the code from this repository into the Apps Script project you created. `clasp` will automatically use the credentials you configured with `gcloud`.
+
+1. Create a file named `.clasp.json` in the repository root with the Script ID you copied earlier:
    ```json
    {
      "scriptId": "YOUR_SCRIPT_ID",
      "rootDir": "apps_script_project"
    }
    ```
-4. Authenticate clasp with the same Super Admin account:
+2. Push the repository source code to your Apps Script project. The `-f` flag forces an overwrite of the remote project with your local files.
    ```bash
-   clasp login
+   clasp push -f
    ```
-5. Push the repository sources into Apps Script:
-   ```bash
-   clasp push
-   ```
-6. Return to the spreadsheet and refresh. The **Permissions Manager** menu will
-   appear once the push completes.
+3. Return to your control spreadsheet and refresh the page. The **Permissions Manager** menu will appear once the push is complete.
 
 <details>
 <summary>Visual aid: Permissions Manager menu</summary>
@@ -168,59 +200,12 @@ The following steps are for users performing a manual setup on their local machi
 </details>
 
 **Common issues at this step:**
-- ❌ `clasp: command not found` → Run `npm install -g @google/clasp`.
-- ❌ `Unauthorized` when `clasp push` → Ensure you ran `clasp login` with the
-  Super Admin account before pushing.
-- ❌ `Script ID not found` → Double-check `.clasp.json` points to the Script ID
-  from the bound Apps Script project.
+- ❌ `Authentication error` → Ensure you have successfully run `gcloud auth login` and `gcloud config set project`. Do **not** use `clasp login`.
+- ❌ `Script ID not found` → Double-check that the `scriptId` in `.clasp.json` is correct.
 
 ---
 
-## 5. Enable APIs and grant consent
-
-1. In the Apps Script editor, click the **+** button next to **Services** and add
-   the following advanced services:
-   - **AdminDirectory API**
-   - **Drive API (v3)**
-
-<details>
-<summary>Visual aid: Enabling advanced services</summary>
-
-![Screenshot of the Apps Script editor showing the '+' button next to Services and the 'AdminDirectory API' and 'Drive API' being added.](./images/workspace_setup/05-advanced-services.png)
-
-</details>
-
-2. From **Project Settings**, open the associated Google Cloud project in a new
-   tab.
-3. In the Cloud Console, enable these APIs if they are not already active:
-   - **Admin SDK API**
-   - **Google Drive API**
-4. Configure the OAuth consent screen when prompted:
-   - User type: **Internal** (recommended for most Workspace tenants)
-   - App name: something descriptive such as `Drive Permission Manager`
-   - Add the Super Admin account as a test user
-   - Save and publish
-
-| Apps Script Services | Cloud Console APIs |
-| -------------------- | ------------------ |
-| Enable **AdminDirectory API** and **Drive API (v3)** under **Services** in the Apps Script editor. | Enable **Admin SDK API** and **Google Drive API** in the linked Google Cloud project. |
-
-> **Why these scopes?** Admin SDK permissions let the script create and manage
-> Google Groups, while Drive scopes allow folder sharing updates. Both are
-> required for the sync loop to align Drive with the spreadsheet.
-
-**Common issues at this step:**
-- ❌ Cannot add advanced services → Make sure you are using the bound script
-  project created earlier and are logged in as Super Admin.
-- ❌ Consent screen shows unfamiliar scopes → The Admin SDK and Drive scopes are
-  necessary for creating groups and updating folder permissions on behalf of the
-  domain. Scopes are limited to your tenant.
-- ❌ APIs still appear disabled → Verify you enabled them both in Apps Script
-  **and** the Cloud Console.
-
----
-
-## 6. Run the first sync
+## 7. Run the first sync
 
 1. Back in the spreadsheet, open **Permissions Manager → ManualSync → Full Sync**.
 2. Grant the script permissions when asked—the prompts will appear twice: once
