@@ -19,6 +19,7 @@
       "settings": {
         "workbench.startupEditor": "none", // Prevent opening a file on startup
         "workbench.editor.showTabs": "multiple", // Always show tabs
+        "workbench.activityBar.visible": true,
         "workbench.activityBar.location": "left", // Ensure activity bar is on the left
         "workbench.panel.defaultLocation": "bottom", // Ensure panel is at the bottom
         "workbench.editor.limit.enabled": true, // Enable editor tab limits
@@ -35,5 +36,7 @@
       }
     }
   },
-  "ports": [8000]
+  "ports": [
+    8000
+  ]
 }
