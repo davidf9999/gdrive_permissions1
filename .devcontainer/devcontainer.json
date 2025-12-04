@@ -15,7 +15,24 @@
       "extensions": [
         "dbaeumer.vscode-eslint",
         "Google.gemini-cli-vscode-ide-companion"
-      ]
+      ],
+      "settings": {
+        "workbench.startupEditor": "none", // Prevent opening a file on startup
+        "workbench.editor.showTabs": "multiple", // Always show tabs
+        "workbench.activityBar.location": "left", // Ensure activity bar is on the left
+        "workbench.panel.defaultLocation": "bottom", // Ensure panel is at the bottom
+        "workbench.editor.limit.enabled": true, // Enable editor tab limits
+        "workbench.editor.limit.value": 10, // Limit to 10 editor tabs
+        "workbench.editor.limit.perEditorGroup": true, // Apply limit per group
+        // Hide the chat pane by default
+        "github.copilot.chat.editor.showViewInEditor": "never",
+        "github.copilot.chat.showViewInEditor": "never",
+        "workbench.view.chat.enabled": false,
+        "workbench.view.output.forceFocus": false, // Don't force focus on output panel
+        "workbench.view.problems.forceFocus": false, // Don't force focus on problems panel
+        "workbench.view.terminal.forceFocus": false, // Don't force focus on terminal panel
+        "workbench.view.showQuietly": true // Prevent panels from opening automatically
+      }
     }
   },
   "ports": [8000]

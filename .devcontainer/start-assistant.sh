@@ -26,15 +26,5 @@ fi
 echo ""
 echo "--> Loading the AI assistant now..."
 
-# Start the Cloudflare DNS backend
-echo "Starting Cloudflare DNS backend..."
-# Ensure we are in the correct directory to activate venv and run uvicorn
-(
-  cd cloudflare_dns
-  source .venv/bin/activate
-  uvicorn main:app --host 0.0.0.0 --port 8000 &
-) &> /dev/null & # Run in background and redirect output to /dev/null
-echo "Cloudflare DNS backend started (PID $!)."
-
 # Now that auth is handled, launch the Gemini CLI with the master prompt.
 gemini -i "$(cat AI_ASSISTANT_PROMPT.md)"
