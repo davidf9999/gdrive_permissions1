@@ -101,15 +101,21 @@ Once the `currentState` is determined, execute the following logic in a loop unt
 
 ### If `currentState` is `CLASP_PROJECT_SETUP`:
 -   **ACTION (Sub-steps):**
-    1.  **Create `.clasp.json`:**
-        -   Check if `.clasp.json` exists.
-        -   If not, use the `write_file` tool to create it using the `scriptId` you saved. Content: `{"scriptId": "THE_ID_YOU_SAVED", "rootDir": "apps_script_project"}`.
-    2.  **Push the project:**
-        -   Explain that you are about to push the project files using the credentials from `gcloud`.
+    1.  **Authenticate `clasp` (Manual Step):**
+        -   Explain that `clasp` requires its own login, separate from `gcloud`.
+        -   Instruct the installer to open their own terminal and run the command `clasp login`.
+        -   Remind them to use the same **Google Workspace Super Admin** account they used for the `gcloud` login.
+        -   Ask the installer to confirm once they have completed the login.
+    2.  **Create `.clasp.json` file:**
+        -   Check if the `.clasp.json` file exists in the project directory.
+        -   If not, use the `write_file` tool to create it using the `scriptId` saved earlier. Content: `{"scriptId": "THE_ID_YOU_SAVED", "rootDir": "apps_script_project"}`.
+    3.  **Push the project:**
+        -   Explain that you are about to push the project files.
         -   Run `clasp push -f`.
 -   **VERIFICATION:**
-    1.  Run `clasp status`. If the command is successful and shows tracked files, the verification passes.
-    2.  Transition to `FIRST_SYNC_COMPLETE`.
+    1.  Before pushing, check for the existence of the `~/.clasprc.json` file to confirm the login was successful.
+    2.  After pushing, run `clasp status` to verify the files were deployed.
+    3.  If successful, transition to `FIRST_SYNC_COMPLETE`.
 
 ### If `currentState` is `FIRST_SYNC_COMPLETE`:
 -  (Follow the ACTION/VERIFICATION pattern)

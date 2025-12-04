@@ -12,7 +12,7 @@ This document is the comprehensive, step-by-step guide for setting up the Google
 1.  [Create or reuse a Google Workspace tenant](#1-create-or-reuse-a-google-workspace-tenant)
 2.  [Prepare the Super Admin account](#2-prepare-the-super-admin-account)
 3.  [Create the control spreadsheet](#3-create-the-control-spreadsheet)
-4.  [Configure the Google Cloud CLI (gcloud)](#4-configure-the-google-cloud-cli-gcloud)
+4.  [Authenticate Command-Line Tools](#4-authenticate-command-line-tools)
 5.  [Enable APIs and grant consent](#5-enable-apis-and-grant-consent)
 6.  [Deploy the Apps Script project with clasp](#6-deploy-the-apps-script-project-with-clasp)
 7.  [Run the first sync](#7-run-the-first-sync)
@@ -127,28 +127,45 @@ This step must be performed while signed in as the **Google Workspace Super Admi
 
 ---
 
-## 4. Configure the Google Cloud CLI (gcloud)
+## 4. Authenticate Command-Line Tools
 
 > **Note for AI Assistant Users:** The assistant will now handle these command-line steps for you.
 
-Authentication for `clasp` is best handled by the Google Cloud CLI (`gcloud`). This is a more robust method than `clasp login`, especially in cloud development environments.
+In this section, we will authenticate the two command-line tools required for setup: `gcloud` and `clasp`.
 
-1. **Verify `gcloud` installation.** In your terminal, run `gcloud --version`. If the command is not found, you must install the [Google Cloud SDK](https://cloud.google.com/sdk/docs/install) first. In the recommended Codespaces environment, it should be pre-installed.
+### 4.1. Authenticate the Google Cloud CLI (`gcloud`)
 
-2. **Authenticate with Google.** It's important to distinguish between you, the **Installer** running this setup, and the **Google account credentials** you are about to provide. For this step, you must use the **Google Workspace Super Admin** account from the previous steps. You will be asked to visit a URL in your browser and paste back a verification code.
-   ```bash
-   gcloud auth login --no-launch-browser
-   ```
-   > **Important:** Your Google account must have **2-Step Verification (2SV)** enabled for this to work.
+1.  **Verify `gcloud` installation.** In your terminal, run `gcloud --version`. If the command is not found, you must install the [Google Cloud SDK](https://cloud.google.com/sdk/docs/install) first. In the recommended Codespaces environment, it should be pre-installed.
 
-3. **Set your GCP Project.** Tell `gcloud` which project you are working on. Replace `YOUR_PROJECT_ID` with your actual Google Cloud Project ID.
-   ```bash
-   gcloud config set project YOUR_PROJECT_ID
-   ```
+2.  **Authenticate `gcloud`.** This step gives `gcloud` permission to manage resources in your Google Cloud project, like enabling APIs.
+    *   In your terminal, run the following command:
+        ```bash
+        gcloud auth login
+        ```
+    *   Follow the link to your browser. When prompted, sign in using the **same Google Workspace Super Admin** account you prepared in Step 2.
+    *   Return to the terminal after you have successfully logged in.
+
+3.  **Set your GCP Project.** Tell `gcloud` which project you are working on. Replace `YOUR_PROJECT_ID` with your actual Google Cloud Project ID.
+    ```bash
+    gcloud config set project YOUR_PROJECT_ID
+    ```
+
+### 4.2. Authenticate the Apps Script CLI (`clasp`)
+
+This step gives `clasp` permission to upload the script files to your spreadsheet's script project.
+
+1.  **Verify `clasp` installation.** In your terminal, run `clasp --version`. If the command is not found, run `npm install -g @google/clasp`.
+2.  **Authenticate `clasp`.**
+    *   In your terminal, run the following command:
+        ```bash
+        clasp login
+        ```
+    *   Follow the link to your browser. When prompted, you **must** sign in using the **same Google Workspace Super Admin** account you used for the `gcloud` login.
+    *   This will create a `~/.clasprc.json` file on your system, which stores the credentials `clasp` will use.
 
 **Common issues at this step:**
-- ❌ `gcloud: command not found` → Ensure the Google Cloud SDK is installed and that its `bin` directory is in your system's PATH.
-- ❌ `Access blocked` during login → Verify that 2-Step Verification is enabled on your Google account.
+- ❌ `gcloud` or `clasp`: command not found → Ensure the tools are installed and their location is in your system's PATH.
+- ❌ `Access blocked` during login → Verify that 2-Step Verification is enabled on your Google Workspace Super Admin account.
 
 ---
 
@@ -179,7 +196,7 @@ The script requires the Apps Script API to be enabled in two places: for your GC
 
 ## 6. Deploy the Apps Script project with clasp
 
-Now we will push the code from this repository into the Apps Script project you created. `clasp` will automatically use the credentials you configured with `gcloud`.
+Now that you have authenticated the tools and configured your project, you will push the code from this repository into the Apps Script project you created.
 
 1. Create a file named `.clasp.json` in the repository root with the Script ID you copied earlier:
    ```json
@@ -202,7 +219,7 @@ Now we will push the code from this repository into the Apps Script project you 
 </details>
 
 **Common issues at this step:**
-- ❌ `Authentication error` → Ensure you have successfully run `gcloud auth login` and `gcloud config set project`. Do **not** use `clasp login`.
+- ❌ `Authentication error` → Ensure you have successfully run `clasp login` as described in Section 4.
 - ❌ `Script ID not found` → Double-check that the `scriptId` in `.clasp.json` is correct.
 
 ---
