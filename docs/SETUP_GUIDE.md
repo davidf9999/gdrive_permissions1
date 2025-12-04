@@ -135,7 +135,7 @@ Authentication for `clasp` is best handled by the Google Cloud CLI (`gcloud`). T
 
 1. **Verify `gcloud` installation.** In your terminal, run `gcloud --version`. If the command is not found, you must install the [Google Cloud SDK](https://cloud.google.com/sdk/docs/install) first. In the recommended Codespaces environment, it should be pre-installed.
 
-2. **Authenticate with Google.** Use the **Google Workspace Super Admin** account from the previous steps. You will be asked to visit a URL in your browser and paste back a verification code.
+2. **Authenticate with Google.** It's important to distinguish between you, the **Installer** running this setup, and the **Google account credentials** you are about to provide. For this step, you must use the **Google Workspace Super Admin** account from the previous steps. You will be asked to visit a URL in your browser and paste back a verification code.
    ```bash
    gcloud auth login --no-launch-browser
    ```

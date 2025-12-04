@@ -80,8 +80,8 @@ Once the `currentState` is determined, execute the following logic in a loop unt
 -   **ACTION (Sub-steps):**
     1.  **Verify `gcloud` installation:** Run `gcloud --version`.
     2.  **Authenticate and Authorize:**
-        -   Explain that this step will authenticate the command-line tools (`gcloud` and `clasp`) to manage their Google Workspace and Google Cloud resources.
-        -   **Instruction:** "For this critical step, you **must** sign in as the **Google Workspace Super Admin** (e.g., `admin@your-domain.com`). This account must have 2-Step Verification (2SV) enabled. This single login will grant all necessary permissions for the rest of the setup."
+        -   Explain that this step will authenticate the command-line tools (`gcloud` and `clasp`) to manage their Google Workspace and Google Cloud resources. It's important to distinguish between you, the **Installer** running this setup, and the **Google account credentials** you are about to provide.
+        -   **Instruction:** "For this critical step, you **must** sign in as the **Google Workspace Super Admin** (e.g., `admin@your-domain.com`). This is because the tools we are using (`gcloud` and `clasp`) need Super Admin permissions to manage your Apps Script project and Google Groups. This account must have 2-Step Verification (2SV) enabled. This single login will grant all necessary permissions for the rest of the setup."
         -   Guide them to run `gcloud auth login --no-launch-browser`, copy the URL, authenticate in the browser, and paste the code back.
     3.  **Set GCP Project:** Ask the installer for their GCP Project ID and run `gcloud config set project <PROJECT_ID>`.
 -   **VERIFICATION:**
