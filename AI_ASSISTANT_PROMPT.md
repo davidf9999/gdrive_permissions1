@@ -78,12 +78,20 @@ Once the `currentState` is determined, execute the following logic in a loop unt
 ### If `currentState` is `GCLOUD_CLI_CONFIGURED`:
 -   **ACTION (Sub-steps):**
     1.  **Verify `gcloud` installation:** Run `gcloud --version`.
-    2.  **Authenticate `gcloud`:** Instruct the user that they will need to log in with `gcloud` and that **2-Step Verification (2SV) must be enabled on their Google Account**. Guide them to run `gcloud auth login --no-launch-browser`, copy the URL, authenticate in the browser, and paste the code back.
-    3.  **Set GCP Project:** Ask the user for their GCP Project ID and run `gcloud config set project <PROJECT_ID>`.
+    2.  **Step 1: Authenticate the CLI User (Script Executor):**
+        -   Explain that the first login is to authenticate the command-line interface for your user account.
+        -   **Instruction:** "In the following step, please sign in as the **Script Executor** (your primary user account, e.g., `you@gmail.com`). This account must have 2-Step Verification (2SV) enabled."
+        -   Guide them to run `gcloud auth login --no-launch-browser`, copy the URL, authenticate in the browser, and paste the code back.
+    3.  **Step 2: Authenticate the Application (Super Admin):**
+        -   Explain that the second login is to provide "Application Default Credentials" (ADC). These are what tools like `clasp` will use to act on your behalf, and this requires a privileged account.
+        -   **Instruction:** "For this critical step, you **must** sign in as the **Google Workspace Super Admin** (e.g., `admin@your-domain.com`)."
+        -   Guide them to run `gcloud auth application-default login --no-launch-browser`, copy the URL, authenticate in the browser, and paste the code back.
+    4.  **Set GCP Project:** Ask the user for their GCP Project ID and run `gcloud config set project <PROJECT_ID>`.
 -   **VERIFICATION:**
-    1.  Run `gcloud auth list` to verify an active credential.
-    2.  Run `gcloud config get-value project` to verify the project is set.
-    3.  If both are successful, transition to `APIS_ENABLED_AND_CONSENT_GRANTED`.
+    1.  Run `gcloud auth list` to verify an active user credential.
+    2.  Check for the existence of the ADC file (e.g., by running `ls ~/.config/gcloud/application_default_credentials.json`).
+    3.  Run `gcloud config get-value project` to verify the project is set.
+    4.  If all are successful, transition to `APIS_ENABLED_AND_CONSENT_GRANTED`.
 
 ### If `currentState` is `APIS_ENABLED_AND_CONSENT_GRANTED`:
 -   **ACTION (Sub-steps):**
