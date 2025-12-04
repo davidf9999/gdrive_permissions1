@@ -79,16 +79,16 @@ Once the `currentState` is determined, execute the following logic in a loop unt
 ### If `currentState` is `GCLOUD_CLI_CONFIGURED`:
 -   **ACTION (Sub-steps):**
     1.  **Verify `gcloud` installation:** Run `gcloud --version`.
-    2.  **Authenticate the CLI:**
-        -   Explain that this step authorizes the command-line tools to act on their behalf. I will refer to the guide on roles and responsibilities to clarify the difference between the person running the commands (the **Installer**) and the account used for authentication (the **CLI Authenticator**).
-        -   **Instruction:** "For this critical authentication step, you must use the Google Account that is the **Google Workspace Super Admin**. We call this the **CLI Authenticator** role. Even if you, the Installer, have multiple Google accounts, you **must** use the Super Admin account here. This is because the tools we are using (`gcloud` and `clasp`) need Super Admin permissions to manage your Apps Script project and Google Groups. This account must have 2-Step Verification (2SV) enabled."
-        -   Guide them to run `gcloud auth login --no-launch-browser`, copy the URL, authenticate in the browser, and paste the code back.
+    2.  **Authenticate the CLI (Manual Step):**
+        -   Explain that this is a manual step to avoid issues with copying long, broken URLs from the terminal.
+        -   Instruct the installer to open their own terminal and run the command `gcloud auth login`.
+        -   Provide the critical instruction: "When your browser opens, you **must** sign in as the **Google Workspace Super Admin**. We call this the **CLI Authenticator** role. This account must have 2-Step Verification (2SV) enabled."
+        -   Ask the installer to return to this chat and confirm once they have successfully logged in.
     3.  **Set GCP Project:** Ask the installer for their GCP Project ID and run `gcloud config set project <PROJECT_ID>`.
 -   **VERIFICATION:**
     1.  Run `gcloud auth list` to verify an active user credential.
-    2.  Check for the existence of the ADC file (e.g., by running `ls ~/.config/gcloud/application_default_credentials.json`).
-    3.  Run `gcloud config get-value project` to verify the project is set.
-    4.  If all are successful, transition to `APIS_ENABLED_AND_CONSENT_GRANTED`.
+    2.  Run `gcloud config get-value project` to verify the project is set.
+    3.  If both are successful, transition to `APIS_ENABLED_AND_CONSENT_GRANTED`.
 
 ### If `currentState` is `APIS_ENABLED_AND_CONSENT_GRANTED`:
 -   **ACTION (Sub-steps):**
