@@ -51,6 +51,19 @@ The `gdrive-permissions` project requires a Google Workspace account and a regis
 
 2.  **Domain Name:** Every Google Workspace account needs its own domain name. We recommend purchasing a low-cost domain from a registrar like Namecheap or Google Domains. We strongly advise against using free domain providers (`.tk`, `.ml`, etc.) as they are often unreliable and may lack the features needed for Google Workspace verification.
 
+### Automatic State Persistence
+
+To prevent you from losing work if your Codespace session times out, the environment is configured to automatically save your progress after every change.
+
+*   **How it works:** After every action that modifies the workspace (like creating a file or editing code), the AI assistant will automatically commit those changes to your current local branch.
+*   **Commit Message:** These automatic commits will have a message like `codespace-autosave: YYYY-MM-DDTHH:MM:SSZ`.
+*   **What to do with them:** You can treat these commits as regular commits. When you are ready to make a "real" commit with a meaningful message, you can either:
+    *   **Amend the last commit:** If you just want to add your changes to the last auto-save, you can use `git commit --amend`.
+    *   **Squash the commits:** You can combine multiple auto-save commits into a single, meaningful commit using an interactive rebase (`git rebase -i`).
+*   **No Pushing:** This feature only commits changes locally. It will never push to the remote repository.
+
+This ensures that even if your Codespace shuts down unexpectedly, your recent work is safely committed and can be easily recovered.
+
 ---
 
 ## For Developers: Contributing to the AI Assistant
@@ -88,6 +101,7 @@ To test the **Automated DNS Configuration** flow (Option 2 for users), an admini
 
 ### Important Notes
 
-*   **Save Your Work:** Any changes you make within a Codespace instance are local to that instance. To persist your changes, you *must* regularly commit and push them to your Git repository.
+*   **Automatic Saving:** The Codespace is configured to automatically commit your changes after every modification to prevent data loss. See the "Automatic State Persistence" section for more details. While this provides a safety net, it is still good practice to make meaningful commits regularly.
+*   **Pushing Your Work:** The auto-save feature does not push to the remote repository. You must still manually `git push` your commits to share them.
 *   You **do not** need to create a new Codespace from the `README.md` button to test prompt or script changes. That is only necessary if you are changing the Codespace configuration itself (e.g., `devcontainer.json`).
 *   You **do not** need to run `git pull` or `git fetch` to see your *local* changes. Those commands are for retrieving updates from the remote repository.
