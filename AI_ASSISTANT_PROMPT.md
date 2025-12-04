@@ -20,10 +20,11 @@ You will manage your progress using the following states. The order is important
 2.  `WORKSPACE_TENANT_CREATED`
 3.  `SUPER_ADMIN_PREPARED`
 4.  `CONTROL_SPREADSHEET_CREATED`
-5.  `CLASP_PROJECT_SETUP`
+5.  `GCLOUD_CLI_CONFIGURED`
 6.  `APIS_ENABLED_AND_CONSENT_GRANTED`
-7.  `FIRST_SYNC_COMPLETE`
-8.  `DONE`
+7.  `CLASP_PROJECT_SETUP`
+8.  `FIRST_SYNC_COMPLETE`
+9.  `DONE`
 
 ---
 
@@ -39,15 +40,16 @@ This is your first action.
     1. Create or reuse a Google Workspace tenant
     2. Prepare the Super Admin account
     3. Create the control spreadsheet and get the Script ID
-    4. Set up the Apps Script project with clasp
+    4. Configure the Google Cloud CLI (gcloud)
     5. Enable APIs and grant consent
-    6. Run the first sync
+    6. Set up and deploy the Apps Script project with clasp
+    7. Run the first sync
     s. I'm not sure, please scan my system for me.
     ---
     ```
 2.  **Get User Choice:** Ask the user to enter the number of the step they wish to start at.
 3.  **Set Initial State:**
-    -   If the user chooses a number (e.g., `3`), set your internal `currentState` to the corresponding state (e.g., `CONTROL_SPREADSHEET_CREATED`).
+    -   If the user chooses a number, set your internal `currentState` to the corresponding state.
     -   If the user chooses `s`, set your internal `currentState` to `START` and proceed to the Main Loop, but execute the `VERIFICATION` steps sequentially first to find the first one that fails.
 4.  **Proceed to the Main Loop.**
 
@@ -58,43 +60,50 @@ This is your first action.
 Once the `currentState` is determined, execute the following logic in a loop until you reach the `DONE` state.
 
 ### If `currentState` is `WORKSPACE_TENANT_CREATED`:
-
--   **ACTION:**
-    1.  Tell the user this is a manual step.
-    2.  Provide the user with a link to the relevant section of `docs/SETUP_GUIDE.md`.
-    3.  Ask the user to type "done" when they have completed the step.
--   **VERIFICATION:**
-    1.  When the user types "done", ask them: "To confirm, have you successfully created or signed into a Google Workspace tenant and have a Super Admin account ready?"
-    2.  If they say "yes", transition to the `SUPER_ADMIN_PREPARED` state. Otherwise, repeat the action instructions.
+-  (Follow standard ACTION/VERIFICATION pattern)
 
 ### If `currentState` is `SUPER_ADMIN_PREPARED`:
--  (Follow the same ACTION/VERIFICATION pattern as the previous state)
+-  (Follow standard ACTION/VERIFICATION pattern)
 
 ### If `currentState` is `CONTROL_SPREADSHEET_CREATED`:
 -   **ACTION:**
     1.  Tell the user this is a manual step.
-    2.  Provide a link to the relevant section of `docs/SETUP_GUIDE.md`.
-    3.  Ask the user to create the spreadsheet, open the Apps Script editor, and paste the **Script ID** back into the chat.
+    2.  Ask the user to create the spreadsheet, open the Apps Script editor, and paste the **Script ID** back into the chat.
 -   **VERIFICATION:**
     1.  When the user provides a string, confirm it looks like a script ID.
-    2.  Save the Script ID to your internal context for the next step.
-    3.  Transition to the `CLASP_PROJECT_SETUP` state.
+    2.  Save the Script ID to your internal context.
+    3.  Transition to the `GCLOUD_CLI_CONFIGURED` state.
+
+### If `currentState` is `GCLOUD_CLI_CONFIGURED`:
+-   **ACTION (Sub-steps):**
+    1.  **Verify `gcloud` installation:** Run `gcloud --version`.
+    2.  **Authenticate `gcloud`:** Instruct the user that they will need to log in with `gcloud` and that **2-Step Verification (2SV) must be enabled on their Google Account**. Guide them to run `gcloud auth login --no-launch-browser`, copy the URL, authenticate in the browser, and paste the code back.
+    3.  **Set GCP Project:** Ask the user for their GCP Project ID and run `gcloud config set project <PROJECT_ID>`.
+-   **VERIFICATION:**
+    1.  Run `gcloud auth list` to verify an active credential.
+    2.  Run `gcloud config get-value project` to verify the project is set.
+    3.  If both are successful, transition to `APIS_ENABLED_AND_CONSENT_GRANTED`.
+
+### If `currentState` is `APIS_ENABLED_AND_CONSENT_GRANTED`:
+-   **ACTION (Sub-steps):**
+    1.  **Enable Project API:** Explain you are enabling the Apps Script API for their GCP project. Run `gcloud services enable script.googleapis.com`.
+    2.  **Enable User API:** Explain this is a separate, manual step. Instruct the user to visit `https://script.google.com/home/usersettings` and ensure the "Apps Script API" is toggled **ON**.
+-   **VERIFICATION:**
+    1.  Run `gcloud services list --enabled --filter="script.googleapis.com"` and check for output.
+    2.  Ask the user to confirm they have enabled the user-level API.
+    3.  If both are successful, transition to `CLASP_PROJECT_SETUP`.
 
 ### If `currentState` is `CLASP_PROJECT_SETUP`:
 -   **ACTION (Sub-steps):**
     1.  **Create `.clasp.json`:**
-        -   Check if `.clasp.json` exists using `read_file`.
-        -   If not, use the `write_file` tool to create it using the `scriptId` you saved from the previous step. The content should be: `{"scriptId": "THE_ID_YOU_SAVED", "rootDir": "apps_script_project"}`.
+        -   Check if `.clasp.json` exists.
+        -   If not, use the `write_file` tool to create it using the `scriptId` you saved. Content: `{"scriptId": "THE_ID_YOU_SAVED", "rootDir": "apps_script_project"}`.
     2.  **Push the project:**
-        -   Explain that you are about to push the project files.
-        -   Run `clasp push -f` using `run_shell_command`.
+        -   Explain that you are about to push the project files using the credentials from `gcloud`.
+        -   Run `clasp push -f`.
 -   **VERIFICATION:**
-    1.  Run `clasp status` using `run_shell_command`.
-    2.  If the command is successful, the verification passes. Transition to `APIS_ENABLED_AND_CONSENT_GRANTED`.
-    3.  If the command fails, report the error from `stderr` to the user and ask for guidance.
-
-### If `currentState` is `APIS_ENABLED_AND_CONSENT_GRANTED`:
--  (Follow the ACTION/VERIFICATION pattern, using `gcloud services list --enabled` for verification)
+    1.  Run `clasp status`. If the command is successful and shows tracked files, the verification passes.
+    2.  Transition to `FIRST_SYNC_COMPLETE`.
 
 ### If `currentState` is `FIRST_SYNC_COMPLETE`:
 -  (Follow the ACTION/VERIFICATION pattern)
