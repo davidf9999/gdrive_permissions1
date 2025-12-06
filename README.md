@@ -67,7 +67,7 @@ For the easiest and fastest setup experience, you can use our AI-powered assista
 
 To launch the assistant, you will need a GitHub account.
 
-[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/davidf9999/gdrive_permissions1?ref=feature/ai-setup-assistant)
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/davidf9999/gdrive_permissions1?ref=main)
 
 ### Manual Setup
 

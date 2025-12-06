@@ -290,7 +290,7 @@ The immediate strategy is to proceed with the CLI agent driving the setup proces
 
 ## AI Assistant CDE Implementation & Debugging (November 2025)
 
-This section details the implementation and debugging of the Cloud Development Environment (CDE) for the AI Setup Assistant, which was created on the `feature/ai-setup-assistant` branch.
+This section details the implementation and debugging of the Cloud Development Environment (CDE) for the AI Setup Assistant, which was created on the `main` branch.
 
 ### Initial Implementation
 
