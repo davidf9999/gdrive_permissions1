@@ -5,7 +5,7 @@ keep the content current.
 
 | File | Purpose | Audience | Notes |
 | ---- | ------- | -------- | ----- |
-| [`README.md`](../README.md) | Front door for the project, covering prerequisites, setup options, and the documentation map. | New administrators & contributors | Keep in sync with the supported deployment paths (manual `build.js` for users, `clasp` for developers) and update when APIs or menus change. |
+| [`README.md`](../README.md) | Front door for the project, covering prerequisites, setup options, and the documentation map. | New administrators & contributors | Keep in sync with the supported deployment paths (manual `bundle.js` for users, `clasp` for developers) and update when APIs or menus change. |
 | [`docs/ARCHITECTURE_OVERVIEW.md`](ARCHITECTURE_OVERVIEW.md) | Architectural walkthrough of the Apps Script modules and spreadsheet layout. | Developers & reviewers | Update when new modules are added or the execution flow changes. |
 | [`docs/SETUP_GUIDE.md`](SETUP_GUIDE.md) | The canonical, step-by-step guide for a full manual installation. | First-time administrators | Update when Google Cloud, Workspace, or Apps Script UI flows change. |
 | [`docs/ONBOARDING.md`](ONBOARDING.md) | A high-level checklist that complements the Setup Guide. | Workspace admins | Use during training sessions; revise if prerequisites shift. |

@@ -188,7 +188,7 @@ Now you will deploy the code from this repository into the Apps Script project y
     ```
 2.  **Build the script bundle.** Run the build script to combine all the separate source code files into a single bundle for deployment.
     ```bash
-    node build.js
+    node bundle.js
     ```
     This will create a new file at `dist/bundle.gs`.
 
@@ -210,7 +210,7 @@ Now you will deploy the code from this repository into the Apps Script project y
 </details>
 
 **Common issues at this step:**
-- ❌ `ReferenceError: "some_function" is not defined.` → This usually means the copy-paste was incomplete or the `node build.js` script failed. Ensure the entire contents of `dist/bundle.gs` are in the editor.
+- ❌ `ReferenceError: "some_function" is not defined.` → This usually means the copy-paste was incomplete or the `node bundle.js` script failed. Ensure the entire contents of `dist/bundle.gs` are in the editor.
 - ❌ `Permissions Manager` menu does not appear → Refresh the spreadsheet. Make sure you saved the project in the Apps Script editor. Double check for any error messages at the top of the editor.
 
 ---

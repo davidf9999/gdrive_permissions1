@@ -156,6 +156,31 @@ risk-based auto sync), consult the guides in the `docs/` directory.
 
 ---
 
+## Updating the Script
+
+If the underlying Apps Script code is updated (for example, after pulling new changes from this repository), you will need to re-deploy the script to your spreadsheet.
+
+The process is simple:
+
+1.  **Generate the new bundle:** Run the bundling script from your terminal to combine all the project files into a single file for deployment.
+
+    ```bash
+    node bundle.js
+    ```
+
+2.  **Copy the bundle:** This command will create or update a file at `dist/bundle.gs`. Open this file and copy its entire contents.
+
+3.  **Update Apps Script:**
+    -   Open your control spreadsheet.
+    -   Go to **Extensions → Apps Script**.
+    -   In the Apps Script editor, you should see a file named `Code.gs` (or similar).
+    -   Delete all the existing code in that file and paste the new code you copied from `dist/bundle.gs`.
+    -   Click the **Save project** icon.
+
+Your spreadsheet is now running the latest version of the script.
+
+---
+
 ## Cost transparency
 
 - **Google Workspace**: typically **$6–18/user/month** depending on your plan
