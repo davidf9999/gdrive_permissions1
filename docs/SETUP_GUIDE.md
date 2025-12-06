@@ -155,17 +155,26 @@ This step gives `gcloud` permission to manage resources in your Google Cloud pro
 
 ## 5. Enable APIs and grant consent
 
-The script requires the Apps Script API to be enabled in two places: for your GCP project and for the Super Admin's user account.
+The script requires several Google Cloud APIs to be enabled for your GCP project, and the Apps Script API must be enabled for the Super Admin's user account.
 
-1.  **Enable the Project-Level API.** In your terminal, run the following `gcloud` command to enable the Apps Script API for your project:
+1.  **Enable the Project-Level APIs.** In your terminal, run the following `gcloud` commands to enable the required APIs for your project:
     ```bash
-    gcloud services enable script.googleapis.com
+    # Enable Admin SDK API (for Google Groups management)
+    gcloud services enable admin.googleapis.com --project=YOUR_PROJECT_ID
+
+    # Enable Drive API (for folder permissions)
+    gcloud services enable drive.googleapis.com --project=YOUR_PROJECT_ID
+
+    # Enable Apps Script API (for script management)
+    gcloud services enable script.googleapis.com --project=YOUR_PROJECT_ID
     ```
+    Replace `YOUR_PROJECT_ID` with your actual GCP project ID.
+
 2.  **Enable the User-Level API.** This is a manual step.
     -   Visit **[script.google.com/home/usersettings](https://script.google.com/home/usersettings)**.
     -   Find the setting for "Google Apps Script API" and toggle it **ON**.
 
-    > **Note:** If you have just enabled these APIs, it may take a few minutes for the changes to propagate through Google's systems.
+    > **Note:** After enabling these APIs, wait 2-5 minutes for the changes to propagate through Google's systems before proceeding.
 
 3.  **Configure the OAuth Consent Screen.** If you have not done so already for this project:
     -   In the [Cloud Console](https://console.cloud.google.com), navigate to **APIs & Services → OAuth consent screen**.
@@ -174,7 +183,9 @@ The script requires the Apps Script API to be enabled in two places: for your GC
     -   Add the Super Admin account as a test user, then save and publish.
 
 **Common issues at this step:**
-- ❌ API errors during a later step → Verify you enabled the API in both the Cloud Console (`gcloud` command) **and** the Apps Script user settings page.
+- ❌ API errors during a later step → Verify you enabled all three APIs in the Cloud Console (`gcloud` commands) **and** the Apps Script user settings page.
+- ❌ `"The Admin SDK API is not enabled for GCP project..."` error when running tests → Run `gcloud services enable admin.googleapis.com --project=YOUR_PROJECT_ID` and wait 2-5 minutes.
+- ❌ APIs not propagating → Wait a full 5 minutes after enabling before testing. API enablement is not instant.
 
 ---
 

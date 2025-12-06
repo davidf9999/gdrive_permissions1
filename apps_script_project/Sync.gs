@@ -391,6 +391,9 @@ function syncAdds(options = {}) {
     const durationSeconds = (endTime - startTime) / 1000;
     logSyncHistory_(null, totalSummary, durationSeconds);
 
+    // Clear the infinite toast
+    if (!silentMode) showToast_('User addition complete!', 'Add Users', 5);
+
     if (SCRIPT_EXECUTION_MODE === 'TEST') {
       showTestMessage_('Add Users', summaryMessage);
     } else if (!silentMode) {
@@ -640,6 +643,9 @@ function fullSync(options = {}) {
     const endTime = new Date();
     const durationSeconds = (endTime - startTime) / 1000;
     logSyncHistory_(null, totalSummary, durationSeconds);
+
+    // Clear the infinite toast
+    if (!silentMode) showToast_('Full sync complete!', 'Full Sync', 5);
 
     if (SCRIPT_EXECUTION_MODE === 'TEST') {
       showTestMessage_('Full Sync', summaryMessage + '\n\nCheck the \'Status\' column in the \'ManagedFolders\' sheet for details.');

@@ -13,11 +13,19 @@
 
 ## Build, Test, and Development Commands
 - **Local manual setup (recommended)**:
-  1. Run `node create_apps_scripts_bundle.js` to generate `dist/apps_scripts_bundle.gs`
-  2. Copy-paste the bundle contents into Apps Script editor
-  3. In Apps Script Project Settings: set timezone (e.g., `America/New_York`, `Etc/UTC`) and GCP Project ID
-  4. In Apps Script editor: create `config.json` file from `apps_script_project/config.json.template` with your Sheet ID and GCP project ID
-  5. See `docs/SETUP_GUIDE.md` for detailed step-by-step instructions
+  1. **Enable required Google Cloud APIs** (can be automated):
+     ```bash
+     # Get your GCP project ID from the config or Google Cloud Console
+     gcloud services enable admin.googleapis.com --project=YOUR_PROJECT_ID
+     gcloud services enable script.googleapis.com --project=YOUR_PROJECT_ID
+     gcloud services enable drive.googleapis.com --project=YOUR_PROJECT_ID
+     ```
+     Note: Wait 2-5 minutes after enabling APIs before proceeding to allow propagation.
+  2. Run `node create_apps_scripts_bundle.js` to generate `dist/apps_scripts_bundle.gs`
+  3. Copy-paste the bundle contents into Apps Script editor
+  4. In Apps Script Project Settings: set timezone (e.g., `America/New_York`, `Etc/UTC`) and GCP Project ID
+  5. In Apps Script editor: create `config.json` file from `apps_script_project/config.json.template` with your Sheet ID and GCP project ID
+  6. See `docs/SETUP_GUIDE.md` for detailed step-by-step instructions
 - Docker-based infra (optional):
   - `docker compose build` – Build the setup environment.
   - `docker compose up` – Provision GCP and print next steps.
@@ -46,3 +54,30 @@
 - Never commit real `config.json`, Sheet IDs with sensitive data, or credentials. Use `config.json.template` and `.env`/`setup.conf` examples.
 - GCP: restrict roles to least privilege; rotate service account keys; verify Admin SDK/Drive API enablement.
 - Sheet access: maintain `SheetEditors` sheet; review group email patterns before syncing.
+
+## Common Issues & Automated Fixes
+
+### API Not Enabled Errors
+If you encounter errors like `"The Admin SDK API is not enabled for GCP project..."`:
+
+**Automated fix:**
+```bash
+# Extract project ID from error message or config.json
+PROJECT_ID="your-project-id"
+
+# Enable the missing API
+gcloud services enable admin.googleapis.com --project=$PROJECT_ID
+
+# Wait for propagation (2-5 minutes) before retrying
+```
+
+**Common APIs needed:**
+- `admin.googleapis.com` - Admin SDK API (for Google Groups management)
+- `script.googleapis.com` - Apps Script API (for clasp deployments)
+- `drive.googleapis.com` - Drive API (for folder permissions)
+
+**Note for AI agents:** When encountering API enablement errors, you can automatically fix them by:
+1. Parsing the project ID from the error message or `config.json`
+2. Running `gcloud services enable <api> --project=<project-id>`
+3. Informing the user to wait 2-5 minutes before retrying
+4. The error message usually contains the direct console link to enable the API
