@@ -1,47 +1,79 @@
-# Delete Google Workspace and Associated Resources
+# DELETE_GOOGLE_WORKSPACE.md
+Complete Guide to Deleting a Google Workspace Domain and All Associated Resources
 
-This guide outlines the steps to fully delete a Google Workspace domain and shut down all related resources so that no further expenses accrue to the workspace owner. Follow each step in order and confirm completion before proceeding.
+This guide provides an end-to-end process for safely deleting a Google Workspace domain, including Workspace data, Cloud resources, secondary domains, DNS records, and billing accounts. Follow each step in order. Skipping steps may prevent the Workspace from being deleted.
+
+## 0. Important Notes Before Starting
+- You cannot delete the last super admin account. The final user is removed automatically during Workspace deletion.
+- A Google Workspace account cannot be deleted if:
+  - Any Google Cloud project still exists.
+  - Any Cloud project is in “pending deletion”.
+  - Any billing account is still open.
+  - Any Marketplace app subscription is active.
+  - Any secondary domain or domain alias remains assigned.
+- Deleting Cloud projects may require waiting up to 24 hours.
+- If Workspace used a subdomain (e.g., demo3.dfront1.com), it must be removed from Workspace and DNS.
 
 ## 1. Prepare and Notify
-- Notify all users about the planned deletion date and expected downtime.
-- Confirm that legal/retention requirements allow removal of user accounts and data.
-- Export compliance data (e.g., Vault matters, audit logs) if required.
+- Notify users of the deletion date.
+- Verify legal/retention policies.
+- Export required compliance archives.
 
-## 2. Back Up and Transfer Critical Data
-- Use Google Takeout or the Workspace data export tool to download organizational data.
-- Transfer ownership of Drive files, Shared Drives, and AppSheet/Apps Script projects that must be retained elsewhere.
-- Reassign ownership of shared calendars, sites, and forms that need to persist under a different domain.
+## 2. Back Up and Transfer Required Data
+- Use Takeout or Workspace Data Export.
+- Transfer ownership of Drive, Shared Drives, Apps Script, AppSheet, Calendars, Sites, and Forms.
 
 ## 3. Audit and Remove Billing Risks
-- In **Admin console > Billing**, cancel all subscriptions (Workspace licenses, add-ons, Marketplace apps) and verify end dates.
-- Remove or downgrade any paid Google Cloud projects linked to the domain:
-  - Set budgets/alerts to $0 and disable billing accounts or close them entirely.
-  - Export billing reports and delete unused projects; transfer required projects to another organization if needed.
-- Review third-party Marketplace apps and revoke access to stop external charges.
+
+### 3.1 Cancel Workspace Subscriptions
+- Admin console → Billing → Cancel Workspace and Marketplace apps.
+
+### 3.2 Delete or Shut Down All Google Cloud Projects
+- https://console.cloud.google.com/cloud-resource-manager
+- Shut down all projects.
+- Wait for “pending deletion” projects to disappear.
+
+### 3.3 Clean Up Cloud Resources
+- App Engine: disable application.
+- Cloud Storage: delete buckets.
+- BigQuery: delete datasets.
+- Service accounts: delete if needed.
+- APIs: disable active APIs.
+
+### 3.4 Close Billing Accounts
+- https://console.cloud.google.com/billing  
+Close each billing account.
 
 ## 4. Remove or Migrate Domain Resources
-- Delete or transfer all user accounts, groups, and organizational units that are no longer needed.
-- Remove recovery email/phone numbers that point to billing contacts for other Google services.
-- Migrate or delete Shared Drives; ensure no external users remain with ownership-like roles.
-- Reassign DNS control for domains that will be used elsewhere; document current DNS records before changes.
+- Delete all users except the final super admin.
+- Delete groups, OUs.
+- Migrate/delete Shared Drives.
+- Document DNS before changes.
 
 ## 5. Delete Secondary Domains and Domain Aliases
-- In **Admin console > Domains > Manage domains**, remove all secondary domains and domain aliases.
-- Update DNS with the registrar to delete or repoint MX, SPF, DKIM, DMARC, and other service records to prevent mail flow and reduce resource usage.
+- Admin console → Domains → Manage domains → Remove all secondary domains.
+- Clean DNS: delete Gmail MX, SPF, DKIM, DMARC, google-site-verification, CNAMEs, subdomain entries.
 
-## 6. Delete the Primary Domain (Close the Workspace)
-- Sign in as a super admin and ensure all users are deleted or suspended and billing is canceled.
-- Navigate to **Admin console > Account settings > Account management** and select **Delete account**.
-- Confirm deletion. Google will remove the primary domain and associated Workspace organization.
+## 6. Delete the Google Workspace Account (Primary Domain)
+- Admin console → Account → Account settings → Account management → Delete account.
+
+## 6.1 Troubleshooting “Delete account” Disabled
+| Blocker | Fix |
+|--------|------|
+| Cloud project exists | Shut down project |
+| Project pending deletion | Wait |
+| Billing account open | Close billing |
+| Marketplace subscription active | Cancel |
+| Secondary domain present | Remove |
+| Last super admin deleted | Restore it |
 
 ## 7. Post-Deletion Verification
-- Confirm that DNS no longer points to Google mail servers and that web, calendar, or other service endpoints are unreachable.
-- Verify that billing accounts are closed and no new invoices generate after deletion.
-- Check recovery emails for confirmation messages that the Workspace has been deleted.
+- Verify DNS cleanup.
+- Confirm billing accounts are closed.
+- Ensure Workspace admin login is disabled.
+- Check confirmation emails.
 
 ## 8. Prevent Future Charges
-- Remove payment methods from the Google Payments center associated with the deleted Workspace.
-- If any Google Cloud projects were retained elsewhere, ensure they are attached to active billing accounts outside the deleted domain and have budget alerts.
-- Monitor billing statements for one full cycle to ensure no unexpected charges occur.
-
-Following this checklist deletes the Google Workspace domain and related resources while preventing ongoing charges to the workspace owner.
+- Remove payment methods: https://pay.google.com/
+- Ensure transferred Cloud projects have valid billing.
+- Monitor statements for one cycle.
