@@ -475,7 +475,8 @@ function setupHelpSheet_() {
     const cell = helpSheet.getRange(i, 2);
     const url = cell.getValue();
     if (url && url.startsWith('http')) {
-      cell.setFontColor('#1155cc').setFontUnderline(true);
+      cell.setFontColor('#1155cc');
+      cell.setFontUnderline(true);
     }
   }
 
