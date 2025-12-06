@@ -457,9 +457,9 @@ function setupHelpSheet_() {
     ['ℹ️ ABOUT ACCESS LEVELS', ''],
     ['', ''],
     ['Super Admins: Full access to all sync operations, testing, and settings.', ''],
-    ['Non-Admins: View-only access to sheets. Super admins manage operations.', ''],
+    ['Non-Admins: View-only access to configuration sheets. Super admins manage operations.', ''],
     ['', ''],
-    ['Note: This Help sheet is created when a super admin opens the spreadsheet.', '']
+    ['Note: This Help sheet is automatically created when the spreadsheet is opened.', '']
   ];
 
   // Write content
@@ -488,32 +488,7 @@ function setupHelpSheet_() {
   helpSheet.setColumnWidth(1, 500);
   helpSheet.setColumnWidth(2, 500);
 
-  // Protect the sheet so it's view-only for non-super-admins.
-  try {
-    const protection = helpSheet.protect();
-    protection.setDescription('Help sheet (view-only for non-super-admins)');
-
-    const allEditors = protection.getEditors();
-    const superAdmins = getSuperAdminEmails_();
-    const superAdminSet = new Set(superAdmins.map(e => e.toLowerCase()));
-
-    const editorsToRemove = allEditors.filter(function(editor) {
-        return !superAdminSet.has(editor.getEmail().toLowerCase());
-    });
-    
-    if (editorsToRemove.length > 0) {
-        protection.removeEditors(editorsToRemove);
-    }
-    
-    // Also ensure domain editing is off
-    if (protection.canDomainEdit()) {
-        protection.setDomainEdit(false);
-    }
-
-  } catch (e) {
-    log_('Could not protect Help sheet: ' + e.message, 'WARN');
-  }
-
+  // Note: Help sheet is not protected - all users can view and edit it
   log_('Created or updated Help sheet.');
 }
 
