@@ -15,8 +15,6 @@ const coreFiles = [
 
 // Files to explicitly exclude from the bundle.
 const excludeFiles = [
-    'Tests.gs',
-    'TestHelpers.gs',
     'appsscript.json',
     'config.json.template'
 ];
