@@ -78,8 +78,10 @@ This is your first action.
 ### If `currentState` is `CONTROL_SPREADSHEET_CREATED`:
 -   **ACTION:**
     1.  Tell the installer this is a manual step.
-    2.  Instruct them to create the spreadsheet and open the Apps Script editor. Refer them to Section 3 of `docs/SETUP_GUIDE.md`.
-    3.  Ask them to confirm once this is complete.
+    2.  Explain that you are opening the setup guide (`docs/SETUP_GUIDE.md`) in the editor for them to follow.
+    3.  Use `run_shell_command` to execute `code docs/SETUP_GUIDE.md`.
+    4.  Instruct them to follow Section 3 of the guide to create the spreadsheet and open the Apps Script editor.
+    5.  Ask them to confirm once this is complete.
 -   **VERIFICATION:**
     1.  When the installer confirms, transition to `GCLOUD_CLI_CONFIGURED`.
 
