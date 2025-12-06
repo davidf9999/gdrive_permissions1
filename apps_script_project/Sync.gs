@@ -339,7 +339,7 @@ function syncAdds(options = {}) {
   try {
     validateManagedFolders_();
     if (!silentMode) showToast_('Adding users to groups...', 'Add Users', -1);
-    showSyncInProgress_();
+    showSyncInProgress_(silentMode);
     log_('*** Starting user addition synchronization...');
 
     const orphanSheets = checkForOrphanSheets_();
@@ -502,7 +502,7 @@ function syncDeletes() {
 
   try {
     showToast_('Removing users from groups...', 'Remove Users', -1);
-    showSyncInProgress_();
+    showSyncInProgress_(false);  // syncDeletes is always interactive
     log_('*** Starting user removal synchronization...');
 
     const execOptions = { removeOnly: true };
@@ -558,7 +558,7 @@ function fullSync(options = {}) {
 
   try {
     if (!silentMode) showToast_('Starting full synchronization...', 'Full Sync', -1);
-    showSyncInProgress_();
+    showSyncInProgress_(silentMode);
     log_('*** Starting full synchronization...');
 
     // --- PRE-SYNC CHECKS ---
@@ -677,7 +677,7 @@ function syncManagedFoldersAdds() {
 
   try {
     showToast_('Starting folder-only sync (adds only)...', 'Sync Folders - Adds', -1);
-    showSyncInProgress_();
+    showSyncInProgress_(false);  // syncManagedFoldersAdds is always interactive
     log_('*** Starting Managed Folders only synchronization (adds only)...');
 
     const summary = processManagedFolders_({ addOnly: true });
@@ -783,7 +783,7 @@ function syncManagedFoldersDeletes() {
 
   try {
     showToast_('Starting destructive sync (deletes only)...', 'Sync Deletes', -1);
-    showSyncInProgress_();
+    showSyncInProgress_(false);  // syncManagedFoldersDeletes is always interactive
     log_('*** Starting destructive synchronization (deletes only)...');
 
     const execOptions = { removeOnly: true };

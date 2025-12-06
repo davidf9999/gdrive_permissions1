@@ -454,9 +454,6 @@ function clearAllLogs() {
     setupDeepAuditLogSheet_(deepFolderAuditLogSheet);
   }
 
-  // Clear any lingering toast messages
-  showToast_('Logs cleared successfully!', 'Clear Logs', 3);
-
   ui.alert('All logs have been cleared.');
 }
 
@@ -487,9 +484,6 @@ function clearAuxiliaryLogs() {
     deepFolderAuditLogSheet.clear();
     setupDeepAuditLogSheet_(deepFolderAuditLogSheet);
   }
-
-  // Clear any lingering toast messages
-  showToast_('Auxiliary logs cleared!', 'Clear Logs', 3);
 
   ui.alert('Auxiliary logs have been cleared.\n\nThe main "Log" sheet has been preserved.');
 }
@@ -809,7 +803,10 @@ function isGroup_(email) {
   }
 }
 
-function showSyncInProgress_() {
+function showSyncInProgress_(silentMode) {
+  // Don't show toast in silent mode (e.g., auto sync)
+  if (silentMode) return;
+
   const enableSheetLocking = getConfiguration_()['EnableSheetLocking'];
   let message = 'A synchronization script is running. Please avoid making changes to the sheet.';
   if (enableSheetLocking) {
