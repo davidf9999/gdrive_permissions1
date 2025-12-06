@@ -24,7 +24,7 @@ You will manage your progress using the following states. The order is important
 4.  `CONTROL_SPREADSHEET_CREATED`
 5.  `GCLOUD_CLI_CONFIGURED`
 6.  `APIS_ENABLED_AND_CONSENT_GRANTED`
-7.  `CLASP_PROJECT_SETUP`
+7.  `SCRIPT_DEPLOYED`
 8.  `FIRST_SYNC_COMPLETE`
 9.  `DONE`
 
@@ -41,10 +41,10 @@ This is your first action.
     Please choose where you would like to start:
     1. Create or reuse a Google Workspace tenant
     2. Prepare the Super Admin account
-    3. Create the control spreadsheet and get the Script ID
+    3. Create the control spreadsheet
     4. Configure the Google Cloud CLI (gcloud)
     5. Enable APIs and grant consent
-    6. Set up and deploy the Apps Script project with clasp
+    6. Deploy the Apps Script project
     7. Run the first sync
     s. I'm not sure, please scan my system for me.
     ---
@@ -70,11 +70,10 @@ Once the `currentState` is determined, execute the following logic in a loop unt
 ### If `currentState` is `CONTROL_SPREADSHEET_CREATED`:
 -   **ACTION:**
     1.  Tell the installer this is a manual step.
-    2.  Ask the installer to create the spreadsheet, open the Apps Script editor, and paste the **Script ID** back into the chat.
+    2.  Instruct them to create the spreadsheet and open the Apps Script editor. Refer them to Section 3 of `docs/SETUP_GUIDE.md`.
+    3.  Ask them to confirm once this is complete.
 -   **VERIFICATION:**
-    1.  When the installer provides a string, confirm it looks like a script ID.
-    2.  Save the Script ID to your internal context.
-    3.  Transition to the `GCLOUD_CLI_CONFIGURED` state.
+    1.  When the installer confirms, transition to the `GCLOUD_CLI_CONFIGURED` state.
 
 ### If `currentState` is `GCLOUD_CLI_CONFIGURED`:
 -   **ACTION (Sub-steps):**
@@ -97,25 +96,26 @@ Once the `currentState` is determined, execute the following logic in a loop unt
 -   **VERIFICATION:**
     1.  Run `gcloud services list --enabled --filter="script.googleapis.com"` and check for output.
     2.  Ask the installer to confirm they have enabled the user-level API.
-    3.  If both are successful, transition to `CLASP_PROJECT_SETUP`.
+    3.  If both are successful, transition to `SCRIPT_DEPLOYED`.
 
-### If `currentState` is `CLASP_PROJECT_SETUP`:
+### If `currentState` is `SCRIPT_DEPLOYED`:
 -   **ACTION (Sub-steps):**
-    1.  **Authenticate `clasp` (Manual Step):**
-        -   Explain that `clasp` requires its own login, separate from `gcloud`.
-        -   Instruct the installer to open their own terminal and run the command `clasp login`.
-        -   Remind them to use the same **Google Workspace Super Admin** account they used for the `gcloud` login.
-        -   Ask the installer to confirm once they have completed the login.
-    2.  **Create `.clasp.json` file:**
-        -   Check if the `.clasp.json` file exists in the project directory.
-        -   If not, use the `write_file` tool to create it using the `scriptId` saved earlier. Content: `{"scriptId": "THE_ID_YOU_SAVED", "rootDir": "apps_script_project"}`.
-    3.  **Push the project:**
-        -   Explain that you are about to push the project files.
-        -   Run `clasp push -f`.
+    1.  **Build the script bundle:**
+        -   Explain that you are about to combine all the project's scripts into a single file for deployment.
+        -   Run `node build.js`.
+    2.  **Instruct for Manual Deployment:**
+        -   Explain that the next steps are manual and must be followed carefully.
+        -   Provide the following instructions:
+            1.  "Open the file `dist/bundle.gs` in the file explorer."
+            2.  "Select all the text in that file and copy it to your clipboard."
+            3.  "Go to the Apps Script editor in your browser."
+            4.  "Delete all the content currently in the `Code.gs` file."
+            5.  "Paste the code from your clipboard into the `Code.gs` file."
+            6.  "Click the 'Save project' icon (it looks like a floppy disk)."
+            7.  "Return to the spreadsheet and refresh the page. You should see a new 'Permissions Manager' menu appear."
+        -   Ask the installer to confirm once they see the new menu.
 -   **VERIFICATION:**
-    1.  Before pushing, check for the existence of the `~/.clasprc.json` file to confirm the login was successful.
-    2.  After pushing, run `clasp status` to verify the files were deployed.
-    3.  If successful, transition to `FIRST_SYNC_COMPLETE`.
+    1.  When the user confirms, transition to `FIRST_SYNC_COMPLETE`.
 
 ### If `currentState` is `FIRST_SYNC_COMPLETE`:
 -  (Follow the ACTION/VERIFICATION pattern)

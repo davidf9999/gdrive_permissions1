@@ -72,7 +72,7 @@ This section is for you if you want to modify or improve the AI assistant itself
 
 ### Development Environment
 
-The Codespace environment contains all the necessary dependencies and tools (`node`, `gcloud`, `clasp`). This avoids "it works on my machine" problems and provides a consistent environment for developing and testing.
+The Codespace environment contains all the necessary dependencies and tools (`node`, `gcloud`). This avoids "it works on my machine" problems and provides a consistent environment for developing and testing.
 
 ### Testing Local Changes
 

@@ -1,7 +1,7 @@
 # Onboarding checklist
 
 Use this quick reference while following the main setup instructions in the
-[README](../README.md) and the detailed
+[Setup Guide](SETUP_GUIDE.md) and the detailed
 [Workspace setup guide](WORKSPACE_SETUP.md). It highlights the prerequisites you
 must satisfy before running the Apps Script for the first time.
 
@@ -23,7 +23,6 @@ must satisfy before running the Apps Script for the first time.
 ## Local tooling
 
 - [ ] Node.js 18+ and npm installed.
-- [ ] [`@google/clasp`](https://github.com/google/clasp) installed globally.
 - [ ] This repository cloned locally.
 
 ## First-run reminders

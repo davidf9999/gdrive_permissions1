@@ -95,7 +95,9 @@ To improve maintainability and scalability, the monolithic `Code.js` file was re
     *   `Audit.gs`: Contains the logic for the new Folders Audit feature.
     *   `Tests.gs`: All test-related functions.
 
-*   **`clasp` for Deployment:** Due to the new multi-file structure, using the `clasp` command-line tool is now the **required method** for deploying the script. The old manual copy-paste method is no longer feasible. The `README.md` has been updated with detailed instructions on how to configure and use `clasp`, including setting the `rootDir` in a `.clasp.json` file.
+*   **Deployment:** Due to the multi-file structure, a build step is required before deployment.
+    *   **Manual Deployment (Primary Method):** The recommended workflow for users is to run a build script (`node build.js`) that concatenates all the project files into a single `dist/bundle.gs` file. The user then manually copies the content of this bundle into the Apps Script editor. This method is simple and does not require any tool installation beyond Node.js.
+    *   **Developer Deployment (`clasp`):** Developers working on the script can still use the `clasp` command-line tool to push the multi-file project directly. This is considered an advanced/developer workflow.
 
 ## Logging and Auditing
 
@@ -252,7 +254,7 @@ This section summarizes the ongoing discussion and planning for an AI agent to a
 
 ### Feasibility Analysis
 
-*   **Highly Feasible (Automated by AI):** `clasp` installation/execution (except initial OAuth), configuration file generation, prerequisite checking (Node.js, npm, clasp), generating shell scripts.
+*   **Highly Feasible (Automated by AI):** Configuration file generation, prerequisite checking (Node.js, npm), running build scripts, generating shell scripts.
 *   **Partially Feasible (Requires Human Intervention):** Enabling GCP APIs via `gcloud` (API enablement is possible, but OAuth consent screen config is manual), running the first sync (execution is possible, but first-time OAuth approval is manual).
 *   **Not Feasible (Must Remain Manual):** Google Workspace Tenant creation (payment, domain verification), Super Admin account preparation (security, UI-based), Control Spreadsheet creation (authenticated session, UI navigation).
 
@@ -294,7 +296,7 @@ This section details the implementation and debugging of the Cloud Development E
 
 The chosen architecture uses a CDE (like GitHub Codespaces) to provide a zero-install, consistent environment for the user. The initial implementation involved:
 1.  Creating a `.devcontainer/` directory with `devcontainer.json` to define the environment.
-2.  Configuring the environment to install `node`, `gcloud`, `clasp`, and `gemini-cli`.
+2.  Configuring the environment to install `node`, `gcloud`, and `gemini-cli`.
 3.  Creating `post-create.sh` and `start-assistant.sh` scripts to handle installation and auto-launch the AI assistant.
 4.  Adding an `AI_ASSISTANT_PROMPT.md` file to instruct the AI.
 5.  Updating `README.md` with a "Launch in Codespaces" button.

@@ -17,36 +17,16 @@ roll out the workflow consistently.
 
 1. [Key features](#key-features)
 2. [Example use cases](#example-use-cases)
-3. [✋ Stop! Do you have these requirements?](#-stop-do-you-have-these-requirements)
+3. [Setup](#setup)
 4. [Architecture overview](#architecture-overview)
-5. [First-time Google Workspace setup](#first-time-google-workspace-setup)
-6. [Manual setup with clasp](#manual-setup-with-clasp)
-7. [Daily usage](#daily-usage)
-8. [Cost transparency](#cost-transparency)
-9. [Security & privacy](#security--privacy)
-10. [Automation & production deployment](#automation--production-deployment)
-11. [Documentation map](#documentation-map)
-12. [Testing](#testing)
-13. [Tearing down the project](#tearing-down-the-project)
-14. [Community](#community)
-
----
-
-## AI-Assisted Setup (Quick Start)
-
-For the easiest and fastest setup experience, you can use our AI-powered assistant.
-
-**Note:** The assistant runs in a pre-configured cloud environment (GitHub Codespaces). We strongly recommend this method to avoid manual installation of tools. For more details, see our [Setup Guide](docs/SETUP_GUIDE.md).
-
-To launch the assistant, you will need a GitHub account. Once you are logged in to GitHub, click the button below to start the setup process in a new Codespace.
-
-[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/davidf9999/gdrive_permissions1?ref=feature/ai-setup-assistant)
-
-The assistant will guide you through every step of the process in an interactive terminal.
-
-**A Note on Approving Commands:** During the setup, the assistant will ask for your permission before it runs commands. For the smoothest experience, we recommend choosing option **2. Yes, allow always** when prompted. This will allow the assistant to complete the setup without asking for approval at every single step.
-
-**Troubleshooting:** The Codespace environment will attempt to install all necessary tools automatically. If an installation fails, a log file (e.g., `gcloud_install.log`) will be created in your project's root directory. The contents of this log will be displayed to help diagnose the issue.
+5. [Daily usage](#daily-usage)
+6. [Cost transparency](#cost-transparency)
+7. [Security & privacy](#security--privacy)
+8. [Automation & production deployment](#automation--production-deployment)
+9. [Documentation map](#documentation-map)
+10. [Testing](#testing)
+11. [Tearing down the project](#tearing-down-the-project)
+12. [Community](#community)
 
 ---
 
@@ -74,15 +54,23 @@ This tool is most effective for managing access for ad-hoc teams and projects th
 
 ---
 
-## ✋ Getting Started with the AI Assistant
+## Setup
 
-The AI Assistant is designed to guide you through the entire setup process from start to finish. Here are the core components the assistant will help you create and configure:
+We offer two ways to set up the Google Drive Permission Manager:
 
--   **A Google Workspace Tenant:** The foundation of the system. The assistant will guide you on how to sign up for a new Workspace trial.
--   **A Google Workspace Super Admin User:** You will create or designate a user with Super Admin privileges. This account is essential for creating the control spreadsheet and authorizing the script.
--   **A Registered Domain Name:** The assistant will instruct you on how to connect your domain to Google Workspace.
+### AI-Assisted Setup (Recommended)
 
-Even if you have none of these items ready, the assistant will start at the very beginning and walk you through each step. Just launch the assistant to get started.
+For the easiest and fastest setup experience, you can use our AI-powered assistant. The assistant runs in a pre-configured cloud environment (GitHub Codespaces) and will guide you through every step of the process.
+
+To launch the assistant, you will need a GitHub account.
+
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/davidf9999/gdrive_permissions1?ref=feature/ai-setup-assistant)
+
+### Manual Setup
+
+If you prefer to set up the project manually, we have a comprehensive, step-by-step guide that covers every required action.
+
+**➡️ See the full [Setup Guide](docs/SETUP_GUIDE.md) to get started.**
 
 ---
 
@@ -143,72 +131,6 @@ That document also includes important **[Performance & Scaling
 Considerations](docs/ARCHITECTURE_OVERVIEW.md#performance--scaling-considerations)**,
 which explains the expected limits of the Apps Script platform and suggests
 alternatives for enterprise-scale deployments.
-
----
-
-## Manual setup with clasp
-
-The canonical deployment flow uses [`clasp`](https://github.com/google/clasp) to
-push the multi-file Apps Script project to your spreadsheet.
-
-### 1. Install tooling
-
-- Install Node.js 18+ and npm.
-- Install clasp globally:
-  ```bash
-  npm install -g @google/clasp
-  ```
-
-### 2. Create the control spreadsheet
-
-1. Create a new Google Spreadsheet named something descriptive (e.g., `Drive
-   Permissions Control`).
-2. Open **Extensions → Apps Script** to create the bound script project.
-3. Copy the **Script ID** from **Project Settings → IDs** — you need it shortly.
-
-### 3. Configure clasp locally
-
-1. Log into clasp:
-   ```bash
-   clasp login
-   ```
-2. At the repository root, create `.clasp.json` pointing at the bound project:
-   ```json
-   {
-     "scriptId": "YOUR_SCRIPT_ID",
-     "rootDir": "apps_script_project"
-   }
-   ```
-3. Pull the remote manifest so the local project matches the Apps Script
-   project:
-   ```bash
-   clasp pull
-   ```
-
-### 4. Push the source files
-
-Deploy all `.gs` and `.js` files to Apps Script:
-
-```bash
-clasp push
-```
-
-Refreshing the spreadsheet should now reveal a **Permissions Manager** menu.
-
-### 5. Enable required APIs and consent screen
-
-1. In the Apps Script editor, open **Services** and add the following advanced
-   services:
-   - `AdminDirectory`
-   - `Drive` (API v3)
-2. From **Project Settings**, follow the link to the attached Google Cloud
-   project and ensure the **Admin SDK API** and **Google Drive API** are both
-   enabled.
-3. Configure the OAuth consent screen if prompted:
-   - User type: **Internal** (recommended for Workspace domains)
-   - Populate the required contact details and add yourself as a test user.
-
-With APIs enabled, you can return to the spreadsheet and run the initial sync.
 
 ---
 

@@ -22,6 +22,45 @@ use.
 4. **Respect coding conventions:** Follow the formatting and naming guidelines
    described in [`AGENTS.md`](AGENTS.md) when editing Apps Script files.
 
+## Development Setup
+
+While end-users deploy the script by building a bundle and copy-pasting, developers contributing to this project should use [`clasp`](https://github.com/google/clasp) for a much more efficient workflow.
+
+### 1. Initial Setup
+
+1.  **Install clasp:**
+    ```bash
+    npm install -g @google/clasp
+    ```
+2.  **Authenticate with Google:** This command opens a browser window for you to log in. You must authenticate with a Google account that has access to the Apps Script project (typically a Super Admin for the target Google Workspace).
+    ```bash
+    clasp login
+    ```
+3.  **Create a Test Spreadsheet:** As a developer, you should have your own Google Sheet to act as a testbed. Create a new sheet and open **Extensions > Apps Script**.
+4.  **Configure `.clasp.json`:** In the root of your local repository, create a `.clasp.json` file. Get the **Script ID** from your test spreadsheet's Apps Script editor (**Project Settings > IDs**) and add it to the file:
+    ```json
+    {
+      "scriptId": "YOUR_TEST_SCRIPT_ID",
+      "rootDir": "apps_script_project"
+    }
+    ```
+    > **Security Note:** This `.clasp.json` file is ignored by `git` to prevent you from accidentally committing your personal script ID.
+
+### 2. Common `clasp` Commands
+
+-   **Push changes:** To deploy your local files to your Apps Script project, run:
+    ```bash
+    clasp push -f
+    ```
+-   **Pull changes:** To pull the latest version from the remote Apps Script project (e.g., if you made a change in the web editor), run:
+    ```bash
+    clasp pull
+    ```
+-   **Check status:** To see which local files differ from the remote project, run:
+    ```bash
+    clasp status
+    ```
+
 ## Proposing Changes
 
 - **Open an issue first** for substantial feature work so we can discuss scope

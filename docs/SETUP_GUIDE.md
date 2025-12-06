@@ -14,7 +14,7 @@ This document is the comprehensive, step-by-step guide for setting up the Google
 3.  [Create the control spreadsheet](#3-create-the-control-spreadsheet)
 4.  [Authenticate Command-Line Tools](#4-authenticate-command-line-tools)
 5.  [Enable APIs and grant consent](#5-enable-apis-and-grant-consent)
-6.  [Deploy the Apps Script project with clasp](#6-deploy-the-apps-script-project-with-clasp)
+6.  [Deploy the Apps Script project](#6-deploy-the-apps-script-project)
 7.  [Run the first sync](#7-run-the-first-sync)
 
 ---
@@ -109,8 +109,7 @@ This step must be performed while signed in as the **Google Workspace Super Admi
 2. Inside the spreadsheet, open **Extensions → Apps Script** to create a bound Apps
    Script project. Leave the editor open—you will connect the local source files
    shortly.
-3. In the Apps Script editor, open **Project Settings → IDs** and copy the
-   **Script ID** value. You will need this for the `clasp` configuration in a later step.
+3. In the Apps Script editor, open **Project Settings → IDs** and take note of the **Script ID** value.
 
 <details>
 <summary>Visual aid: Finding the Apps Script ID</summary>
@@ -127,17 +126,15 @@ This step must be performed while signed in as the **Google Workspace Super Admi
 
 ---
 
-## 4. Authenticate Command-Line Tools
+## 4. Authenticate the Google Cloud CLI (`gcloud`)
 
 > **Note for AI Assistant Users:** The assistant will now handle these command-line steps for you.
 
-In this section, we will authenticate the two command-line tools required for setup: `gcloud` and `clasp`.
-
-### 4.1. Authenticate the Google Cloud CLI (`gcloud`)
+This step gives `gcloud` permission to manage resources in your Google Cloud project, like enabling APIs.
 
 1.  **Verify `gcloud` installation.** In your terminal, run `gcloud --version`. If the command is not found, you must install the [Google Cloud SDK](https://cloud.google.com/sdk/docs/install) first. In the recommended Codespaces environment, it should be pre-installed.
 
-2.  **Authenticate `gcloud`.** This step gives `gcloud` permission to manage resources in your Google Cloud project, like enabling APIs.
+2.  **Authenticate `gcloud`.**
     *   In your terminal, run the following command:
         ```bash
         gcloud auth login
@@ -150,21 +147,8 @@ In this section, we will authenticate the two command-line tools required for se
     gcloud config set project YOUR_PROJECT_ID
     ```
 
-### 4.2. Authenticate the Apps Script CLI (`clasp`)
-
-This step gives `clasp` permission to upload the script files to your spreadsheet's script project.
-
-1.  **Verify `clasp` installation.** In your terminal, run `clasp --version`. If the command is not found, run `npm install -g @google/clasp`.
-2.  **Authenticate `clasp`.**
-    *   In your terminal, run the following command:
-        ```bash
-        clasp login
-        ```
-    *   Follow the link to your browser. When prompted, you **must** sign in using the **same Google Workspace Super Admin** account you used for the `gcloud` login.
-    *   This will create a `~/.clasprc.json` file on your system, which stores the credentials `clasp` will use.
-
 **Common issues at this step:**
-- ❌ `gcloud` or `clasp`: command not found → Ensure the tools are installed and their location is in your system's PATH.
+- ❌ `gcloud: command not found` → Ensure the tool is installed and its location is in your system's PATH.
 - ❌ `Access blocked` during login → Verify that 2-Step Verification is enabled on your Google Workspace Super Admin account.
 
 ---
@@ -194,33 +178,40 @@ The script requires the Apps Script API to be enabled in two places: for your GC
 
 ---
 
-## 6. Deploy the Apps Script project with clasp
+## 6. Deploy the Apps Script project
 
-Now that you have authenticated the tools and configured your project, you will push the code from this repository into the Apps Script project you created.
+Now you will deploy the code from this repository into the Apps Script project you created. This is a manual copy-and-paste process.
 
-1. Create a file named `.clasp.json` in the repository root with the Script ID you copied earlier:
-   ```json
-   {
-     "scriptId": "YOUR_SCRIPT_ID",
-     "rootDir": "apps_script_project"
-   }
-   ```
-2. Push the repository source code to your Apps Script project. The `-f` flag forces an overwrite of the remote project with your local files.
-   ```bash
-   clasp push -f
-   ```
-3. Return to your control spreadsheet and refresh the page. The **Permissions Manager** menu will appear once the push is complete.
+1.  **Install project dependencies.** In your local terminal, at the root of the repository, run `npm install`. This is only needed once.
+    ```bash
+    npm install
+    ```
+2.  **Build the script bundle.** Run the build script to combine all the separate source code files into a single bundle for deployment.
+    ```bash
+    node build.js
+    ```
+    This will create a new file at `dist/bundle.gs`.
+
+3.  **Copy the bundled code.** Open the `dist/bundle.gs` file in a text editor, select all the text, and copy it to your clipboard.
+
+4.  **Paste into the Apps Script Editor.**
+    *   Return to the Apps Script editor you opened in Step 3.
+    *   If there is any existing code in the `Code.gs` file, delete it completely.
+    *   Paste the code from your clipboard into the `Code.gs` editor window.
+    *   Click the **Save project** icon (a floppy disk) at the top of the editor.
+
+5.  Return to your control spreadsheet and refresh the page. The **Permissions Manager** menu will appear once the script is saved.
 
 <details>
 <summary>Visual aid: Permissions Manager menu</summary>
 
-![Screenshot of the Google Sheet interface with the 'Permissions Manager' menu visible after a successful 'clasp push'.](./images/workspace_setup/04-permissions-manager-menu.png)
+![Screenshot of the Google Sheet interface with the 'Permissions Manager' menu visible after a successful deployment.](./images/workspace_setup/04-permissions-manager-menu.png)
 
 </details>
 
 **Common issues at this step:**
-- ❌ `Authentication error` → Ensure you have successfully run `clasp login` as described in Section 4.
-- ❌ `Script ID not found` → Double-check that the `scriptId` in `.clasp.json` is correct.
+- ❌ `ReferenceError: "some_function" is not defined.` → This usually means the copy-paste was incomplete or the `node build.js` script failed. Ensure the entire contents of `dist/bundle.gs` are in the editor.
+- ❌ `Permissions Manager` menu does not appear → Refresh the spreadsheet. Make sure you saved the project in the Apps Script editor. Double check for any error messages at the top of the editor.
 
 ---
 
