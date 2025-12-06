@@ -298,7 +298,12 @@ function updateAutoSyncStatusIndicator_() {
     }
     updateConfigSetting_('AutoSync Trigger Status', statusToDisplay);
   } catch (e) {
-    log_('Could not update AutoSync status indicator: ' + e.message, 'WARN');
+    if (e.message.includes('sufficient')) { // Catches 'not sufficient permissions'
+      updateConfigSetting_('AutoSync Trigger Status', 'AUTH_REQUIRED');
+      log_('Could not update AutoSync status indicator due to missing permissions. A super admin can fix this by running an item from the "AutoSync" menu to re-authorize.', 'WARN');
+    } else {
+      log_('Could not update AutoSync status indicator: ' + e.message, 'WARN');
+    }
   }
 }
 
