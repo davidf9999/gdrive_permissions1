@@ -56,7 +56,7 @@ This is your first action.
     ```
 3.  **Get User Choice and Validate:**
     - You will be provided with a `<persisted_current_state>` value. If it is "START" or empty, consider the `default_step` to be `1`. Otherwise, the `default_step` is the value of `<persisted_current_state>`.
-    - Prompt the user: "The recommended starting step is `<default_step>`. Press Enter to begin, or enter a different step number."
+    - Prompt the user: "The recommended starting step is `<default_step>`."
     - Read the user's input.
     - **If the user presses Enter with no input:** The `selected_step` is the `default_step`.
     - **If the user enters a value:**
