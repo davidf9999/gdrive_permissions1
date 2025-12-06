@@ -79,8 +79,10 @@ Once the `currentState` is determined, execute the following logic in a loop unt
     1.  **Verify `gcloud` installation:** Run `gcloud --version`.
     2.  **Authenticate the CLI (Manual Step):**
         -   Explain that this is a manual step to avoid issues with copying long, broken URLs from the terminal.
-        -   Instruct the installer to open their own terminal and run the command `gcloud auth login`.
-        -   Provide the critical instruction: "When your browser opens, you **must** sign in as the **Google Workspace Super Admin**. We call this the **CLI Authenticator** role. This account must have 2-Step Verification (2SV) enabled."
+        -   Instruct the installer to perform the following steps:
+            1. Using the `+` at the top of this terminal, create a new terminal for the following command(s) (you will not be able to run it from an existing terminal).
+            2. Run the following command: `gcloud auth login`.
+            3. Your web browser will open. When it does, you must sign in as the Google Workspace Super Admin (<SUPER_ADMIN_EMAIL>). We call this the **CLI Authenticator** role. It is strongly recommended that this account has 2-Step Verification (2SV) enabled for security.
         -   Ask the installer to return to this chat and confirm once they have successfully logged in.
     3.  **Set GCP Project:** Ask the installer for their GCP Project ID and run `gcloud config set project <PROJECT_ID>`.
 -   **VERIFICATION:**
