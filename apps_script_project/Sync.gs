@@ -342,6 +342,22 @@ function syncAdds(options = {}) {
     showSyncInProgress_();
     log_('*** Starting user addition synchronization...');
 
+    const orphanSheets = checkForOrphanSheets_();
+    if (orphanSheets && orphanSheets.length > 0) {
+      const errorMessage = 'SYNC ABORTED: Found orphan sheets that are not in the configuration: ' +
+                           orphanSheets.join(', ') +
+                           '.\n\n' +
+                           'To resolve this:\n' +
+                           '1. Go to: Permissions Manager → Advanced → Delete Orphan Sheets\n' +
+                           '2. Or add these sheets to ManagedFolders/UserGroups configuration\n\n' +
+                           'Note: You may also need to manually delete related Google Groups from the Google Workspace Admin console.';
+      log_(errorMessage, 'ERROR');
+      if (!silentMode) {
+        SpreadsheetApp.getUi().alert(errorMessage);
+      }
+      throw new Error('Orphan sheets found. Sync aborted.');
+    }
+
     // 1. Sync Sheet Editors (SAFE mode: additions only, silent for AutoSync)
     const adminSummary = syncSheetEditors({ addOnly: true, silentMode: true });
     if (adminSummary) {
