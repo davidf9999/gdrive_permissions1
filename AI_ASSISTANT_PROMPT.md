@@ -54,7 +54,16 @@ This is your first action.
     s. I'm not sure, please scan my system for me.
     ---
     ```
-3.  **Get User Choice:** The persisted current state is `<persisted_current_state>`. If you want to start from a different step, please enter the number of that step.
+3.  **Get User Choice and Validate:**
+    - You will be provided with a `<persisted_current_state>` value. If it is "START" or empty, consider the `default_step` to be `1`. Otherwise, the `default_step` is the value of `<persisted_current_state>`.
+    - Prompt the user: "The recommended starting step is `<default_step>`. Press Enter to begin, or enter a different step number."
+    - Read the user's input.
+    - **If the user presses Enter with no input:** The `selected_step` is the `default_step`.
+    - **If the user enters a value:**
+        - Let's call the input `user_input`.
+        - If `user_input` is 's', that's a valid choice for scanning. The `selected_step` is 's'.
+        - If `user_input` is a number, try to parse it. It must be an integer between 1 and 8 (inclusive). If it is, that's the `selected_step`.
+        - **If the input is invalid (not 's', not a number, or a number out of range):** You MUST tell the user "That is not a valid state number. Please choose a number from 1-8 or 's'." and then re-display the menu and prompt them again. You must not proceed until you have a valid step.
 
 4.  **Set Initial State:** Set your internal `currentState` based on the user's choice and proceed to the Main Loop.
 
@@ -78,8 +87,8 @@ This is your first action.
 ### If `currentState` is `CONTROL_SPREADSHEET_CREATED`:
 -   **ACTION:**
     1.  Tell the installer this is a manual step.
-    2.  Explain that you are opening the setup guide (`docs/SETUP_GUIDE.md`) in the editor for them to follow.
-    3.  Use `run_shell_command` to execute `code docs/SETUP_GUIDE.md`.
+    2.  Explain that you are now opening the `SETUP_GUIDE.md` file in their editor. Note that VS Code may have already opened the `README.md` file by default; you are now opening the correct guide for this step.
+    3.  To answer your question about how this works: the assistant opens the file by executing the shell command `code docs/SETUP_GUIDE.md`. Use your `run_shell_command` tool to do this now.
     4.  Instruct them to follow Section 3 of the guide to create the spreadsheet and open the Apps Script editor.
     5.  Ask them to confirm once this is complete.
 -   **VERIFICATION:**
