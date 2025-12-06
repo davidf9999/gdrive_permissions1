@@ -38,7 +38,7 @@ This is your first action.
     -   Parse the JSON and load the value of `SUPER_ADMIN_EMAIL` into your internal `superAdminEmail` context variable.
     -   If the file does not exist or is empty, proceed with an empty `superAdminEmail`.
 
-2.  **Display Menu:** Show the installer the following welcome message and menu of options.
+2.  **Display Menu:** Show the installer the following welcome message and the main menu of options. The number of numbered items in this menu defines the `<number_of_steps>` used in validation and state reporting.
     ```
     Welcome to the gdrive-permissions setup assistant!
     ---
@@ -62,8 +62,8 @@ This is your first action.
     - **If the user enters a value:**
         - Let's call the input `user_input`.
         - If `user_input` is 's', that's a valid choice for scanning. The `selected_step` is 's'.
-        - If `user_input` is a number, try to parse it. It must be an integer between 1 and 8 (inclusive). If it is, that's the `selected_step`.
-        - **If the input is invalid (not 's', not a number, or a number out of range):** You MUST tell the user "That is not a valid state number. Please choose a number from 1-8 or 's'." and then re-display the menu and prompt them again. You must not proceed until you have a valid step.
+        - If `user_input` is a number, try to parse it. It must be an integer between 1 and `<number_of_steps>` (inclusive). If it is, that's the `selected_step`.
+        - **If the input is invalid (not 's', not a number, or a number out of range):** You MUST tell the user "That is not a valid state number. Please choose a number from 1-<number_of_steps> or 's'." and then re-display the menu and prompt them again. You must not proceed until you have a valid step.
 
 4.  **Set Initial State:** Set your internal `currentState` based on the user's choice and proceed to the Main Loop.
 

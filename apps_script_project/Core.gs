@@ -1438,7 +1438,7 @@ function setSheetUiStyles_() {
         });
 
         // Clear old background colors from columns that might have been protected before
-        const clearBgRange = managedSheet.getRange(2, 1, managedSheet.getLastRow() - 1, 8);
+        const clearBgRange = managedSheet.getRange(2, 1, managedSheet.getLastRow() - 1, URL_COL);
         clearBgRange.setBackground(null);
 
         // Now apply new protection and styling to columns 5-8 only
