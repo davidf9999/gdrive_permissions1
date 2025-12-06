@@ -96,7 +96,7 @@ To improve maintainability and scalability, the monolithic `Code.js` file was re
     *   `Tests.gs`: All test-related functions.
 
 *   **Deployment:** Due to the multi-file structure, a build step is required before deployment.
-    *   **Manual Deployment (Primary Method):** The recommended workflow for users is to run a build script (`node bundle.js`) that concatenates all the project files into a single `dist/bundle.gs` file. The user then manually copies the content of this bundle into the Apps Script editor. This method is simple and does not require any tool installation beyond Node.js.
+    *   **Manual Deployment (Primary Method):** The recommended workflow for users is to run a build script (`node create_apps_scripts_bundle.js`) that concatenates all the project files into a single `dist/apps_scripts_bundle.gs` file. The user then manually copies the content of this bundle into the Apps Script editor. This method is simple and does not require any tool installation beyond Node.js.
     *   **Developer Deployment (`clasp`):** Developers working on the script can still use the `clasp` command-line tool to push the multi-file project directly. This is considered an advanced/developer workflow.
 
 ## Logging and Auditing

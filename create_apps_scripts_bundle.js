@@ -3,7 +3,7 @@ const path = require('path');
 
 const sourceDir = 'apps_script_project';
 const outputDir = 'dist';
-const outputFile = path.join(outputDir, 'bundle.gs');
+const outputFile = path.join(outputDir, 'apps_scripts_bundle.gs');
 
 // Core files that must be loaded in a specific order.
 const coreFiles = [

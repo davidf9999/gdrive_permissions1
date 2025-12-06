@@ -165,7 +165,7 @@ The process is simple:
 1.  **Generate the new bundle:** Run the bundling script from your terminal to combine all the project files into a single file for deployment.
 
     ```bash
-    node bundle.js
+    node create_apps_scripts_bundle.js
     ```
 
 2.  **Copy the bundle:** This command will create or update a file at `dist/bundle.gs`. Open this file and copy its entire contents.
