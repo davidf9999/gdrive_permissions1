@@ -94,18 +94,11 @@ This sheet allows you to configure advanced settings for the script. It also dis
 
 **Key Configuration Settings:**
 
-
-
 | Setting | Description | Default |
-
 | :--- | :--- | :--- |
-
 | `EnableAutoSync` | Set to `TRUE` to allow the time-based trigger to run. Set to `FALSE` to pause all automatic syncing without deleting the trigger. | `TRUE` |
-
-| `NotificationEmail` | The email address where important notifications (like errors or pending deletions) will be sent. | The script owner's email |
-
-| `MaxFileSizeMB` | A safeguard to prevent the spreadsheet from becoming too large. If the file size exceeds this limit, AutoSync is aborted and an admin is notified. | `100` |
-
+| `NotificationEmail` | The email address where important notifications (like errors or pending deletions) will be sent. | Script owner's email |
+| `MaxFileSizeMB` | Safeguard preventing the spreadsheet from becoming too large; AutoSync aborts and notifies an admin when exceeded. | `100` |
 | `EnableGCPLogging` | Set to `TRUE` to send detailed logs to Google Cloud Logging (requires a linked GCP project). | `FALSE` |
 
 
@@ -135,27 +128,17 @@ The `LogLevel` setting controls how much detail is written to the Log sheet. Thi
 
 #### API Retry Settings
 
-
-
 The script is designed with built-in retry mechanisms to handle temporary API errors, such as Google's rate limits. The behavior of these retries can be configured in this sheet:
 
-
-
-| Setting           | Description                                                                                                                                              | Default |
-
-| :---------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------- | :------ |
-
-| `RetryMaxRetries` | The maximum number of times the script will attempt to re-execute a failed API call (e.g., due to rate limiting).                                        | `5`     |
-
-| `RetryInitialDelayMs` | The initial time in milliseconds to wait before the first retry. This delay doubles with each subsequent retry (exponential backoff).                     | `1000`  |
-
-
+| Setting | Description | Default |
+| :-------------------- | :-------------------------------------------------------------------------------------------------------------------------------- | :------- |
+| `RetryMaxRetries` | Maximum number of times the script will attempt to re-execute a failed API call (e.g., due to rate limiting). | `5` |
+| `RetryInitialDelayMs` | Initial delay in milliseconds before the first retry. This delay doubles with each subsequent retry (exponential backoff). | `1000` |
 
 Adjusting these settings can help the script successfully complete operations under varying API loads. For a deeper understanding of how these settings impact performance, especially during high-volume operations, refer to the [Testing Guide (docs/TESTING.md)](TESTING.md) section on Stress Testing.
 
-
-
 ### 6. `Log` & `TestLog`
+
 
 
 
@@ -562,3 +545,10 @@ This is a common and complex issue that can have several causes:
 2.  **Browser/Gmail Notification Settings:** Notification delivery depends heavily on the user's own client-side settings. For notifications to appear, the user must have granted Gmail permission to show notifications in their browser. They can typically check this by looking for a prompt from their browser when in Gmail or by checking their browser's site settings for `mail.google.com`.
 
 3.  **Google Workspace / Account Settings:** Notification behavior can sometimes vary based on your organization's Google Workspace settings or a user's individual Google account settings.
+
+### How do I share a new document with everyone who already has access to a managed folder?
+
+Each managed folder is shared through a Google Group (the `GroupEmail` shown on the `ManagedFolders` tab), even if Drive shows the folder was shared by a Super Admin. To make a document available to the same audience:
+
+- **Recommended (copy/move):** Create the file in the managed folder or move a copy there. The folder’s group permission applies automatically, and the copy remains available to everyone even if you later delete your local/original version elsewhere.
+- **Only when you know the group email:** If the file must stay elsewhere and you are a Sheet Editor (or can ask one for the `GroupEmail`), share the file with that group address. Sharing with the Super Admin account will only grant that person access and will not reach the rest of the group.

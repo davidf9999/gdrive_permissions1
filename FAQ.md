@@ -15,6 +15,9 @@ Yes. Start by populating the control tabs with the current groups or users and r
 ## How do I migrate from manual sharing?
 Create tabs for each managed folder, list the intended members, and run **Full Sync (Add & Delete)**. This provisions the groups and cleans up any lingering manual access via **Sync Deletes**.
 
+## How do I share a new document with everyone who can already access a managed folder?
+See the detailed guidance in the [User Guide](docs/USER_GUIDE.md#how-do-i-share-a-new-document-with-everyone-who-already-has-access-to-a-managed-folder) for the recommended approach (copy/move into the managed folder) and when to use the group email instead.
+
 ## What API quotas should I expect? Will I hit them?
 The Admin SDK and Drive API quotas are sufficient for most small to medium deployments. Very large organisations should enable billing and monitor Admin SDK quotas in the Google Cloud Console.
 
@@ -23,3 +26,6 @@ Removing a row and running **Sync Deletes** revokes the corresponding Google Gro
 
 ## Do I need to be a Super Admin?
 Yes. Managing Google Groups through the Admin SDK requires Super Admin privileges; delegated roles cannot grant the scopes needed for the script to function.
+
+## Can SharePoint replace Google Drive for this project?
+No. SharePoint is only a helpful point of comparison. It requires Microsoft identities, limits guest access, charges per user, and does not offer a spreadsheet-driven permission model that works for large numbers of external Gmail users. It is mentioned because many enterprise teams know SharePoint well, so referencing it gives Microsoft-oriented readers a fast mental model for the structured permissions, inheritance, and governance this tool brings to Google Drive.
