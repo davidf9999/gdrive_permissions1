@@ -475,8 +475,12 @@ function setupHelpSheet_() {
     const cell = helpSheet.getRange(i, 2);
     const url = cell.getValue();
     if (url && url.startsWith('http')) {
-      cell.setFontColor('#1155cc');
-      cell.setFontUnderline(true);
+      const richText = SpreadsheetApp.newRichTextValue()
+        .setText(url)
+        .setLinkUrl(url)
+        .setTextStyle(SpreadsheetApp.newTextStyle().setForegroundColor('#1155cc').setUnderline(true).build())
+        .build();
+      cell.setRichTextValue(richText);
     }
   }
 
