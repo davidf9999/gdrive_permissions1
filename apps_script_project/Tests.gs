@@ -891,7 +891,7 @@ function runAutoSyncErrorEmailTest() {
 
         // Simulate an error by creating an orphan sheet
         const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-        orphanSheet = spreadsheet.insertSheet(orphanSheetName);
+        orphanSheet = spreadsheet.insertSheet(orphanSheetName, spreadsheet.getSheets().length);
         log_('Created orphan sheet "' + orphanSheetName + '" to trigger a fatal error.', 'INFO');
 
         // Run AutoSync, which should now run and fail because of the orphan sheet
@@ -1021,7 +1021,8 @@ function runSheetLockingTest_() {
 
     try {
         // 1. Create a temporary sheet
-        sheet = SpreadsheetApp.getActiveSpreadsheet().insertSheet(testSheetName);
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        sheet = ss.insertSheet(testSheetName, ss.getSheets().length);
         log_('Created temporary sheet: ' + testSheetName, 'INFO');
 
         // 2. Lock the sheet
@@ -1401,8 +1402,8 @@ function runCircularDependencyTest_() {
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const userGroupsSheet = ss.getSheetByName(USER_GROUPS_SHEET_NAME);
-    const sheetA = ss.insertSheet('TestCycleA_G');
-    const sheetB = ss.insertSheet('TestCycleB_G');
+    const sheetA = ss.insertSheet('TestCycleA_G', ss.getSheets().length);
+    const sheetB = ss.insertSheet('TestCycleB_G', ss.getSheets().length);
     let success = false;
 
     try {
@@ -1517,7 +1518,7 @@ function runUserGroupDeletionTest() {
         log_('✓ Added test group to UserGroups: ' + testGroupName, 'INFO');
 
         // Create group sheet with test member
-        const testSheet = ss.insertSheet(testGroupName + '_G');
+        const testSheet = ss.insertSheet(testGroupName + '_G', ss.getSheets().length);
         testSheet.getRange('A1:A2').setValues([['Email'], ['test.member@example.com']]);
         log_('✓ Created group sheet: ' + testGroupName + '_G', 'INFO');
 
@@ -1685,7 +1686,7 @@ function runFolderRoleDeletionTest() {
         testUserSheetName = 'TestDeleteFolderUsers';
 
         // Create user sheet
-        const testUserSheet = ss.insertSheet(testUserSheetName);
+        const testUserSheet = ss.insertSheet(testUserSheetName, ss.getSheets().length);
         testUserSheet.getRange('A1:A2').setValues([['Email'], ['test.user@example.com']]);
         log_('✓ Created user sheet: ' + testUserSheetName, 'INFO');
 
