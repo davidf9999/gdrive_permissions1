@@ -944,6 +944,13 @@ function getOrCreateGroup_(groupEmail, groupName) {
       log_('Successfully created group: ' + groupEmail);
       wasNewlyCreated = true;
     } catch (createError) {
+      if (createError.message.includes('API has not been used')) {
+        const projectId = getProjectIdFromError_(createError.message) || '[Project ID not found]';
+        const enableUrl = `https://console.developers.google.com/apis/api/admin.googleapis.com/overview?project=${projectId}`;
+        const friendlyError = `The Admin SDK API is not enabled for GCP project "${projectId}". Please enable it here: ${enableUrl} - then wait a few minutes and retry.`;
+        log_(`Failed to create group ${groupEmail}. Error: ${friendlyError}`, 'ERROR');
+        throw new Error(friendlyError);
+      }
       log_('Failed to create group ' + groupEmail + '. Error: ' + createError.toString(), 'ERROR');
       throw new Error('Could not create group: ' + createError.message);
     }
@@ -951,6 +958,12 @@ function getOrCreateGroup_(groupEmail, groupName) {
 
   return { group: group, wasNewlyCreated: wasNewlyCreated };
 }
+
+function getProjectIdFromError_(errorMessage) {
+    const match = errorMessage.match(/project (\d+)/);
+    return match ? match[1] : null;
+}
+
 
 function getOrCreateUserSheet_(sheetName) {
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
