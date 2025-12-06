@@ -48,8 +48,7 @@ This is your first action.
     7. Run the first sync
     s. I'm not sure, please scan my system for me.
     ---
-    ```
-2.  **Get User Choice:** Ask the installer to enter the number of the step they wish to start at.
+    2.  **Get User Choice:** The persisted current state is `<persisted_current_state>`. If you want to start from a different step, please enter the number of that step.
 3.  **Set Initial State:**
     -   If the installer chooses a number, set your internal `currentState` to the corresponding state.
     -   If the installer chooses `s`, set your internal `currentState` to `START` and proceed to the Main Loop, but execute the `VERIFICATION` steps sequentially first to find the first one that fails.
