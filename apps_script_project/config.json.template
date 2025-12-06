@@ -1,1 +1,5 @@
-{"gcpProjectId": "YOUR-GCP-PROJECT-ID", "sheetId": "YOUR-GOOGLE-SHEET-ID"}
+{
+  "_comment": "This is a template. Create a new file named config.json in the Apps Script editor and paste this content. Replace YOUR-GCP-PROJECT-ID with your GCP Project ID and YOUR-GOOGLE-SHEET-ID with your control spreadsheet ID. Do not commit the actual config.json to version control.",
+  "gcpProjectId": "YOUR-GCP-PROJECT-ID",
+  "sheetId": "YOUR-GOOGLE-SHEET-ID"
+}

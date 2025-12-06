@@ -168,13 +168,13 @@ The process is simple:
     node create_apps_scripts_bundle.js
     ```
 
-2.  **Copy the bundle:** This command will create or update a file at `dist/bundle.gs`. Open this file and copy its entire contents.
+2.  **Copy the bundle:** This command will create or update a file at `dist/apps_scripts_bundle.gs`. Open this file and copy its entire contents.
 
 3.  **Update Apps Script:**
     -   Open your control spreadsheet.
     -   Go to **Extensions → Apps Script**.
     -   In the Apps Script editor, you should see a file named `Code.gs` (or similar).
-    -   Delete all the existing code in that file and paste the new code you copied from `dist/bundle.gs`.
+    -   Delete all the existing code in that file and paste the new code you copied from `dist/apps_scripts_bundle.gs`.
     -   Click the **Save project** icon.
 
 Your spreadsheet is now running the latest version of the script.

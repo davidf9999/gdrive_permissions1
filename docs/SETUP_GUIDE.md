@@ -188,11 +188,11 @@ Now you will deploy the code from this repository into the Apps Script project y
     ```
 2.  **Build the script bundle.** Run the build script to combine all the separate source code files into a single bundle for deployment.
     ```bash
-    node bundle.js
+    node create_apps_scripts_bundle.js
     ```
-    This will create a new file at `dist/bundle.gs`.
+    This will create a new file at `dist/apps_scripts_bundle.gs`.
 
-3.  **Copy the bundled code.** Open the `dist/bundle.gs` file in a text editor, select all the text, and copy it to your clipboard.
+3.  **Copy the bundled code.** Open the `dist/apps_scripts_bundle.gs` file in a text editor, select all the text, and copy it to your clipboard.
 
 4.  **Paste into the Apps Script Editor.**
     *   Return to the Apps Script editor you opened in Step 3.
@@ -200,7 +200,21 @@ Now you will deploy the code from this repository into the Apps Script project y
     *   Paste the code from your clipboard into the `Code.gs` editor window.
     *   Click the **Save project** icon (a floppy disk) at the top of the editor.
 
-5.  Return to your control spreadsheet and refresh the page. The **Permissions Manager** menu will appear once the script is saved.
+5.  **Configure Project Settings.**
+    *   In the Apps Script editor, open **Project Settings** (gear icon in the left sidebar).
+    *   Scroll to **General settings** and set the timezone to your preferred timezone (e.g., `America/New_York`, `Europe/London`, `Etc/UTC`). The default timezone in the repository is UTC, but you should change it to match your organization's timezone.
+    *   Scroll to **Google Cloud Platform (GCP) Project** and enter your GCP Project ID (you can find this in the Google Cloud Console).
+
+6.  **Create the config.json file.**
+    *   In the Apps Script editor, click the **+** button next to **Files** in the left sidebar.
+    *   Select **Script** and name it `config.json`.
+    *   Open the `apps_script_project/config.json.template` file from this repository in a text editor.
+    *   Copy its contents and paste into the `config.json` file you just created.
+    *   Replace `YOUR-GCP-PROJECT-ID` with your actual GCP Project ID.
+    *   Replace `YOUR-GOOGLE-SHEET-ID` with the ID of your control spreadsheet (you can find this in the spreadsheet URL: `https://docs.google.com/spreadsheets/d/YOUR-GOOGLE-SHEET-ID/edit`).
+    *   Save the file.
+
+7.  Return to your control spreadsheet and refresh the page. The **Permissions Manager** menu will appear once the script is saved.
 
 <details>
 <summary>Visual aid: Permissions Manager menu</summary>
@@ -210,8 +224,10 @@ Now you will deploy the code from this repository into the Apps Script project y
 </details>
 
 **Common issues at this step:**
-- ❌ `ReferenceError: "some_function" is not defined.` → This usually means the copy-paste was incomplete or the `node bundle.js` script failed. Ensure the entire contents of `dist/bundle.gs` are in the editor.
+- ❌ `ReferenceError: "some_function" is not defined.` → This usually means the copy-paste was incomplete or the `node create_apps_scripts_bundle.js` script failed. Ensure the entire contents of `dist/apps_scripts_bundle.gs` are in the editor.
 - ❌ `Permissions Manager` menu does not appear → Refresh the spreadsheet. Make sure you saved the project in the Apps Script editor. Double check for any error messages at the top of the editor.
+- ❌ Timezone issues or dates appear incorrect → Verify you set the correct timezone in Project Settings (step 5).
+- ❌ `config.json` not found errors → Ensure you created the `config.json` file in the Apps Script editor with your GCP Project ID and Sheet ID (step 6).
 
 ---
 

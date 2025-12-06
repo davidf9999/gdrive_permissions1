@@ -1,5 +1,6 @@
 {
-  "timeZone": "Asia/Jerusalem",
+  "_comment": "This file should be manually configured in the Apps Script editor via Project Settings. Set timezone to your organization's timezone (e.g., America/New_York, Europe/London, Asia/Tokyo, etc.). The GCP project ID should also be set there.",
+  "timeZone": "Etc/UTC",
   "dependencies": {
     "enabledAdvancedServices": [
       {
