@@ -16,7 +16,7 @@ Some teams prefer to expose a formal REST or GraphQL endpoint instead of writing
 - **Handle concurrency and locking**: Batch incoming updates and serialize writes per folder/role to avoid race conditions in the spreadsheet. Use optimistic locking (e.g., ETags from the Sheets API) or a message queue to buffer bursts.
 - **Authenticate and audit**: Use service-to-service auth (OAuth client credentials, signed JWTs, or mTLS) so the API can attribute every change to a system actor. Log correlation IDs into the `Log` tab so spreadsheet viewers can trace changes back to API callers.
 - **Surface feedback**: Provide a “sync status” endpoint that reads from the `Status` tab so API consumers know whether their changes have been reconciled. Pair this with lightweight webhooks or pub/sub notifications for downstream systems.
-- **Plan for a fuller backend**: If your roadmap includes more complex workflows (approvals, conflict resolution, or per-folder policies), use the dedicated API as the boundary between the spreadsheet UI and a future datastore. That lets you migrate heavy logic off Apps Script incrementally without breaking current operators.
+- **Plan for a fuller backend**: If your roadmap includes more complex workflows (approvals, conflict resolution, or per-folder policies), use the dedicated API as the boundary between the spreadsheet UI and a future datastore. That lets you migrate heavy logic off Apps Script incrementally without breaking current operators. For an architectural blueprint—including rollout phases, queueing, staging tabs, and auth/observability considerations—see [`docs/INTEGRATIONS_DESIGN.md`](./INTEGRATIONS_DESIGN.md).
 
 ### Example approaches
 

@@ -183,7 +183,7 @@ Your spreadsheet is now running the latest version of the script.
 
 ## Integrations and programmatic extensions
 
-Looking to connect the control spreadsheet with the rest of your stack? See [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) for detailed guidance on writing data into the sheet, reading results for monitoring, triggering syncs, and planning a dedicated API layer.
+Looking to connect the control spreadsheet with the rest of your stack? See [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) for detailed guidance on writing data into the sheet, reading results for monitoring, triggering syncs, and planning a dedicated API layer. For architectural direction (including when to add a backend/API and how to roll it out), read the companion [design note](docs/INTEGRATIONS_DESIGN.md).
 
 ## Cost transparency
 
