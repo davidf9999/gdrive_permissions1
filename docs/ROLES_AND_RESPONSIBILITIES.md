@@ -1,19 +1,21 @@
 # Roles and Responsibilities
 
-You've raised an excellent point about the distinction between the person performing the setup and the various digital accounts they use. Let's clarify the roles with that in mind.
+Use the correct Google account for each task, even if one person wears multiple hats. In many smaller teams, a single person (using a Workspace Super Admin account) may cover the setup-focused roles below.
 
 ### Personas vs. Accounts
 
--   **The Installer (Human Being):** This is you, the person at the keyboard. You have a GitHub account to run the Codespace, and you likely have one or more Google accounts.
--   **The Accounts (Digital Identities):** These are the specific Google accounts that are used to perform actions.
-
-For this system to work, it's critical to use the correct **Account** for the correct task.
+- **The Installer (Human Being):** You, the person at the keyboard. You may switch between multiple Google accounts.
+- **The Accounts (Digital Identities):** The specific Google accounts used for setup, ongoing administration, or day-to-day edits.
 
 ### Account Roles
 
-| Role | Account Type | Relevance | Responsibilities |
+| Role | Account Type | Setup Responsibilities | Ongoing Usage |
 | :--- | :--- | :--- | :--- |
-| **CLI Authenticator** | Google Workspace account with **Super Admin** privileges. | **Setup-critical** | This is the account used to log in when the AI assistant prompts you to authenticate `gcloud`. While you (the Installer) may have many Google accounts, you **must** use the Super Admin account here. This is because the tool used by the assistant (`gcloud`) requires Super Admin permissions to manage the GCP project. |
-| **Sheet Creator & Owner**| Google Workspace account with **Super Admin** privileges. | **Setup & Maintenance** | This is the account that creates the control spreadsheet and therefore owns the Apps Script project. The script will run with this account's authority. For simplicity, this should be the **same account** as the `CLI Authenticator`.|
-| **Sheet Editor** | Any Google Account. | **Day-to-Day Operation**| A trusted user who manages folder permissions by editing the control spreadsheet (e.g., adding/removing users). This role does not need Super Admin rights and is managed via the `SheetEditors` tab. |
-| **Managed User** | Any Google Account. | **End User** | A regular user who is granted access to folders by the system. Their access is defined by their presence in the permission sheets. |
+| **Workspace Super Admin** (Google Workspace Super Administrator) | Google Workspace system role. | Creates/enables the Workspace tenant settings, turns on Admin SDK + Drive APIs in Google Cloud, authorizes the Apps Script project, and grants any required API access. Often the same person handles the two sub-roles below. | Rarely involved after setup. Reviews audit logs, monitors email alerts, and handles escalations needing domain-wide privileges. |
+| **CLI Authenticator** | Workspace Super Admin account used for CLI auth. | Authenticates `gcloud` when prompted so the tooling can manage the GCP project with the necessary domain-wide privileges. | Primarily used during setup or re-authentication events. |
+| **Sheet Creator & Owner** | Workspace Super Admin account (ideally the same as the CLI Authenticator). | Creates the control spreadsheet and owns the Apps Script project. The script runs with this account's authority. | May step in to transfer ownership or approve new scopes, but typically hands off to the Super Admin role below. |
+| **Super Admin** (listed in `Config` > `SuperAdminEmails`) | Script-level permission granted to specific accounts. | Configures `Config` settings, manages triggers, runs built-in tests, and troubleshoots errors. | Runs manual syncs, monitors `SyncHistory`/`Logs`, updates configuration, marks items for deletion, and can edit sheets. |
+| **Sheet Editor** | Any Google account with edit access to the control spreadsheet. | Edits `ManagedFolders`, `UserGroups`, and membership sheets; marks items for deletion via the Delete checkbox. Cannot run scripts or access menu functions. | Maintains user lists, adds/removes folders, checks Status columns; changes are applied when a Super Admin runs the next sync. |
+| **Managed User** | Any Google account represented in folder/group tabs. | None. They simply appear in the relevant group or folder-role tab. | Receives Drive access after the next sync and may view the sheet read-only to confirm expected folders. |
+
+> Tip: In practice, many deployments keep the Workspace Super Admin, CLI Authenticator, and Sheet Creator & Owner as the same account to simplify setup while still delegating ongoing operations to Super Admins and Sheet Editors.
