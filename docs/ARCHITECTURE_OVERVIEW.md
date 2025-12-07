@@ -25,22 +25,23 @@ tabs:
   something goes wrong).
 
 ```mermaid
+%% Wider nodes with manual line breaks to keep labels visible in GitHub's Mermaid renderer
 flowchart TD
   subgraph ControlSheet[Control Spreadsheet]
     direction TB
-    ManagedFolders["ManagedFolders<br>(Folder IDs + enforced roles)"]
+    ManagedFolders["ManagedFolders<br>(Folder IDs +<br>enforced roles)"]
     ManagedGroups["ManagedGroups<br>(Reusable membership lists)"]
     subgraph GroupTabs[Group Membership Tabs]
       direction LR
-      GroupSheet1[Group tab: Marketing Editors]
-      GroupSheet2[Group tab: Marketing Viewers]
-      GroupSheet3[Group tab: Agency Partners]
+      GroupSheet1["Group tab:<br>Marketing Editors"]
+      GroupSheet2["Group tab:<br>Marketing Viewers"]
+      GroupSheet3["Group tab:<br>Agency Partners"]
     end
     subgraph FolderRoleTabs[Folder / Role Tabs]
       direction TB
-      FolderSheet1[Marketing Drive → Editor tab]
-      FolderSheet2[Marketing Drive → Viewer tab]
-      FolderSheet3[Finance Reports → Viewer tab]
+      FolderSheet1["Marketing Drive →<br>Editor tab"]
+      FolderSheet2["Marketing Drive →<br>Viewer tab"]
+      FolderSheet3["Finance Reports →<br>Viewer tab"]
     end
     Logs["Logs / Status<br>(collapse unless needed)"]
     Config["Config<br>(optional tuning)"]
@@ -57,7 +58,8 @@ flowchart TD
   GroupSheet3 -- partners --> FolderSheet2
   GroupSheet2 -. reused .-> FolderSheet3
 
-  classDef default fill:#f4fbff,stroke:#1463a5,stroke-width:1.5px,color:#0d273d;
+  %% Slightly narrower nodes keep arrows snug without clipping GitHub's renderer
+  classDef default fill:#f4fbff,stroke:#1463a5,stroke-width:1.5px,color:#0d273d,width:210px,text-align:left;
   classDef group fill:#fff6e8,stroke:#d97706,color:#4a1d05;
   classDef folder fill:#effaf3,stroke:#047857,color:#092314;
   classDef log fill:#e5e7eb,stroke:#9ca3af,color:#374151;
@@ -82,16 +84,17 @@ sharing limit while still mirroring business org charts. The diagram below shows
 how those relationships resolve from definition → group → individual users.
 
 ```mermaid
+%% Wider nodes with manual line breaks to prevent label truncation in GitHub's Mermaid renderer
 flowchart LR
   subgraph Definition[Folder / Role Definition]
-    FR["Managed folder + enforced role"]
+    FR["Managed folder +<br>enforced role"]
   end
   subgraph SharingTargets[Sharing Targets]
-    Groups["Managed Google Groups"]
-    Individuals["Optional direct user invites"]
+    Groups["Managed Google<br>Groups"]
+    Individuals["Optional direct<br>user invites"]
   end
   subgraph Membership[List-based Membership]
-    GroupSheet["Group tab in control sheet"]
+    GroupSheet["Group tab in<br>control sheet"]
     Users["List of user emails"]
   end
 
@@ -99,7 +102,8 @@ flowchart LR
   FR -- "Shared with" --> Individuals
   Groups -- "Group contains" --> GroupSheet
   GroupSheet -- "Defines" --> Users
-  classDef default fill:#f2f7ff,stroke:#335bff,stroke-width:1.5px,color:#0f1e4d;
+  %% Narrower nodes (210px) prevent oversized boxes while keeping text visible
+  classDef default fill:#f2f7ff,stroke:#335bff,stroke-width:1.5px,color:#0f1e4d,width:210px,text-align:left;
   classDef def fill:#eefcf3,stroke:#2e8540,stroke-width:1.5px,color:#0c3214;
   classDef targets fill:#fff7eb,stroke:#ff8b33,stroke-width:1.5px,color:#5a2500;
   classDef membership fill:#f9f0ff,stroke:#8a2be2,stroke-width:1.5px,color:#2e0b4d;
