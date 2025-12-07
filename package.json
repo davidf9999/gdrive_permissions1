@@ -9,7 +9,9 @@
   "scripts": {
     "test": "jest",
     "test:email": "RUN_EMAIL_TEST=1 jest --runTestsByPath tests/manual/EmailCapability.test.js",
-    "format": "prettier --write apps_script_project/"
+    "format": "prettier --write apps_script_project/",
+    "bundle": "node create_apps_scripts_bundle.js",
+    "bundle:with-tests": "node create_apps_scripts_bundle.js --with-tests"
   },
   "repository": {
     "type": "git",

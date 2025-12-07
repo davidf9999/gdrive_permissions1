@@ -198,10 +198,15 @@ Now you will deploy the code from this repository into the Apps Script project y
     npm install
     ```
 2.  **Build the script bundle.** Run the build script to combine all the separate source code files into a single bundle for deployment.
-    ```bash
-    node create_apps_scripts_bundle.js
-    ```
-    This will create a new file at `dist/apps_scripts_bundle.gs`.
+    -   Default (no testing menu or test config):
+        ```bash
+        npm run bundle
+        ```
+    -   Include the testing menu, test helpers, and test config defaults:
+        ```bash
+        npm run bundle:with-tests
+        ```
+    Both commands create a new file at `dist/apps_scripts_bundle.gs`.
 
 3.  **Copy the bundled code.** Open the `dist/apps_scripts_bundle.gs` file in a text editor, select all the text, and copy it to your clipboard.
 

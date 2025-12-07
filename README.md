@@ -59,21 +59,31 @@ This tool is most effective for managing access for ad-hoc teams and projects th
 
 ## Setup
 
-We offer two ways to set up the Google Drive Permission Manager:
+Choose the setup path that fits your environment:
 
-### AI-Assisted Setup (Recommended)
+### Cloudspaces (AI-assisted)
 
-For the easiest and fastest setup experience, you can use our AI-powered assistant. The assistant runs in a pre-configured cloud environment (GitHub Codespaces) and will guide you through every step of the process.
-
-To launch the assistant, you will need a GitHub account.
+- Launch the pre-configured assistant directly from the README button below (GitHub Codespaces required).
+- The assistant guides you through the copy/paste deployment using the default bundle **without** the built-in testing menus or test config.
+- If you need the testing menu, generate a local bundle with the `--with-tests` option (see "Local bundle" below) and paste that code into your Apps Script project instead of the default bundle.
 
 [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/davidf9999/gdrive_permissions1?ref=main)
 
-### Manual Setup
+### Local bundle (copy/paste)
 
-If you prefer to set up the project manually, we have a comprehensive, step-by-step guide that covers every required action.
+Use this path when working from your own workstation:
 
-**➡️ See the full [Setup Guide](docs/SETUP_GUIDE.md) to get started.**
+1. Install dependencies once: `npm install`
+2. Build the bundle **without** the testing menu (default): `npm run bundle`
+3. Build the bundle **with** testing code, menu items, and config defaults: `npm run bundle:with-tests`
+4. Copy `dist/apps_scripts_bundle.gs` into the Apps Script editor (see [Setup Guide](docs/SETUP_GUIDE.md) for screenshots).
+
+### Manual setup with clasp (advanced)
+
+- An alternative to bundling: push the individual `.gs` files with `clasp push --project apps_script_project --force`.
+- Each source file will appear separately in the Apps Script editor (instead of the single bundled file).
+- Not supported inside Codespaces because the `clasp` login flow requires local credentials.
+- To expose the testing menu when using clasp, create a small file that sets `var TEST_FEATURES_ENABLED = true;` and keep `Tests.gs`/`TestHelpers.gs` in the project. Leave it unset to deploy without tests.
 
 ---
 

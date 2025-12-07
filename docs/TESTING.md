@@ -2,6 +2,8 @@
 
 This project uses a two-pronged approach to testing to ensure both the correctness of the code's logic and its proper functioning in a live Google environment. This guide covers both testing strategies.
 
+> **Enable the in-spreadsheet testing menu:** The Apps Script bundle ships **without** test helpers by default. Build with `npm run bundle:with-tests` (or set `TEST_FEATURES_ENABLED = true` when using `clasp`) if you want the `Permissions Manager → Testing` menu to appear in your spreadsheet.
+
 ---
 
 ## Automated Unit Testing (with Jest)
