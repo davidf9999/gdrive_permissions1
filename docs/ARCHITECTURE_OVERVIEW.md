@@ -58,7 +58,8 @@ flowchart TD
   GroupSheet3 -- partners --> FolderSheet2
   GroupSheet2 -. reused .-> FolderSheet3
 
-  classDef default fill:#f4fbff,stroke:#1463a5,stroke-width:1.5px,color:#0d273d,width:260px,text-align:left;
+  %% Slightly narrower nodes keep arrows snug without clipping GitHub's renderer
+  classDef default fill:#f4fbff,stroke:#1463a5,stroke-width:1.5px,color:#0d273d,width:210px,text-align:left;
   classDef group fill:#fff6e8,stroke:#d97706,color:#4a1d05;
   classDef folder fill:#effaf3,stroke:#047857,color:#092314;
   classDef log fill:#e5e7eb,stroke:#9ca3af,color:#374151;
@@ -101,7 +102,8 @@ flowchart LR
   FR -- "Shared with" --> Individuals
   Groups -- "Group contains" --> GroupSheet
   GroupSheet -- "Defines" --> Users
-  classDef default fill:#f2f7ff,stroke:#335bff,stroke-width:1.5px,color:#0f1e4d,width:260px,text-align:left;
+  %% Narrower nodes (210px) prevent oversized boxes while keeping text visible
+  classDef default fill:#f2f7ff,stroke:#335bff,stroke-width:1.5px,color:#0f1e4d,width:210px,text-align:left;
   classDef def fill:#eefcf3,stroke:#2e8540,stroke-width:1.5px,color:#0c3214;
   classDef targets fill:#fff7eb,stroke:#ff8b33,stroke-width:1.5px,color:#5a2500;
   classDef membership fill:#f9f0ff,stroke:#8a2be2,stroke-width:1.5px,color:#2e0b4d;
