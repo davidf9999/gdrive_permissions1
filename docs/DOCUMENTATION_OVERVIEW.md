@@ -10,6 +10,7 @@ keep the content current.
 | [`docs/SETUP_GUIDE.md`](SETUP_GUIDE.md) | The canonical, step-by-step guide for a full manual installation. | First-time administrators | Update when Google Cloud, Workspace, or Apps Script UI flows change. |
 | [`docs/ONBOARDING.md`](ONBOARDING.md) | A high-level checklist that complements the Setup Guide. | Workspace admins | Use during training sessions; revise if prerequisites shift. |
 | [`docs/USER_GUIDE.md`](USER_GUIDE.md) | Day-to-day usage guide for the spreadsheet menu. | Spreadsheet operators | Align with the in-sheet menu names and supported workflows. |
+| [`docs/SYSTEM_LIFE_CYCLE.md`](SYSTEM_LIFE_CYCLE.md) | Describes the setup, usage, and teardown stages at a glance and links to the detailed guides. | Administrators & operators | Update when prerequisites or retirement steps change. |
 | [`docs/TESTING.md`](TESTING.md) | Describes the in-sheet testing harness and expected results. | Developers & QA | Update when new tests or diagnostics are added. |
 | [`docs/AUTO_SYNC_GUIDE.md`](AUTO_SYNC_GUIDE.md) | Explains optional AutoSync triggers. | Advanced admins | Validate instructions alongside `RISK_BASED_AUTO_SYNC.md`. |
 | [`docs/RISK_BASED_AUTO_SYNC.md`](RISK_BASED_AUTO_SYNC.md) | Details the risk-based AutoSync safeguards. | Advanced admins | Ensure screenshots and copy match the current script options. |
