@@ -175,11 +175,15 @@ The process is simple:
     -   Go to **Extensions → Apps Script**.
     -   In the Apps Script editor, you should see a file named `Code.gs` (or similar).
     -   Delete all the existing code in that file and paste the new code you copied from `dist/apps_scripts_bundle.gs`.
-    -   Click the **Save project** icon.
+ -   Click the **Save project** icon.
 
 Your spreadsheet is now running the latest version of the script.
 
 ---
+
+## Integrations and programmatic extensions
+
+Looking to connect the control spreadsheet with the rest of your stack? See [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) for detailed guidance on writing data into the sheet, reading results for monitoring, triggering syncs, and planning a dedicated API layer. For architectural direction (including when to add a backend/API and how to roll it out), read the companion [design note](docs/INTEGRATIONS_DESIGN.md).
 
 ## Cost transparency
 
