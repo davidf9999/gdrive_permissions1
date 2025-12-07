@@ -18,18 +18,19 @@ roll out the workflow consistently.
 1. [Key features](#key-features)
 2. [Example use cases](#example-use-cases)
 3. [Setup](#setup)
-4. [Architecture overview](#architecture-overview)
-5. [Conceptual comparison: Google Drive vs. SharePoint](#conceptual-comparison-google-drive-vs-sharepoint)
-6. [First-time Google Workspace setup](#first-time-google-workspace-setup)
-7. [Manual setup with clasp](#manual-setup-with-clasp)
-8. [Daily usage](#daily-usage)
-9. [Cost transparency](#cost-transparency)
-10. [Security & privacy](#security--privacy)
-11. [Automation & production deployment](#automation--production-deployment)
-12. [Documentation map](#documentation-map)
-13. [Testing](#testing)
-14. [Tearing down the project](#tearing-down-the-project)
-15. [Community](#community)
+4. [System life cycle](#system-life-cycle)
+5. [Architecture overview](#architecture-overview)
+6. [Conceptual comparison: Google Drive vs. SharePoint](#conceptual-comparison-google-drive-vs-sharepoint)
+7. [First-time Google Workspace setup](#first-time-google-workspace-setup)
+8. [Manual setup with clasp](#manual-setup-with-clasp)
+9. [Daily usage](#daily-usage)
+10. [Cost transparency](#cost-transparency)
+11. [Security & privacy](#security--privacy)
+12. [Automation & production deployment](#automation--production-deployment)
+13. [Documentation map](#documentation-map)
+14. [Testing](#testing)
+15. [Tearing down the project](#tearing-down-the-project)
+16. [Community](#community)
 
 ---
 
@@ -74,6 +75,12 @@ To launch the assistant, you will need a GitHub account.
 If you prefer to set up the project manually, we have a comprehensive, step-by-step guide that covers every required action.
 
 **➡️ See the full [Setup Guide](docs/SETUP_GUIDE.md) to get started.**
+
+---
+
+## System life cycle
+
+To plan the project from first install through retirement, see the [System life cycle](docs/SYSTEM_LIFE_CYCLE.md) guide. It outlines the setup, day-to-day usage, and teardown stages and links to the detailed documentation for each phase.
 
 ---
 
