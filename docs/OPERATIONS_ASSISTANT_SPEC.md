@@ -25,6 +25,15 @@ This spec scopes the assistant to ongoing operations for the Google Drive Permis
 - Read-only usage of `dist/apps_scripts_bundle.gs` or `apps_script_project/` sources for explanations; do not modify bundle or script files when assisting operators.
 - Permit limited shell commands for inspecting docs, fetching logs, or running non-destructive tests; forbid commands that prompt for credentials or mutate Google Drive/Workspace resources.
 - Keep guidance bounded to spreadsheet-first workflows; do not suggest direct Drive permission changes outside the automation path.
+- If tool access expands to edit control sheets, constrain mutations to pre-approved ranges (e.g., specific folder/role tabs) with explicit user confirmation per action, dry-run diffs, and automatic logging back to the conversation. Require sheet-level locking and guardrails that mirror existing Apps Script validation (role names, managed groups) to avoid bypassing the automation’s safety checks.
+
+## Implementation guidelines (assistant runtime)
+- Follow the spreadsheet-first model: any writes to Drive or Groups must flow through the control sheet and Apps Script menus/triggers; the assistant should never mutate Drive directly.
+- Enforce least-privilege scopes for any sheet-editing tool: row/column scoping, tab allowlists, rate limiting, and user-attributed edits that match the operator’s account.
+- Mirror Apps Script validation before writes: verify folder IDs, role names, and email formats, and refuse actions that would skip review steps documented in `README.md` and `docs/SETUP_GUIDE.md`.
+- Keep state lightweight and observable: reuse the `.gemini/assistant_state.json` pattern only for ephemeral context (recent sync statuses, current sheet focus), avoid duplicating the setup FSM, and provide a clear reset path.
+- Prefer explain-then-act flows: present the intended tab changes, expected sync trigger, and rollback path; execute only after explicit user confirmation.
+- Testing: include mocked conversations covering sheet-editing flows, sync error triage, and stress-test initiation to confirm the assistant references the correct menus and logs while honoring safety rails.
 
 ## Validation and testing of the assistant
 - Mock conversations for each intent (e.g., adding a collaborator, diagnosing a sync error, running stress tests) to verify the assistant cites the correct docs and menu steps.
