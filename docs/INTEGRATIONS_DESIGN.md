@@ -22,11 +22,17 @@ Treat the tool as a **Workspace control layer** that coexists with other automat
 
 ```mermaid
 flowchart LR
-  External[External systems<br>(HRIS, ticketing, CI/CD)] -->|Google Admin/Drive API| Workspace[Workspace resources<br>(users, groups, folders)]
-  Workspace -->|List & diff| Sync[Apps Script sync engine]
-  Sync -->|Merge state| Sheet[Control spreadsheet]
+  External["External systems<br/>(HRIS, ticketing, CI/CD)"]
+  Workspace["Workspace resources<br/>(users, groups, folders)"]
+  Sync["Apps Script sync engine"]
+  Sheet["Control spreadsheet"]
+  Logging["Cloud Logging / Log tab"]
+
+  External -->|Google Admin/Drive API| Workspace
+  Workspace -->|List & diff| Sync
+  Sync -->|Merge state| Sheet
   Sheet -->|Desired permissions| Sync
-  Sync -->|Logs + metrics| Logging[Cloud Logging / Log tab]
+  Sync -->|Logs + metrics| Logging
 
   classDef default fill:#f9fbff,stroke:#1d4ed8,color:#0f172a;
   classDef sheet fill:#fff7ed,stroke:#d97706,color:#7c2d12;
