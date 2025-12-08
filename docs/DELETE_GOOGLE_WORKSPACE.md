@@ -53,10 +53,26 @@ Close each billing account.
 This step is critical for ensuring the domain can be fully released from Google Workspace.
 
 ### 4.1 Clean Up Workspace Entities
-- **Delete Users**: Go to `Admin console > Users` and delete all users except for one super admin account.
-- **Delete Groups**: Go to `Admin console > Groups` and delete all groups.
-- **Migrate or Delete Shared Drives**: Ensure all data in Shared Drives is either moved to an external location or is no longer needed, then delete the Shared Drives.
-- **Delete Organizational Units (OUs)**: Delete any custom OUs you have created.
+
+This step ensures that all user- and script-created resources within the Workspace are removed.
+
+- **Delete Users**
+  - **How to find:** Go to the Admin console > **Directory** > **[Users](https://admin.google.com/ac/users)**.
+  - **What to delete:** Delete all users **except for one super admin account**. You will use this final account to delete the Workspace itself.
+
+- **Delete Groups**
+  - **How to find:** Go to the Admin console > **Directory** > **[Groups](https://admin.google.com/ac/groups)**.
+  - **What to delete:** Delete all groups. The `gdrive_permissions` script creates groups with specific naming patterns that you should look for and delete:
+    - `managed.folder.<FolderName>.<Role>@yourdomain.com` (e.g., `managed.folder.MyProject.viewer@yourdomain.com`)
+    - `SheetEditors@yourdomain.com`
+
+- **Migrate or Delete Shared Drives**
+  - **How to find:** Go to the Admin console > **Apps** > **Google Workspace** > **[Drive and Docs](https://admin.google.com/ac/managedsettings/55656082996/mc)** > **Manage shared drives**.
+  - **What to delete:** The script does not create Shared Drives, but it may manage permissions for folders located within them. Before deleting the Workspace, ensure all data in any Shared Drives is either moved to an external location or is no longer needed, then delete the Shared Drives themselves.
+
+- **Delete Organizational Units (OUs)**
+  - **How to find:** Go to the Admin console > **Directory** > **[Organizational units](https://admin.google.com/ac/orgunits)**.
+  - **What to delete:** The script does not create OUs. Delete any custom OUs you have created. You will not be able to delete the top-level, root OU (your domain).
 
 ### 4.2 Document and Clean DNS Records
 Before making changes, take a screenshot or export the DNS settings from your domain registrar's control panel. This provides a rollback point.
