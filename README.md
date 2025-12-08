@@ -108,7 +108,7 @@ At a glance, the system combines three moving pieces:
 flowchart LR
   Control["Control spreadsheet tabs<br>(Control tabs)"]
   Script["Apps Script automation<br>(5-min trigger)"]
-  Groups["Google Groups<br>(one per folder/role)"]
+  Groups["Google Groups<br>(one per users group and one per folder/role)"]
   Drive["Drive folder permissions<br>(Editor / Viewer / etc.)"]
   Status["Status + Logs tabs<br>(for administrators)"]
   Alerts["Email / Chat alerts<br>(on errors)"]

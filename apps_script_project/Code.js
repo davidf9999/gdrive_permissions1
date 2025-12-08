@@ -64,7 +64,7 @@ function onOpen() {
   setupLogSheets_();
 
   if (superAdmin) {
-    updateAutoSyncStatusIndicator_();
+    // updateAutoSyncStatusIndicator_();
     applyFullView_();
   } else {
     applyRestrictedView_();

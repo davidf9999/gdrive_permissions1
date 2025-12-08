@@ -376,7 +376,7 @@ function applyConfigValidation_() {
       cell.setDataValidation(rule);
     }
   }
-  log_('Applied checkbox validation rules to Config sheet.');
+  // log_('Applied checkbox validation rules to Config sheet.');
 }
 
 function setupLogSheets_() {
@@ -489,7 +489,7 @@ function setupHelpSheet_() {
   helpSheet.setColumnWidth(2, 500);
 
   // Note: Help sheet is not protected - all users can view and edit it
-  log_('Created or updated Help sheet.');
+  // log_('Created or updated Help sheet.');
 }
 
 function setupSyncHistorySheet_() {
