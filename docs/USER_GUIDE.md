@@ -126,6 +126,21 @@ The `LogLevel` setting controls how much detail is written to the Log sheet. Thi
 
 **Recommendation:** Use `INFO` (default) for normal operation. Switch to `DEBUG` only when troubleshooting. With `INFO`, routine "AutoSync skipped: No changes detected" messages won't clutter your logs every 5 minutes.
 
+#### Enabling Google Cloud Logging
+
+If you set `EnableGCPLogging` to `TRUE`, make sure the Apps Script project is linked to the correct Google Cloud project and that Cloud Logging is available. Recommended steps:
+
+1. In the Apps Script editor, open **Project Settings** and confirm the **Cloud project (Script ID)** matches your intended GCP project.
+2. Enable the Cloud Logging API for that project (requires Project Editor/Owner or a role with `serviceusage.services.enable`):
+
+   ```bash
+   gcloud services enable logging.googleapis.com --project=YOUR_PROJECT_ID
+   ```
+
+3. (Optional) Grant your admins access to view logs in Google Cloud Console with the **Logging Viewer** role (or broader, if needed).
+
+New log entries will appear in Google Cloud Console under **Logging > Logs Explorer**, with the message prefixed by the Apps Script log level (e.g., `[INFO]` or `[ERROR]`).
+
 #### API Retry Settings
 
 The script is designed with built-in retry mechanisms to handle temporary API errors, such as Google's rate limits. The behavior of these retries can be configured in this sheet:
