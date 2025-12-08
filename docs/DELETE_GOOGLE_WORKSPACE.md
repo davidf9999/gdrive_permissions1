@@ -32,10 +32,10 @@ This guide provides an end-to-end process for safely deleting a Google Workspace
 - Click the three dots menu (⋮) and select **Cancel Subscription**.
 - Follow the on-screen instructions to complete the cancellation.
 
-### 3.2 Delete or Shut Down All Google Cloud Projects
-- https://console.cloud.google.com/cloud-resource-manager
-- Shut down all projects.
-- Wait for “pending deletion” projects to disappear.
+### 3.2 Delete All Google Cloud Projects
+- Go to the [Cloud Resource Manager](https://console.cloud.google.com/cloud-resource-manager).
+- Select and **Delete** all projects associated with the Workspace.
+- **Note**: Projects enter a 30-day "pending deletion" state before being permanently removed. While the user notes this wait may not be required, it is a safeguard.
 
 ### 3.3 Clean Up Cloud Resources
 - App Engine: disable application.
@@ -48,11 +48,32 @@ This guide provides an end-to-end process for safely deleting a Google Workspace
 - https://console.cloud.google.com/billing  
 Close each billing account.
 
-## 4. Remove or Migrate Domain Resources
-- Delete all users except the final super admin.
-- Delete groups, OUs.
-- Migrate/delete Shared Drives.
-- Document DNS before changes.
+## 4. Remove and Disconnect Domain Resources
+
+This step is critical for ensuring the domain can be fully released from Google Workspace.
+
+### 4.1 Clean Up Workspace Entities
+- **Delete Users**: Go to `Admin console > Users` and delete all users except for one super admin account.
+- **Delete Groups**: Go to `Admin console > Groups` and delete all groups.
+- **Migrate or Delete Shared Drives**: Ensure all data in Shared Drives is either moved to an external location or is no longer needed, then delete the Shared Drives.
+- **Delete Organizational Units (OUs)**: Delete any custom OUs you have created.
+
+### 4.2 Document and Clean DNS Records
+Before making changes, take a screenshot or export the DNS settings from your domain registrar's control panel. This provides a rollback point.
+
+Common registrars include:
+- [Google Domains](https://domains.google.com/)
+- [Cloudflare](https://dash.cloudflare.com/)
+- [GoDaddy](https://dcc.godaddy.com/domains)
+- [Squarespace](https://www.squarespace.com/domain-names)
+
+From your registrar's DNS management page, you will need to remove all records related to Google Workspace, such as:
+- **MX records** for Gmail (e.g., `aspmx.l.google.com`).
+- **SPF records** (a TXT record starting with `v=spf1 include:_spf.google.com ~all`).
+- **DKIM records** (a TXT record with a selector like `google._domainkey`).
+- **DMARC records**.
+- The **`google-site-verification`** TXT record.
+- Any **CNAMEs** pointing to Google services (e.g., `mail.yourdomain.com`).
 
 ## 5. Delete Secondary Domains and Domain Aliases
 - Admin console → Domains → Manage domains → Remove all secondary domains.
@@ -64,7 +85,7 @@ Close each billing account.
 ## 6.1 Troubleshooting “Delete account” Disabled
 | Blocker | Fix |
 |--------|------|
-| Cloud project exists | Shut down project |
+| Cloud project exists | Delete project. Note: May require a wait for permanent deletion. |
 | Project pending deletion | Wait |
 | Billing account open | Close billing |
 | Marketplace subscription active | Cancel |
