@@ -96,17 +96,27 @@ From your registrar's DNS management page, you will need to remove all records r
 - Clean DNS: delete Gmail MX, SPF, DKIM, DMARC, google-site-verification, CNAMEs, subdomain entries.
 
 ## 6. Delete the Google Workspace Account (Primary Domain)
-- Admin console → Account → Account settings → Account management → Delete account.
+
+**Critical Prerequisites:** Before you can delete your Google Workspace account, you *must* ensure all associated resources are removed and subscriptions are cancelled. Failure to do so will block the deletion process, as indicated by messages like "Delete Google Cloud resources" or "Cancel subscriptions and delete Google Cloud resources, and Marketplace Apps (Required)". Specifically, ensure you have completed:
+
+-   **All steps in Section 3: Audit and Remove Billing Risks** (including cancelling Workspace subscriptions, deleting Google Cloud projects and resources, and closing billing accounts).
+-   **All steps in Section 4: Remove and Disconnect Domain Resources** (including cleaning up Workspace entities and DNS records, and deleting secondary domains/aliases).
+
+Once these prerequisites are met, navigate to:
+-   Admin console → Account → Account settings → Account management → Delete account.
 
 ## 6.1 Troubleshooting “Delete account” Disabled
+
+If the "Delete account" option is still disabled, refer to the following common blockers and their solutions, ensuring you've followed the relevant sections in this guide:
+
 | Blocker | Fix |
-|--------|------|
-| Cloud project exists | Delete project. Note: May require a wait for permanent deletion. |
-| Project pending deletion | Wait |
-| Billing account open | Close billing |
-| Marketplace subscription active | Cancel |
-| Secondary domain present | Remove |
-| Last super admin deleted | Restore it |
+|---|---|
+| Cloud project exists | Delete project (see section 3.2: Delete All Google Cloud Projects). Note: May require a wait for permanent deletion. |
+| Project pending deletion | Wait for the project to be permanently deleted. |
+| Billing account open | Close billing accounts (see section 3.4: Close Billing Accounts). |
+| Marketplace subscription active | Cancel Marketplace subscriptions (part of section 3.1: Cancel Workspace Subscriptions). |
+| Secondary domain present | Remove secondary domains (see section 5: Delete Secondary Domains and Domain Aliases). |
+| Last super admin deleted | Restore a super admin account if accidentally deleted. |
 
 ## 7. Post-Deletion Verification
 - Verify DNS cleanup.
