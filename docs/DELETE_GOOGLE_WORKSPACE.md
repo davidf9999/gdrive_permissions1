@@ -26,7 +26,11 @@ This guide provides an end-to-end process for safely deleting a Google Workspace
 ## 3. Audit and Remove Billing Risks
 
 ### 3.1 Cancel Workspace Subscriptions
-- Admin console → Billing → Cancel Workspace and Marketplace apps.
+- Go to [admin.google.com](http://admin.google.com/).
+- Navigate to **Billing** > **Subscriptions**.
+- Select the subscription you want to cancel.
+- Click the three dots menu (⋮) and select **Cancel Subscription**.
+- Follow the on-screen instructions to complete the cancellation.
 
 ### 3.2 Delete or Shut Down All Google Cloud Projects
 - https://console.cloud.google.com/cloud-resource-manager
