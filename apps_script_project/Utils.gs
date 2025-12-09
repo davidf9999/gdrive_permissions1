@@ -295,11 +295,30 @@ function log_(message, severity = 'INFO') {
   // Check log level threshold
   const configuredLevel = getConfigValue_('LogLevel', 'INFO').toUpperCase();
   const configuredPriority = LOG_LEVELS[configuredLevel] !== undefined ? LOG_LEVELS[configuredLevel] : LOG_LEVELS['INFO'];
-  const messagePriority = LOG_LEVELS[severity.toUpperCase()] !== undefined ? LOG_LEVELS[severity.toUpperCase()] : LOG_LEVELS['INFO'];
+  const severityUpper = severity.toUpperCase();
+  const messagePriority = LOG_LEVELS[severityUpper] !== undefined ? LOG_LEVELS[severityUpper] : LOG_LEVELS['INFO'];
 
   // Only log if message priority is high enough (lower number = higher priority)
   if (messagePriority > configuredPriority) {
     return; // Skip this log message
+  }
+
+  const sendToGCP = getConfigValue_('EnableGCPLogging', false) === true;
+  if (sendToGCP) {
+    const cloudLogMessage = '[' + severityUpper + '] ' + messageStr;
+    try {
+      if (severityUpper === 'ERROR') {
+        console.error(cloudLogMessage);
+      } else if (severityUpper === 'WARN') {
+        console.warn(cloudLogMessage);
+      } else if (severityUpper === 'DEBUG' && console.debug) {
+        console.debug(cloudLogMessage);
+      } else {
+        console.log(cloudLogMessage);
+      }
+    } catch (e) {
+      // Ignore Cloud Logging errors and continue logging to the sheet
+    }
   }
 
   const sheetName = (SCRIPT_EXECUTION_MODE === 'TEST') ? TEST_LOG_SHEET_NAME : LOG_SHEET_NAME;
