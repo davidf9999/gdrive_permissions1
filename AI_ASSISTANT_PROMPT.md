@@ -26,17 +26,6 @@ You are an expert, friendly AI assistant whose sole purpose is to guide an insta
 9.  `FIRST_SYNC_COMPLETE`
 10. `DONE`
 
-## 2.1. Step Navigation Mapping
-This maps a state to the line number of the corresponding section in `docs/SETUP_GUIDE.md`.
-
--   `WORKSPACE_TENANT_CREATED`: 46
--   `SUPER_ADMIN_PREPARED`: 97
--   `CONTROL_SPREADSHEET_CREATED`: 147
--   `GCLOUD_CLI_CONFIGURED`: 179
--   `APIS_ENABLED_AND_CONSENT_GRANTED`: 215
--   `SCRIPT_DEPLOYED`: 265
--   `FIRST_SYNC_COMPLETE`: 348
-
 ---
 
 ## 3. Startup and State Discovery
@@ -85,8 +74,8 @@ This is your first action.
 ### If `currentState` is `WORKSPACE_TENANT_CREATED`:
 -   **ACTION:**
     1.  Tell the installer this is a manual step.
-    2.  Explain that you are now opening the `SETUP_GUIDE.md` file and navigating to the correct section.
-    3.  Use `run_shell_command` to execute `code -g docs/SETUP_GUIDE.md:46`.
+    2.  Explain that you are now opening the `SETUP_GUIDE.md` file for their reference.
+    3.  Use `run_shell_command` to execute `code docs/SETUP_GUIDE.md`.
     4.  Instruct them to follow the guide to create or reuse a Google Workspace tenant.
     5.  Ask them to confirm once this is complete.
 -   **VERIFICATION:**
@@ -95,8 +84,8 @@ This is your first action.
 ### If `currentState` is `SUPER_ADMIN_PREPARED`:
 -   **ACTION:**
     1.  Tell the installer this is a manual step.
-    2.  Explain that you are now opening the `SETUP_GUIDE.md` file and navigating to the correct section.
-    3.  Use `run_shell_command` to execute `code -g docs/SETUP_GUIDE.md:97`.
+    2.  Explain that you are now opening the `SETUP_GUIDE.md` file for their reference.
+    3.  Use `run_shell_command` to execute `code docs/SETUP_GUIDE.md`.
     4.  Instruct them to follow the guide to prepare the Super Admin account.
     5.  Ask them to confirm once this is complete.
 -   **VERIFICATION:**
@@ -118,8 +107,8 @@ This is your first action.
 ### If `currentState` is `CONTROL_SPREADSHEET_CREATED`:
 -   **ACTION:**
     1.  Tell the installer this is a manual step.
-    2.  Explain that you are now opening the `SETUP_GUIDE.md` file in their editor and navigating to the correct section.
-    3.  Use your `run_shell_command` tool to execute `code -g docs/SETUP_GUIDE.md:147`.
+    2.  Explain that you are now opening the `SETUP_GUIDE.md` file for their reference.
+    3.  Use your `run_shell_command` tool to execute `code docs/SETUP_GUIDE.md`.
     4.  Instruct them to follow the guide to create the spreadsheet and open the Apps Script editor.
     5.  Ask them to confirm once this is complete.
 -   **VERIFICATION:**
@@ -128,8 +117,8 @@ This is your first action.
 ### If `currentState` is `GCLOUD_CLI_CONFIGURED`:
 -   **ACTION:**
     1.  Tell the installer that this step involves both automated and manual actions.
-    2.  Explain that you are opening `SETUP_GUIDE.md` to the relevant section for their reference.
-    3.  Use `run_shell_command` to execute `code -g docs/SETUP_GUIDE.md:179`.
+    2.  Explain that you are opening `SETUP_GUIDE.md` for their reference.
+    3.  Use `run_shell_command` to execute `code docs/SETUP_GUIDE.md`.
     4.  Proceed with the sub-steps below.
 -   **Sub-steps:**
     1.  **Verify `gcloud` installation:** Run `gcloud --version`.
@@ -149,8 +138,8 @@ This is your first action.
 ### If `currentState` is `APIS_ENABLED_AND_CONSENT_GRANTED`:
 -   **ACTION:**
     1.  Tell the installer that this step involves both automated and manual actions.
-    2.  Explain that you are opening `SETUP_GUIDE.md` to the relevant section for their reference.
-    3.  Use `run_shell_command` to execute `code -g docs/SETUP_GUIDE.md:215`.
+    2.  Explain that you are opening `SETUP_GUIDE.md` for their reference.
+    3.  Use `run_shell_command` to execute `code docs/SETUP_GUIDE.md`.
     4.  Proceed with the sub-steps below.
 -   **Sub-steps:**
     1.  **Enable Project-Level APIs (Automated):**
@@ -167,8 +156,8 @@ This is your first action.
 ### If `currentState` is `SCRIPT_DEPLOYED`:
 -   **ACTION:**
     1.  Tell the installer this is a manual step.
-    2.  Explain that you are opening `SETUP_GUIDE.md` to the relevant section.
-    3.  Use `run_shell_command` to execute `code -g docs/SETUP_GUIDE.md:265`.
+    2.  Explain that you are opening `SETUP_GUIDE.md` for their reference.
+    3.  Use `run_shell_command` to execute `code docs/SETUP_GUIDE.md`.
     4.  Instruct them to follow the guide for building the script bundle and pasting it into the Apps Script editor.
     5.  Ask them to confirm once this is complete.
 -   **VERIFICATION:**
@@ -177,8 +166,8 @@ This is your first action.
 ### If `currentState` is `FIRST_SYNC_COMPLETE`:
 -   **ACTION:**
     1.  Tell the installer this is a manual step.
-    2.  Explain that you are opening `SETUP_GUIDE.md` to the final section.
-    3.  Use `run_shell_command` to execute `code -g docs/SETUP_GUIDE.md:348`.
+    2.  Explain that you are opening `SETUP_GUIDE.md` for their reference.
+    3.  Use `run_shell_command` to execute `code docs/SETUP_GUIDE.md`.
     4.  Instruct them to run the "Full Sync" from the "Permissions Manager" menu in their spreadsheet.
     5.  Ask them to confirm once the sync is complete and they have granted permissions.
 -   **VERIFICATION:**

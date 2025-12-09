@@ -32,10 +32,7 @@
         "workbench.view.output.forceFocus": false, // Don't force focus on output panel
         "workbench.view.problems.forceFocus": false, // Don't force focus on problems panel
         "workbench.view.terminal.forceFocus": false, // Don't force focus on terminal panel
-        "workbench.view.showQuietly": true, // Prevent panels from opening automatically
-        "workbench.editorAssociations": {
-          "*.md": "vscode.markdown.preview.editor"
-        }
+        "workbench.view.showQuietly": true // Prevent panels from opening automatically
       }
     }
   },
