@@ -61,7 +61,7 @@ This is your first action.
     - **If the user presses Enter with no input:** The `selected_step` is the `default_step`.
     - **If the user enters a value:**
         - Let's call the input `user_input`.
-        - If `user_input` is 's', that's a valid choice for scanning. The `selected_step` is 's'.
+        - If `user_input` is 's', this indicates the user is unsure of the current state. In this case, you must be conservative. Set the `selected_step` to 1, and proceed as if the user had chosen step 1. This overrides any `default_step` or `<persisted_current_state>`.
         - If `user_input` is a number, try to parse it. It must be an integer between 1 and `<number_of_steps>` (inclusive). If it is, that's the `selected_step`.
         - **If the input is invalid (not 's', not a number, or a number out of range):** You MUST tell the user "That is not a valid state number. Please choose a number from 1-<number_of_steps> or 's'." and then re-display the menu and prompt them again. You must not proceed until you have a valid step.
 
