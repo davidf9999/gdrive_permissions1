@@ -6,7 +6,7 @@
 - `apps_script_project/appsscript.json`: Project manifest template. Settings (timezone, GCP project) must be manually configured in Apps Script editor via Project Settings.
 - `create_apps_scripts_bundle.js`: Build script that bundles all source files into `dist/apps_scripts_bundle.gs`.
 - `dist/apps_scripts_bundle.gs`: Generated bundle file to copy-paste into Apps Script editor.
-- `docs/`: User and testing guides (`USER_GUIDE.md`, `TESTING.md`, `ONBOARDING.md`, `SETUP_GUIDE.md`).
+- `docs/`: User and testing guides (`USER_GUIDE.md`, `SUPER_ADMIN_USER_GUIDE.md`, `SHEET_EDITOR_USER_GUIDE.md`, `TESTING.md`, `ONBOARDING.md`, `SETUP_GUIDE.md`).
 - `scripts/setup.sh`: Optional infra setup steps run inside the container.
 - `terraform/`: Optional GCP infrastructure (APIs, roles, settings).
 - `docker-compose.yml` and `Dockerfile`: Build/run the setup wizard container.

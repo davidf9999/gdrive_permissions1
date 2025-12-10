@@ -9,7 +9,9 @@ keep the content current.
 | [`docs/ARCHITECTURE_OVERVIEW.md`](ARCHITECTURE_OVERVIEW.md) | Architectural walkthrough of the Apps Script modules and spreadsheet layout. | Developers & reviewers | Update when new modules are added or the execution flow changes. |
 | [`docs/SETUP_GUIDE.md`](SETUP_GUIDE.md) | The canonical, step-by-step guide for a full manual installation. | First-time administrators | Update when Google Cloud, Workspace, or Apps Script UI flows change. |
 | [`docs/ONBOARDING.md`](ONBOARDING.md) | A high-level checklist that complements the Setup Guide. | Workspace admins | Use during training sessions; revise if prerequisites shift. |
-| [`docs/USER_GUIDE.md`](USER_GUIDE.md) | Day-to-day usage guide for the spreadsheet menu. | Spreadsheet operators | Align with the in-sheet menu names and supported workflows. |
+| [`docs/USER_GUIDE.md`](USER_GUIDE.md) | Hub page that directs users to the correct role-based guide. | All Users | - |
+| [`docs/SUPER_ADMIN_USER_GUIDE.md`](SUPER_ADMIN_USER_GUIDE.md) | Guide for Super Admins covering setup, syncs, and advanced tasks. | Super Admins | Contains all instructions requiring Super Admin privileges. |
+| [`docs/SHEET_EDITOR_USER_GUIDE.md`](SHEET_EDITOR_USER_GUIDE.md) | Guide for Sheet Editors covering day-to-day permission management. | Sheet Editors | Explains how to edit the sheets to manage permissions. |
 | [`docs/SYSTEM_LIFE_CYCLE.md`](SYSTEM_LIFE_CYCLE.md) | Describes the setup, usage, and teardown stages at a glance and links to the detailed guides. | Administrators & operators | Update when prerequisites or retirement steps change. |
 | [`docs/TESTING.md`](TESTING.md) | Describes the in-sheet testing harness and expected results. | Developers & QA | Update when new tests or diagnostics are added. |
 | [`docs/AUTO_SYNC_GUIDE.md`](AUTO_SYNC_GUIDE.md) | Explains optional AutoSync triggers. | Advanced admins | Validate instructions alongside `RISK_BASED_AUTO_SYNC.md`. |

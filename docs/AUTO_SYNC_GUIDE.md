@@ -210,7 +210,7 @@ The system also supports explicitly deleting entire groups and folder-role bindi
    - Status column shows warning
    - Row remains in sheet
 
-For complete details on the deletion feature, see the [User Guide section on Deleting Groups and Folder-Role Bindings](USER_GUIDE.md#deleting-groups-and-folder-role-bindings).
+For complete details on the deletion feature, see the [Super Admin User Guide section on Deleting Groups and Folder-Role Bindings](SUPER_ADMIN_USER_GUIDE.md#deleting-groups-and-folder-role-bindings).
 
 ### Auditing and File Size Management
 
