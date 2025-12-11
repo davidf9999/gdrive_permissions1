@@ -29,8 +29,8 @@ All core actions are run from the spreadsheet menu: **Permissions Manager**.
 
 These functions read the control sheets and apply the defined state to Google Drive and Google Groups.
 
-*   **`Add Users to Groups`**: A non-destructive sync. It only **adds** new members to groups. It will create new folders and groups if they don't exist. It will **not** remove anyone. This is safe to run to apply additions.
-*   **`Remove Users from Groups`**: A destructive sync. It only **removes** members from groups if they have been removed from the user sheets. It will **not** add anyone. You will be asked to confirm before it proceeds.
+*   **`Add/Enable Users in Groups`**: A non-destructive sync. It **adds or re-enables** members in groups based on the control sheets. It will create new folders and groups if they don't exist. It will **not** disable anyone. This is safe to run to apply additions or reversals of prior disables.
+*   **`Remove/Disable Users from Groups`**: A destructive sync. It **removes/marks users as disabled** in groups when they have been removed from the user sheets. It will **not** add or re-enable anyone. You will be asked to confirm before it proceeds.
 *   **`Full Sync`**: Performs both additions and removals in one operation. It also processes deletion requests for entire groups or folder-role bindings. **This is the most powerful sync and should be used with care.**
 
 For changes made by Sheet Editors to be reflected in Google Drive and Google Groups, these synchronization functions must be executed. This can happen in two ways:

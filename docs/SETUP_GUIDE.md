@@ -257,7 +257,7 @@ Now you will deploy the code from this repository into the Apps Script project y
 
 3. After the sync completes, review the generated sheets and populate the user
    tabs with email addresses.
-4. Use **Add Users to Groups** and **Remove Users from Groups** (under the ManualSync menu) for day-to-day changes. The
+4. Use **Add/Enable Users in Groups** and **Remove/Disable Users from Groups** (under the ManualSync menu) for day-to-day changes. The
    [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) file explains the workflow in
    detail.
 
