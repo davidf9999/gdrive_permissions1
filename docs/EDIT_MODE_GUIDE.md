@@ -321,7 +321,7 @@ Edit Mode is a menu item, so technically anyone with menu access can use it. How
 
 **No!** You can still run manual syncs while in Edit Mode via:
 - Permissions Manager → ManualSync → Full Sync
-- Permissions Manager → ManualSync → Add Users to Groups
+- Permissions Manager → ManualSync → Add/Enable Users in Groups
 - etc.
 
 Edit Mode only suspends **automatic** syncs, not manual ones.

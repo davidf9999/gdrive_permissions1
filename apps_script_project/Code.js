@@ -415,13 +415,13 @@ function createManualSyncMenu_(ui) {
     .addItem('Sync Sheet Editors', 'syncSheetEditors')
     .addItem('Sync User Groups', 'syncUserGroups')
     .addSeparator()
-    .addItem('Sync All Folders - Add Users Only', 'syncManagedFoldersAdds')
-    .addItem('Sync All Folders - Remove Users Only', 'syncManagedFoldersDeletes');
+    .addItem('Sync All Folders - Add/Enable Users Only', 'syncManagedFoldersAdds')
+    .addItem('Sync All Folders - Remove/Disable Users Only', 'syncManagedFoldersDeletes');
 
   return ui.createMenu('ManualSync')
     .addItem('Full Sync', 'fullSync')
-    .addItem('Add Users to Groups', 'syncAdds')
-    .addItem('Remove Users from Groups', 'syncDeletes')
+    .addItem('Add/Enable Users in Groups', 'syncAdds')
+    .addItem('Remove/Disable Users from Groups', 'syncDeletes')
     .addSeparator()
     .addSubMenu(granularMenu);
 }
