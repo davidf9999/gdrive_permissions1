@@ -10,6 +10,7 @@
 
 As a Super Admin, your primary responsibilities are:
 - Performing the initial setup and authorization of the script.
+- Taking care that sheet edits are applied, either manually or via configuring auto-sync.
 - Running the synchronization functions that apply the permissions defined in the sheets.
 - Managing advanced configuration and deletion operations.
 - Troubleshooting system-level errors and monitoring logs.
@@ -27,6 +28,11 @@ These functions read the control sheets and apply the defined state to Google Dr
 *   **`Add Users to Groups`**: A non-destructive sync. It only **adds** new members to groups. It will create new folders and groups if they don't exist. It will **not** remove anyone. This is safe to run to apply additions.
 *   **`Remove Users from Groups`**: A destructive sync. It only **removes** members from groups if they have been removed from the user sheets. It will **not** add anyone. You will be asked to confirm before it proceeds.
 *   **`Full Sync`**: Performs both additions and removals in one operation. It also processes deletion requests for entire groups or folder-role bindings. **This is the most powerful sync and should be used with care.**
+
+For changes made by Sheet Editors to be reflected in Google Drive and Google Groups, these synchronization functions must be executed. This can happen in two ways:
+
+1.  **Manual Sync:** A Super Admin (or the Script Owner) manually selects one of the above menu items. This provides immediate application of changes.
+2.  **Auto Sync:** The `autoSync` feature, if enabled and configured (refer to the `Config` sheet settings and the "Setup AutoSync" menu option), will periodically run the synchronization in the background. A Super Admin must ensure `autoSync` is correctly configured for automated application of changes.
 
 ### Verifying Permissions with the Folders Audit
 
