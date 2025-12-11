@@ -21,143 +21,111 @@ function syncSheetEditors(options = {}) {
       return totalSummary;
     }
 
-    // Get admin group email from Config sheet
-    let adminGroupEmail = getConfigValue_('AdminGroupEmail', '');
-    if (adminGroupEmail) {
-      adminGroupEmail = adminGroupEmail.toString().trim().toLowerCase();
-    }
-    // Validate that adminGroupEmail is a valid email format (contains @ and a domain)
-    const emailPattern = /^[^S@]+@[^S@]+\.[^S@]+$/;
-    if (!adminGroupEmail || !emailPattern.test(adminGroupEmail)) {
-      if (adminGroupEmail) {
-        log_('Invalid admin group email in Config: "' + adminGroupEmail + '". Regenerating...', 'WARN');
+    // Get SheetEditors group email from Config, with fallback for backward compatibility
+    let groupEmail = getConfigValue_('SheetEditorsGroupEmail', '');
+    if (!groupEmail) {
+      groupEmail = getConfigValue_('AdminGroupEmail', ''); // Fallback to old name
+      if (groupEmail) {
+        updateConfigSetting_('SheetEditorsGroupEmail', groupEmail); // Migrate to new name
       }
-      adminGroupEmail = generateGroupEmail_(SHEET_EDITORS_GROUP_NAME);
-      // Save the generated email to Config immediately
-      updateConfigSetting_('AdminGroupEmail', adminGroupEmail);
+    }
+    
+    if (groupEmail) {
+      groupEmail = groupEmail.toString().trim().toLowerCase();
+    }
+    
+    const emailPattern = /^[^S@]+@[^S@]+\.[^S@]+$/;
+    if (!groupEmail || !emailPattern.test(groupEmail)) {
+      if (groupEmail) {
+        log_('Invalid Sheet Editors group email in Config: "' + groupEmail + '". Regenerating...', 'WARN');
+      }
+      groupEmail = generateGroupEmail_(SHEET_EDITORS_GROUP_NAME);
+      updateConfigSetting_('SheetEditorsGroupEmail', groupEmail);
     }
 
-    // 1. Get desired editors
-    const adminData = sheetEditorsSheet.getRange('A2:D' + sheetEditorsSheet.getLastRow()).getValues();
-    const adminEmails = adminData.filter(function(row) {
-      const email = row[0].toString().trim().toLowerCase();
-      const isDisabled = row[3];
-      return email && email.length > 0 && !isDisabled;
+    // 1. Get desired editors for the SPREADSHEET ITSELF
+    const sheetEditorData = sheetEditorsSheet.getRange(2, 1, sheetEditorsSheet.getLastRow(), 5).getValues();
+    const desiredSheetEditors = sheetEditorData.filter(function(row) {
+      const email = row[0] && row[0].toString().trim().toLowerCase();
+      const isDisabled = row[4]; // Column E
+      return email && !isUserRowDisabled_(isDisabled);
     }).map(function(row) {
       return row[0].toString().trim().toLowerCase();
     });
-    const adminSet = new Set(adminEmails);
+    const desiredSheetEditorSet = new Set(desiredSheetEditors);
 
-    // 2. Get current editors
-    const currentEditors = spreadsheet.getEditors()
+    // 2. Get current editors of the SPREADSHEET
+    const currentSheetEditors = spreadsheet.getEditors()
       .map(function(user) { return user.getEmail().toLowerCase(); });
-    const editorSet = new Set(currentEditors);
+    const currentSheetEditorSet = new Set(currentSheetEditors);
 
-    // 3. Determine changes
+    // 3. Determine changes, always including the owner as a desired editor
     const owner = spreadsheet.getOwner();
     if (owner) {
-      adminSet.add(owner.getEmail().toLowerCase());
+      desiredSheetEditorSet.add(owner.getEmail().toLowerCase());
     }
 
-    const emailsToAdd = adminEmails.filter(function(email) { return !editorSet.has(email); });
-    const emailsToRemove = currentEditors.filter(function(email) { return !adminSet.has(email); });
+    const emailsToAdd = Array.from(desiredSheetEditorSet).filter(email => !currentSheetEditorSet.has(email));
+    const emailsToRemove = currentSheetEditors.filter(email => !desiredSheetEditorSet.has(email));
 
-    // In addOnly mode, skip removals (DESTRUCTIVE operations)
     if (addOnly && emailsToRemove.length > 0) {
       log_('SAFE mode: Skipping ' + emailsToRemove.length + ' sheet editor removal(s). Run "Sync Sheet Editors" manually to process removals.', 'WARN');
-      // Continue with additions only
     }
 
-    if (emailsToAdd.length === 0 && (addOnly || emailsToRemove.length === 0)) {
-      syncSheetEditorsGroup_(sheetEditorsSheet, adminGroupEmail, { addOnly: addOnly });
-      log_('Sheet editor list is already up to date.');
-      if (!silentMode) {
-        if (SCRIPT_EXECUTION_MODE === 'TEST') {
-          showTestMessage_('Sheet Editors Sync', 'Sheet editor list is already up to date. No changes were needed. Editors group synced to ' + adminGroupEmail + '.');
-        } else {
-          SpreadsheetApp.getUi().alert('Sheet editor list is already up to date. No changes were needed.\nEditors group synced to ' + adminGroupEmail + '.');
-        }
-      }
-      return totalSummary;
-    }
-
-    // Build confirmation message
-    let confirmationMessage = 'Sheet Editors Sync will make the following changes to the editors of this spreadsheet:\n';
     if (emailsToAdd.length > 0) {
-      confirmationMessage += '\nADD:\n';
-      emailsToAdd.forEach(function(email) { confirmationMessage += '  - ' + email + '\n'; });
-    }
-    if (!addOnly && emailsToRemove.length > 0) {
-      confirmationMessage += '\nREMOVE:\n';
-      emailsToRemove.forEach(function(email) { confirmationMessage += '  - ' + email + '\n'; });
-    }
-
-    // In silent mode or addOnly mode with only additions, skip confirmation
-    if (!silentMode && !addOnly && emailsToRemove.length > 0) {
-      confirmationMessage += '\nAre you sure you want to continue?';
-      const response = SpreadsheetApp.getUi().alert('Confirm Sheet Editors Sync', confirmationMessage, SpreadsheetApp.getUi().ButtonSet.YES_NO);
-
-      if (response !== SpreadsheetApp.getUi().Button.YES) {
-        if (!silentMode) SpreadsheetApp.getUi().alert('Sheet editors sync cancelled.');
-        log_('Sheet editors sync cancelled by user.');
-        sheetEditorsSheet.getRange(ADMINS_STATUS_CELL).setValue('CANCELLED');
-        return totalSummary;
-      }
-    } else {
-      // Log changes in silent/addOnly mode
-      log_('AUTO-SYNC: Processing sheet editor changes without confirmation:');
-      log_(confirmationMessage);
-    }
-
-    sheetEditorsSheet.getRange(ADMINS_STATUS_CELL).setValue('Processing...');
-
-    // 5. Perform the additions
-    if (emailsToAdd.length > 0) {
-      log_('Adding ' + emailsToAdd.length + ' editor(s): ' + emailsToAdd.join(', '));
+      log_('Adding ' + emailsToAdd.length + ' spreadsheet editor(s): ' + emailsToAdd.join(', '));
       spreadsheet.addEditors(emailsToAdd);
-      totalSummary.added = emailsToAdd.length;
+      totalSummary.added += emailsToAdd.length;
     }
 
-    // Perform removals only if not in addOnly mode
     if (!addOnly && emailsToRemove.length > 0) {
-      log_('Removing ' + emailsToRemove.length + ' editor(s): ' + emailsToRemove.join(', '));
+      log_('Removing ' + emailsToRemove.length + ' spreadsheet editor(s): ' + emailsToRemove.join(', '));
       emailsToRemove.forEach(function(email) {
         try {
           spreadsheet.removeEditor(email);
+          totalSummary.removed++;
         } catch (e) {
           log_('Failed to remove editor ' + email + ': ' + e.message, 'ERROR');
+          totalSummary.failed++;
         }
       });
-      totalSummary.removed = emailsToRemove.length;
     }
 
-    syncSheetEditorsGroup_(sheetEditorsSheet, adminGroupEmail, { addOnly: addOnly });
+    // 4. Sync the GOOGLE GROUP for sheet editors
+    const groupSyncSummary = syncSheetEditorsGroup_(sheetEditorsSheet, groupEmail, { addOnly: addOnly });
+    if(groupSyncSummary) {
+        totalSummary.added += groupSyncSummary.added;
+        totalSummary.removed += groupSyncSummary.removed;
+        totalSummary.failed += groupSyncSummary.failed;
+    }
 
-    log_('Sheet editors sync complete. Editors group email: ' + adminGroupEmail + '.');
+
+    log_('Sheet editors sync complete. Editors group email: ' + groupEmail + '.');
     if (!silentMode) {
-      if (SCRIPT_EXECUTION_MODE === 'TEST') {
-        showTestMessage_('Sheet Editors Sync', 'Sheet editors sync complete. Editors group synced to ' + adminGroupEmail + '.');
-      } else {
-        SpreadsheetApp.getUi().alert('Sheet editors sync complete.\nEditors group synced to ' + adminGroupEmail + '.');
-      }
+        const message = 'Sheet editors sync complete. Editors group synced to ' + groupEmail + '.';
+        if (SCRIPT_EXECUTION_MODE === 'TEST') showTestMessage_('Sheet Editors Sync', message);
+        else SpreadsheetApp.getUi().alert(message);
     }
 
   } catch (e) {
-    log_('ERROR in syncSheetEditors: ' + e.toString());
+    log_('ERROR in syncSheetEditors: ' + e.toString() + ' ' + e.stack);
     if (sheetEditorsSheet) {
       try {
         sheetEditorsSheet.getRange(ADMINS_STATUS_CELL).setValue('ERROR: ' + e.message);
       } catch (ignored) {}
     }
     if (!silentMode) SpreadsheetApp.getUi().alert('An error occurred during Sheet Editors sync: ' + e.message);
+    totalSummary.failed++;
   }
   return totalSummary;
 }
 
-function syncSheetEditorsGroup_(sheetEditorsSheet, adminGroupEmail, options = {}) {
+function syncSheetEditorsGroup_(sheetEditorsSheet, groupEmail, options = {}) {
   const addOnly = options && options.addOnly !== undefined ? options.addOnly : false;
-  const statusCell = sheetEditorsSheet.getRange(ADMINS_STATUS_CELL);
-  const lastSyncedCell = sheetEditorsSheet.getRange(ADMINS_LAST_SYNC_CELL);
+  const statusCell = sheetEditorsSheet.getRange(ADMINS_STATUS_CELL); // Column D
+  const lastSyncedCell = sheetEditorsSheet.getRange(ADMINS_LAST_SYNC_CELL); // Column C
+  const groupLinkCell = sheetEditorsSheet.getRange('B2'); // Column B
+
   statusCell.setValue('Processing group sync...');
   const timestamp = Utilities.formatDate(new Date(), SpreadsheetApp.getActive().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss');
 
@@ -165,20 +133,81 @@ function syncSheetEditorsGroup_(sheetEditorsSheet, adminGroupEmail, options = {}
     log_('Admin Directory service not available. Skipping Sheet Editors group sync.', 'WARN');
     statusCell.setValue('SKIPPED (No Admin SDK)');
     lastSyncedCell.setValue(timestamp);
-    return null;
+    return { added: 0, removed: 0, failed: 0 };
   }
 
   try {
-    getOrCreateGroup_(adminGroupEmail, SHEET_EDITORS_GROUP_NAME);
-    const summary = syncGroupMembership_(adminGroupEmail, SHEET_EDITORS_SHEET_NAME, { addOnly: addOnly });
+    const groupResult = getOrCreateGroup_(groupEmail, 'Permissions Manager Sheet Editors');
+    const adminLink = 'https://admin.google.com/ac/groups/' + groupResult.group.id + '/members';
+    groupLinkCell.setValue(adminLink);
 
-    // Update the Config sheet with the admin group email
-    updateConfigSetting_('AdminGroupEmail', adminGroupEmail);
+    // Get desired members from the sheet, respecting the 'Disabled' column (E)
+    const sheetData = sheetEditorsSheet.getRange(2, 1, sheetEditorsSheet.getLastRow(), 5).getValues();
+    const desiredMembers = sheetData.filter(function(row) {
+      const email = row[0] && row[0].toString().trim().toLowerCase();
+      const isDisabled = row[4]; // Column E is 'Disabled'
+      return email && !isUserRowDisabled_(isDisabled);
+    }).map(function(row) {
+      return row[0].toString().trim().toLowerCase();
+    });
+    const desiredMemberSet = new Set(desiredMembers);
 
+    // Get current members from the group
+    const currentMembers = fetchAllGroupMembers_(groupEmail);
+    const currentMemberSet = new Set(currentMembers.map(m => m.email.toLowerCase()));
+
+    // Calculate diff
+    const membersToAdd = desiredMembers.filter(email => !currentMemberSet.has(email));
+    const membersToRemove = currentMembers.filter(m => !desiredMemberSet.has(m.email.toLowerCase()) && m.role !== 'OWNER').map(m => m.email);
+    
+    let summary = { added: 0, removed: 0, failed: 0 };
+    const config = getConfiguration_();
+    const MEMBERSHIP_BATCH_SIZE = config.MembershipBatchSize || 10;
+    const INTER_BATCH_DELAY_MS = 1000;
+
+    // Process additions
+    if (membersToAdd.length > 0) {
+      log_(`SheetEditors Group Sync: Adding ${membersToAdd.length} members...`);
+      for (let i = 0; i < membersToAdd.length; i += MEMBERSHIP_BATCH_SIZE) {
+        const chunk = membersToAdd.slice(i, i + MEMBERSHIP_BATCH_SIZE);
+        const requests = chunk.map(email => ({
+          method: 'POST',
+          path: `/admin/directory/v1/groups/${groupEmail}/members`,
+          payload: JSON.stringify({ email: email, role: 'MEMBER' }),
+          operation: 'add',
+          email: email
+        }));
+        const chunkSummary = _executeMembershipChunkWithRetries_(requests, groupEmail, config);
+        summary.added += chunkSummary.added;
+        summary.failed += chunkSummary.failed;
+        if (i + MEMBERSHIP_BATCH_SIZE < membersToAdd.length) Utilities.sleep(INTER_BATCH_DELAY_MS);
+      }
+    }
+
+    // Process removals
+    if (!addOnly && membersToRemove.length > 0) {
+      log_(`SheetEditors Group Sync: Removing ${membersToRemove.length} members...`);
+      for (let i = 0; i < membersToRemove.length; i += MEMBERSHIP_BATCH_SIZE) {
+        const chunk = membersToRemove.slice(i, i + MEMBERSHIP_BATCH_SIZE);
+        const requests = chunk.map(email => ({
+          method: 'DELETE',
+          path: `/admin/directory/v1/groups/${groupEmail}/members/${email}`,
+          operation: 'remove',
+          email: email
+        }));
+        const chunkSummary = _executeMembershipChunkWithRetries_(requests, groupEmail, config);
+        summary.removed += chunkSummary.removed;
+        summary.failed += chunkSummary.failed;
+        if (i + MEMBERSHIP_BATCH_SIZE < membersToRemove.length) Utilities.sleep(INTER_BATCH_DELAY_MS);
+      }
+    }
+
+    log_(`SheetEditors group membership sync complete: +${summary.added} -${summary.removed} !${summary.failed}`, 'INFO');
     statusCell.setValue('OK');
     lastSyncedCell.setValue(timestamp);
     return summary;
   } catch (e) {
+    log_('ERROR in syncSheetEditorsGroup_: ' + e.message + ' Stack: ' + e.stack, 'ERROR');
     statusCell.setValue('ERROR: ' + e.message);
     throw e;
   }

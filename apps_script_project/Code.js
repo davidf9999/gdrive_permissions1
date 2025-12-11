@@ -2,7 +2,6 @@
 const SCRIPT_VERSION = '1.0.0';
 const MANAGED_FOLDERS_SHEET_NAME = 'ManagedFolders';
 const SHEET_EDITORS_SHEET_NAME = 'SheetEditors';
-const ADMINS_SHEET_NAME = 'SheetEditors';
 const LOG_SHEET_NAME = 'Log';
 const TEST_LOG_SHEET_NAME = 'TestLog';
 const USER_GROUPS_SHEET_NAME = 'UserGroups';
@@ -26,9 +25,9 @@ const DELETE_COL = 9;              // User-editable: mark for deletion
 // Column mapping for the UserGroups sheet
 const USERGROUPS_DELETE_COL = 6;   // User-editable: mark for deletion
 
-const ADMINS_LAST_SYNC_CELL = 'B2';
-const ADMINS_STATUS_CELL = 'C2';
-const SHEET_EDITORS_GROUP_NAME = 'Sheet Editors Control Panel';
+const ADMINS_LAST_SYNC_CELL = 'C2';
+const ADMINS_STATUS_CELL = 'D2';
+const SHEET_EDITORS_GROUP_NAME = 'sheets-editors';
 
 // User sheet header constants
 const USER_EMAIL_HEADER = 'User Email Address';

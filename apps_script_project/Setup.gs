@@ -150,31 +150,31 @@ function setupControlSheets_() {
 
   // Check for SheetEditors sheet
   let sheetEditorsSheet = ss.getSheetByName(SHEET_EDITORS_SHEET_NAME);
-  const sheetEditorsHeaders = ['Sheet Editor Emails', 'Last Synced', 'Status', 'Disabled'];
+  const sheetEditorsHeaders = ['Sheet Editor Emails', 'Group Admin Link', 'Last Synced', 'Status', 'Disabled'];
   if (!sheetEditorsSheet) {
     sheetEditorsSheet = ss.insertSheet(SHEET_EDITORS_SHEET_NAME);
     sheetEditorsSheet.getRange(1, 1, 1, sheetEditorsHeaders.length).setValues([sheetEditorsHeaders]).setFontWeight('bold');
     sheetEditorsSheet.setFrozenRows(1);
     log_('Created "SheetEditors" sheet.');
   } else {
-    // Update headers (this will migrate old 4-column format to new 3-column format)
-    const existingHeaders = sheetEditorsSheet.getRange(1, 1, 1, 4).getValues()[0];
+    // Update headers, migrating old formats if necessary
+    const existingHeaders = sheetEditorsSheet.getRange(1, 1, 1, sheetEditorsSheet.getMaxColumns()).getValues()[0];
 
-    // If old format detected (has 'Admins Group Email' in column B), migrate the data
-    if (existingHeaders[1] === 'Admins Group Email') {
-      log_('Migrating SheetEditors sheet from old 4-column format to new 3-column format...', 'WARN');
-      // Delete column B (the old Admins Group Email column)
-      sheetEditorsSheet.deleteColumn(2);
+    // Migration from 3-column format (Email, Last Synced, Status)
+    if (existingHeaders[1] === 'Last Synced' && existingHeaders[2] === 'Status') {
+        sheetEditorsSheet.insertColumn(2); // Insert new column for Group Admin Link
+        sheetEditorsSheet.getRange(1, 1, 1, sheetEditorsHeaders.length).setValues([sheetEditorsHeaders]).setFontWeight('bold');
+        log_('Migrated SheetEditors sheet to new 5-column format.');
+    } else {
+        // Just set the headers to be safe
+        sheetEditorsSheet.getRange(1, 1, 1, sheetEditorsHeaders.length).setValues([sheetEditorsHeaders]).setFontWeight('bold');
     }
-
-    // Set the new headers
-    sheetEditorsSheet.getRange(1, 1, 1, sheetEditorsHeaders.length).setValues([sheetEditorsHeaders]).setFontWeight('bold');
-    sheetEditorsSheet.getRange('D1').clearDataValidations().clearNote();
+    sheetEditorsSheet.getRange('E1').clearDataValidations().clearNote();
     sheetEditorsSheet.setFrozenRows(1);
   }
   
   // Add checkbox validation for the Disabled column
-  const adminDisabledRange = sheetEditorsSheet.getRange('D2:D');
+  const adminDisabledRange = sheetEditorsSheet.getRange('E2:E');
   const existingAdminDisabledRule = adminDisabledRange.getDataValidation();
   if (!existingAdminDisabledRule || existingAdminDisabledRule.getCriteriaType() !== SpreadsheetApp.DataValidationCriteria.CHECKBOX) {
     const rule = SpreadsheetApp.newDataValidation().requireCheckbox().build();
@@ -219,7 +219,8 @@ function setupControlSheets_() {
       'AutoSync Trigger Status': { value: 'DISABLED', description: 'A visual indicator of the AutoSync trigger status. (Read-only)' }
     },
     '--- Access Control ---': {
-      'SuperAdminEmails': { value: currentUserEmail, description: 'Comma-separated list of super admin email addresses. Super admins see the full menu and test sheets.' }
+      'SuperAdminEmails': { value: currentUserEmail, description: 'Comma-separated list of super admin email addresses. Super admins see the full menu and test sheets.' },
+      'SheetEditorsGroupEmail': { value: '', description: 'The email address for the Google Group containing all Sheet Editors. Auto-generates if blank.' }
     },
     '--- Sync Behavior ---': {
       'EnableSheetLocking': { value: true, description: 'Check to enable the sheet locking mechanism during sync operations. This is recommended to prevent data inconsistencies.' },
@@ -246,7 +247,6 @@ function setupControlSheets_() {
         'EnableGCPLogging': { value: false, description: 'For advanced users. Check to send logs to Google Cloud Logging for better monitoring.' },
     },
     '--- General ---': {
-        'AdminGroupEmail': { value: '', description: 'The email address for the Google Group containing all Sheet Editors. Auto-generates if blank.' },
         'EnableToasts': { value: false, description: 'Check to show small, non-pausing progress messages in the corner of the screen during syncs. These do not affect timeouts.' },
         'GitHubRepoURL': { value: 'https://github.com/davidf9999/gdrive_permissions1', description: 'The URL to the GitHub repository for this project. Used in the Help menu.' },
     },
