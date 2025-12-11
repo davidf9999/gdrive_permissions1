@@ -95,9 +95,29 @@ function migrateManagedFoldersColumns_(sheet) {
 }
 
 /**
+ * Migrates old config settings to new names.
+ */
+function migrateConfigSettings_() {
+  try {
+    // Migrate AdminGroupEmail to SheetEditorsGroupEmail
+    const adminGroupEmail = getConfigValue_('AdminGroupEmail', '');
+    if (adminGroupEmail) {
+      const sheetEditorsGroupEmail = getConfigValue_('SheetEditorsGroupEmail', '');
+      if (!sheetEditorsGroupEmail) {
+        updateConfigSetting_('SheetEditorsGroupEmail', adminGroupEmail);
+        log_('Migrated "AdminGroupEmail" to "SheetEditorsGroupEmail" in Config sheet.', 'INFO');
+      }
+    }
+  } catch (e) {
+    log_('Failed to migrate config settings: ' + e.message, 'WARN');
+  }
+}
+
+/**
  * Ensures the control sheets (ManagedFolders, SheetEditors) exist.
  */
 function setupControlSheets_() {
+  migrateConfigSettings_(); // Run config migration first
   migrateUserGroupSheets_(); // Run migration first
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
@@ -162,7 +182,7 @@ function setupControlSheets_() {
 
     // Migration from 3-column format (Email, Last Synced, Status)
     if (existingHeaders[1] === 'Last Synced' && existingHeaders[2] === 'Status') {
-        sheetEditorsSheet.insertColumn(2); // Insert new column for Group Admin Link
+        sheetEditorsSheet.insertColumnBefore(2); // Insert new column for Group Admin Link
         sheetEditorsSheet.getRange(1, 1, 1, sheetEditorsHeaders.length).setValues([sheetEditorsHeaders]).setFontWeight('bold');
         log_('Migrated SheetEditors sheet to new 5-column format.');
     } else {
