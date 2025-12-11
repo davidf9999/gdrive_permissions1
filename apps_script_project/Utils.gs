@@ -19,6 +19,34 @@ function showToast_(message, title, timeoutSeconds) {
   }
 }
 
+function getHeaderMap_(sheet) {
+  if (!sheet) return {};
+
+  const lastColumn = sheet.getLastColumn();
+  if (lastColumn < 1) return {};
+
+  const headers = sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
+  const map = {};
+  headers.forEach(function(header, index) {
+    const key = String(header || '')
+      .trim()
+      .toLowerCase();
+    if (key) {
+      map[key] = index + 1; // 1-based column index
+    }
+  });
+
+  return map;
+}
+
+function resolveColumn_(headerMap, headerName, fallback) {
+  if (!headerName) return fallback;
+  const key = String(headerName)
+    .trim()
+    .toLowerCase();
+  return headerMap[key] || fallback;
+}
+
 function generateGroupEmail_(baseName) {
   const domain = Session.getActiveUser().getEmail().split('@')[1];
   if (!domain) {
@@ -50,12 +78,18 @@ function validateUniqueGroupEmails_() {
   // 1. Collect emails from UserGroups sheet (including generated ones)
   const userGroupsSheet = spreadsheet.getSheetByName(USER_GROUPS_SHEET_NAME);
   if (userGroupsSheet && userGroupsSheet.getLastRow() > 1) {
-    const data = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 2).getValues();
+    const userGroupHeaders = getHeaderMap_(userGroupsSheet);
+    const groupNameCol = resolveColumn_(userGroupHeaders, 'GroupName', 1);
+    const groupEmailCol = resolveColumn_(userGroupHeaders, 'GroupEmail', 2);
+
+    const data = userGroupsSheet
+      .getRange(2, 1, userGroupsSheet.getLastRow() - 1, Math.max(groupNameCol, groupEmailCol))
+      .getValues();
     for (let i = 0; i < data.length; i++) {
-      const groupName = data[i][0];
+      const groupName = data[i][groupNameCol - 1];
       if (!groupName) continue;
 
-      let groupEmail = data[i][1];
+      let groupEmail = data[i][groupEmailCol - 1];
       if (!groupEmail) {
         try {
           groupEmail = generateGroupEmail_(groupName);
@@ -78,13 +112,25 @@ function validateUniqueGroupEmails_() {
   // 2. Collect emails from ManagedFolders sheet (including generated ones)
   const managedSheet = spreadsheet.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
   if (managedSheet && managedSheet.getLastRow() > 1) {
-    const data = managedSheet.getRange(2, 1, managedSheet.getLastRow() - 1, Math.max(FOLDER_NAME_COL, ROLE_COL, GROUP_EMAIL_COL)).getValues();
+    const managedHeaders = getHeaderMap_(managedSheet);
+    const folderNameCol = resolveColumn_(managedHeaders, 'FolderName', FOLDER_NAME_COL);
+    const roleCol = resolveColumn_(managedHeaders, 'Role', ROLE_COL);
+    const groupEmailCol = resolveColumn_(managedHeaders, 'GroupEmail', GROUP_EMAIL_COL);
+
+    const data = managedSheet
+      .getRange(
+        2,
+        1,
+        managedSheet.getLastRow() - 1,
+        Math.max(folderNameCol, roleCol, groupEmailCol)
+      )
+      .getValues();
     for (let i = 0; i < data.length; i++) {
-      const folderName = data[i][FOLDER_NAME_COL - 1];
-      const role = data[i][ROLE_COL - 1];
+      const folderName = data[i][folderNameCol - 1];
+      const role = data[i][roleCol - 1];
       if (!folderName || !role) continue;
-      
-      let groupEmail = data[i][GROUP_EMAIL_COL - 1];
+
+      let groupEmail = data[i][groupEmailCol - 1];
       if (!groupEmail) {
         try {
           const userSheetName = `${folderName}_${role}`;
