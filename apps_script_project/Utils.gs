@@ -862,8 +862,14 @@ function showSyncInProgress_(silentMode) {
 }
 
 function hideSyncInProgress_() {
-  // A simple toast to indicate completion, or just let the next UI action override it.
-  // For now, we'll just let it disappear or be replaced.
+  // Force-clear any lingering "Working" toast that Sheets may leave behind.
+  // Using a short, blank toast reliably dismisses the spinner without showing user-facing text.
+  try {
+    SpreadsheetApp.getActiveSpreadsheet().toast(' ', ' ', 1);
+  } catch (e) {
+    // If toast clearing fails (e.g., UI not available), just log the warning.
+    log_('Unable to clear working toast: ' + e.message, 'WARN');
+  }
 }
 
 function validateGroupNesting_() {
