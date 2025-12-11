@@ -10,6 +10,7 @@
 
 As a Super Admin, your primary responsibilities are:
 - Performing the initial setup and authorization of the script.
+- Taking care that sheet edits are applied, either manually or via configuring auto-sync.
 - Running the synchronization functions that apply the permissions defined in the sheets.
 - Managing advanced configuration and deletion operations.
 - Troubleshooting system-level errors and monitoring logs.
