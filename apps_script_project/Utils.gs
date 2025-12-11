@@ -28,7 +28,7 @@ function generateGroupEmail_(baseName) {
   const sanitizedName = baseName
     .toLowerCase()
     .replace(/\s+/g, '-')              // Replace spaces with hyphens
-    .replace(/[^a-z0-9-]/g, '')        // Remove invalid characters
+    .replace(/[^a-z0-9_-]/g, '')       // Remove invalid characters, preserving underscores
     .replace(/-+/g, '-')               // Collapse consecutive hyphens
     .replace(/^-+|-+$/g, '');          // Remove leading/trailing hyphens
 
