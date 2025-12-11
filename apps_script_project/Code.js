@@ -2,6 +2,7 @@
 const SCRIPT_VERSION = '1.0.0';
 const MANAGED_FOLDERS_SHEET_NAME = 'ManagedFolders';
 const SHEET_EDITORS_SHEET_NAME = 'SheetEditors';
+const ADMINS_SHEET_NAME = SHEET_EDITORS_SHEET_NAME; // Backward compatibility with legacy Admins sheet references
 const LOG_SHEET_NAME = 'Log';
 const TEST_LOG_SHEET_NAME = 'TestLog';
 const USER_GROUPS_SHEET_NAME = 'UserGroups';
