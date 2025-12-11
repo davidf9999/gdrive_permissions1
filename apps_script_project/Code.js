@@ -150,9 +150,13 @@ function onEdit(e) {
   if (sheetName === CONFIG_SHEET_NAME) {
     const editedRow = range.getRow();
     const editedCol = range.getColumn();
+    const headerMap = getHeaderMap_(sheet);
+    const descriptionCol = resolveColumn_(headerMap, 'Description', 3);
+    const valueCol = resolveColumn_(headerMap, 'Value', 2);
+    const settingCol = resolveColumn_(headerMap, 'Setting', 1);
 
     // Protect Description Column (column 3)
-    if (editedCol === 3) {
+    if (editedCol === descriptionCol) {
       range.setValue(oldValue);
       SpreadsheetApp.getActiveSpreadsheet().toast('The description column is not editable.', 'Edit Reverted', 10);
       return;
@@ -164,12 +168,12 @@ function onEdit(e) {
     }
 
     // Only act on edits in the "Value" column (column B/2)
-    if (editedCol !== 2) {
+    if (editedCol !== valueCol) {
       return;
     }
 
-    const settingCell = sheet.getRange(editedRow, 1);
-    const valueCell = sheet.getRange(editedRow, 2);
+    const settingCell = sheet.getRange(editedRow, settingCol);
+    const valueCell = sheet.getRange(editedRow, valueCol);
     const settingName = settingCell.getValue();
 
     // Handle Read-Only Status Indicator
