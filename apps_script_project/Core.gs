@@ -117,7 +117,7 @@ function processManagedFolders_(options = {}) {
     if (removeOnly || returnPlanOnly) {
       log_('Processing in delete-only or planning mode...');
       jobsToProcess.forEach(job => {
-        const result = syncGroupMembership_(job.groupEmail, job.userSheetName, options);
+        const result = syncGroupMembership_(job.existingGroupEmail, job.existingUserSheetName, options);
         if (result) {
             if (returnPlanOnly) {
                 totalSummary.plan = (totalSummary.plan || []).concat(result);
