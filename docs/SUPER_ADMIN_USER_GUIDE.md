@@ -28,6 +28,11 @@ These functions read the control sheets and apply the defined state to Google Dr
 *   **`Remove Users from Groups`**: A destructive sync. It only **removes** members from groups if they have been removed from the user sheets. It will **not** add anyone. You will be asked to confirm before it proceeds.
 *   **`Full Sync`**: Performs both additions and removals in one operation. It also processes deletion requests for entire groups or folder-role bindings. **This is the most powerful sync and should be used with care.**
 
+For changes made by Sheet Editors to be reflected in Google Drive and Google Groups, these synchronization functions must be executed. This can happen in two ways:
+
+1.  **Manual Sync:** A Super Admin (or the Script Owner) manually selects one of the above menu items. This provides immediate application of changes.
+2.  **Auto Sync:** The `autoSync` feature, if enabled and configured (refer to the `Config` sheet settings and the "Setup AutoSync" menu option), will periodically run the synchronization in the background. A Super Admin must ensure `autoSync` is correctly configured for automated application of changes.
+
 ### Verifying Permissions with the Folders Audit
 
 The script includes a powerful, read-only **Folders Audit** feature that lets you check for any issues or discrepancies without making any changes. It's highly recommended to run this periodically to ensure the integrity of your permissions setup.
