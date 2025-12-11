@@ -21,14 +21,9 @@ function syncSheetEditors(options = {}) {
       return totalSummary;
     }
 
-    // Get SheetEditors group email from Config, with fallback for backward compatibility
-    let groupEmail = getConfigValue_('SheetEditorsGroupEmail', '');
-    if (!groupEmail) {
-      groupEmail = getConfigValue_('AdminGroupEmail', ''); // Fallback to old name
-      if (groupEmail) {
-        updateConfigSetting_('SheetEditorsGroupEmail', groupEmail); // Migrate to new name
-      }
-    }
+    const adminGroupEmail = getConfigValue_('AdminGroupEmail', '');
+    const sheetEditorsGroupEmail = getConfigValue_('SheetEditorsGroupEmail', '');
+    let groupEmail = sheetEditorsGroupEmail || adminGroupEmail;
 
     if (groupEmail) {
       groupEmail = groupEmail.toString().trim().toLowerCase();
@@ -36,12 +31,16 @@ function syncSheetEditors(options = {}) {
 
     // Validate that groupEmail is a valid email format (contains @ and a domain)
     const emailPattern = /^\S+@\S+\.\S+$/;
-    if (!groupEmail || !emailPattern.test(groupEmail)) {
-      if (groupEmail) {
-        log_('Invalid Sheet Editors group email in Config: "' + groupEmail + '". Regenerating...', 'WARN');
-      }
+    if (!groupEmail) {
       groupEmail = generateGroupEmail_(SHEET_EDITORS_GROUP_NAME);
       updateConfigSetting_('SheetEditorsGroupEmail', groupEmail);
+    } else if (!emailPattern.test(groupEmail)) {
+      const sourceKey = sheetEditorsGroupEmail ? 'SheetEditorsGroupEmail' : 'AdminGroupEmail';
+      const message = 'Invalid ' + sourceKey + ' value "' + groupEmail + '" in Config. Please update the Config sheet with a valid group email to continue syncing.';
+      log_(message, 'ERROR');
+      throw new Error(message);
+    } else if (!sheetEditorsGroupEmail && adminGroupEmail) {
+      updateConfigSetting_('SheetEditorsGroupEmail', groupEmail); // Align new key to legacy value without generating a new group
     }
 
     // 1. Get desired editors for the SPREADSHEET ITSELF
