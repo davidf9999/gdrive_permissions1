@@ -136,10 +136,10 @@ function processManagedFolders_(options = {}) {
     _batchFindFolders(jobsToProcess, sheet);
 
     log_('Step 2/5: Creating new folders...');
-    _sequentiallyCreateFolders(jobsToProcess, sheet, silentMode);
+    _sequentiallyCreateFolders(jobsToProcess, sheet, silentMode, totalSummary);
 
     log_('Step 3/5: Creating groups and user sheets...');
-    _sequentiallyCreateGroupsAndSheets(jobsToProcess, sheet, lockManager);
+    _sequentiallyCreateGroupsAndSheets(jobsToProcess, sheet, lockManager, totalSummary);
 
     log_('Step 4/5: Batch-setting folder permissions...');
     const permSummary = _batchSetPermissions(jobsToProcess);
@@ -282,23 +282,27 @@ function _batchFindFolders(jobs, sheet) {
 /**
  * [HELPER] Sequentially creates folders that were not found in the batch find operation.
  */
-function _sequentiallyCreateFolders(jobs, sheet, silentMode) {
+function _sequentiallyCreateFolders(jobs, sheet, silentMode, totalSummary) {
     jobs.forEach(job => {
         try {
             if (job.folder) return; // Already found or processed
-            const folder = getOrCreateFolder_(job.folderName, job.folderId, { silentMode: silentMode });
-            job.folder = folder;
-            job.folderId = folder.getId();
-            job.folderName = folder.getName(); // Update name in case it was corrected
+            const result = getOrCreateFolder_(job.folderName, job.folderId, { silentMode: silentMode });
+            job.folder = result.folder;
+            job.folderId = result.folder.getId();
+            job.folderName = result.folder.getName(); // Update name in case it was corrected
+            if (result.wasNewlyCreated) {
+              totalSummary.added++;
+            }
 
             // Write updates to sheet immediately
             sheet.getRange(job.rowIndex, FOLDER_ID_COL).setValue(job.folderId);
             sheet.getRange(job.rowIndex, FOLDER_NAME_COL).setValue(job.folderName);
-            sheet.getRange(job.rowIndex, URL_COL).setValue(folder.getUrl());
+            sheet.getRange(job.rowIndex, URL_COL).setValue(result.folder.getUrl());
         } catch (e) {
             log_(`Failed to get/create folder for row ${job.rowIndex}: ${e.message}`, 'ERROR');
             sheet.getRange(job.rowIndex, STATUS_COL).setValue('Error: Folder creation failed');
             job.error = true; // Mark job as failed
+            totalSummary.failed++;
         }
     });
 }
@@ -306,7 +310,7 @@ function _sequentiallyCreateFolders(jobs, sheet, silentMode) {
 /**
  * [HELPER] Sequentially creates groups and user sheets for jobs that need them.
  */
-function _sequentiallyCreateGroupsAndSheets(jobs, sheet, lockManager) {
+function _sequentiallyCreateGroupsAndSheets(jobs, sheet, lockManager, totalSummary) {
   if (shouldSkipGroupOps_()) {
       log_('Skipping group/sheet creation (Admin SDK not available).', 'WARN');
       return;
@@ -329,6 +333,7 @@ function _sequentiallyCreateGroupsAndSheets(jobs, sheet, lockManager) {
         log_(`Failed to generate group email for row ${job.rowIndex}: ${e.message}`, 'ERROR');
         sheet.getRange(job.rowIndex, STATUS_COL).setValue('Error: Bad group name');
         job.error = true;
+        totalSummary.failed++;
         return;
       }
     }
@@ -339,11 +344,20 @@ function _sequentiallyCreateGroupsAndSheets(jobs, sheet, lockManager) {
     sheet.getRange(job.rowIndex, GROUP_EMAIL_COL).setValue(job.groupEmail);
 
     // Create resources
-    const userSheet = getOrCreateUserSheet_(job.userSheetName);
+    const sheetResult = getOrCreateUserSheet_(job.userSheetName);
+    if (sheetResult.wasNewlyCreated) {
+      totalSummary.added++;
+    }
+    const userSheet = sheetResult.sheet;
+
     if (lockManager.isEnabled) {
       lockManager.lock(userSheet);
     }
-    getOrCreateGroup_(job.groupEmail, job.userSheetName);
+    
+    const groupResult = getOrCreateGroup_(job.groupEmail, job.userSheetName);
+    if (groupResult.wasNewlyCreated) {
+      totalSummary.added++;
+    }
   });
 }
 
@@ -850,6 +864,8 @@ function updateDeleteStatusWarnings_() {
 
 function getOrCreateFolder_(folderName, folderId, options = {}) {
   const silentMode = options && options.silentMode !== undefined ? options.silentMode : false;
+  let wasNewlyCreated = false;
+
   if (folderId) {
     try {
       const folder = DriveApp.getFolderById(folderId);
@@ -893,7 +909,7 @@ function getOrCreateFolder_(folderName, folderId, options = {}) {
         }
       }
       log_('Successfully found folder "' + folder.getName() + '" by ID.');
-      return folder;
+      return { folder: folder, wasNewlyCreated: false };
     } catch (e) {
       if (e && (e.code === 'FOLDER_RENAME_DECLINED' || e.code === 'FOLDER_RENAME_FAILED')) {
         throw e;
@@ -913,12 +929,13 @@ function getOrCreateFolder_(folderName, folderId, options = {}) {
       throw new Error('Ambiguous: Multiple folders exist with the name "' + folderName + '". Please specify by ID.');
     }
     log_('Successfully found folder "' + folderName + '" by name.');
-    return foundFolder;
+    return { folder: foundFolder, wasNewlyCreated: false };
   } else {
     log_('No folder found with name "' + folderName + '". Creating it now...');
     const newFolder = DriveApp.createFolder(folderName);
     log_('Successfully created folder "' + folderName + '"');
-    return newFolder;
+    wasNewlyCreated = true;
+    return { folder: newFolder, wasNewlyCreated: wasNewlyCreated };
   }
 }
 
@@ -968,6 +985,7 @@ function getProjectIdFromError_(errorMessage) {
 function getOrCreateUserSheet_(sheetName) {
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = spreadsheet.getSheetByName(sheetName);
+  let wasNewlyCreated = false;
 
   if (sheet) {
     ensureUserSheetHeaders_(sheet);
@@ -983,10 +1001,11 @@ function getOrCreateUserSheet_(sheetName) {
       }
     }
 
-    return sheet;
+    return { sheet: sheet, wasNewlyCreated: false };
   } else {
     log_('User sheet "' + sheetName + '" not found. Creating it...');
     sheet = spreadsheet.insertSheet(sheetName, spreadsheet.getSheets().length);
+    wasNewlyCreated = true;
 
     const headerRange = sheet.getRange(1, 1, 1, 2);
     headerRange.setValues([[USER_EMAIL_HEADER, DISABLED_HEADER]]);
@@ -1001,7 +1020,7 @@ function getOrCreateUserSheet_(sheetName) {
     disabledRange.setDataValidation(rule);
 
     log_('Successfully created user sheet: "' + sheetName + '"');
-    return sheet;
+    return { sheet: sheet, wasNewlyCreated: wasNewlyCreated };
   }
 }
 
