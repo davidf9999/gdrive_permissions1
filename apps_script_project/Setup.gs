@@ -240,7 +240,7 @@ function setupControlSheets_() {
     },
     '--- Access Control ---': {
       'SuperAdminEmails': { value: currentUserEmail, description: 'Comma-separated list of super admin email addresses. Super admins see the full menu and test sheets.' },
-      'SheetEditorsGroupEmail': { value: '', description: 'The email address for the Google Group containing all Sheet Editors. Auto-generates if blank.' }
+      'SheetEditorsGroupEmail': { value: '', description: 'The email address for the Google Group containing all Sheet Editors. Uses AdminGroupEmail if set; auto-generates only when both are blank.' }
     },
     '--- Sync Behavior ---': {
       'EnableSheetLocking': { value: true, description: 'Check to enable the sheet locking mechanism during sync operations. This is recommended to prevent data inconsistencies.' },
