@@ -2,7 +2,11 @@
 
 > **Who is this guide for?** This guide is for **Google Workspace Super Admins** who are responsible for the initial setup, ongoing maintenance, and execution of the core synchronization scripts.
 
-**Crucial Prerequisite:** To perform any of the actions in this guide, you must be **both** a Google Workspace Super Admin **and** have been granted **"Editor"** access to the Permissions Manager Google Sheet itself. Being a Super Admin does **not** automatically grant you access to the sheet.
+**Crucial Prerequisite:** To perform any of the actions in this guide, you must be a Google Workspace Super Admin **and** have permission to edit the Permissions Manager Google Sheet. This permission is granted in one of two ways:
+*   **By being the Owner of the spreadsheet file.**
+*   **By being listed as an active user in the `SheetEditors` sheet.**
+
+Being a Super Admin alone does **not** automatically grant you access to the sheet. The script will always treat the spreadsheet Owner as an editor, even if they are not listed in the `SheetEditors` sheet.
 
 ---
 
