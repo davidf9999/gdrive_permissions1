@@ -29,12 +29,13 @@ function syncSheetEditors(options = {}) {
         updateConfigSetting_('SheetEditorsGroupEmail', groupEmail); // Migrate to new name
       }
     }
-    
+
     if (groupEmail) {
       groupEmail = groupEmail.toString().trim().toLowerCase();
     }
-    
-    const emailPattern = /^[^S@]+@[^S@]+\.[^S@]+$/;
+
+    // Validate that groupEmail is a valid email format (contains @ and a domain)
+    const emailPattern = /^\S+@\S+\.\S+$/;
     if (!groupEmail || !emailPattern.test(groupEmail)) {
       if (groupEmail) {
         log_('Invalid Sheet Editors group email in Config: "' + groupEmail + '". Regenerating...', 'WARN');
@@ -237,20 +238,23 @@ function syncUserGroups(options = {}) {
     
     // If Admin SDK is unavailable, we can't create a plan or sync.
     if (shouldSkipGroupOps_()) {
-      log_('Admin SDK (Admin Directory) not available. Skipping syncUserGroups.', 'WARN');
-      if (!returnPlanOnly) {
-          const dataRange = userGroupsSheet.getRange(2, 1, lastRow - 1, 5); 
-          const data = dataRange.getValues();
-          for (let i = 0; i < data.length; i++) {
-            const rowIndex = i + 2;
-            if (data[i][0]) { // If there's a group name
-              userGroupsSheet.getRange(rowIndex, 4).setValue(Utilities.formatDate(new Date(), SpreadsheetApp.getActive().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss'));
-              userGroupsSheet.getRange(rowIndex, 5).setValue('SKIPPED (No Admin SDK)');
-            }
-          }
-          if (!silentMode) SpreadsheetApp.getUi().alert('User group sync skipped: Admin Directory service not available.');
+      const skipMessage = 'Admin SDK (Admin Directory) not available. Skipping syncUserGroups.';
+      log_(skipMessage, 'WARN');
+      if (returnPlanOnly) {
+        throw new Error(skipMessage + ' Enable the Admin SDK to plan user group removals.');
       }
-      return returnPlanOnly ? [] : totalSummary;
+
+      const dataRange = userGroupsSheet.getRange(2, 1, lastRow - 1, 5);
+      const data = dataRange.getValues();
+      for (let i = 0; i < data.length; i++) {
+        const rowIndex = i + 2;
+        if (data[i][0]) { // If there's a group name
+          userGroupsSheet.getRange(rowIndex, 4).setValue(Utilities.formatDate(new Date(), SpreadsheetApp.getActive().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss'));
+          userGroupsSheet.getRange(rowIndex, 5).setValue('SKIPPED (No Admin SDK)');
+        }
+      }
+      if (!silentMode) SpreadsheetApp.getUi().alert('User group sync skipped: Admin Directory service not available.');
+      return totalSummary;
     }
     
     const dataRange = userGroupsSheet.getRange(2, 1, lastRow - 1, 5);
