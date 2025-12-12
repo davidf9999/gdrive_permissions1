@@ -864,11 +864,27 @@ function showSyncInProgress_(silentMode) {
 function hideSyncInProgress_() {
   // Force-clear any lingering "Working" toast that Sheets may leave behind.
   // Using a short, blank toast reliably dismisses the spinner without showing user-facing text.
+  let cleared = false;
+
   try {
-    SpreadsheetApp.getActiveSpreadsheet().toast(' ', ' ', 1);
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    ss.toast(' ', ' ', 1);
+    SpreadsheetApp.flush();
+    Utilities.sleep(200);
+    ss.toast('', '', 1);
+    cleared = true;
   } catch (e) {
-    // If toast clearing fails (e.g., UI not available), just log the warning.
-    log_('Unable to clear working toast: ' + e.message, 'WARN');
+    log_('Unable to clear working toast via Spreadsheet.toast: ' + e.message, 'WARN');
+  }
+
+  if (cleared) return;
+
+  // Fallback: open and immediately close a blank modal to force the UI to refresh.
+  try {
+    const html = HtmlService.createHtmlOutput('<script>google.script.host.close();</script>').setWidth(10).setHeight(10);
+    SpreadsheetApp.getUi().showModalDialog(html, '');
+  } catch (e) {
+    log_('Unable to clear working toast via modal refresh: ' + e.message, 'WARN');
   }
 }
 
