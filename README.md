@@ -2,14 +2,11 @@
 
 > **Important Note:** This project requires a **Google Workspace domain**. While personal @gmail.com accounts can be managed by this system, they cannot be used by administrators to directly run the Apps Script due to its reliance on Google Workspace administrative APIs.
 
-The Google Drive Permission Manager automates Drive folder sharing by treating
-one Google Spreadsheet as the source of truth for access. Each folder/role combination
-gets its own tab where administrators list email addresses—no scripting
-experience required. A bound Apps Script project runs on a five-minute cadence
-to keep the relevant Google Groups and Drive permissions aligned with those
-tabs. This repository packages that script alongside guided setup
-documentation, automated tests, and optional infrastructure helpers so teams can
-roll out the workflow consistently.
+The Google Drive Permission Manager offers a convenient, spreadsheet-based solution for organizations seeking centralized control over data sharing. It empowers people that are not professional administrators to be"sheet_editors" and manage complex access permissions for Google Drive folders directly from a Google Sheet. The sheet serves as the single source of truth. Hence, it is particularly well-suited for environments where teams and projects are dynamic, and traditional identity management systems may not be feasible.
+
+This project supports accessibility for organizations at a low cost: Any user with a Google-affiliated account (including free @gmail.com addresses) can be granted access, while the management of these permissions can be delegated to a list of trusted users who also do not need to be paid Google Workspace administrators. It requires only a registered domain (~$10/year) and a single Google Workspace user license (starting from ~$8/month) to operate.
+
+The system has Apps Scripts that synchronizes the permissions defined in the control sheet with Google Workspace. This synchronization can be triggered manually by a super admin (paid) user at any time or configured to run automatically at regular intervals. To manage permissions efficiently and at scale, the script creates and maintains Google Groups for each folder and role combination, ensuring a robust and maintainable access control structure. This repository provides the complete scripts, an AI setup assistant, accompanied by comprehensive setup guides, and automated tests to enable a smooth and consistent rollout.
 
 ---
 
