@@ -144,7 +144,7 @@ alternatives for enterprise-scale deployments.
 
 ## Conceptual comparison: Google Drive vs. SharePoint
 
-SharePoint is a helpful analogy for readers coming from Microsoft ecosystems, but it is not a supported backend for this tool. For the full explanation—including a feature-by-feature comparison table—see [`docs/sharepoint_comparison.md`](docs/sharepoint_comparison.md), which is also linked from the [FAQ](FAQ.md#can-sharepoint-replace-google-drive-for-this-project).
+SharePoint is a helpful analogy for readers coming from Microsoft ecosystems, but it is not a supported backend for this tool. For the full explanation—including a feature-by-feature comparison table—see [`docs/SHAREPOINT_COMPARISON.md`](docs/SHAREPOINT_COMPARISON.md), which is also linked from the [FAQ](FAQ.md#can-sharepoint-replace-google-drive-for-this-project).
 
 ---
 
@@ -239,7 +239,7 @@ reduce API calls during large syncs).
 | Stopping or pausing scripts | [`docs/STOP_SCRIPTS.md`](docs/STOP_SCRIPTS.md) |
 | Full setup walkthrough (Workspace, Cloud, Script) | [`docs/SETUP_GUIDE.md`](docs/SETUP_GUIDE.md) |
 | Spreadsheet and script onboarding checklist | [`docs/ONBOARDING.md`](docs/ONBOARDING.md) |
-| SharePoint conceptual comparison | [`docs/sharepoint_comparison.md`](docs/sharepoint_comparison.md) |
+| SharePoint conceptual comparison | [`docs/SHAREPOINT_COMPARISON.md`](docs/SHAREPOINT_COMPARISON.md) |
 | Frequently asked questions | [`FAQ.md`](FAQ.md) |
 | Architecture deep dive | [`docs/ARCHITECTURE_OVERVIEW.md`](docs/ARCHITECTURE_OVERVIEW.md) |
 | Historical decisions & debugging notes | [`GEMINI.md`](GEMINI.md) |
