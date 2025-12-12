@@ -43,6 +43,7 @@ The system has Apps Scripts that synchronizes the permissions defined in the con
   notifications make auditing straightforward.
 - **Extensive test helpers** – Built-in stress tests and manual access tests are
   available directly from the spreadsheet UI.
+- **AI setup assistant** – Guides you through the setup process in a pre-configured cloud environment, simplifying deployment.
 
 ---
 
