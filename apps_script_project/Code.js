@@ -9,6 +9,9 @@ const USER_GROUPS_SHEET_NAME = 'UserGroups';
 const CONFIG_SHEET_NAME = 'Config';
 const FOLDER_AUDIT_LOG_SHEET_NAME = 'FoldersAuditLog';
 const SYNC_HISTORY_SHEET_NAME = 'SyncHistory';
+if (typeof TEST_FEATURES_ENABLED === 'undefined') {
+  var TEST_FEATURES_ENABLED = false;
+}
 const DEFAULT_MAX_LOG_LENGTH = 10000;
 const AUTO_SYNC_CHANGE_SIGNATURE_KEY = 'AutoSyncChangeSignature';
 
@@ -188,19 +191,28 @@ function onEdit(e) {
 }
 
 function buildSuperAdminMenu_(menu, ui) {
-  menu.addSubMenu(createManualSyncMenu_(ui));
-  menu.addSeparator();
-  menu.addSubMenu(createAutoSyncMenu_(ui));
-  menu.addSeparator();
-  menu.addSubMenu(createAuditsMenu_(ui));
-  menu.addSeparator();
-  menu.addSubMenu(createTestingMenu_(ui));
-  menu.addSeparator();
-  menu.addSubMenu(createLoggingMenu_(ui));
-  menu.addSeparator();
-  menu.addSubMenu(createAdvancedMenu_(ui));
-  menu.addSeparator();
-  menu.addSubMenu(createHelpMenu_(ui));
+  const subMenus = [
+    createManualSyncMenu_(ui),
+    createAutoSyncMenu_(ui),
+    createAuditsMenu_(ui)
+  ];
+
+  if (TEST_FEATURES_ENABLED === true) {
+    subMenus.push(createTestingMenu_(ui));
+  }
+
+  subMenus.push(
+    createLoggingMenu_(ui),
+    createAdvancedMenu_(ui),
+    createHelpMenu_(ui)
+  );
+
+  subMenus.forEach(function(subMenu, index) {
+    if (index > 0) {
+      menu.addSeparator();
+    }
+    menu.addSubMenu(subMenu);
+  });
 }
 
 function buildRestrictedMenu_() {
@@ -509,9 +521,14 @@ function createAdvancedMenu_(ui) {
 }
 
 function createHelpMenu_(ui) {
-  return ui.createMenu('Help')
-    .addItem('User Guide', 'openUserGuide')
-    .addItem('Testing Guide', 'openTestingGuide')
+  const helpMenu = ui.createMenu('Help')
+    .addItem('User Guide', 'openUserGuide');
+
+  if (TEST_FEATURES_ENABLED === true) {
+    helpMenu.addItem('Testing Guide', 'openTestingGuide');
+  }
+
+  return helpMenu
     .addItem('README', 'openReadme')
     .addItem('All Documentation', 'openAllDocumentation')
     .addSeparator()

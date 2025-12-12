@@ -2,6 +2,16 @@
 
 This project uses a two-pronged approach to testing to ensure both the correctness of the code's logic and its proper functioning in a live Google environment. This guide covers both testing strategies.
 
+> **Enable the in-spreadsheet testing menu:** The Apps Script bundle ships **without** test helpers by default. Build with `npm run bundle:with-tests` (or set `TEST_FEATURES_ENABLED = true` when using `clasp`) if you want the `Permissions Manager → Testing` menu to appear in your spreadsheet.
+
+## Quick manual smoke tests for the bundles
+
+Use this checklist to confirm the setup options behave as expected before relying on the deeper test suites:
+
+1. **Default bundle (no tests):** Run `npm run bundle`, paste `dist/apps_scripts_bundle.gs` into Apps Script, reload the spreadsheet, and verify the **Testing** submenu is **absent** while the other menus appear as normal.
+2. **Bundle with tests enabled:** Run `npm run bundle:with-tests`, paste the bundle, reload, and confirm the **Permissions Manager → Testing** submenu and the test config defaults (e.g., `ShowTestPrompts`, `EnableToasts`) are present in the Config sheet.
+3. **Clasp deployment:** If pushing source files individually with `clasp`, ensure `Tests.gs` and `TestHelpers.gs` remain in the project and add a short file that sets `var TEST_FEATURES_ENABLED = true;`. Reload and confirm the Testing submenu appears.
+
 ---
 
 ## Automated Unit Testing (with Jest)

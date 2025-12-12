@@ -269,8 +269,11 @@ function setupControlSheets_() {
     '--- General ---': {
         'EnableToasts': { value: false, description: 'Check to show small, non-pausing progress messages in the corner of the screen during syncs. These do not affect timeouts.' },
         'GitHubRepoURL': { value: 'https://github.com/davidf9999/gdrive_permissions1', description: 'The URL to the GitHub repository for this project. Used in the Help menu.' },
-    },
-    '--- Testing ---': {
+    }
+  };
+
+  if (TEST_FEATURES_ENABLED === true) {
+    defaultConfig['--- Testing ---'] = {
         'ShowTestPrompts': { value: true, description: 'Set to FALSE to run tests without UI prompts that pause the script. Required for fully automated test runs.'},
         'TestAutoConfirm': { value: false, description: 'For automated testing only. Set to TRUE to automatically answer "Yes" to all test verification prompts.' },
         'TestCleanup': { value: false, description: 'Set to TRUE to automatically delete all folders, groups, and sheets created by a test. If FALSE, you will be prompted manually.' },
@@ -279,8 +282,8 @@ function setupControlSheets_() {
         'TestRole': { value: 'Editor', description: 'The role to be tested during the Manual Access Test.' },
         'TestNumFolders': { value: 2, description: 'The number of folders to create during the Stress Test. Total API calls are TestNumFolders * TestNumUsers. High numbers can cause API rate-limiting errors.' },
         'TestNumUsers': { value: 5, description: 'The number of users to create PER FOLDER during the Stress Test. Total API calls are TestNumFolders * TestNumUsers. High numbers can cause API rate-limiting errors.' }
-    }
-  };
+    };
+  }
 
   let configSheet = ss.getSheetByName(CONFIG_SHEET_NAME);
   if (!configSheet) {

@@ -5,6 +5,8 @@ const sourceDir = 'apps_script_project';
 const outputDir = 'dist';
 const outputFile = path.join(outputDir, 'apps_scripts_bundle.gs');
 
+const includeTests = process.argv.includes('--with-tests');
+
 // Core files that must be loaded in a specific order.
 const coreFiles = [
     'Code.js',
@@ -14,9 +16,15 @@ const coreFiles = [
 ];
 
 // Files to explicitly exclude from the bundle.
+const testFiles = [
+    'TestHelpers.gs',
+    'Tests.gs'
+];
+
 const excludeFiles = [
     'appsscript.json',
-    'config.json.template'
+    'config.json.template',
+    ...(!includeTests ? testFiles : [])
 ];
 
 try {
@@ -42,6 +50,7 @@ try {
     // Combine core files and other files to get the final processing order
     const fileOrder = [...coreFiles, ...otherFiles];
 
+    console.log(`Including test files: ${includeTests ? 'yes' : 'no'}`);
     console.log('Bundling files in the following order:');
     console.log(fileOrder.join(' -> '));
 
@@ -61,7 +70,7 @@ try {
             console.warn(`WARNING: File not found and will be skipped: ${filePath}`);
             return content;
         }
-    }, '');
+    }, `// Bundler options\n// TEST_FEATURES_ENABLED controls whether test menus, config, and code are available.\nvar TEST_FEATURES_ENABLED = ${includeTests};\n\n`);
 
     // Write the bundled file
     fs.writeFileSync(outputFile, bundleContent, 'utf8');
