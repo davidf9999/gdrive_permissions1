@@ -77,7 +77,10 @@ This is your first action.
     2.  Explain that you are now opening the `SETUP_GUIDE.md` file for their reference.
     3.  Use `run_shell_command` to execute `code docs/SETUP_GUIDE.md`.
     4.  Instruct them to follow the guide to create or reuse a Google Workspace tenant.
-    5.  Ask them to confirm once this is complete.
+    5.  Remind them that Google will prompt for a phone number to verify the new Google Workspace Super Admin, that each phone
+        number can only be used a limited number of times, and that some cellular providers' numbers may not be supported for
+        verification.
+    6.  Ask them to confirm once this is complete.
 -   **VERIFICATION:**
     1.  When the installer confirms, transition to `SUPER_ADMIN_PREPARED`.
 
