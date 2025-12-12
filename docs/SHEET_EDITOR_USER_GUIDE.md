@@ -8,7 +8,7 @@ Welcome! This guide explains how to use the Google Spreadsheet to manage folder 
 
 ## The Core Concept
 
-This system works by linking Google Drive folders to Google Groups. Instead of sharing a folder with hundreds of individual email addresses, you share it with a single group (e.g., `my-project-editors@your-domain.com`). You then control who has access by simply adding or removing people from that group.
+This system works by linking Google Drive folders to Google Groups. Instead of sharing a folder with multiple (even hundreds) of individual email addresses, you share it with a single group (e.g., `my-project-editors@your-domain.com`). You then control who has access by simply adding or removing people from that group.
 
 This spreadsheet is your central control panel for this entire process.
 
