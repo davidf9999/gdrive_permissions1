@@ -6,7 +6,7 @@ This document outlines the final architecture for the AI Assistant v2. The core 
 
 - **Resilient & Session-Independent:** The assistant can be stopped and started at will. It will determine the correct state of the setup process every time it runs, without relying on persistent data from previous sessions.
 - **State-Aware ("Jumpable"):** The assistant will detect the actual state of the user's environment, even if some steps were completed manually, and "jump" to the correct current step.
-- **Document-Driven:** The assistant's logic and the user's view will be driven by the primary setup guide, `docs/SETUP_GUIDE.md`.
+- **Document-Driven:** The assistant's logic and the user's view will be driven by the primary [Setup Guide](SETUP_GUIDE.md).
 - **Zero-Friction Startup:** The assistant requires no complex pre-setup from the user. The user can run it directly from the main project clone.
 - **Non-Intrusive:** The assistant does not require any external databases or services.
 
@@ -18,7 +18,7 @@ The assistant will be architected as a Finite State Machine (FSM). It is "statel
 
 ### 2.1. High-Level States
 
-The main states of the FSM are derived directly from the major numbered steps in `docs/SETUP_GUIDE.md`:
+The main states of the FSM are derived directly from the major numbered steps in the [Setup Guide](SETUP_GUIDE.md):
 
 - `START`
 - `WORKSPACE_TENANT_CREATED`
@@ -62,9 +62,9 @@ The assistant will hold necessary data (like the user-provided Script ID) in mem
 
 ## 3. User Role Clarification
 
-To address potential user confusion regarding the various Google accounts and roles, a new explanatory asset will be created and added to the main setup guide.
+To address potential user confusion regarding the various Google accounts and roles, a new explanatory asset will be created and added to the main [Setup Guide](SETUP_GUIDE.md).
 
-- **Task:** Create a clear table and/or Mermaid diagram in `docs/SETUP_GUIDE.md`.
+- **Task:** Create a clear table and/or Mermaid diagram in the [Setup Guide](SETUP_GUIDE.md).
 - **Content:** The asset will clearly distinguish between:
     - **Google Workspace Super Admin**
     - **The user running the script**
@@ -75,7 +75,7 @@ To address potential user confusion regarding the various Google accounts and ro
 
 ## 4. Document-Driven User Experience
 
-- **Source of Truth:** The assistant will treat `docs/SETUP_GUIDE.md` as the canonical source of truth for the setup steps.
+- **Source of Truth:** The assistant will treat the [Setup Guide](SETUP_GUIDE.md) as the canonical source of truth for the setup steps.
 - **Editor Interaction:** Direct editor manipulation is not reliably feasible. As an alternative, the assistant will provide the user with a direct markdown link to the relevant section of the guide for each step.
 
 ---
@@ -90,5 +90,5 @@ To address potential user confusion regarding the various Google accounts and ro
 3.  **Phase 3: Refactor Assistant Actions**
     - Refactor the existing linear assistant logic into discrete "action" functions that are called by the FSM for each state. These actions will contain the granular sub-step logic.
 4.  **Phase 4: Documentation**
-    - Create the User Role Clarification table/diagram and insert it into `docs/SETUP_GUIDE.md`.
-    - Update the main `AI_ASSISTANT_GUIDE.md` to reflect the new, more robust functionality.
+    - Create the User Role Clarification table/diagram and insert it into the [Setup Guide](SETUP_GUIDE.md).
+    - Update the main [AI Assistant Guide](AI_ASSISTANT_GUIDE.md) to reflect the new, more robust functionality.
