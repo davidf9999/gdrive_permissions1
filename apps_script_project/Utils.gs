@@ -866,29 +866,22 @@ function showSyncInProgress_(silentMode) {
 }
 
 function hideSyncInProgress_() {
-  // Force-clear any lingering "Working" toast that Sheets may leave behind.
-  // Using a short, blank toast reliably dismisses the spinner without showing user-facing text.
-  let cleared = false;
-
+  // Try to force the host UI to refresh without showing a toast or modal that can
+  // leave behind the "Working" overlay. A tiny sidebar that immediately closes
+  // tends to nudge the Sheets client to repaint.
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    ss.toast(' ', ' ', 1);
+    const ui = SpreadsheetApp.getUi();
+    const html = HtmlService.createHtmlOutput(
+      '<script>setTimeout(function(){google.script.host.close();}, 50);</script>'
+    )
+      .setWidth(10)
+      .setHeight(10);
+    ui.showSidebar(html);
     SpreadsheetApp.flush();
-    Utilities.sleep(200);
-    ss.toast('', '', 1);
-    cleared = true;
+    Utilities.sleep(150);
+    ui.showSidebar(HtmlService.createHtmlOutput('<script>google.script.host.close();</script>').setWidth(10));
   } catch (e) {
-    log_('Unable to clear working toast via Spreadsheet.toast: ' + e.message, 'WARN');
-  }
-
-  if (cleared) return;
-
-  // Fallback: open and immediately close a blank modal to force the UI to refresh.
-  try {
-    const html = HtmlService.createHtmlOutput('<script>google.script.host.close();</script>').setWidth(10).setHeight(10);
-    SpreadsheetApp.getUi().showModalDialog(html, '');
-  } catch (e) {
-    log_('Unable to clear working toast via modal refresh: ' + e.message, 'WARN');
+    log_('Unable to refresh UI after sync: ' + e.message, 'WARN');
   }
 }
 
