@@ -858,7 +858,11 @@ function showSyncInProgress_(silentMode) {
   if (enableSheetLocking) {
     message = 'A synchronization script is running. The sheet is temporarily locked to prevent data corruption. Please wait a moment.';
   }
-  showToast_(message, 'Sync in Progress', 30); // Increase duration to 30 seconds
+  // Avoid using Spreadsheet toast here; the host sometimes leaves behind a persistent
+  // "Working" overlay even after the script finishes. Instead, surface the message in
+  // logs only. Sheet locking (if enabled) still provides a visual indicator through the
+  // lock icon.
+  log_(message, 'INFO');
 }
 
 function hideSyncInProgress_() {
