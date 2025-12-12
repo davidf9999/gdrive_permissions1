@@ -858,12 +858,31 @@ function showSyncInProgress_(silentMode) {
   if (enableSheetLocking) {
     message = 'A synchronization script is running. The sheet is temporarily locked to prevent data corruption. Please wait a moment.';
   }
-  showToast_(message, 'Sync in Progress', 30); // Increase duration to 30 seconds
+  // Avoid using Spreadsheet toast here; the host sometimes leaves behind a persistent
+  // "Working" overlay even after the script finishes. Instead, surface the message in
+  // logs only. Sheet locking (if enabled) still provides a visual indicator through the
+  // lock icon.
+  log_(message, 'INFO');
 }
 
 function hideSyncInProgress_() {
-  // A simple toast to indicate completion, or just let the next UI action override it.
-  // For now, we'll just let it disappear or be replaced.
+  // Try to force the host UI to refresh without showing a toast or modal that can
+  // leave behind the "Working" overlay. A tiny sidebar that immediately closes
+  // tends to nudge the Sheets client to repaint.
+  try {
+    const ui = SpreadsheetApp.getUi();
+    const html = HtmlService.createHtmlOutput(
+      '<script>setTimeout(function(){google.script.host.close();}, 50);</script>'
+    )
+      .setWidth(10)
+      .setHeight(10);
+    ui.showSidebar(html);
+    SpreadsheetApp.flush();
+    Utilities.sleep(150);
+    ui.showSidebar(HtmlService.createHtmlOutput('<script>google.script.host.close();</script>').setWidth(10));
+  } catch (e) {
+    log_('Unable to refresh UI after sync: ' + e.message, 'WARN');
+  }
 }
 
 function validateGroupNesting_() {
