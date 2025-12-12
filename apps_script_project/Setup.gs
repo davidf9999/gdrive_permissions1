@@ -264,7 +264,7 @@ function setupControlSheets_() {
         'MaxLogLength': { value: DEFAULT_MAX_LOG_LENGTH, description: 'The maximum number of rows to keep in the Log and TestLog sheets.' },
         'MaxFileSizeMB': { value: 100, description: 'The maximum file size in MB for the spreadsheet. If exceeded, AutoSync will be aborted and an alert sent. This prevents uncontrolled growth of version history.' },
         '_SyncHistory': { value: 'Always enabled', description: 'Sync history is automatically tracked in the SyncHistory sheet with revision links (30-100 days retention).' },
-        'EnableGCPLogging': { value: false, description: 'For advanced users. Check to send logs to Google Cloud Logging for better monitoring.' },
+        'EnableGCPLogging': { value: false, description: 'Experimental (see feature/gcp-logging-experimental branch). Leave FALSE on main; check only in that branch to send logs to Google Cloud Logging.' },
     },
     '--- General ---': {
         'EnableToasts': { value: false, description: 'Check to show small, non-pausing progress messages in the corner of the screen during syncs. These do not affect timeouts.' },

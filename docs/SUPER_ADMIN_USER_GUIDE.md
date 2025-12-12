@@ -100,7 +100,7 @@ The `Config` sheet allows you to configure advanced settings.
 | `EnableAutoSync` | Set to `TRUE` to allow the time-based trigger to run. `FALSE` pauses automatic syncing. |
 | `NotificationEmail` | The email address where important notifications (like errors or pending deletions) will be sent. |
 | `AllowGroupFolderDeletion` | Set to `TRUE` to allow the `Full Sync` operation to process deletions marked with the Delete checkbox. |
-| `EnableGCPLogging` | Set to `TRUE` to send detailed logs to Google Cloud Logging (requires a linked GCP project). |
+| `EnableGCPLogging` | Experimental; keep `FALSE` on the main branch. Use the `feature/gcp-logging-experimental` branch and set to `TRUE` there to send logs to Google Cloud Logging (requires a linked GCP project). |
 | `RetryMaxRetries` | Max number of times the script will retry a failed API call. |
 | `RetryInitialDelayMs`| Initial delay in milliseconds before the first retry (uses exponential backoff). |
 
@@ -108,11 +108,12 @@ The `Config` sheet allows you to configure advanced settings.
 
 ## Advanced Logging with Google Cloud
 
-For more robust logging, you can enable integration with Google Cloud Logging.
+For more robust logging, you can enable integration with Google Cloud Logging. This feature is currently experimental and maintained in the `feature/gcp-logging-experimental` branch; keep it disabled on the main branch unless you are explicitly testing.
 
-**To enable this:**
+**To enable this (experimental branch only):**
 
-1.  You must have linked the script to a Google Cloud project during setup.
-2.  In the `Config` sheet, set the value of `EnableGCPLogging` to `TRUE`.
+1.  Switch to the `feature/gcp-logging-experimental` branch.
+2.  Ensure you have linked the script to a Google Cloud project during setup.
+3.  In the `Config` sheet, set the value of `EnableGCPLogging` to `TRUE`.
 
-Once enabled, you can view the logs in the [Google Cloud Logs Explorer](https://console.cloud.google.com/logs/viewer), which provides powerful searching and filtering capabilities.
+Once enabled (on the experimental branch), you can view the logs in the [Google Cloud Logs Explorer](https://console.cloud.google.com/logs/viewer), which provides powerful searching and filtering capabilities.
