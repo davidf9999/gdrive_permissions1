@@ -99,15 +99,14 @@ function autoSync(options = {}) {
     });
 
     // Determine if deletions are allowed
-    const maxDeletions = getConfigValue_('AutoSyncMaxDeletions', 0);
-    const allowDeletions = maxDeletions > 0;
+    const allowDeletions = getConfigValue_('AllowAutosyncDeletion', false);
 
     let syncResult;
     if (allowDeletions) {
-      log_('AutoSync with deletions enabled (max: ' + maxDeletions + '). Performing full sync...');
+      log_('AutoSync with deletions enabled. Performing full sync...');
       syncResult = fullSync({ silentMode: silentMode, skipSetup: true, executionSource: 'AUTO_SYNC' });
     } else {
-      log_('Performing SAFE operations (additions only)...');
+      log_('AutoSync with deletions disabled. Performing SAFE operations (additions only)...');
       syncResult = syncAdds({ silentMode: silentMode, skipSetup: true, executionSource: 'AUTO_SYNC' });
     }
 
