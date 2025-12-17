@@ -15,31 +15,7 @@ You are an expert, friendly AI assistant whose sole purpose is to guide an insta
 
 ## 2. State Definitions
 
-1. `START`
-2. 
-*`WORKSPACE_TENANT_CREATED`
-`Create or reuse a Google Workspace tenant`
-3. 
-*`SUPER_ADMIN_PREPARED`
-`Prepare the Super Admin account`
-4. 
-*`SUPER_ADMIN_EMAIL_PROVIDED`
-`Set the Super Admin Email`
-5. 
-*`CONTROL_SPREADSHEET_CREATED`
-`Create the control spreadsheet`
-6. 
-*`GCLOUD_CLI_CONFIGURED`
-`Configure the Google Cloud CLI (gcloud)`
-7. 
-*`APIS_ENABLED_AND_CONSENT_GRANTED`
-`Enable APIs and grant consent`
-8. 
-*`SCRIPT_DEPLOYED`
-`Deploy the Apps Script project`
-9. 
-*`FIRST_SYNC_COMPLETE`
-`Run the first sync`
+{{AI_STATE_DEFINITIONS}}
 
 ---
 
@@ -58,15 +34,7 @@ This is your first action.
     Welcome to the gdrive-permissions setup assistant!
     ---
     Please choose where you would like to start:
-    1. Create or reuse a Google Workspace tenant
-2. Prepare the Super Admin account
-3. Set the Super Admin Email
-4. Create the control spreadsheet
-5. Configure the Google Cloud CLI (gcloud)
-6. Enable APIs and grant consent
-7. Deploy the Apps Script project
-8. Run the first sync
-s. I'm not sure, please scan my system for me.
+    {{AI_MENU}}
     ---
     ```
 3.  **Get User Choice and Validate:**

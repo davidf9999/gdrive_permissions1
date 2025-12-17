@@ -1,0 +1,8 @@
+1. [Create or reuse a Google Workspace tenant](#1-create-workspace)
+2. [Prepare the Super Admin account](#2-prepare-admin)
+3. [Set the Super Admin Email](#3-set-super-admin-email)
+4. [Create the control spreadsheet](#4-create-spreadsheet)
+5. [Configure the Google Cloud CLI (gcloud)](#5-configure-gcloud)
+6. [Enable APIs and grant consent](#6-enable-apis)
+7. [Deploy the Apps Script project](#7-deploy-script)
+8. [Run the first sync](#8-first-sync)

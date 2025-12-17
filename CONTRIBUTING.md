@@ -61,6 +61,29 @@ While end-users deploy the script by building a bundle and copy-pasting, develop
     clasp status
     ```
 
+## Documentation Workflow
+
+To ensure consistency, the main setup documentation is generated from a single source of truth.
+
+-   `docs/SETUP_GUIDE.md`
+-   `AI_ASSISTANT_PROMPT.md`
+
+These files are built from templates (`.template.md`) and a shared content file.
+
+-   **Shared Steps:** `docs/common/_SETUP_STEPS.md` contains the core, numbered setup instructions.
+-   **Templates:** `docs/SETUP_GUIDE.template.md` and `AI_ASSISTANT_PROMPT.template.md` contain the unique content for each file, with a `{{SETUP_STEPS}}` placeholder where the shared steps are injected.
+
+**To update the setup documentation:**
+
+1.  Edit the appropriate template file or the shared `_SETUP_STEPS.md` file.
+2.  Run the build script to apply your changes:
+    ```bash
+    npm run build:docs
+    ```
+3.  Commit the source files (`.template.md`, `_SETUP_STEPS.md`), not the generated files.
+
+> **Important:** Do not edit `docs/SETUP_GUIDE.md` or `AI_ASSISTANT_PROMPT.md` directly. Your changes will be overwritten the next time the build script runs.
+
 ## Proposing Changes
 
 - **Open an issue first** for substantial feature work so we can discuss scope

@@ -58,3 +58,7 @@ setup.conf
 
 # AI Assistant State
 .gemini/assistant_state.json
+
+# Generated documentation files
+docs/SETUP_GUIDE.md
+AI_ASSISTANT_PROMPT.md
