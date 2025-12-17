@@ -61,6 +61,25 @@ While end-users deploy the script by building a bundle and copy-pasting, develop
     clasp status
     ```
 
+## Documentation Workflow
+
+To ensure consistency, key documentation files are generated from templates and a central data file (`docs/common/steps.yaml`).
+
+-   `docs/SETUP_GUIDE.md`
+-   `AI_ASSISTANT_PROMPT.md`
+-   And other files in `docs/common/`
+
+**To update the documentation:**
+
+1.  Edit the appropriate source files (e.g., `*.template.md` files or `docs/common/steps.yaml`).
+2.  Run the build script to apply your changes:
+    ```bash
+    npm run build
+    ```
+3.  **Commit both the source files and the updated generated files.** This is important to keep the repository's documentation user-ready.
+
+> **Important:** Do not edit generated files like `docs/SETUP_GUIDE.md` directly. Your changes will be overwritten. The CI system includes a check to ensure that all generated documentation is up-to-date; pull requests with stale documentation will fail.
+
 ## Proposing Changes
 
 - **Open an issue first** for substantial feature work so we can discuss scope

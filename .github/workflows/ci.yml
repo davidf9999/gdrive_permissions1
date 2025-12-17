@@ -27,5 +27,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Check for up-to-date documentation
+        run: |
+          npm run build
+          if ! git diff --quiet; then
+            echo "Error: Generated documentation is out of date. Please run 'npm run build' and commit the changes."
+            echo "The following differences were found:"
+            git diff
+            exit 1
+          fi
+
       - name: Run tests
         run: npm test -- --runInBand

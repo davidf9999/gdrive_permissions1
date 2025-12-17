@@ -58,3 +58,5 @@ setup.conf
 
 # AI Assistant State
 .gemini/assistant_state.json
+
+
