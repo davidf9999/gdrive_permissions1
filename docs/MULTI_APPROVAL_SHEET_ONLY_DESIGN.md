@@ -77,3 +77,13 @@ A dedicated table that sheet editors can edit directly. Suggested columns:
 - Approvals remain asynchronous; users should not expect immediate application after adding approvers because triggers run on schedule.
 - Free-form `ProposedRowSnapshot` requires clear formatting guidance to avoid malformed updates; consider providing helper formulas (e.g., `TEXTJOIN`) to assemble payloads.
 - Concurrent requests touching the same `TargetRowKey` should be blocked or queued by the script to avoid conflicts.
+
+## Implementation effort and risk outlook
+- **Complexity level: moderate, bounded** – The feature layers on existing trigger-driven flows and sheet-based validation, so it does not require new infrastructure. Most effort sits in schema migration, trigger wiring, and idempotent state handling rather than novel APIs.
+- **Safe-by-default toggle** – With `ApprovalsEnabled = FALSE` or `RequiredApprovals = 1`, current behavior is preserved. This containment limits blast radius during rollout and allows phased enablement per environment.
+- **Key risk areas to watch**:
+  - **Conflict resolution**: Requests that overlap on the same row/key need guardrails to prevent clobbering. Expect to add conflict checks and clear error messaging.
+  - **Data quality of proposed changes**: Since requests are cell-driven, malformed snapshots can lead to denial loops. Strong validation, protected columns, and helper formulas reduce this risk.
+  - **Trigger throughput and quotas**: Additional time-driven/on-change work increases Apps Script execution counts. Keeping logic lightweight and batching approvals in the AutoSync loop mitigates quota pressure.
+  - **Approver availability**: If `RequiredApprovals` exceeds available editors or editors are inactive, requests can stall. The banner warnings and denial/expiry flow surface this early.
+- **Overall expectation** – With careful validation and conflict handling, this is a reasonable and safe enhancement that should be implementable without excessive effort. The main work items are schema setup, approval counting, and sync gating; each is well-scoped and incremental.
