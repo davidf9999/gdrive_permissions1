@@ -9,6 +9,7 @@ const USER_GROUPS_SHEET_NAME = 'UserGroups';
 const CONFIG_SHEET_NAME = 'Config';
 const FOLDER_AUDIT_LOG_SHEET_NAME = 'FoldersAuditLog';
 const SYNC_HISTORY_SHEET_NAME = 'SyncHistory';
+const CHANGE_REQUESTS_SHEET_NAME = 'ChangeRequests';
 const DEFAULT_MAX_LOG_LENGTH = 10000;
 const AUTO_SYNC_CHANGE_SIGNATURE_KEY = 'AutoSyncChangeSignature';
 
@@ -22,6 +23,28 @@ const LAST_SYNCED_COL = 6;         // Managed by script
 const STATUS_COL = 7;              // Managed by script
 const URL_COL = 8;                 // Managed by script
 const DELETE_COL = 9;              // User-editable: mark for deletion
+
+// Column mapping for the ChangeRequests sheet
+const CHANGE_REQUEST_ID_COL = 1;
+const CHANGE_REQUEST_REQUESTED_BY_COL = 2;
+const CHANGE_REQUEST_REQUESTED_AT_COL = 3;
+const CHANGE_REQUEST_TARGET_SHEET_COL = 4;
+const CHANGE_REQUEST_TARGET_ROW_KEY_COL = 5;
+const CHANGE_REQUEST_ACTION_COL = 6;
+const CHANGE_REQUEST_PROPOSED_SNAPSHOT_COL = 7;
+const CHANGE_REQUEST_STATUS_COL = 8;
+const CHANGE_REQUEST_APPROVALS_NEEDED_COL = 9;
+const CHANGE_REQUEST_FIRST_APPROVER_COL = 10;
+const CHANGE_REQUEST_DENY_REASON_COL = 13;
+const CHANGE_REQUEST_APPLIED_AT_COL = 14;
+
+// Change request statuses
+const CHANGE_REQUEST_STATUS_PENDING = 'PENDING';
+const CHANGE_REQUEST_STATUS_APPROVED = 'APPROVED';
+const CHANGE_REQUEST_STATUS_DENIED = 'DENIED';
+const CHANGE_REQUEST_STATUS_CANCELLED = 'CANCELLED';
+const CHANGE_REQUEST_STATUS_APPLIED = 'APPLIED';
+const CHANGE_REQUEST_STATUS_EXPIRED = 'EXPIRED';
 
 // Column mapping for the UserGroups sheet
 const USERGROUPS_DELETE_COL = 6;   // User-editable: mark for deletion
@@ -115,6 +138,11 @@ function onEdit(e) {
   const sheetName = sheet.getName();
   const range = e.range;
   const oldValue = e.oldValue;
+
+  if (sheetName === CHANGE_REQUESTS_SHEET_NAME) {
+    handleChangeRequestEdit_(e);
+    return;
+  }
 
   // --- Handle ManagedFolders and UserGroups row deletion warning ---
   if (sheetName === MANAGED_FOLDERS_SHEET_NAME || sheetName === USER_GROUPS_SHEET_NAME) {
