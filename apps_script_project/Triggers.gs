@@ -76,6 +76,22 @@ function autoSync(options = {}) {
   }
 
   try {
+    const props = PropertiesService.getDocumentProperties();
+    const now = Date.now();
+    const lastRunRaw = props.getProperty(AUTO_SYNC_LAST_RUN_KEY);
+    const intervalMinutes = getConfigValue_('AutoSyncInterval', 5);
+    const enforcedIntervalMs = Math.max(5, intervalMinutes) * 60 * 1000;
+
+    if (lastRunRaw) {
+      const elapsed = now - Number(lastRunRaw);
+      if (!isNaN(elapsed) && elapsed < enforcedIntervalMs) {
+        log_('AutoSync skipped: last run was ' + Math.round(elapsed / 1000) + 's ago (interval ' + intervalMinutes + ' mins).', 'DEBUG');
+        return { skipped: true, added: 0, removed: 0, failed: 0 };
+      }
+    }
+
+    props.setProperty(AUTO_SYNC_LAST_RUN_KEY, String(now));
+
     if (isInEditMode_()) {
       log_('AutoSync skipped: spreadsheet is in Edit Mode.', 'DEBUG');
       return;

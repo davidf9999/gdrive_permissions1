@@ -11,6 +11,7 @@ const FOLDER_AUDIT_LOG_SHEET_NAME = 'FoldersAuditLog';
 const SYNC_HISTORY_SHEET_NAME = 'SyncHistory';
 const DEFAULT_MAX_LOG_LENGTH = 10000;
 const AUTO_SYNC_CHANGE_SIGNATURE_KEY = 'AutoSyncChangeSignature';
+const AUTO_SYNC_LAST_RUN_KEY = 'AutoSyncLastRunTimestamp';
 
 // Column mapping for the ManagedFolders sheet
 const FOLDER_NAME_COL = 1;
