@@ -1,6 +1,6 @@
 1. Create or reuse a Google Workspace tenant
 2. Prepare the Super Admin account
-3. Set the Super Admin Email
+3. Create or select a Google Cloud Project
 4. Create the control spreadsheet
 5. Configure the Google Cloud CLI (gcloud)
 6. Enable APIs and grant consent

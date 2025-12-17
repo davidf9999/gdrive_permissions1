@@ -6,8 +6,8 @@
 *`SUPER_ADMIN_PREPARED`
 `Prepare the Super Admin account`
 4. 
-*`SUPER_ADMIN_EMAIL_PROVIDED`
-`Set the Super Admin Email`
+*`GCP_PROJECT_CREATED`
+`Create or select a Google Cloud Project`
 5. 
 *`CONTROL_SPREADSHEET_CREATED`
 `Create the control spreadsheet`

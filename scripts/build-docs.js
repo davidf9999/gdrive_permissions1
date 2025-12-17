@@ -41,6 +41,14 @@ function buildDocs() {
     fs.writeFileSync(path.join(commonDir, '_SETUP_STEPS.md'), setupSteps);
     console.log('Successfully generated docs/common/_SETUP_STEPS.md');
 
+    const aiAssistantSteps = steps
+      .map(step => step.ai_assistant_guide)
+      .filter(guide => guide && guide.trim() !== '')
+      .join('\n\n');
+    fs.writeFileSync(path.join(commonDir, '_AI_ASSISTANT_STEPS.md'), aiAssistantSteps);
+    console.log('Successfully generated docs/common/_AI_ASSISTANT_STEPS.md');
+
+
     // 3. Assemble the final documents
     const setupGuideTemplate = fs.readFileSync(path.join(projectRoot, 'docs', 'SETUP_GUIDE.template.md'), 'utf8');
     const setupGuide = setupGuideTemplate
@@ -52,7 +60,8 @@ function buildDocs() {
     const assistantPromptTemplate = fs.readFileSync(path.join(projectRoot, 'AI_ASSISTANT_PROMPT.template.md'), 'utf8');
     const assistantPrompt = assistantPromptTemplate
       .replace('{{AI_STATE_DEFINITIONS}}', aiStateDefinitions)
-      .replace('{{AI_MENU}}', aiMenu);
+      .replace('{{AI_MENU}}', aiMenu)
+      .replace('{{SETUP_STEPS}}', aiAssistantSteps);
     fs.writeFileSync(path.join(projectRoot, 'AI_ASSISTANT_PROMPT.md'), assistantPrompt);
     console.log('Successfully generated AI_ASSISTANT_PROMPT.md');
 

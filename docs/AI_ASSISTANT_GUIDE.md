@@ -4,104 +4,71 @@ This document provides guidance for using and developing the AI-powered assistan
 
 ## Who Is This Guide For?
 
-First, it's important to understand the roles within this project's context.
+*   **Installer:** You are setting up the `gdrive-permissions` system for your organization. Your goal is to use the AI Assistant to get the project running. You will interact with a **Google Workspace Super Admin** account to perform privileged actions. You do not intend to modify the assistant's code. For a full breakdown of roles, see the [Roles and Responsibilities](ROLES_AND_RESPONSIBILITIES.md) guide.
 
-*   **Installer:** An **Installer** is the person who runs the initial setup of the `gdrive-permissions` system for their organization. Your primary goal is to use the AI Assistant to get the project running. You will interact with a **Google Workspace Super Admin** account to perform privileged actions. Once set up, **Sheet Editors** will manage permissions day-to-day, and **Managed Users** will be the ones granted access. You do not intend to modify the assistant's code.
+*   **Developer:** You want to modify, extend, or contribute to the AI Assistant itself. Your goal is to work on the codebase of the assistant.
 
-*   **Developer:** A **Developer** is someone who wants to modify, extend, or contribute to the AI Assistant itself. Your goal is to work on the codebase of the assistant.
-
-> **Prerequisite:** A GitHub account is required for all installers and developers. The recommended setup process uses GitHub Codespaces, which is tied to your GitHub identity.
+> **Prerequisite:** A GitHub account is required. The recommended setup process uses GitHub Codespaces, which is tied to your GitHub identity.
 
 ---
 
-## For Installers: Setting Up the Project with the AI Assistant
+## For Installers: Setting Up the Project
 
-This section is for you if your goal is to get the `gdrive-permissions` project up and running.
+This section is for you if your goal is to get the `gdrive-permissions` project up and running. The AI Assistant will guide you through the process outlined in the main [Setup Guide](SETUP_GUIDE.md).
 
 ### Recommended Environment: GitHub Codespaces
 
-For setting up this project, we **strongly recommend** using the provided GitHub Codespaces environment. Launching a Codespace gives you a pre-configured, zero-installation environment where the AI Assistant can guide you through the setup process seamlessly. **You do not need to manually clone the repository; this is handled automatically by Codespaces.** All instructions from the AI assistant assume you are operating within this environment.
+We **strongly recommend** using the provided GitHub Codespaces environment. This gives you a pre-configured, zero-installation environment where the AI Assistant can guide you seamlessly. **Do not clone the repository manually;** launch the Codespace directly from the project's `README.md`.
 
-You can launch it from the main `README.md` file of the project.
+### Testing the Project for Free
 
-### DNS Configuration Options
+The `gdrive-permissions` project requires a Google Workspace account and a registered domain.
 
-Your `gdrive-permissions1` instance needs a web address (DNS record) to be accessible. The AI assistant will help you with this. Depending on your situation, there are two ways this can be handled.
-
-#### Option 1: Manual DNS Configuration
-
-This is the default path if you are setting up the project for your own domain.
-
-*   **Who it's for:** Installers who have their own domain and manage their DNS records through a registrar like GoDaddy, Namecheap, Google Domains, etc.
-*   **How it works:** The AI assistant will guide you through finding the public IP address of your Codespace environment. It will then provide you with clear instructions to manually create an `A` record at your domain registrar, pointing to your Codespace's IP.
-
-#### Option 2: Automated DNS Configuration
-
-This path provides a seamless, automated experience if an administrator has assigned you a specific subdomain.
-
-*   **Who it's for:** Installers or testers who have been provided with a pre-configured subdomain (e.g., `tester1.yourdomain.com`) and special credentials from a project administrator.
-*   **How it works:** If you add the provided Cloudflare credentials to your Codespace environment, the AI assistant will detect them. It will then prompt you for your assigned subdomain and automatically create or update the necessary DNS records for you.
-
-### Testing the Assistant for Free
-
-The `gdrive-permissions` project requires a Google Workspace account and a registered domain, which typically involve costs.
-
-1.  **Google Workspace:** The setup process relies on administrative APIs only available through a Google Workspace account. A standard `@gmail.com` account will not work. Google offers a **14-day free trial** for new Workspace accounts, which is ideal for testing.
+1.  **Google Workspace:** The setup requires administrative APIs only available through Google Workspace. A standard `@gmail.com` account will not work. Google offers a **[14-day free trial](https://workspace.google.com/pricing.html)** for new accounts.
     > **Warning:** The free trial usually requires a credit card and must be cancelled before the trial period ends to avoid charges.
 
-2.  **Domain Name:** Every Google Workspace account needs its own domain name. We recommend purchasing a low-cost domain from a registrar like Namecheap or Google Domains. We strongly advise against using free domain providers (`.tk`, `.ml`, etc.) as they are often unreliable and may lack the features needed for Google Workspace verification.
-
-### Automatic State Persistence
-
-To prevent you from losing work if your Codespace session times out, the environment is configured to automatically save your progress after every change.
-
-*   **How it works:** After every action that modifies the workspace (like creating a file or editing code), the AI assistant will automatically commit those changes to your current local branch.
-*   **Commit Message:** These automatic commits will have a message like `codespace-autosave: YYYY-MM-DDTHH:MM:SSZ`.
-*   **What to do with them:** You can treat these commits as regular commits. When you are ready to make a "real" commit with a meaningful message, you can either:
-    *   **Amend the last commit:** If you just want to add your changes to the last auto-save, you can use `git commit --amend`.
-    *   **Squash the commits:** You can combine multiple auto-save commits into a single, meaningful commit using an interactive rebase (`git rebase -i`).
-*   **No Pushing:** This feature only commits changes locally. It will never push to the remote repository.
-
-This ensures that even if your Codespace shuts down unexpectedly, your recent work is safely committed and can be easily recovered.
+2.  **Domain Name:** You will need a domain name. We recommend purchasing one from a registrar like [Namecheap](https://www.namecheap.com/) or [Google Domains](https://domains.google/). We strongly advise against free domain providers, which are often unreliable.
 
 ---
 
 ## For Developers: Contributing to the AI Assistant
 
-This section is for you if you want to modify or improve the AI assistant itself.
+This section is for you if you want to modify or improve the AI assistant.
 
 ### Development Environment
 
-The Codespace environment contains all the necessary dependencies and tools (`node`, `gcloud`). This avoids "it works on my machine" problems and provides a consistent environment for developing and testing.
+The Codespace environment contains all necessary dependencies (`node`, `gcloud`, etc.) to provide a consistent development and testing environment.
 
 ### Testing Local Changes
 
-1.  **Make Local Changes:** Edit the relevant files, such as `AI_ASSISTANT_PROMPT.md`, directly within the Codespace.
-2.  **Restart the Assistant:** To have the assistant use your updated instructions, you must restart it by running the startup script directly in the terminal:
+1.  **Make Changes:** Edit the relevant files (e.g., `AI_ASSISTANT_PROMPT.md`) directly within the Codespace.
+2.  **Restart the Assistant:** To test your changes, you must restart the assistant by running the startup script in the terminal:
     ```bash
     /bin/bash .devcontainer/start-assistant.sh
     ```
-3.  **Test the New Behavior:** A new assistant session will begin, using the latest version of the files you edited.
+    A new assistant session will begin using the latest version of your files.
+
+### Auto-Committing Changes (Safety Feature)
+
+To prevent you from losing work if your Codespace session times out, the environment is configured to automatically commit your progress after every change.
+
+*   **How it works:** After every action that modifies the workspace (like creating a file), the assistant automatically commits those changes to your current local branch with a message like `codespace-autosave: YYYY-MM-DDTHH:MM:SSZ`.
+*   **What to do:** You can treat these as regular commits. When you are ready to make a "real" commit, you can either **amend** the last commit (`git commit --amend`) or **squash** multiple auto-save commits into one (`git rebase -i`).
+*   **No Pushing:** This feature only commits locally. It will never push to the remote repository.
 
 ### Administrator Setup for Automated DNS
 
-To test the **Automated DNS Configuration** flow (Option 2 for installers), an administrator or developer must first perform this one-time setup for a tester.
+To enable the **Automated DNS Configuration** flow for a tester, an administrator must perform this one-time setup.
 
-1.  **Create Initial DNS Record:** In your Cloudflare account, manually create a placeholder `A` record for the tester's assigned subdomain (e.g., `tester1.yourdomain.com`) pointing to a temporary, non-Cloudflare IP (e.g., `192.0.2.1`). This record must exist before you can scope an API token to it.
-2.  **Generate a Sandboxed API Token:**
-    *   Log in to your Cloudflare account.
-    *   Go to **My Profile -> API Tokens -> Create Token**.
-    *   Select **"Create Custom Token"**.
-    *   **Token Name:** Give it a descriptive name (e.g., `gdrive-permissions-tester1-dns`).
+1.  **Create Placeholder DNS Record:** In your Cloudflare account, manually create a placeholder `A` record for the tester's assigned subdomain (e.g., `tester1.yourdomain.com`) pointing to a temporary IP like `192.0.2.1`.
+2.  **Generate a Scoped API Token:**
+    *   In Cloudflare, go to **My Profile -> API Tokens -> Create Token**.
+    *   Use the **"Create Custom Token"** template.
     *   **Permissions:** `Zone` -> `DNS` -> `Edit`.
     *   **Zone Resources:** `Include` -> `Specific zone` -> Your root domain.
     *   **Record Resources (Crucial for Security):** `Include` -> `Specific record` -> The tester's specific subdomain (e.g., `tester1.yourdomain.com`). This ensures the token can *only* affect this single record.
-    *   Continue to create the token.
-3.  **Provide Credentials to Tester:** Securely provide the generated `CLOUDFLARE_API_TOKEN`, your `CLOUDFLARE_ZONE_ID`, and your `ROOT_DOMAIN_NAME` to the tester. The tester will add these as secrets to their GitHub Codespace environment.
+3.  **Provide Credentials:** Securely provide the generated `CLOUDFLARE_API_TOKEN`, your `CLOUDFLARE_ZONE_ID`, and your `ROOT_DOMAIN_NAME` to the tester so they can add them as GitHub Codespace secrets.
 
 ### Important Notes
-
-*   **Automatic Saving:** The Codespace is configured to automatically commit your changes after every modification to prevent data loss. See the "Automatic State Persistence" section for more details. While this provides a safety net, it is still good practice to make meaningful commits regularly.
-*   **Pushing Your Work:** The auto-save feature does not push to the remote repository. You must still manually `git push` your commits to share them.
-*   You **do not** need to create a new Codespace from the `README.md` button to test prompt or script changes. That is only necessary if you are changing the Codespace configuration itself (e.g., `devcontainer.json`).
-*   You **do not** need to run `git pull` or `git fetch` to see your *local* changes. Those commands are for retrieving updates from the remote repository.
+*   You **do not** need to create a new Codespace to test prompt or script changes. That is only for changing the Codespace configuration itself (e.g., `devcontainer.json`).
+*   You **do not** need to `git pull` or `git fetch` to see your *local* changes. Those commands are for retrieving updates from the remote repository.
