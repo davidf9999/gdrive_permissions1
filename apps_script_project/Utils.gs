@@ -39,6 +39,17 @@ function getHeaderMap_(sheet) {
   return map;
 }
 
+function requireColumn_(headerMap, headerName, sheetName) {
+  const column = resolveColumn_(headerMap, headerName, null);
+  if (column) {
+    return column;
+  }
+
+  const errorMessage = 'Missing required column "' + headerName + '" in sheet "' + sheetName + '".';
+  log_(errorMessage, 'ERROR');
+  throw new Error(errorMessage);
+}
+
 function resolveColumn_(headerMap, headerName, fallback) {
   if (!headerName) return fallback;
   const key = String(headerName)
@@ -97,8 +108,8 @@ function validateUniqueGroupEmails_() {
   const userGroupsSheet = spreadsheet.getSheetByName(USER_GROUPS_SHEET_NAME);
   if (userGroupsSheet && userGroupsSheet.getLastRow() > 1) {
     const userGroupHeaders = getHeaderMap_(userGroupsSheet);
-    const groupNameCol = resolveColumn_(userGroupHeaders, 'GroupName', 1);
-    const groupEmailCol = resolveColumn_(userGroupHeaders, 'GroupEmail', 2);
+    const groupNameCol = requireColumn_(userGroupHeaders, 'GroupName', USER_GROUPS_SHEET_NAME);
+    const groupEmailCol = requireColumn_(userGroupHeaders, 'GroupEmail', USER_GROUPS_SHEET_NAME);
 
     const data = userGroupsSheet
       .getRange(2, 1, userGroupsSheet.getLastRow() - 1, Math.max(groupNameCol, groupEmailCol))
@@ -131,9 +142,9 @@ function validateUniqueGroupEmails_() {
   const managedSheet = spreadsheet.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
   if (managedSheet && managedSheet.getLastRow() > 1) {
     const managedHeaders = getHeaderMap_(managedSheet);
-    const folderNameCol = resolveColumn_(managedHeaders, 'FolderName', FOLDER_NAME_COL);
-    const roleCol = resolveColumn_(managedHeaders, 'Role', ROLE_COL);
-    const groupEmailCol = resolveColumn_(managedHeaders, 'GroupEmail', GROUP_EMAIL_COL);
+    const folderNameCol = requireColumn_(managedHeaders, 'FolderName', MANAGED_FOLDERS_SHEET_NAME);
+    const roleCol = requireColumn_(managedHeaders, 'Role', MANAGED_FOLDERS_SHEET_NAME);
+    const groupEmailCol = requireColumn_(managedHeaders, 'GroupEmail', MANAGED_FOLDERS_SHEET_NAME);
 
     const data = managedSheet
       .getRange(
@@ -1023,13 +1034,26 @@ function findGroupEmailByName_(groupName) {
     // Check ManagedFolders sheet (only read actual data rows)
     const managedFoldersSheet = spreadsheet.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
     if (managedFoldersSheet && managedFoldersSheet.getLastRow() > 1) {
-        const data = managedFoldersSheet.getRange(2, 1, managedFoldersSheet.getLastRow() - 1, Math.max(USER_SHEET_NAME_COL, GROUP_EMAIL_COL)).getValues();
+      const managedHeaders = getHeaderMap_(managedFoldersSheet);
+      const userSheetNameCol = resolveColumn_(managedHeaders, 'UserSheetName', null);
+      const managedGroupEmailCol = resolveColumn_(managedHeaders, 'GroupEmail', null);
+
+      if (userSheetNameCol && managedGroupEmailCol) {
+        const data = managedFoldersSheet
+          .getRange(
+            2,
+            1,
+            managedFoldersSheet.getLastRow() - 1,
+            Math.max(userSheetNameCol, managedGroupEmailCol)
+          )
+          .getValues();
         for (let i = 0; i < data.length; i++) {
-            const currentSheetName = data[i][USER_SHEET_NAME_COL - 1];
-            if (currentSheetName && currentSheetName.slice(0, -2) === groupName && data[i][GROUP_EMAIL_COL - 1]) {
-                 return data[i][GROUP_EMAIL_COL - 1];
-            }
+          const currentSheetName = data[i][userSheetNameCol - 1];
+          if (currentSheetName && currentSheetName.slice(0, -2) === groupName && data[i][managedGroupEmailCol - 1]) {
+            return data[i][managedGroupEmailCol - 1];
+          }
         }
+      }
     }
 
     return null;
