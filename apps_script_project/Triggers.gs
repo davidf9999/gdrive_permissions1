@@ -163,6 +163,27 @@ function autoSync(options = {}) {
 
 
 
+
+/**
+ * Helper to get all data from a sheet for hashing, ignoring filters.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet The sheet to get data from.
+ * @param {number} numCols The number of columns to include.
+ * @return {Array<Array<any>>} The data.
+ */
+function getSheetDataForHashing_(sheet, numCols) {
+  if (sheet && sheet.getLastRow() > 1) {
+    const allData = sheet.getDataRange().getValues();
+    allData.shift(); // Remove header
+    return allData.map(function(row) {
+      // Ensure row has enough columns to slice, pad with empty strings if not
+      const paddedRow = row.concat(Array(Math.max(0, numCols - row.length)).fill(''));
+      return paddedRow.slice(0, numCols);
+    });
+  }
+  return [];
+}
+
+
 /**
  * Detects changes in the spreadsheet and managed folders since the last AutoSync run.
  * Returns whether a sync should run and the reasons why.
@@ -191,42 +212,38 @@ function detectAutoSyncChanges_() {
     const userGroupsSheet = spreadsheet.getSheetByName(USER_GROUPS_SHEET_NAME);
 
     let dataString = '';
-    if (managedSheet && managedSheet.getLastRow() > 1) {
-      // Read only user-editable columns (1-5): FolderName, FolderId, Role, GroupEmail, UserSheetName
-      // Exclude script-managed columns (6-8): LastSynced, Status, URL
-      const data = managedSheet.getRange(2, 1, managedSheet.getLastRow() - 1, USER_SHEET_NAME_COL).getValues();
+    
+    if (managedSheet) {
+      const data = getSheetDataForHashing_(managedSheet, USER_SHEET_NAME_COL);
       dataString += JSON.stringify(data);
 
-      // Add user sheets from ManagedFolders to the hash
-      const userSheetNames = managedSheet.getRange(2, USER_SHEET_NAME_COL, managedSheet.getLastRow() - 1, 1).getValues().flat();
-      userSheetNames.forEach(name => {
+      const userSheetNames = data.map(function(row) { return row[USER_SHEET_NAME_COL - 1]; });
+      userSheetNames.forEach(function(name) {
         if (name) {
           const userSheet = spreadsheet.getSheetByName(name);
-          if (userSheet && userSheet.getLastRow() > 1) {
-            const userData = userSheet.getRange(2, 1, userSheet.getLastRow() - 1, 2).getValues();
+          if (userSheet) {
+            const userData = getSheetDataForHashing_(userSheet, 2);
             dataString += JSON.stringify(userData);
           }
         }
       });
     }
-    if (adminsSheet && adminsSheet.getLastRow() > 1) {
-      // Read only user-editable column (1): Group Email
-      // Exclude script-managed columns (Last Synced, Status)
-      const data = adminsSheet.getRange(2, 1, adminsSheet.getLastRow() - 1, 1).getValues();
+    
+    if (adminsSheet) {
+      const data = getSheetDataForHashing_(adminsSheet, 1);
       dataString += JSON.stringify(data);
     }
-    if (userGroupsSheet && userGroupsSheet.getLastRow() > 1) {
-      // Read user-editable columns from UserGroups.
-      const data = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 6).getValues();
+
+    if (userGroupsSheet) {
+      const data = getSheetDataForHashing_(userGroupsSheet, 6);
       dataString += JSON.stringify(data);
 
-      // Add user sheets from UserGroups to the hash
-      const groupNames = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 1).getValues().flat();
-      groupNames.forEach(name => {
+      const groupNames = data.map(function(row) { return row[0]; });
+      groupNames.forEach(function(name) {
         if (name) {
           const groupSheet = spreadsheet.getSheetByName(name + '_G');
-          if (groupSheet && groupSheet.getLastRow() > 1) {
-            const groupData = groupSheet.getRange(2, 1, groupSheet.getLastRow() - 1, 2).getValues();
+          if (groupSheet) {
+            const groupData = getSheetDataForHashing_(groupSheet, 2);
             dataString += JSON.stringify(groupData);
           }
         }
@@ -257,9 +274,10 @@ function detectAutoSyncChanges_() {
 
   // Check if actual data in control sheets has changed
   const previousDataHash = previousSnapshot && previousSnapshot.dataHash ? previousSnapshot.dataHash : null;
-  if (dataHash && previousDataHash && dataHash !== previousDataHash) {
+  if (dataHash && dataHash !== previousDataHash) {
     shouldRun = true;
     reasons.push('Control sheet data has changed.');
+    log_('Data hash changed. Old: ' + previousDataHash + ' New: ' + dataHash, 'DEBUG');
   }
 
   const snapshot = {
