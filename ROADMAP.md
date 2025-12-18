@@ -22,6 +22,7 @@ This section contains ideas for long-term development, aimed at expanding the to
 
 - **Support for Shared Drives (Team Drives):** Extend the permission management capabilities to include Google Shared Drives, which use a different permission and membership model than standard folders.
 - **Time-Based Access Control:** Introduce the ability to grant temporary access by defining start and end dates for permissions in the user sheets. A scheduled trigger would manage the automated granting and revoking of access.
+- **Multi-Approver Workflow:** Require multiple manager approvals before a permission change is synced, with the state managed in a new sheet. See [PR #65](https://github.com/davidf9999/gdrive_permissions1/pull/65) and [Codex Task](https://chatgpt.com/codex/tasks/task_e_6942d181af108320a14ff233c6dbab19).
 
 ### Integrations & Extensibility
 
