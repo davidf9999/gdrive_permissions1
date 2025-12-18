@@ -47,6 +47,24 @@ function resolveColumn_(headerMap, headerName, fallback) {
   return headerMap[key] || fallback;
 }
 
+/**
+ * Finds the row number for a given value in a specific column of a sheet.
+ * @param {Sheet} sheet The sheet to search.
+ * @param {number} col The 1-based column index to search in.
+ * @param {string} value The value to find.
+ * @return {number} The 1-based row index, or -1 if not found.
+ */
+function findRowByValue_(sheet, col, value) {
+  if (!sheet) return -1;
+  const data = sheet.getRange(1, col, sheet.getLastRow(), 1).getValues();
+  for (let i = 0; i < data.length; i++) {
+    if (data[i][0] === value) {
+      return i + 1; // 1-based row index
+    }
+  }
+  return -1;
+}
+
 function generateGroupEmail_(baseName) {
   const domain = Session.getActiveUser().getEmail().split('@')[1];
   if (!domain) {

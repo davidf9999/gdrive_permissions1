@@ -170,31 +170,18 @@ function setupControlSheets_() {
 
   // Check for SheetEditors sheet
   let sheetEditorsSheet = ss.getSheetByName(SHEET_EDITORS_SHEET_NAME);
-  const sheetEditorsHeaders = ['Sheet Editor Emails', 'Group Admin Link', 'Last Synced', 'Status', 'Disabled'];
+  const sheetEditorsHeaders = ['Sheet Editor Emails', 'Disabled'];
   if (!sheetEditorsSheet) {
     sheetEditorsSheet = ss.insertSheet(SHEET_EDITORS_SHEET_NAME);
-    sheetEditorsSheet.getRange(1, 1, 1, sheetEditorsHeaders.length).setValues([sheetEditorsHeaders]).setFontWeight('bold');
-    sheetEditorsSheet.setFrozenRows(1);
     log_('Created "SheetEditors" sheet.');
-  } else {
-    // Update headers, migrating old formats if necessary
-    const existingHeaders = sheetEditorsSheet.getRange(1, 1, 1, sheetEditorsSheet.getMaxColumns()).getValues()[0];
-
-    // Migration from 3-column format (Email, Last Synced, Status)
-    if (existingHeaders[1] === 'Last Synced' && existingHeaders[2] === 'Status') {
-        sheetEditorsSheet.insertColumnBefore(2); // Insert new column for Group Admin Link
-        sheetEditorsSheet.getRange(1, 1, 1, sheetEditorsHeaders.length).setValues([sheetEditorsHeaders]).setFontWeight('bold');
-        log_('Migrated SheetEditors sheet to new 5-column format.');
-    } else {
-        // Just set the headers to be safe
-        sheetEditorsSheet.getRange(1, 1, 1, sheetEditorsHeaders.length).setValues([sheetEditorsHeaders]).setFontWeight('bold');
-    }
-    sheetEditorsSheet.getRange('E1').clearDataValidations().clearNote();
-    sheetEditorsSheet.setFrozenRows(1);
   }
+
+  // Always set the headers to ensure correctness and overwrite old formats.
+  sheetEditorsSheet.getRange(1, 1, 1, sheetEditorsHeaders.length).setValues([sheetEditorsHeaders]).setFontWeight('bold');
+  sheetEditorsSheet.setFrozenRows(1);
   
   // Add checkbox validation for the Disabled column
-  const adminDisabledRange = sheetEditorsSheet.getRange('E2:E');
+  const adminDisabledRange = sheetEditorsSheet.getRange('B2:B'); // Now column B
   const existingAdminDisabledRule = adminDisabledRange.getDataValidation();
   if (!existingAdminDisabledRule || existingAdminDisabledRule.getCriteriaType() !== SpreadsheetApp.DataValidationCriteria.CHECKBOX) {
     const rule = SpreadsheetApp.newDataValidation().requireCheckbox().build();
@@ -216,6 +203,13 @@ function setupControlSheets_() {
     log_('Updated UserGroups headers with Delete column.');
   }
   userGroupsSheet.setFrozenRows(1);
+
+  // Ensure SheetEditors row exists in UserGroups
+  const groupNames = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow(), 1).getValues().flat();
+  if (!groupNames.includes(SHEET_EDITORS_SHEET_NAME)) {
+    userGroupsSheet.appendRow([SHEET_EDITORS_SHEET_NAME, '', '', '', '', false]);
+    log_('Added missing "SheetEditors" entry to the UserGroups sheet.');
+  }
 
   // Add checkbox validation for the Delete column (column F)
   const userGroupsDeleteRange = userGroupsSheet.getRange('F2:F');

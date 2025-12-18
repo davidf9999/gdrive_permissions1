@@ -1,166 +1,140 @@
 /**
- * Synchronizes the editors of the spreadsheet file with the list in the SheetEditors sheet.
+ * Synchronizes the editors of the spreadsheet file and the members of the SheetEditors Google Group.
+ * This function now centralizes all logic for the SheetEditors group, treating it as a special
+ * case managed via a dedicated row in the UserGroups sheet.
  *
  * @param {Object} options - Options for sync behavior
- * @param {boolean} options.addOnly - If true, only add editors (SAFE operations for AutoSync)
+ * @param {boolean} options.addOnly - If true, only add members/editors (SAFE operations for AutoSync)
  * @param {boolean} options.silentMode - If true, skip UI dialogs (for background execution)
- * @returns {object} A summary of the changes made, with properties for `added` and `removed` counts.
+ * @returns {object} A summary of the changes made, with properties for `added`, `removed`, and `failed` counts.
  */
 function syncSheetEditors(options = {}) {
   const addOnly = options && options.addOnly !== undefined ? options.addOnly : false;
   const silentMode = options && options.silentMode !== undefined ? options.silentMode : false;
   const totalSummary = { added: 0, removed: 0, failed: 0 };
-  let sheetEditorsSheet;
+  let userGroupsSheet;
+
   try {
-    log_('Running Sheet Editors Sync... (addOnly: ' + addOnly + ', silentMode: ' + silentMode + ')');
+    log_('DEBUG: syncSheetEditors started.', 'DEBUG');
     const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-    sheetEditorsSheet = spreadsheet.getSheetByName(SHEET_EDITORS_SHEET_NAME);
+    const sheetEditorsSheet = spreadsheet.getSheetByName(SHEET_EDITORS_SHEET_NAME);
     if (!sheetEditorsSheet) {
-      log_('SheetEditors sheet not found. Skipping sheet editors sync.');
-      if (!silentMode) SpreadsheetApp.getUi().alert('SheetEditors sheet not found. Skipping sheet editors sync.');
-      return totalSummary;
+      throw new Error('SheetEditors sheet not found. Skipping sync.');
     }
 
-    const adminGroupEmail = getConfigValue_('AdminGroupEmail', '');
-    const sheetEditorsGroupEmail = getConfigValue_('SheetEditorsGroupEmail', '');
-    let groupEmail = sheetEditorsGroupEmail || adminGroupEmail;
+    userGroupsSheet = spreadsheet.getSheetByName(USER_GROUPS_SHEET_NAME);
+    if (!userGroupsSheet) {
+      throw new Error('UserGroups sheet not found. Cannot sync SheetEditors group.');
+    }
+    
+    // --- DYNAMICALLY FIND METADATA CELLS in UserGroups sheet ---
+    log_('DEBUG: Getting UserGroups header map.', 'DEBUG');
+    const ugHeaders = getHeaderMap_(userGroupsSheet);
+    log_('DEBUG: UserGroups Headers Map: ' + JSON.stringify(ugHeaders), 'DEBUG');
 
-    if (groupEmail) {
-      groupEmail = groupEmail.toString().trim().toLowerCase();
+    const ugGroupNameCol = resolveColumn_(ugHeaders, 'groupname', 1);
+    const ugGroupEmailCol = resolveColumn_(ugHeaders, 'groupemail', 2);
+    const ugAdminLinkCol = resolveColumn_(ugHeaders, 'group admin link', 3);
+    const ugLastSyncedCol = resolveColumn_(ugHeaders, 'last synced', 4);
+    const ugStatusCol = resolveColumn_(ugHeaders, 'status', 5);
+    log_(`DEBUG: Resolved Columns: GroupName=${ugGroupNameCol}, GroupEmail=${ugGroupEmailCol}, AdminLink=${ugAdminLinkCol}, LastSynced=${ugLastSyncedCol}, Status=${ugStatusCol}`, 'DEBUG');
+
+    const sheetEditorsRow = findRowByValue_(userGroupsSheet, ugGroupNameCol, SHEET_EDITORS_SHEET_NAME);
+    log_('DEBUG: Result of findRowByValue_ for "SheetEditors": ' + sheetEditorsRow, 'DEBUG');
+    if (sheetEditorsRow === -1) {
+      throw new Error(`'${SHEET_EDITORS_SHEET_NAME}' not found in UserGroups sheet. Please run setup again.`);
     }
 
-    // Validate that groupEmail is a valid email format (contains @ and a domain)
-    const emailPattern = /^\S+@\S+\.\S+$/;
-    if (!groupEmail) {
-      groupEmail = generateGroupEmail_(SHEET_EDITORS_GROUP_NAME);
-      updateConfigSetting_('SheetEditorsGroupEmail', groupEmail);
-    } else if (!emailPattern.test(groupEmail)) {
-      const sourceKey = sheetEditorsGroupEmail ? 'SheetEditorsGroupEmail' : 'AdminGroupEmail';
-      const message = 'Invalid ' + sourceKey + ' value "' + groupEmail + '" in Config. Please update the Config sheet with a valid group email to continue syncing.';
-      log_(message, 'ERROR');
-      throw new Error(message);
-    } else if (!sheetEditorsGroupEmail && adminGroupEmail) {
-      updateConfigSetting_('SheetEditorsGroupEmail', groupEmail); // Align new key to legacy value without generating a new group
-    }
+    const statusCell = userGroupsSheet.getRange(sheetEditorsRow, ugStatusCol);
+    const lastSyncedCell = userGroupsSheet.getRange(sheetEditorsRow, ugLastSyncedCol);
+    const groupLinkCell = userGroupsSheet.getRange(sheetEditorsRow, ugAdminLinkCol);
+    const groupEmailCell = userGroupsSheet.getRange(sheetEditorsRow, ugGroupEmailCol);
 
-    // 1. Get desired editors for the SPREADSHEET ITSELF
-    const sheetEditorData = sheetEditorsSheet.getRange(2, 1, sheetEditorsSheet.getLastRow(), 5).getValues();
+    log_('DEBUG: Setting status to "Processing..."', 'DEBUG');
+    statusCell.setValue('Processing...');
+
+    // --- SPREADSHEET EDITOR SYNC (File-level permissions) ---
+    // This part remains unchanged as it deals with the spreadsheet file itself.
+    const sheetEditorData = sheetEditorsSheet.getRange(2, 1, sheetEditorsSheet.getLastRow(), 2).getValues(); // Check cols A, B
     const desiredSheetEditors = sheetEditorData.filter(function(row) {
       const email = row[0] && row[0].toString().trim().toLowerCase();
-      const isDisabled = row[4]; // Column E
+      const isDisabled = row[1]; // Column B is 'Disabled'
       return email && !isUserRowDisabled_(isDisabled);
     }).map(function(row) {
       return row[0].toString().trim().toLowerCase();
     });
     const desiredSheetEditorSet = new Set(desiredSheetEditors);
 
-    // 2. Get current editors of the SPREADSHEET
-    const currentSheetEditors = spreadsheet.getEditors()
-      .map(function(user) { return user.getEmail().toLowerCase(); });
-    const currentSheetEditorSet = new Set(currentSheetEditors);
-
-    // 3. Determine changes, always including the owner as a desired editor
     const owner = spreadsheet.getOwner();
     if (owner) {
       desiredSheetEditorSet.add(owner.getEmail().toLowerCase());
     }
 
+    const currentSheetEditors = spreadsheet.getEditors().map(user => user.getEmail().toLowerCase());
+    const currentSheetEditorSet = new Set(currentSheetEditors);
+    
     const emailsToAdd = Array.from(desiredSheetEditorSet).filter(email => !currentSheetEditorSet.has(email));
-    const emailsToRemove = currentSheetEditors.filter(email => !desiredSheetEditorSet.has(email));
-
-    if (addOnly && emailsToRemove.length > 0) {
-      log_('SAFE mode: Skipping ' + emailsToRemove.length + ' sheet editor removal(s). Run "Sync Sheet Editors" manually to process removals.', 'WARN');
-    }
-
     if (emailsToAdd.length > 0) {
       log_('Adding ' + emailsToAdd.length + ' spreadsheet editor(s): ' + emailsToAdd.join(', '));
       spreadsheet.addEditors(emailsToAdd);
       totalSummary.added += emailsToAdd.length;
     }
+    
+    if (!addOnly) {
+      const emailsToRemove = currentSheetEditors.filter(email => !desiredSheetEditorSet.has(email));
+      if (emailsToRemove.length > 0) {
+        log_('Removing ' + emailsToRemove.length + ' spreadsheet editor(s): ' + emailsToRemove.join(', '));
+        emailsToRemove.forEach(function(email) {
+          try {
+            spreadsheet.removeEditor(email);
+            totalSummary.removed++;
+          } catch (e) {
+            log_('Failed to remove spreadsheet editor ' + email + ': ' + e.message, 'ERROR');
+            totalSummary.failed++;
+          }
+        });
+      }
+    }
+    // --- END SPREADSHEET EDITOR SYNC ---
 
-    if (!addOnly && emailsToRemove.length > 0) {
-      log_('Removing ' + emailsToRemove.length + ' spreadsheet editor(s): ' + emailsToRemove.join(', '));
-      emailsToRemove.forEach(function(email) {
-        try {
-          spreadsheet.removeEditor(email);
-          totalSummary.removed++;
-        } catch (e) {
-          log_('Failed to remove editor ' + email + ': ' + e.message, 'ERROR');
-          totalSummary.failed++;
-        }
-      });
+
+    // --- GOOGLE GROUP MEMBERSHIP SYNC ---
+    if (shouldSkipGroupOps_()) {
+      log_('Admin Directory service not available. Skipping Sheet Editors group membership sync.', 'WARN');
+      statusCell.setValue('SKIPPED (No Admin SDK)');
+      lastSyncedCell.setValue(new Date());
+      return totalSummary;
     }
 
-    // 4. Sync the GOOGLE GROUP for sheet editors
-    const groupSyncSummary = syncSheetEditorsGroup_(sheetEditorsSheet, groupEmail, { addOnly: addOnly });
-    if(groupSyncSummary) {
-        totalSummary.added += groupSyncSummary.added;
-        totalSummary.removed += groupSyncSummary.removed;
-        totalSummary.failed += groupSyncSummary.failed;
+    log_('DEBUG: Reading group email from cell.', 'DEBUG');
+    let groupEmail = groupEmailCell.getValue().toString().trim().toLowerCase();
+    log_('DEBUG: Group email from sheet: ' + groupEmail, 'DEBUG');
+    if (!groupEmail) {
+      groupEmail = generateGroupEmail_(SHEET_EDITORS_GROUP_NAME);
+      log_('DEBUG: Generated group email: ' + groupEmail, 'DEBUG');
+      log_('DEBUG: Writing generated email back to cell.', 'DEBUG');
+      groupEmailCell.setValue(groupEmail);
+      log_(`Generated and set SheetEditors group email in UserGroups sheet: ${groupEmail}`, 'INFO');
     }
 
-
-    log_('Sheet editors sync complete. Editors group email: ' + groupEmail + '.');
-    if (!silentMode) {
-        const message = 'Sheet editors sync complete. Editors group synced to ' + groupEmail + '.';
-        if (SCRIPT_EXECUTION_MODE === 'TEST') showTestMessage_('Sheet Editors Sync', message);
-        else SpreadsheetApp.getUi().alert(message);
-    }
-
-  } catch (e) {
-    log_('ERROR in syncSheetEditors: ' + e.toString() + ' ' + e.stack);
-    if (sheetEditorsSheet) {
-      try {
-        sheetEditorsSheet.getRange(ADMINS_STATUS_CELL).setValue('ERROR: ' + e.message);
-      } catch (ignored) {}
-    }
-    if (!silentMode) SpreadsheetApp.getUi().alert('An error occurred during Sheet Editors sync: ' + e.message);
-    totalSummary.failed++;
-  }
-  return totalSummary;
-}
-
-function syncSheetEditorsGroup_(sheetEditorsSheet, groupEmail, options = {}) {
-  const addOnly = options && options.addOnly !== undefined ? options.addOnly : false;
-  const statusCell = sheetEditorsSheet.getRange(ADMINS_STATUS_CELL); // Column D
-  const lastSyncedCell = sheetEditorsSheet.getRange(ADMINS_LAST_SYNC_CELL); // Column C
-  const groupLinkCell = sheetEditorsSheet.getRange('B2'); // Column B
-
-  statusCell.setValue('Processing group sync...');
-  const timestamp = Utilities.formatDate(new Date(), SpreadsheetApp.getActive().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss');
-
-  if (shouldSkipGroupOps_()) {
-    log_('Admin Directory service not available. Skipping Sheet Editors group sync.', 'WARN');
-    statusCell.setValue('SKIPPED (No Admin SDK)');
-    lastSyncedCell.setValue(timestamp);
-    return { added: 0, removed: 0, failed: 0 };
-  }
-
-  try {
     const groupResult = getOrCreateGroup_(groupEmail, 'Permissions Manager Sheet Editors');
     const adminLink = 'https://admin.google.com/ac/groups/' + groupResult.group.id + '/members';
+    log_('DEBUG: Generated admin link: ' + adminLink, 'DEBUG');
+    log_('DEBUG: Writing admin link to cell.', 'DEBUG');
     groupLinkCell.setValue(adminLink);
 
-    // Get desired members from the sheet, respecting the 'Disabled' column (E)
-    const sheetData = sheetEditorsSheet.getRange(2, 1, sheetEditorsSheet.getLastRow(), 5).getValues();
-    const desiredMembers = sheetData.filter(function(row) {
-      const email = row[0] && row[0].toString().trim().toLowerCase();
-      const isDisabled = row[4]; // Column E is 'Disabled'
-      return email && !isUserRowDisabled_(isDisabled);
-    }).map(function(row) {
-      return row[0].toString().trim().toLowerCase();
-    });
+    const desiredMembers = desiredSheetEditors; // Same list as spreadsheet editors
     const desiredMemberSet = new Set(desiredMembers);
 
-    // Get current members from the group
     const currentMembers = fetchAllGroupMembers_(groupEmail);
     const currentMemberSet = new Set(currentMembers.map(m => m.email.toLowerCase()));
 
-    // Calculate diff
     const membersToAdd = desiredMembers.filter(email => !currentMemberSet.has(email));
     const membersToRemove = currentMembers.filter(m => !desiredMemberSet.has(m.email.toLowerCase()) && m.role !== 'OWNER').map(m => m.email);
     
-    let summary = { added: 0, removed: 0, failed: 0 };
+    log_('DEBUG: Members to add: ' + membersToAdd.length, 'DEBUG');
+    log_('DEBUG: Members to remove: ' + membersToRemove.length, 'DEBUG');
+
     const config = getConfiguration_();
     const MEMBERSHIP_BATCH_SIZE = config.MembershipBatchSize || 10;
     const INTER_BATCH_DELAY_MS = 1000;
@@ -178,8 +152,8 @@ function syncSheetEditorsGroup_(sheetEditorsSheet, groupEmail, options = {}) {
           email: email
         }));
         const chunkSummary = _executeMembershipChunkWithRetries_(requests, groupEmail, config);
-        summary.added += chunkSummary.added;
-        summary.failed += chunkSummary.failed;
+        totalSummary.added += chunkSummary.added;
+        totalSummary.failed += chunkSummary.failed;
         if (i + MEMBERSHIP_BATCH_SIZE < membersToAdd.length) Utilities.sleep(INTER_BATCH_DELAY_MS);
       }
     }
@@ -196,21 +170,45 @@ function syncSheetEditorsGroup_(sheetEditorsSheet, groupEmail, options = {}) {
           email: email
         }));
         const chunkSummary = _executeMembershipChunkWithRetries_(requests, groupEmail, config);
-        summary.removed += chunkSummary.removed;
-        summary.failed += chunkSummary.failed;
+        totalSummary.removed += chunkSummary.removed;
+        totalSummary.failed += chunkSummary.failed;
         if (i + MEMBERSHIP_BATCH_SIZE < membersToRemove.length) Utilities.sleep(INTER_BATCH_DELAY_MS);
       }
     }
 
-    log_(`SheetEditors group membership sync complete: +${summary.added} -${summary.removed} !${summary.failed}`, 'INFO');
+    log_('DEBUG: Group membership sync complete. Writing final status.', 'DEBUG');
+    log_(`SheetEditors group membership sync complete: +${totalSummary.added} -${totalSummary.removed} !${totalSummary.failed}`, 'INFO');
     statusCell.setValue('OK');
-    lastSyncedCell.setValue(timestamp);
-    return summary;
+    lastSyncedCell.setValue(Utilities.formatDate(new Date(), SpreadsheetApp.getActive().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss'));
+    log_('DEBUG: Final status and timestamp written.', 'DEBUG');
+
+    if (!silentMode) {
+        const message = 'Sheet editors sync complete. Group synced to ' + groupEmail + '.';
+        if (SCRIPT_EXECUTION_MODE === 'TEST') showTestMessage_('Sheet Editors Sync', message);
+        else SpreadsheetApp.getUi().alert(message);
+    }
+
   } catch (e) {
-    log_('ERROR in syncSheetEditorsGroup_: ' + e.message + ' Stack: ' + e.stack, 'ERROR');
-    statusCell.setValue('ERROR: ' + e.message);
-    throw e;
+    const errorMessage = 'ERROR in syncSheetEditors: ' + e.toString() + ' ' + e.stack;
+    log_(errorMessage, 'ERROR');
+    // Try to write error status to the cell if possible
+    try {
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      const ugSheet = ss.getSheetByName(USER_GROUPS_SHEET_NAME);
+      if (ugSheet) {
+        const ugHeaders = getHeaderMap_(ugSheet);
+        const ugGroupNameCol = resolveColumn_(ugHeaders, 'groupname', 1);
+        const ugStatusCol = resolveColumn_(ugHeaders, 'status', 5);
+        const sheetEditorsRow = findRowByValue_(ugSheet, ugGroupNameCol, SHEET_EDITORS_SHEET_NAME);
+        if (sheetEditorsRow !== -1) {
+          ugSheet.getRange(sheetEditorsRow, ugStatusCol).setValue('ERROR: ' + e.message);
+        }
+      }
+    } catch (ignored) {}
+    if (!silentMode) SpreadsheetApp.getUi().alert('An error occurred during Sheet Editors sync: ' + e.message);
+    totalSummary.failed++;
   }
+  return totalSummary;
 }
 
 

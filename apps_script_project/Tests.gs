@@ -1369,28 +1369,55 @@ function cleanupFolderByName() {
 }
 
 function removeBlankRows() {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
-    if (!sheet) {
-        SpreadsheetApp.getUi().alert('ManagedFolders sheet not found.');
-        return;
-    }
-    const data = sheet.getDataRange().getValues();
-    const rowsToDelete = [];
-    for (let i = data.length - 1; i >= 1; i--) { // Start from bottom, skip header
-        const folderName = data[i][FOLDER_NAME_COL - 1];
-        const folderId = data[i][FOLDER_ID_COL - 1];
-        if (!folderName && !folderId) {
-            rowsToDelete.push(i + 1);
+    let totalRowsDeleted = 0;
+
+    function _removeBlankRowsFromSheet(sheetName, primaryColumnIndex = 1) {
+        const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+        if (!sheet) {
+            log_(`removeBlankRows: Sheet "${sheetName}" not found.`, 'WARN');
+            return 0;
         }
+
+        const lastRow = sheet.getLastRow();
+        if (lastRow <= 1) {
+            return 0; // Nothing to do if sheet is empty or only has a header
+        }
+
+        const data = sheet.getDataRange().getValues();
+        const rowsToDelete = [];
+        let deletedCount = 0;
+
+        // Iterate backwards to safely delete rows without messing up indices
+        for (let i = data.length - 1; i >= 1; i--) { // Start from bottom, skip header
+            const rowData = data[i];
+            // A row is considered blank if all its cells are empty/whitespace
+            const isBlank = rowData.every(cell => !cell || String(cell).trim() === '');
+            
+            if (isBlank) {
+                // Apps Script row numbers are 1-indexed, array is 0-indexed
+                sheet.deleteRow(i + 1);
+                deletedCount++;
+            }
+        }
+        
+        if (deletedCount > 0) {
+            log_(`Removed ${deletedCount} blank row(s) from "${sheetName}".`);
+        }
+        return deletedCount;
     }
 
-    if (rowsToDelete.length > 0) {
-        rowsToDelete.forEach(function(row) {
-            sheet.deleteRow(row);
-        });
-        SpreadsheetApp.getUi().alert(rowsToDelete.length + ' blank row(s) have been removed.');
-    } else {
-        SpreadsheetApp.getUi().alert('No blank rows found.');
+    try {
+        totalRowsDeleted += _removeBlankRowsFromSheet(MANAGED_FOLDERS_SHEET_NAME);
+        totalRowsDeleted += _removeBlankRowsFromSheet(USER_GROUPS_SHEET_NAME);
+
+        if (totalRowsDeleted > 0) {
+            SpreadsheetApp.getUi().alert(totalRowsDeleted + ' blank row(s) have been removed from the configuration sheets.');
+        } else {
+            SpreadsheetApp.getUi().alert('No blank rows found in ManagedFolders or UserGroups sheets.');
+        }
+    } catch (e) {
+        log_('Error in removeBlankRows: ' + e.message, 'ERROR');
+        SpreadsheetApp.getUi().alert('An error occurred while removing blank rows: ' + e.message);
     }
 }
 
