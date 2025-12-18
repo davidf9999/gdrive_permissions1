@@ -101,7 +101,6 @@ function autoSync(options = {}) {
     const changeDetection = detectAutoSyncChanges_();
 
     if (!changeDetection.shouldRun) {
-      log_('AutoSync skipped: No changes detected since last run.', 'DEBUG');
       return { skipped: true, added: 0, removed: 0, failed: 0 };
     }
 
@@ -238,10 +237,21 @@ function detectAutoSyncChanges_() {
     if (userGroupsSheet) {
       const ugHeaders = getHeaderMap_(userGroupsSheet);
       const deleteCol = resolveColumn_(ugHeaders, 'delete', 6);
-      const data = getSheetDataForHashing_(userGroupsSheet, deleteCol);
-      dataString += JSON.stringify(data);
+      const lastRow = userGroupsSheet.getLastRow();
 
-      const groupNames = data.map(function(row) { return row[0]; });
+      // Only include user-managed data (GroupName, GroupEmail, Delete flag) to avoid
+      // triggering syncs on script-managed columns like Last Synced/Status.
+      let filteredData = [];
+      if (lastRow > 1) {
+        const rawData = userGroupsSheet.getRange(2, 1, lastRow - 1, deleteCol).getValues();
+        filteredData = rawData.map(function(row) {
+          return [row[0], row[1], row[deleteCol - 1]];
+        });
+      }
+
+      dataString += JSON.stringify(filteredData);
+
+      const groupNames = filteredData.map(function(row) { return row[0]; });
       groupNames.forEach(function(name) {
         if (name) {
           const groupSheet = spreadsheet.getSheetByName(name + '_G');
