@@ -127,7 +127,6 @@ function autoSync(options = {}) {
     }
 
     // Save snapshot with success/failure status
-    const props = PropertiesService.getDocumentProperties();
     if (syncResult && syncResult.failed === 0) {
       changeDetection.snapshot.lastSyncSuccessful = true;
       props.setProperty(AUTO_SYNC_CHANGE_SIGNATURE_KEY, JSON.stringify(changeDetection.snapshot));
