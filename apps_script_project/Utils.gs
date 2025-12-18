@@ -889,15 +889,28 @@ function hideSyncInProgress_() {
   // tends to nudge the Sheets client to repaint.
   try {
     const ui = SpreadsheetApp.getUi();
-    const html = HtmlService.createHtmlOutput(
+    const sidebarHtml = HtmlService.createHtmlOutput(
       '<script>setTimeout(function(){google.script.host.close();}, 50);</script>'
     )
       .setWidth(10)
       .setHeight(10);
-    ui.showSidebar(html);
+    ui.showSidebar(sidebarHtml);
     SpreadsheetApp.flush();
     Utilities.sleep(150);
-    ui.showSidebar(HtmlService.createHtmlOutput('<script>google.script.host.close();</script>').setWidth(10));
+
+    // On some clients the transient sidebar is not enough. Briefly showing a
+    // tiny modal (that immediately closes) plus a short-lived blank toast gives
+    // Sheets an extra repaint signal and clears the stuck "Working" label.
+    const modalHtml = HtmlService.createHtmlOutput(
+      '<script>setTimeout(function(){google.script.host.close();}, 50);</script>'
+    )
+      .setWidth(10)
+      .setHeight(10);
+    ui.showModalDialog(modalHtml, ' ');
+    SpreadsheetApp.flush();
+    Utilities.sleep(75);
+
+    SpreadsheetApp.getActiveSpreadsheet().toast(' ', ' ', 1);
   } catch (e) {
     log_('Unable to refresh UI after sync: ' + e.message, 'WARN');
   }
