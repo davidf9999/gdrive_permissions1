@@ -13,22 +13,6 @@ const DEFAULT_MAX_LOG_LENGTH = 10000;
 const AUTO_SYNC_CHANGE_SIGNATURE_KEY = 'AutoSyncChangeSignature';
 const AUTO_SYNC_LAST_RUN_KEY = 'AutoSyncLastRunTimestamp';
 
-// Column mapping for the ManagedFolders sheet
-const FOLDER_NAME_COL = 1;
-const FOLDER_ID_COL = 2;
-const ROLE_COL = 3;
-const GROUP_EMAIL_COL = 4;        // User-editable: manually specify for Hebrew names
-const USER_SHEET_NAME_COL = 5;    // Managed by script
-const LAST_SYNCED_COL = 6;         // Managed by script
-const STATUS_COL = 7;              // Managed by script
-const URL_COL = 8;                 // Managed by script
-const DELETE_COL = 9;              // User-editable: mark for deletion
-
-// Column mapping for the UserGroups sheet
-const USERGROUPS_DELETE_COL = 6;   // User-editable: mark for deletion
-
-const SHEET_EDITORS_GROUP_NAME = 'sheets-editors';
-
 // User sheet header constants
 const USER_EMAIL_HEADER = 'User Email Address';
 const DISABLED_HEADER = 'Disabled';

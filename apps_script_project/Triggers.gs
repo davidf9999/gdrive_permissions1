@@ -213,10 +213,12 @@ function detectAutoSyncChanges_() {
     let dataString = '';
     
     if (managedSheet) {
-      const data = getSheetDataForHashing_(managedSheet, USER_SHEET_NAME_COL);
+      const managedHeaders = getHeaderMap_(managedSheet);
+      const userSheetNameCol = resolveColumn_(managedHeaders, 'usersheetname', 5);
+      const data = getSheetDataForHashing_(managedSheet, userSheetNameCol);
       dataString += JSON.stringify(data);
 
-      const userSheetNames = data.map(function(row) { return row[USER_SHEET_NAME_COL - 1]; });
+      const userSheetNames = data.map(function(row) { return row[userSheetNameCol - 1]; });
       userSheetNames.forEach(function(name) {
         if (name) {
           const userSheet = spreadsheet.getSheetByName(name);
@@ -234,7 +236,9 @@ function detectAutoSyncChanges_() {
     }
 
     if (userGroupsSheet) {
-      const data = getSheetDataForHashing_(userGroupsSheet, 6);
+      const ugHeaders = getHeaderMap_(userGroupsSheet);
+      const deleteCol = resolveColumn_(ugHeaders, 'delete', 6);
+      const data = getSheetDataForHashing_(userGroupsSheet, deleteCol);
       dataString += JSON.stringify(data);
 
       const groupNames = data.map(function(row) { return row[0]; });

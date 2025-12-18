@@ -854,7 +854,9 @@ function getAllManagedSheets_() {
   // Add user sheets from ManagedFolders
   const managedFoldersSheet = ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
   if (managedFoldersSheet && managedFoldersSheet.getLastRow() > 1) {
-    const userSheetNames = managedFoldersSheet.getRange(2, USER_SHEET_NAME_COL, managedFoldersSheet.getLastRow() - 1, 1).getValues().flat();
+    const headers = getHeaderMap_(managedFoldersSheet);
+    const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+    const userSheetNames = managedFoldersSheet.getRange(2, userSheetNameCol, managedFoldersSheet.getLastRow() - 1, 1).getValues().flat();
     userSheetNames.forEach(name => {
       if (name) sheets.add(ss.getSheetByName(name));
     });

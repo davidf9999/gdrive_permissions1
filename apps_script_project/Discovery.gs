@@ -26,10 +26,18 @@ function discoverManualAdditions_() {
 
   const managedFoldersSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
   if (managedFoldersSheet && managedFoldersSheet.getLastRow() > 1) {
-    const managedFoldersData = managedFoldersSheet.getRange(2, 1, managedFoldersSheet.getLastRow() - 1, GROUP_EMAIL_COL).getValues();
+    const headers = getHeaderMap_(managedFoldersSheet);
+    const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+    const groupEmailCol = resolveColumn_(headers, 'groupemail', 4);
+    const folderIdCol = resolveColumn_(headers, 'folderid', 2);
+    
+    const managedFoldersData = managedFoldersSheet.getRange(2, 1, managedFoldersSheet.getLastRow() - 1, Math.max(userSheetNameCol, groupEmailCol, folderIdCol)).getValues();
     managedFoldersData.forEach(row => {
-      if (row[USER_SHEET_NAME_COL - 1] && row[GROUP_EMAIL_COL - 1]) {
-        allGroups.set(row[USER_SHEET_NAME_COL - 1], { email: row[GROUP_EMAIL_COL - 1], folderId: row[FOLDER_ID_COL - 1] });
+      const userSheetName = row[userSheetNameCol - 1];
+      const groupEmail = row[groupEmailCol - 1];
+      const folderId = row[folderIdCol - 1];
+      if (userSheetName && groupEmail) {
+        allGroups.set(userSheetName, { email: groupEmail, folderId: folderId });
       }
     });
   }

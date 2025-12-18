@@ -20,7 +20,10 @@ function validateUserSheets_() {
     return true; // No folders to validate
   }
 
-  const userSheetNames = managedFoldersSheet.getRange(2, USER_SHEET_NAME_COL, managedFoldersSheet.getLastRow() - 1, 1).getValues().flat();
+  const headers = getHeaderMap_(managedFoldersSheet);
+  const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+
+  const userSheetNames = managedFoldersSheet.getRange(2, userSheetNameCol, managedFoldersSheet.getLastRow() - 1, 1).getValues().flat();
   let isValid = true;
 
   // Check for duplicate user sheet names
@@ -140,13 +143,20 @@ function auditMemberRolesOnFolders_() {
     return;
   }
 
-  const managedFoldersData = managedFoldersSheet.getRange(2, 1, managedFoldersSheet.getLastRow() - 1, GROUP_EMAIL_COL).getValues();
+  const headers = getHeaderMap_(managedFoldersSheet);
+  const folderNameCol = resolveColumn_(headers, 'foldername', 1);
+  const folderIdCol = resolveColumn_(headers, 'folderid', 2);
+  const roleCol = resolveColumn_(headers, 'role', 3);
+  const groupEmailCol = resolveColumn_(headers, 'groupemail', 4);
+  const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+  
+  const managedFoldersData = managedFoldersSheet.getRange(2, 1, managedFoldersSheet.getLastRow() - 1, Math.max(...Object.values(headers))).getValues();
   managedFoldersData.forEach(row => {
-    const folderName = row[FOLDER_NAME_COL - 1];
-    const folderId = row[FOLDER_ID_COL - 1];
-    const expectedRole = row[ROLE_COL - 1];
-    const groupEmail = row[GROUP_EMAIL_COL - 1].toLowerCase();
-    const userSheetName = row[USER_SHEET_NAME_COL - 1];
+    const folderName = row[folderNameCol - 1];
+    const folderId = row[folderIdCol - 1];
+    const expectedRole = row[roleCol - 1];
+    const groupEmail = row[groupEmailCol - 1].toLowerCase();
+    const userSheetName = row[userSheetNameCol - 1];
 
     if (!folderId || !groupEmail || !expectedRole || !userSheetName) return;
 
@@ -332,14 +342,22 @@ function getFolderHierarchy_(folder, path = '') {
 function getManagedFolderInfoById_(folderId) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
   if (!sheet) return null;
-  const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, GROUP_EMAIL_COL).getValues();
+
+  const headers = getHeaderMap_(sheet);
+  const folderNameCol = resolveColumn_(headers, 'foldername', 1);
+  const folderIdCol = resolveColumn_(headers, 'folderid', 2);
+  const roleCol = resolveColumn_(headers, 'role', 3);
+  const groupEmailCol = resolveColumn_(headers, 'groupemail', 4);
+  const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+
+  const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, Math.max(...Object.values(headers))).getValues();
   for (let i = 0; i < data.length; i++) {
-    if (data[i][FOLDER_ID_COL - 1] === folderId) {
+    if (data[i][folderIdCol - 1] === folderId) {
       return {
-        folderName: data[i][FOLDER_NAME_COL - 1],
-        groupEmail: data[i][GROUP_EMAIL_COL - 1].toLowerCase(),
-        userSheetName: data[i][USER_SHEET_NAME_COL - 1],
-        expectedRole: data[i][ROLE_COL - 1]
+        folderName: data[i][folderNameCol - 1],
+        groupEmail: data[i][groupEmailCol - 1].toLowerCase(),
+        userSheetName: data[i][userSheetNameCol - 1],
+        expectedRole: data[i][roleCol - 1]
       };
     }
   }

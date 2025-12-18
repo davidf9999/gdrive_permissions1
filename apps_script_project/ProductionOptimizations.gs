@@ -140,13 +140,19 @@ function processManagedFoldersOptimized_() {
     return totalSummary;
   }
 
+  const headers = getHeaderMap_(sheet);
+  const statusCol = resolveColumn_(headers, 'status', 7);
+  const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+  const folderNameCol = resolveColumn_(headers, 'foldername', 1);
+  const groupEmailCol = resolveColumn_(headers, 'groupemail', 4);
+
   // Read all folder data at once
-  const allData = sheet.getRange(2, 1, lastRow - 1, STATUS_COL).getValues();
+  const allData = sheet.getRange(2, 1, lastRow - 1, statusCol).getValues();
 
   // Collect all user sheet names
   const userSheetNames = [];
   allData.forEach(function(row) {
-    const userSheetName = row[USER_SHEET_NAME_COL - 1];
+    const userSheetName = row[userSheetNameCol - 1];
     if (userSheetName) {
       userSheetNames.push(userSheetName);
     }
@@ -161,9 +167,9 @@ function processManagedFoldersOptimized_() {
     const rowIndex = i + 2;
     const row = allData[i];
 
-    const folderName = row[FOLDER_NAME_COL - 1];
-    const groupEmail = row[GROUP_EMAIL_COL - 1];
-    const userSheetName = row[USER_SHEET_NAME_COL - 1];
+    const folderName = row[folderNameCol - 1];
+    const groupEmail = row[groupEmailCol - 1];
+    const userSheetName = row[userSheetNameCol - 1];
 
     if (!folderName) continue;
 
@@ -181,7 +187,7 @@ function processManagedFoldersOptimized_() {
         }
       } else {
         log_('Skipping ' + folderName + ' (no changes)', 'INFO');
-        sheet.getRange(rowIndex, STATUS_COL).setValue('OK (unchanged)');
+        sheet.getRange(rowIndex, statusCol).setValue('OK (unchanged)');
       }
     } catch (e) {
       log_('Error processing row ' + rowIndex + ': ' + e.message, 'ERROR');
