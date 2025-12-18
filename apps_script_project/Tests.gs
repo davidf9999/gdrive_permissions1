@@ -1371,7 +1371,13 @@ function cleanupFolderByName() {
 function removeBlankRows() {
     let totalRowsDeleted = 0;
 
-    function _removeBlankRowsFromSheet(sheetName, primaryColumnIndex = 1) {
+    /**
+     * Helper function to remove blank rows from a specific sheet.
+     * A row is considered blank if its key identifying column(s) are empty.
+     * @param {string} sheetName The name of the sheet to clean.
+     * @param {Array<number>} keyColumnIndexes An array of 1-based column indexes to check. If all are empty, the row is deleted.
+     */
+    function _removeBlankRowsFromSheet(sheetName, keyColumnIndexes = [1]) {
         const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
         if (!sheet) {
             log_(`removeBlankRows: Sheet "${sheetName}" not found.`, 'WARN');
@@ -1380,22 +1386,24 @@ function removeBlankRows() {
 
         const lastRow = sheet.getLastRow();
         if (lastRow <= 1) {
-            return 0; // Nothing to do if sheet is empty or only has a header
+            return 0; // Nothing to do
         }
 
         const data = sheet.getDataRange().getValues();
-        const rowsToDelete = [];
         let deletedCount = 0;
 
         // Iterate backwards to safely delete rows without messing up indices
         for (let i = data.length - 1; i >= 1; i--) { // Start from bottom, skip header
             const rowData = data[i];
-            // A row is considered blank if all its cells are empty/whitespace
-            const isBlank = rowData.every(cell => !cell || String(cell).trim() === '');
             
-            if (isBlank) {
-                // Apps Script row numbers are 1-indexed, array is 0-indexed
-                sheet.deleteRow(i + 1);
+            // A row is considered effectively blank if all its key columns are empty.
+            const isEffectivelyBlank = keyColumnIndexes.every(colIndex => {
+                const cellValue = rowData[colIndex - 1]; // convert 1-based to 0-based
+                return !cellValue || String(cellValue).trim() === '';
+            });
+            
+            if (isEffectivelyBlank) {
+                sheet.deleteRow(i + 1); // sheet rows are 1-indexed
                 deletedCount++;
             }
         }
@@ -1407,8 +1415,16 @@ function removeBlankRows() {
     }
 
     try {
-        totalRowsDeleted += _removeBlankRowsFromSheet(MANAGED_FOLDERS_SHEET_NAME);
-        totalRowsDeleted += _removeBlankRowsFromSheet(USER_GROUPS_SHEET_NAME);
+        // For ManagedFolders, a row is blank if Column A (FolderName) is empty.
+        totalRowsDeleted += _removeBlankRowsFromSheet(MANAGED_FOLDERS_SHEET_NAME, [FOLDER_NAME_COL]);
+        
+        // For UserGroups, a row is blank if Column A (GroupName) is empty.
+        const ugSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(USER_GROUPS_SHEET_NAME);
+        if(ugSheet) {
+          const ugHeaders = getHeaderMap_(ugSheet);
+          const groupNameCol = resolveColumn_(ugHeaders, 'groupname', 1);
+          totalRowsDeleted += _removeBlankRowsFromSheet(USER_GROUPS_SHEET_NAME, [groupNameCol]);
+        }
 
         if (totalRowsDeleted > 0) {
             SpreadsheetApp.getUi().alert(totalRowsDeleted + ' blank row(s) have been removed from the configuration sheets.');

@@ -205,10 +205,24 @@ function setupControlSheets_() {
   userGroupsSheet.setFrozenRows(1);
 
   // Ensure SheetEditors row exists in UserGroups
-  const groupNames = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow(), 1).getValues().flat();
-  if (!groupNames.includes(SHEET_EDITORS_SHEET_NAME)) {
-    userGroupsSheet.appendRow([SHEET_EDITORS_SHEET_NAME, '', '', '', '', false]);
-    log_('Added missing "SheetEditors" entry to the UserGroups sheet.');
+  const groupNameColData = userGroupsSheet.getRange(1, 1, userGroupsSheet.getLastRow(), 1).getValues().flat();
+  if (!groupNameColData.includes(SHEET_EDITORS_SHEET_NAME)) {
+    // Find the first completely empty row to insert into, to avoid appending to the bottom of a large empty sheet.
+    let firstEmptyRow = -1;
+    for(let i = 1; i < groupNameColData.length; i++) { // Start at 1 to skip header
+      if (groupNameColData[i] === '') {
+        firstEmptyRow = i + 1; // i is 0-indexed, rows are 1-indexed
+        break;
+      }
+    }
+
+    if (firstEmptyRow === -1) {
+      // If no empty rows were found in the existing data range, append after the last known row.
+      firstEmptyRow = groupNameColData.length + 1;
+    }
+    
+    userGroupsSheet.getRange(firstEmptyRow, 1, 1, 6).setValues([[SHEET_EDITORS_SHEET_NAME, '', '', '', '', false]]);
+    log_('Added missing "SheetEditors" entry to the UserGroups sheet at row ' + firstEmptyRow);
   }
 
   // Add checkbox validation for the Delete column (column F)
