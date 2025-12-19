@@ -206,7 +206,7 @@ function detectAutoSyncChanges_() {
   let dataHash = '';
   try {
     const managedSheet = spreadsheet.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
-    const adminsSheet = spreadsheet.getSheetByName(ADMINS_SHEET_NAME);
+    const adminsSheet = spreadsheet.getSheetByName(SHEET_EDITORS_SHEET_NAME);
     const userGroupsSheet = spreadsheet.getSheetByName(USER_GROUPS_SHEET_NAME);
 
     let dataString = '';

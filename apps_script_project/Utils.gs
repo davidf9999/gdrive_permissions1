@@ -786,7 +786,7 @@ function clearCache() {
   }
 }
 function getAdminEmails_() {
-  const adminSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(ADMINS_SHEET_NAME);
+  const adminSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_EDITORS_SHEET_NAME);
   if (!adminSheet) {
     return [];
   }
@@ -931,7 +931,7 @@ function validateGroupNesting_() {
   log_('Validating group nesting for circular dependencies...');
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   const groupSheets = spreadsheet.getSheets().filter(s => s.getName().endsWith('_G'));
-  const adminSheet = spreadsheet.getSheetByName(ADMINS_SHEET_NAME);
+  const adminSheet = spreadsheet.getSheetByName(SHEET_EDITORS_SHEET_NAME);
   if (adminSheet) {
     groupSheets.push(adminSheet);
   }
@@ -945,7 +945,7 @@ function validateGroupNesting_() {
     let parentGroupEmail;
 
     // Determine the parent group's email
-    if (sheetName === ADMINS_SHEET_NAME) {
+    if (sheetName === SHEET_EDITORS_SHEET_NAME) {
       parentGroupEmail = getConfiguration_()['AdminGroupEmail'];
     } else {
       const groupName = sheetName.slice(0, -2); // Remove '_G'

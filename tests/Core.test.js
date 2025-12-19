@@ -27,298 +27,117 @@ eval(codeJsContent);
 loadGasFileIntoGlobal('../apps_script_project/Utils.gs');
 loadGasFileIntoGlobal('../apps_script_project/Core.gs');
 
-// TODO: These tests are for legacy code that was refactored. The processRow_ function
-// no longer exists - it was refactored into processManagedFolders_() and helper functions
-// (_buildSyncJobs, _batchFindFolders, etc.) in November 2025. These tests need to be
-// rewritten to test the new architecture. See Core.gs for current functions.
-describe.skip('processRow_ (LEGACY - NEEDS REWRITE)', () => {
-  let mockManagedSheet, mockFolder, mockConfigSheet, sheetRegistry, mockSpreadsheet, mockUserSheet, mockUi;
-  let currentUserSheetName, currentFolderName, managedRow;
-
+describe('_buildSyncJobs', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    global.log_ = jest.fn();
+  });
 
-    // --- Mock GAS Global Objects ---
-    global.CacheService = { getScriptCache: jest.fn(() => ({ get: jest.fn(), put: jest.fn() })) };
-    global.Utilities = { formatDate: jest.fn(date => date.toISOString()), sleep: jest.fn() };
-    global.Session = { getActiveUser: jest.fn(() => ({ getEmail: jest.fn(() => 'test.user@example.com') })) };
-    global.getConfigValue_ = jest.fn(() => false);
-    global.lockSheetForEdits_ = jest.fn();
-    global.unlockSheetForEdits_ = jest.fn();
-    lockSheetForEdits_ = global.lockSheetForEdits_;
-    unlockSheetForEdits_ = global.unlockSheetForEdits_;
-    global.AdminDirectory = { Groups: { get: jest.fn(), insert: jest.fn() }, Members: { list: jest.fn(() => ({ members: [] })) } };
-    global.DriveApp.Permission = { EDIT: 'EDIT', VIEW: 'VIEW', NONE: 'NONE' };
-
-    // --- Mock DriveApp ---
-    currentFolderName = 'mockFolderName';
-    mockFolder = {
-      getId: jest.fn(() => 'mockFolderId'),
-      getName: jest.fn(() => currentFolderName),
-      getUrl: jest.fn(() => 'http://mock.folder.url'),
-      addEditor: jest.fn(),
-      addViewer: jest.fn(),
-      addCommenter: jest.fn(),
-      setName: jest.fn(newName => { currentFolderName = newName; }),
-      getAccess: jest.fn(email => DriveApp.Permission.NONE),
-      getEditors: jest.fn(() => []),
-      getViewers: jest.fn(() => []),
-      getCommenters: jest.fn(() => []),
-    };
-    DriveApp.getFolderById.mockReturnValue(mockFolder);
-    DriveApp.getFoldersByName.mockReturnValue({ hasNext: jest.fn(() => false), next: jest.fn() });
-    DriveApp.createFolder = jest.fn().mockReturnValue(mockFolder);
-
-    // --- Mock SpreadsheetApp ---
-    managedRow = {
-      folderName: 'mockFolderName',
-      folderId: 'folder-id',
-      role: 'viewer',
-      userSheetName: '',
-      groupEmail: '',
-      status: '',
-      url: '',
-      lastSynced: ''
-    };
-
-    const createCellRange = (key) => ({
-      getValue: jest.fn(() => managedRow[key]),
-      setValue: jest.fn(value => { managedRow[key] = value; }),
-      getValues: jest.fn(() => [[managedRow[key]]]),
-      setValues: jest.fn(values => {
-        managedRow[key] = Array.isArray(values) && values.length > 0 ? values[0][0] : values;
-      })
-    });
-
-    mockManagedSheet = {
-      getName: jest.fn(() => global.MANAGED_FOLDERS_SHEET_NAME),
+  function createSheetWithData(data, statusUpdates) {
+    return {
       getRange: jest.fn((row, column, numRows, numCols) => {
-        if (row === 2 && column === 1 && numRows === 1 && numCols === 2) {
+        if (numRows && numCols) {
           return {
-            getValues: jest.fn(() => [[managedRow.folderName, managedRow.folderId]])
+            getValues: jest.fn(() => data)
           };
         }
-        if (column === global.USER_SHEET_NAME_COL) {
-          return createCellRange('userSheetName');
-        }
-        if (column === global.GROUP_EMAIL_COL) {
-          return createCellRange('groupEmail');
-        }
-        if (column === global.STATUS_COL) {
-          return createCellRange('status');
-        }
-        if (column === global.FOLDER_NAME_COL) {
-          return createCellRange('folderName');
-        }
-        if (column === global.FOLDER_ID_COL) {
-          return createCellRange('folderId');
-        }
-        if (column === global.ROLE_COL) {
-          return createCellRange('role');
-        }
-        if (column === global.URL_COL) {
-          return createCellRange('url');
-        }
-        if (column === global.LAST_SYNCED_COL) {
-          return createCellRange('lastSynced');
-        }
-        return createCellRange('status');
-      }),
-      insertSheet: jest.fn(() => mockManagedSheet),
-      getSheets: jest.fn(() => []),
-      setFrozenRows: jest.fn(),
-      appendRow: jest.fn(),
-      getLastRow: jest.fn(() => 1),
-      deleteRows: jest.fn(),
-    };
-
-    mockConfigSheet = {
-      getRange: jest.fn(() => ({
-        getValue: jest.fn(),
-        setValue: jest.fn(),
-        getValues: jest.fn(() => [[]]),
-        setValues: jest.fn()
-      })),
-      getLastRow: jest.fn().mockReturnValue(2),
-    };
-
-    currentUserSheetName = 'mockFolderName_viewer';
-    sheetRegistry = new Map();
-    const createSheetRange = () => ({
-      getValue: jest.fn(),
-      setValue: jest.fn(),
-      getValues: jest.fn(() => []),
-      setValues: jest.fn(),
-      setFontWeight: jest.fn(),
-      setDataValidation: jest.fn(), // Fix: Add the missing mock function
-      getCell: jest.fn(() => ({ setValue: jest.fn() })),
-    });
-
-    mockUserSheet = {
-      setName: jest.fn(newName => {
-        sheetRegistry.delete(currentUserSheetName);
-        currentUserSheetName = newName;
-        sheetRegistry.set(newName, mockUserSheet);
-      }),
-      getName: jest.fn(() => currentUserSheetName),
-      getLastRow: jest.fn(() => 1),
-      getRange: jest.fn(() => createSheetRange()),
-      setFrozenRows: jest.fn(),
-    };
-
-    sheetRegistry.set(global.MANAGED_FOLDERS_SHEET_NAME, mockManagedSheet);
-    sheetRegistry.set(global.CONFIG_SHEET_NAME, mockConfigSheet);
-    sheetRegistry.set(currentUserSheetName, mockUserSheet);
-
-    managedRow.userSheetName = currentUserSheetName;
-
-    const getSheetByName = jest.fn(name => sheetRegistry.get(name) || null);
-    mockSpreadsheet = {
-      getSheetByName: getSheetByName,
-      getSpreadsheetTimeZone: jest.fn(() => 'UTC'),
-      getSheets: jest.fn(() => Array.from(sheetRegistry.values())),
-      insertSheet: jest.fn(name => {
-        let sheetName = name;
-        const newSheet = {
-          setName: jest.fn(newName => {
-            sheetRegistry.delete(sheetName);
-            sheetName = newName;
-            sheetRegistry.set(sheetName, newSheet);
-          }),
-          getName: jest.fn(() => sheetName),
-          getLastRow: jest.fn(() => 1),
-          getRange: jest.fn(() => createSheetRange()),
-          setFrozenRows: jest.fn(),
+        return {
+          setValue: jest.fn(value => {
+            statusUpdates.push({ row, column, value });
+          })
         };
-        sheetRegistry.set(sheetName, newSheet);
-        return newSheet;
-      }),
-      toast: jest.fn(),
+      })
     };
+  }
 
-    mockUi = {
-      alert: jest.fn(() => 'YES'),
-      ButtonSet: { YES_NO: 'YES_NO' },
-      Button: { YES: 'YES', NO: 'NO' },
-    };
+  const headers = {
+    foldername: 1,
+    folderid: 2,
+    role: 3,
+    groupemail: 4,
+    usersheetname: 5,
+    status: 7
+  };
 
-    SpreadsheetApp.getUi = jest.fn(() => mockUi);
-    SpreadsheetApp.getActiveSpreadsheet.mockReturnValue(mockSpreadsheet);
-    SpreadsheetApp.getActive = jest.fn(() => ({
-      getSpreadsheetTimeZone: jest.fn(() => 'UTC'),
-    }));
+  it('builds jobs for valid rows and skips empty rows', () => {
+    const statusUpdates = [];
+    const data = [
+      ['Folder A', 'id-a', 'viewer', 'group-a@example.com', 'Folder A_viewer', '', ''],
+      ['', '', '', '', '', '', ''],
+      ['Folder B', 'id-b', 'editor', 'group-b@example.com', 'Folder B_editor', '', '']
+    ];
+    const sheet = createSheetWithData(data, statusUpdates);
+
+    const jobs = _buildSyncJobs(sheet, 4, {}, headers);
+
+    expect(jobs).toHaveLength(2);
+    expect(jobs[0]).toMatchObject({
+      rowIndex: 2,
+      folderName: 'Folder A',
+      folderId: 'id-a',
+      role: 'viewer',
+      existingGroupEmail: 'group-a@example.com',
+      existingUserSheetName: 'Folder A_viewer'
+    });
+    expect(jobs[1]).toMatchObject({
+      rowIndex: 4,
+      folderName: 'Folder B',
+      folderId: 'id-b',
+      role: 'editor',
+      existingGroupEmail: 'group-b@example.com',
+      existingUserSheetName: 'Folder B_editor'
+    });
+    expect(statusUpdates).toHaveLength(0);
   });
 
-  it('should call DriveApp.addViewer for viewer role', () => {
-    managedRow.userSheetName = '';
-    managedRow.groupEmail = '';
-    managedRow.role = 'viewer';
+  it('filters jobs by prefix and row indexes when configured', () => {
+    const statusUpdates = [];
+    const data = [
+      ['Alpha Folder', 'id-a', 'viewer', 'group-a@example.com', 'Alpha_viewer', '', ''],
+      ['Beta Folder', 'id-b', 'viewer', 'group-b@example.com', 'Beta_viewer', '', '']
+    ];
+    const sheet = createSheetWithData(data, statusUpdates);
 
-    processRow_(2, {});
+    const jobs = _buildSyncJobs(sheet, 3, { onlySyncPrefixes: ['Alpha'], onlySyncRowIndexes: [2] }, headers);
 
-    expect(mockFolder.addViewer).toHaveBeenCalledWith('mockfoldernameviewer@example.com');
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0].folderName).toBe('Alpha Folder');
   });
 
-  it('should call DriveApp.addEditor for editor role', () => {
-    managedRow.role = 'editor';
-    managedRow.userSheetName = '';
-    managedRow.groupEmail = '';
+  it('marks rows missing roles as errors', () => {
+    const statusUpdates = [];
+    const data = [
+      ['Folder Missing Role', 'id-missing', '', 'group-missing@example.com', 'Missing_viewer', '', '']
+    ];
+    const sheet = createSheetWithData(data, statusUpdates);
 
-    processRow_(2, {});
+    const jobs = _buildSyncJobs(sheet, 2, {}, headers);
 
-    expect(mockFolder.addEditor).toHaveBeenCalledWith('mockfoldernameeditor@example.com');
-  });
-
-  it('locks and unlocks only the relevant sheets when locking is enabled', () => {
-    global.getConfigValue_.mockReturnValue(true);
-
-    processRow_(2, {});
-
-    expect(global.lockSheetForEdits_).toHaveBeenCalledTimes(2);
-    expect(global.lockSheetForEdits_.mock.calls).toEqual([
-      [mockManagedSheet],
-      [mockUserSheet],
+    expect(jobs).toHaveLength(0);
+    expect(statusUpdates).toEqual([
+      { row: 2, column: 7, value: 'Error: Role is missing' }
     ]);
-
-    expect(global.unlockSheetForEdits_).toHaveBeenCalledTimes(2);
-    const unlockedSheets = global.unlockSheetForEdits_.mock.calls.map(call => call[0]);
-    expect(unlockedSheets).toEqual(expect.arrayContaining([mockManagedSheet, mockUserSheet]));
-  });
-
-  it('renames the folder and existing user sheet when the configured name changes', () => {
-    sheetRegistry.delete(currentUserSheetName);
-    currentUserSheetName = 'LegacySheet_viewer';
-    sheetRegistry.set(currentUserSheetName, mockUserSheet);
-
-    managedRow.folderName = 'New Folder Name';
-    managedRow.role = 'viewer';
-    managedRow.userSheetName = currentUserSheetName;
-    managedRow.groupEmail = 'existing-group@example.com';
-
-    processRow_(2, {});
-
-    expect(mockUi.alert).toHaveBeenCalledWith(
-      'Folder name mismatch',
-      expect.stringContaining('New Folder Name'),
-      mockUi.ButtonSet.YES_NO
-    );
-    expect(mockFolder.setName).toHaveBeenCalledWith('New Folder Name');
-    expect(mockUserSheet.setName).toHaveBeenCalledWith('New Folder Name_viewer');
-    expect(mockFolder.addViewer).toHaveBeenCalledWith('existing-group@example.com');
-  });
-
-  it('should throw an error for an unsupported role', () => {
-    managedRow.role = 'unsupported-role';
-    managedRow.userSheetName = '';
-    managedRow.groupEmail = '';
-
-    expect(() => processRow_(2, {})).toThrow('Unsupported role: "unsupported-role"');
-  });
-
-  it('renames a folder when retrieved by ID with a different name', () => {
-    currentFolderName = 'Old Folder Name';
-
-    const folder = getOrCreateFolder_('Renamed Folder', 'folder-id');
-
-    expect(mockFolder.setName).toHaveBeenCalledWith('Renamed Folder');
-    expect(folder.getName()).toBe('Renamed Folder');
-  });
-
-  it('throws when a folder rename is declined by the user', () => {
-    currentFolderName = 'Original Name';
-    mockUi.alert.mockReturnValue(mockUi.Button.NO);
-
-    expect(() => getOrCreateFolder_('Desired Name', 'folder-id')).toThrow('Folder name mismatch for ID "folder-id"');
-    expect(mockFolder.setName).not.toHaveBeenCalled();
   });
 });
 
-// TODO: These tests check for outdated behavior. The function now uses validateUserSheetEmails_()
-// which handles validation differently (see Core.gs line 827-830). Tests need rewriting to match
-// current implementation that throws validation errors rather than logging them.
-describe.skip('syncGroupMembership_ (NEEDS UPDATE FOR NEW VALIDATION)', () => {
-  let originalLog, originalFetchMembers;
-
+describe('syncGroupMembership_', () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
-    // Mock CacheService for configuration
     global.CacheService = {
       getScriptCache: jest.fn(() => ({
         get: jest.fn(() => null),
-        put: jest.fn(),
-      })),
+        put: jest.fn()
+      }))
     };
-
-    originalLog = log_;
-    originalFetchMembers = fetchAllGroupMembers_;
-    log_ = jest.fn();
-    fetchAllGroupMembers_ = jest.fn(() => []);
-  });
-
-  afterEach(() => {
-    log_ = originalLog;
-    fetchAllGroupMembers_ = originalFetchMembers;
+    global.Utilities = { sleep: jest.fn() };
+    global.log_ = jest.fn();
+    global.fetchAllGroupMembers_ = jest.fn(() => []);
+    global.validateUserSheetEmails_ = jest.fn(() => ({ valid: true, error: null }));
+    global._executeMembershipChunkWithRetries_ = jest.fn(() => ({ added: 0, removed: 0, failed: 0 }));
+    global.SpreadsheetApp = {
+      getActiveSpreadsheet: jest.fn()
+    };
   });
 
   function mockSpreadsheetForUserSheet(userSheetName, values) {
@@ -330,70 +149,29 @@ describe.skip('syncGroupMembership_ (NEEDS UPDATE FOR NEW VALIDATION)', () => {
     };
 
     const mockSpreadsheet = {
-      getSheetByName: jest.fn(name => {
-        if (name === userSheetName) {
-          return mockUserSheet;
-        }
-        return null;
-      }),
-      getSpreadsheetTimeZone: jest.fn(() => 'UTC')
+      getSheetByName: jest.fn(name => (name === userSheetName ? mockUserSheet : null))
     };
 
     SpreadsheetApp.getActiveSpreadsheet.mockReturnValue(mockSpreadsheet);
     return mockUserSheet;
   }
 
-  it('logs an error when a row contains more than one email address', () => {
-    const values = [
-      ['valid@example.com'],
-      ['first@example.com second@example.com'],
-      ['']
-    ];
+  it('throws when user sheet validation fails', () => {
+    mockSpreadsheetForUserSheet('TeamSheet_Editor', [['valid@example.com']]);
+    validateUserSheetEmails_.mockReturnValue({ valid: false, error: 'Duplicate emails found' });
 
-    mockSpreadsheetForUserSheet('TeamSheet_Editor', values);
-
-    syncGroupMembership_('group@example.com', 'TeamSheet_Editor', { returnPlanOnly: true });
-
-    expect(fetchAllGroupMembers_).toHaveBeenCalledWith('group@example.com');
-    expect(log_).toHaveBeenCalledWith(
-      expect.stringContaining('multiple email addresses'),
-      'ERROR'
+    expect(() => syncGroupMembership_('group@example.com', 'TeamSheet_Editor')).toThrow(
+      'VALIDATION ERROR in sheet "TeamSheet_Editor": Duplicate emails found'
     );
-    expect(
-      log_.mock.calls.some(call => call[0].includes('Found 1 active emails in sheet "TeamSheet_Editor"'))
-    ).toBe(true);
   });
 
-  it('accepts a single valid trimmed email and skips logging errors', () => {
-    const values = [
-      ['   Valid.User@Example.COM   '],
-      ['   ']
-    ];
+  it('returns an empty summary when no membership changes are required', () => {
+    mockSpreadsheetForUserSheet('TeamSheet_Viewer', [['member@example.com', '']]);
+    fetchAllGroupMembers_.mockReturnValue([{ email: 'member@example.com', role: 'MEMBER' }]);
 
-    mockSpreadsheetForUserSheet('TeamSheet_Viewer', values);
+    const summary = syncGroupMembership_('group@example.com', 'TeamSheet_Viewer');
 
-    syncGroupMembership_('group@example.com', 'TeamSheet_Viewer', { returnPlanOnly: true });
-
-    expect(
-      log_.mock.calls.some(call => call[0].includes('Found 1 active emails in sheet "TeamSheet_Viewer"'))
-    ).toBe(true);
-    const errorCalls = log_.mock.calls.filter(call => call[1] === 'ERROR');
-    expect(errorCalls).toHaveLength(0);
-  });
-
-  it('skips disabled rows while keeping the email for auditing', () => {
-    const values = [
-      ['enabled@example.com', ''],
-      ['disabled@example.com', true],
-      ['another.disabled@example.com', 'yes']
-    ];
-
-    mockSpreadsheetForUserSheet('TeamSheet_Disabled', values);
-
-    syncGroupMembership_('group@example.com', 'TeamSheet_Disabled', { returnPlanOnly: true });
-
-    expect(
-      log_.mock.calls.some(call => call[0].includes('Found 1 active emails in sheet "TeamSheet_Disabled" (skipped 2 disabled entries).'))
-    ).toBe(true);
+    expect(summary).toEqual({ added: 0, removed: 0, failed: 0 });
+    expect(_executeMembershipChunkWithRetries_).not.toHaveBeenCalled();
   });
 });
