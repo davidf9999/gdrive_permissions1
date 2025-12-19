@@ -175,14 +175,15 @@ function auditMemberRolesOnFolders_() {
       const folder = DriveApp.getFolderById(folderId);
       const viewers = folder.getViewers().map(u => u.getEmail().toLowerCase());
       const editors = folder.getEditors().map(u => u.getEmail().toLowerCase());
+      const groupRole = getRoleFromAccessLists_(groupEmail, editors, viewers);
+
+      auditGroupRoleOnFolder_(folder, folderName, expectedRole, groupEmail);
 
       sheetMembers.forEach(memberEmail => {
         const member = memberEmail.toLowerCase();
-        let actualRole = 'NONE';
-        if (editors.includes(member)) {
-          actualRole = 'EDITOR';
-        } else if (viewers.includes(member)) {
-          actualRole = 'VIEWER';
+        let actualRole = getRoleFromAccessLists_(member, editors, viewers);
+        if (actualRole === 'NONE' && groupRole !== 'NONE') {
+          actualRole = groupRole;
         }
 
         if (actualRole.toUpperCase() !== expectedRole.toUpperCase()) {
@@ -218,6 +219,18 @@ function auditGroupRoleOnFolder_(folder, folderName, expectedRole, groupEmail) {
     if (!hasCorrectPermission) {
         logAndAudit_('Folder Permission', folderName, 'Permission Mismatch', 'Expected: ' + expectedRole + ', Actual: ' + actualRole);
     }
+}
+
+function getRoleFromAccessLists_(email, editors, viewers) {
+  if (!email) return 'NONE';
+  const normalizedEmail = email.toLowerCase();
+  if (editors.includes(normalizedEmail)) {
+    return 'EDITOR';
+  }
+  if (viewers.includes(normalizedEmail)) {
+    return 'VIEWER';
+  }
+  return 'NONE';
 }
 
 function deepAuditFolder() {
@@ -285,14 +298,13 @@ function deepAuditFolder() {
       if (sheetMembers.size > 0) {
         const viewers = item.item.getViewers().map(u => u.getEmail().toLowerCase());
         const editors = item.item.getEditors().map(u => u.getEmail().toLowerCase());
+        const groupRole = getRoleFromAccessLists_(groupEmail, editors, viewers);
 
         sheetMembers.forEach(memberEmail => {
           const member = memberEmail.toLowerCase();
-          let actualRole = 'NONE';
-          if (editors.includes(member)) {
-            actualRole = 'EDITOR';
-          } else if (viewers.includes(member)) {
-            actualRole = 'VIEWER';
+          let actualRole = getRoleFromAccessLists_(member, editors, viewers);
+          if (actualRole === 'NONE' && groupRole !== 'NONE') {
+            actualRole = groupRole;
           }
 
           if (actualRole.toUpperCase() !== expectedRole.toUpperCase()) {
