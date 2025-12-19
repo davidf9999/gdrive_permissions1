@@ -1580,7 +1580,7 @@ function updateUserSheetHeaders_() {
       // Only process user sheets (not control sheets)
       if (managedSheetNames.has(sheetName) &&
           sheetName !== MANAGED_FOLDERS_SHEET_NAME &&
-          sheetName !== ADMINS_SHEET_NAME &&
+          sheetName !== SHEET_EDITORS_SHEET_NAME &&
           sheetName !== USER_GROUPS_SHEET_NAME &&
           sheetName !== CONFIG_SHEET_NAME &&
           sheetName !== LOG_SHEET_NAME &&
