@@ -24,6 +24,7 @@ This guide provides an end-to-end process for safely deleting a Google Workspace
 - Transfer ownership of Drive, Shared Drives, Apps Script, AppSheet, Calendars, Sites, and Forms.
 
 ## 3. Audit and Remove Billing Risks
+**Priority: High (cost/blocker)** — These steps prevent ongoing charges and unblock account deletion.
 
 ### 3.1 Cancel Workspace Subscriptions
 - Go to [admin.google.com](http://admin.google.com/).
@@ -37,6 +38,29 @@ This guide provides an end-to-end process for safely deleting a Google Workspace
 - Select and **Delete** all projects associated with the Workspace.
 - **Note**: Projects enter a 30-day "pending deletion" state before being permanently removed. While the user notes this wait may not be required, it is a safeguard.
 
+#### How to delete a GCP project (Console)
+1. Open the project selector (top bar) and choose the project you want to delete.
+2. Go to **IAM & Admin** → **Settings**.
+3. In the **Shut down** section, click **Shut down** (or **Shut down project**).
+4. Type the **Project ID** to confirm and click **Shut down**.
+5. Repeat for each remaining project.
+
+If you do not see the **Shut down** button, confirm:
+- You are a **Project Owner** or **Organization Admin** for that project.
+- The project is not already in **Pending deletion** (check the project list in Cloud Resource Manager).
+- You are in the correct project (the project ID in the header matches the one you want to delete).
+
+#### How to delete a GCP project (gcloud CLI)
+If you prefer the CLI:
+```bash
+gcloud projects delete PROJECT_ID
+```
+You can list projects with:
+```bash
+gcloud projects list
+```
+Projects will show `DELETE_REQUESTED` while pending deletion.
+
 ### 3.3 Clean Up Cloud Resources
 - App Engine: disable application.
 - Cloud Storage: delete buckets.
@@ -49,6 +73,7 @@ This guide provides an end-to-end process for safely deleting a Google Workspace
 Close each billing account.
 
 ## 4. Remove and Disconnect Domain Resources
+**Priority: Medium** — These steps clean up Workspace entities and DNS so the domain can be released.
 
 This step is critical for ensuring the domain can be fully released from Google Workspace.
 
@@ -92,10 +117,12 @@ From your registrar's DNS management page, you will need to remove all records r
 - Any **CNAMEs** pointing to Google services (e.g., `mail.yourdomain.com`).
 
 ## 5. Delete Secondary Domains and Domain Aliases
+**Priority: Medium** — Required to release the primary domain.
 - Admin console → Domains → Manage domains → Remove all secondary domains.
 - Clean DNS: delete Gmail MX, SPF, DKIM, DMARC, google-site-verification, CNAMEs, subdomain entries.
 
 ## 6. Delete the Google Workspace Account (Primary Domain)
+**Priority: High (final action)** — Only possible after high/medium priority steps are complete.
 
 **Critical Prerequisites:** Before you can delete your Google Workspace account, you *must* ensure all associated resources are removed and subscriptions are cancelled. Failure to do so will block the deletion process, as indicated by messages like "Delete Google Cloud resources" or "Cancel subscriptions and delete Google Cloud resources, and Marketplace Apps (Required)". Specifically, ensure you have completed:
 
@@ -119,6 +146,7 @@ If the "Delete account" option is still disabled, refer to the following common 
 | Last super admin deleted | Restore a super admin account if accidentally deleted. |
 
 ## 7. Post-Deletion Verification
+**Priority: Low** — Validation and follow-up checks.
 - Verify DNS cleanup.
 - Confirm billing accounts are closed.
 - Ensure Workspace admin login is disabled.
