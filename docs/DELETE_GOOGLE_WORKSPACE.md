@@ -37,6 +37,29 @@ This guide provides an end-to-end process for safely deleting a Google Workspace
 - Select and **Delete** all projects associated with the Workspace.
 - **Note**: Projects enter a 30-day "pending deletion" state before being permanently removed. While the user notes this wait may not be required, it is a safeguard.
 
+#### How to delete a GCP project (Console)
+1. Open the project selector (top bar) and choose the project you want to delete.
+2. Go to **IAM & Admin** → **Settings**.
+3. In the **Shut down** section, click **Shut down** (or **Shut down project**).
+4. Type the **Project ID** to confirm and click **Shut down**.
+5. Repeat for each remaining project.
+
+If you do not see the **Shut down** button, confirm:
+- You are a **Project Owner** or **Organization Admin** for that project.
+- The project is not already in **Pending deletion** (check the project list in Cloud Resource Manager).
+- You are in the correct project (the project ID in the header matches the one you want to delete).
+
+#### How to delete a GCP project (gcloud CLI)
+If you prefer the CLI:
+```bash
+gcloud projects delete PROJECT_ID
+```
+You can list projects with:
+```bash
+gcloud projects list
+```
+Projects will show `DELETE_REQUESTED` while pending deletion.
+
 ### 3.3 Clean Up Cloud Resources
 - App Engine: disable application.
 - Cloud Storage: delete buckets.
