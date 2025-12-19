@@ -8,6 +8,7 @@
 > *   **Be Patient:** The initial Codespaces setup can take a few minutes.
 > *   **Read the Chat:** The assistant will show you the commands it's running. You don't need to read all of the output, just focus on the assistant's chat responses.
 > *   **You're in Control:** While the assistant can run commands for you, you can always choose to copy the commands and run them manually in a separate terminal.
+> *   **Codespaces billing:** GitHub Codespaces is metered usage. Depending on your account, you may incur charges. If you want to avoid paid usage, use a local terminal instead of Codespaces and make sure you stop/delete any Codespaces you start.
 
 This document is the comprehensive, step-by-step guide for setting up the Google Drive Permission Manager. For a successful deployment, follow these steps in the presented order.
 
@@ -17,6 +18,37 @@ This document is the comprehensive, step-by-step guide for setting up the Google
 
 *   **Administrative Skills:** Even with the AI assistant, this setup requires a basic understanding of administrative concepts like domain management and user permissions.
 *   **Google Account:** For authenticating the `gemini` CLI tool, you will need a standard Google account (like a `@gmail.com` address). This account does **not** need to be your GitHub or Google Workspace admin account.
+
+### Avoiding Codespaces Charges (and what changes if you do)
+
+GitHub Codespaces is billed based on usage (compute + storage). If you want to avoid unexpected costs:
+
+*   **Prefer local setup:** Run the steps in this guide on your own machine (or another non-Codespaces environment).
+*   **Shut down when idle:** If you do use Codespaces, stop the environment when you are done. Delete it if you no longer need it.
+*   **Review billing settings:** Check your GitHub **Billing and licensing → Usage** settings to understand current usage and set any desired budgets/alerts.
+*   **Understand gross vs billed:** The Usage page may show a **gross amount** for Codespaces usage and a **billed amount** of $0 if your included/free quota covers it. You only pay when billed amount is non-zero.
+
+To manage or delete existing Codespaces:
+
+*   Go to [github.com/codespaces](https://github.com/codespaces) to view all your environments.
+*   **Stop** a Codespace you are not actively using to halt compute billing.
+*   **Delete** a Codespace you no longer need to stop storage billing (deleting removes its data).
+
+Stopping or deleting unused Codespaces helps avoid charges and reduces the chance of hitting usage limits/quotas because you are no longer accruing compute or storage time.
+
+If you avoid Codespaces entirely, there are **no functional restrictions** on this project, but you may need to install local dependencies yourself (Node.js, `npm`, and `gcloud`). Codespaces provides these preconfigured; local setups require manual installation and environment setup.
+
+### Codespaces billing & access FAQ (short answers)
+
+*   **Do free users get 4 cores?** Machine sizes depend on your account plan and the repo/org settings. The Codespaces UI shows available options for your account.
+*   **Gross vs billed amount:** Usage may show a **gross amount** even when the **billed amount** is $0. You are only charged when billed amount is non-zero.
+*   **When does the quota reset?** Codespaces usage is tracked by billing month. Check your usage page for the current billing period dates.
+*   **Do I need a credit card?** If you haven’t added a payment method, usage beyond included/free quota is typically blocked instead of billed.
+*   **Will I be notified when I hit the quota?** GitHub shows usage in **Billing and licensing → Usage** and can block additional Codespaces usage once you exceed the included quota.
+*   **How do I disable Codespaces?** If you don’t want any Codespaces usage, disable it in your GitHub settings or at the organization level:
+    *   Personal account settings: https://github.com/settings/codespaces
+    *   Organization settings (if applicable): https://github.com/organizations/YOUR_ORG/settings/codespaces
+*   **Can I avoid Codespaces by using local Docker?** Yes. This repo includes a Docker-based setup option (see **Docker-based infra (optional)** above) that can be run locally to avoid Codespaces usage.
 
 ### Authenticating the Gemini CLI
 
@@ -163,4 +195,3 @@ This step gives `gcloud` permission to manage resources in your Google Cloud pro
 </details>
 
 After the script finishes, the management sheets will be created. See the [User Guide](USER_GUIDE.md) for next steps.
-
