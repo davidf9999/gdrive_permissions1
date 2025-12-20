@@ -204,6 +204,13 @@ function setupControlSheets_() {
   }
   userGroupsSheet.setFrozenRows(1);
 
+  // Remove legacy SheetEditors group row if it still exists in UserGroups.
+  const legacyGroupRow = findRowByValue_(userGroupsSheet, 1, 'SheetEditors');
+  if (legacyGroupRow > 1) {
+    userGroupsSheet.deleteRow(legacyGroupRow);
+    log_('Removed legacy "SheetEditors" row from UserGroups.');
+  }
+
   // Ensure SheetEditors_G row exists in UserGroups
   const groupNameColData = userGroupsSheet.getRange(1, 1, userGroupsSheet.getLastRow(), 1).getValues().flat();
   if (!groupNameColData.includes(SHEET_EDITORS_SHEET_NAME)) {
