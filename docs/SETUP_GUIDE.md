@@ -7,6 +7,7 @@
 > *   **Follow the Assistant:** The assistant will guide you interactively. Refer to this guide for the manual steps you'll need to perform in your web browser. The assistant will tell you when.
 > *   **Be Patient:** The initial Codespaces setup can take a few minutes.
 > *   **Read the Chat:** The assistant will show you the commands it's running. You don't need to read all of the output, just focus on the assistant's chat responses.
+> *   **Sharing Screenshots:** If you need to show the assistant something from your screen, you can copy text and paste it into the chat. For images, save a screenshot to a file and share the file path with the assistant so it can open the image.
 > *   **Open in Preview Mode:** If this guide opens as raw Markdown, switch to preview mode with `Ctrl+Shift+V` (Windows/Linux) or `Cmd+Shift+V` (macOS).
 > *   **Hide the Chat Pane:** If VS Code opens with the chat pane visible, you can hide it via **View → Appearance → Toggle Chat** or by running **View: Toggle Chat** from the Command Palette. VS Code will remember the layout the next time you open it.
 > *   **You're in Control:** While the assistant can run commands for you, you can always choose to copy the commands and run them manually in a separate terminal.
@@ -24,7 +25,7 @@ This document is the comprehensive, step-by-step guide for setting up the Google
 
 ### Authenticating the Gemini CLI
 
-Before starting, you need to authenticate the `gemini` command-line tool.
+Before starting the Setup Steps, you need to authenticate the `gemini` command-line tool.
 
 1.  In the terminal, you will be prompted to authenticate.
 2.  Select **1: Login with Google**.
@@ -35,14 +36,14 @@ Before starting, you need to authenticate the `gemini` command-line tool.
 
 ## Setup Steps Overview
 
-1. [Create or reuse a Google Workspace tenant](#1-create-workspace)
-2. [Prepare the Super Admin account](#2-prepare-admin)
-3. [Create or select a Google Cloud Project](#3-create-gcp-project)
-4. [Create the control spreadsheet](#4-create-spreadsheet)
-5. [Configure the Google Cloud CLI (gcloud)](#5-configure-gcloud)
-6. [Enable APIs and grant consent](#6-enable-apis)
-7. [Deploy the Apps Script project](#7-deploy-script)
-8. [Run the first sync](#8-first-sync)
+1. [Create or reuse a Google Workspace tenant](#1-create-or-reuse-a-google-workspace-tenant)
+2. [Prepare the Super Admin account](#2-prepare-the-super-admin-account)
+3. [Create or select a Google Cloud Project](#3-create-or-select-a-google-cloud-project)
+4. [Create the control spreadsheet](#4-create-the-control-spreadsheet)
+5. [Configure the Google Cloud CLI (gcloud)](#5-configure-the-google-cloud-cli-gcloud)
+6. [Enable APIs and grant consent](#6-enable-apis-and-grant-consent)
+7. [Deploy the Apps Script project](#7-deploy-the-apps-script-project)
+8. [Run the first sync](#8-run-the-first-sync)
 
 ---
 
@@ -167,4 +168,3 @@ This step gives `gcloud` permission to manage resources in your Google Cloud pro
 </details>
 
 After the script finishes, the management sheets will be created. See the [User Guide](USER_GUIDE.md) for next steps.
-
