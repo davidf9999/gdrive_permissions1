@@ -254,7 +254,7 @@ function detectAutoSyncChanges_() {
       const groupNames = filteredData.map(function(row) { return row[0]; });
       groupNames.forEach(function(name) {
         if (name) {
-          const groupSheet = spreadsheet.getSheetByName(name + '_G');
+          const groupSheet = spreadsheet.getSheetByName(getUserGroupSheetName_(name));
           if (groupSheet) {
             const groupData = getSheetDataForHashing_(groupSheet, 2);
             dataString += JSON.stringify(groupData);

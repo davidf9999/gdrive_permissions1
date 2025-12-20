@@ -539,7 +539,7 @@ function checkForOrphanSheets_() {
         const groupSheetNames = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 1).getValues();
         if (groupSheetNames) {
             groupSheetNames.forEach(function(row) {
-                if (row[0]) requiredSheetNames.add(row[0] + '_G');
+                if (row[0]) requiredSheetNames.add(getUserGroupSheetName_(row[0]));
             });
         }
     }
@@ -712,7 +712,7 @@ function processUserGroupDeletions_(summary) {
       }
 
       // 2. Delete user sheet (GroupName_G)
-      const userSheetName = groupName + '_G';
+      const userSheetName = getUserGroupSheetName_(groupName);
       const userSheet = ss.getSheetByName(userSheetName);
       if (userSheet) {
         ss.deleteSheet(userSheet);
@@ -1561,7 +1561,7 @@ function getAllManagedSheetNames_() {
     const groupNames = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 1).getValues();
     groupNames.forEach(function(row) {
       if (row[0]) {
-        managedSheetNames.add(row[0] + '_G');
+        managedSheetNames.add(getUserGroupSheetName_(row[0]));
       }
     });
   }
