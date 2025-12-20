@@ -183,7 +183,7 @@ This is the final step where you'll authorize the script and let it create the n
 
 **Manual Action Required:**
 1. Return to your control spreadsheet and refresh the page. You should see a "Permissions Manager" menu.
-2. From the menu, select **Permissions Manager → Setup → Setup All Sheets & Sync Admins**.
+2. From the menu, select **Permissions Manager → ManualSync → Granular Sync → Sync Sheet Editors**.
 3. You will be prompted to grant the script permissions. Review and accept these.
 
 After the sync completes, the necessary sheets will be created, and you can begin populating them. Refer to the [User Guide](docs/SETUP_GUIDE.md#8-run-the-first-sync) for more details on day-to-day operations.
