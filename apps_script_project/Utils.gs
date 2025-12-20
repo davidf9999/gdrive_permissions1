@@ -946,7 +946,15 @@ function validateGroupNesting_() {
 
     // Determine the parent group's email
     if (sheetName === SHEET_EDITORS_SHEET_NAME) {
-      parentGroupEmail = getConfiguration_()['SheetEditorsGroupEmail'] || getConfiguration_()['AdminGroupEmail'];
+      parentGroupEmail = getConfigValue_('SheetEditorsGroupEmail', '') || getConfigValue_('AdminGroupEmail', '');
+      if (!parentGroupEmail) {
+        try {
+          parentGroupEmail = generateGroupEmail_(SHEET_EDITORS_GROUP_NAME);
+          log_('Generated Sheet Editors group email for nesting validation: ' + parentGroupEmail, 'INFO');
+        } catch (e) {
+          log_('Unable to generate Sheet Editors group email for nesting validation: ' + e.message, 'WARN');
+        }
+      }
     } else {
       const groupName = sheetName.slice(0, -2); // Remove '_G'
       // Find this group's email in UserGroups or ManagedFolders
