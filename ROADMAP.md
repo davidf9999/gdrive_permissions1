@@ -11,6 +11,7 @@ This section highlights specific features and improvements that are planned for 
 | **Centralized Logging with Cloud Logging** | Implement a configuration option to stream Apps Script execution logs directly to Google Cloud Logging for improved, centralized monitoring. | [PR #47](https://github.com/davidf9999/gdrive_permissions1/pull/47)<br>[Codex Task](https://chatgpt.com/s/cd_6936b78b56088191b348c1fb7ad96dfe)         |
 | **Enhanced Integration Documentation**       | Create comprehensive documentation and examples for integrating the Permissions Manager with other products and internal workflows. | [PR #42](https://github.com/davidf9999/gdrive_permissions1/pull/42)<br>[Codex Task](https://chatgpt.com/s/cd_6936b7da0a9c819194aa7183ddb1348f)         |
 | **Streamlined Developer Setup**              | Finalize and document setup options for both cloud-based (GitHub Codespaces) and local development to simplify contributor onboarding. | [PR #44](https://github.com/davidf9999/gdrive_permissions1/pull/44)<br>[Codex Task](https://chatgpt.com/s/cd_6936b811da40819198c1f4a94bf35dc9)         |
+| **Local Docker Setup Image**                 | Provide a Dockerfile and optional Docker Compose workflow to run the assistant locally without Codespaces. | TBD |
 
 ---
 
