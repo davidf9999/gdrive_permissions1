@@ -18,7 +18,7 @@ function discoverManualAdditions_() {
     const userGroupsData = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 2).getValues();
     userGroupsData.forEach(row => {
       if (row[0] && row[1]) {
-        const sheetName = row[0] + '_G';
+        const sheetName = getUserGroupSheetName_(row[0]);
         allGroups.set(sheetName, { email: row[1], folderId: null });
       }
     });

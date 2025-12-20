@@ -275,7 +275,7 @@ function syncUserGroups(options = {}) {
         }
 
         if (returnPlanOnly) {
-          const groupSheetName = groupName + '_G';
+          const groupSheetName = getUserGroupSheetName_(groupName);
           const plan = syncGroupMembership_(groupEmail, groupSheetName, options);
           if (plan) {
             deletionPlan.push(plan);
@@ -293,7 +293,7 @@ function syncUserGroups(options = {}) {
             groupEmailCell.setValue(groupEmail);
           }
 
-          const groupSheetName = groupName + '_G';
+          const groupSheetName = getUserGroupSheetName_(groupName);
           getOrCreateUserSheet_(groupSheetName);
           const groupResult = getOrCreateGroup_(groupEmail, groupName);
           const adminLink = 'https://admin.google.com/ac/groups/' + groupResult.group.id + '/members';
@@ -867,7 +867,7 @@ function getAllManagedSheets_() {
   if (userGroupsSheet && userGroupsSheet.getLastRow() > 1) {
     const groupNames = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 1).getValues().flat();
     groupNames.forEach(name => {
-      if (name) sheets.add(ss.getSheetByName(name + '_G'));
+      if (name) sheets.add(ss.getSheetByName(getUserGroupSheetName_(name)));
     });
   }
 

@@ -1067,6 +1067,19 @@ function findGroupEmailByName_(groupName) {
     return null;
 }
 
+function getUserGroupSheetName_(groupName) {
+  if (!groupName) {
+    return '';
+  }
+
+  const trimmedName = groupName.toString().trim();
+  if (!trimmedName) {
+    return '';
+  }
+
+  return trimmedName.endsWith('_G') ? trimmedName : trimmedName + '_G';
+}
+
 /**
  * Finds all groups that contain a specific member (for detecting nested groups).
  * Used to warn when deleting a group that is nested in other groups.
