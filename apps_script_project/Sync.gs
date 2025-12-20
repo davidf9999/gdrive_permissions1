@@ -19,7 +19,7 @@ function syncSheetEditors(options = {}) {
     const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
     const sheetEditorsSheet = spreadsheet.getSheetByName(SHEET_EDITORS_SHEET_NAME);
     if (!sheetEditorsSheet) {
-      throw new Error('SheetEditors sheet not found. Skipping sync.');
+      throw new Error(SHEET_EDITORS_SHEET_NAME + ' sheet not found. Skipping sync.');
     }
 
     userGroupsSheet = spreadsheet.getSheetByName(USER_GROUPS_SHEET_NAME);
@@ -40,7 +40,7 @@ function syncSheetEditors(options = {}) {
     log_(`DEBUG: Resolved Columns: GroupName=${ugGroupNameCol}, GroupEmail=${ugGroupEmailCol}, AdminLink=${ugAdminLinkCol}, LastSynced=${ugLastSyncedCol}, Status=${ugStatusCol}`, 'DEBUG');
 
     const sheetEditorsRow = findRowByValue_(userGroupsSheet, ugGroupNameCol, SHEET_EDITORS_SHEET_NAME);
-    log_('DEBUG: Result of findRowByValue_ for "SheetEditors": ' + sheetEditorsRow, 'DEBUG');
+    log_('DEBUG: Result of findRowByValue_ for "' + SHEET_EDITORS_SHEET_NAME + '": ' + sheetEditorsRow, 'DEBUG');
     if (sheetEditorsRow === -1) {
       throw new Error(`'${SHEET_EDITORS_SHEET_NAME}' not found in UserGroups sheet. Please run setup again.`);
     }

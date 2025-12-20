@@ -401,7 +401,7 @@ This design allows team members to edit sheets without needing their own Google 
 AutoSync intelligently detects when changes require a sync:
 
 **When AutoSync Runs:**
-1. **Data Changes** - When `ManagedFolders`, `SheetEditors`, or `UserGroups` sheets are modified.
+1. **Data Changes** - When `ManagedFolders`, `SheetEditors_G`, or `UserGroups` sheets are modified.
    - The script uses an SHA-256 hash of the actual data content to detect changes.
    - It ignores formatting, validation rules, and status updates, ensuring only meaningful data changes trigger a sync.
 2. **Folder Changes** - When managed Google Drive folders are modified (e.g., renamed, moved).

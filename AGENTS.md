@@ -53,7 +53,7 @@
 ## Security & Configuration Tips
 - Never commit real `config.json`, Sheet IDs with sensitive data, or credentials. Use `config.json.template` and `.env`/`setup.conf` examples.
 - GCP: restrict roles to least privilege; rotate service account keys; verify Admin SDK/Drive API enablement.
-- Sheet access: maintain `SheetEditors` sheet; review group email patterns before syncing.
+- Sheet access: maintain `SheetEditors_G` sheet; review group email patterns before syncing.
 
 ## Common Issues & Automated Fixes
 
