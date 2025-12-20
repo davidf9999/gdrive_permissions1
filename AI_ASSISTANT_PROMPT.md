@@ -103,7 +103,7 @@ This section defines your actions for each state. For detailed instructions on t
 This is the foundational step for your Google Drive Permissions Manager. You'll need an active Google Workspace tenant. If you don't have one, you can start a free trial.
 
 **Manual Action Required:**
-Follow the instructions in the [Setup Guide](docs/SETUP_GUIDE.md#1-create-or-reuse-a-google-workspace-tenant) to either create a new Google Workspace tenant or sign into an existing one.
+Follow the instructions in the [Setup Guide](docs/SETUP_GUIDE.md#1-create-workspace) to either create a new Google Workspace tenant or sign into an existing one.
 
 **Once you have successfully set up or signed into your Google Workspace tenant, type 'done' to continue.**
 
@@ -112,7 +112,7 @@ Follow the instructions in the [Setup Guide](docs/SETUP_GUIDE.md#1-create-or-reu
 Now, you'll prepare the Super Admin account that will be used for the setup. This involves ensuring the correct roles and enabling necessary services.
 
 **Manual Action Required:**
-Follow the instructions in the [Setup Guide](docs/SETUP_GUIDE.md#2-prepare-the-super-admin-account) to:
+Follow the instructions in the [Setup Guide](docs/SETUP_GUIDE.md#2-prepare-admin) to:
 1. Confirm your account has the Super Admin role.
 2. Enable the Google Groups service.
 3. Accept the Google Cloud Terms of Service.
@@ -125,7 +125,7 @@ Follow the instructions in the [Setup Guide](docs/SETUP_GUIDE.md#2-prepare-the-s
 The Google Drive Permissions Manager requires a Google Cloud Platform (GCP) project to manage APIs.
 
 **Manual Action Required:**
-Follow the instructions in the [Setup Guide](docs/SETUP_GUIDE.md#3-create-or-select-a-google-cloud-project) to:
+Follow the instructions in the [Setup Guide](docs/SETUP_GUIDE.md#3-create-gcp-project) to:
 1. Navigate to the Google Cloud Console.
 2. Create a **NEW PROJECT** or select an existing, unused project.
 3. **Copy the Project ID and save it.** You will need it in subsequent steps.
@@ -137,7 +137,7 @@ Follow the instructions in the [Setup Guide](docs/SETUP_GUIDE.md#3-create-or-sel
 This spreadsheet will be the central hub for managing all your Drive permissions.
 
 **Manual Action Required:**
-Follow the instructions in the [Setup Guide](docs/SETUP_GUIDE.md#4-create-the-control-spreadsheet) to:
+Follow the instructions in the [Setup Guide](docs/SETUP_GUIDE.md#4-create-spreadsheet) to:
 1. Create a new Google Spreadsheet in Google Drive.
 2. Open **Extensions → Apps Script** to create a new Apps Script project bound to the spreadsheet.
 3. In the Apps Script editor, open **Project Settings** (the gear icon ⚙️) and copy the **Script ID**. You will need this later.
@@ -186,6 +186,6 @@ This is the final step where you'll authorize the script and let it create the n
 2. From the menu, select **Permissions Manager → ManualSync → Granular Sync → Sync Sheet Editors**.
 3. You will be prompted to grant the script permissions. Review and accept these.
 
-After the sync completes, the necessary sheets will be created, and you can begin populating them. Refer to the [User Guide](docs/SETUP_GUIDE.md#8-run-the-first-sync) for more details on day-to-day operations.
+After the sync completes, the necessary sheets will be created, and you can begin populating them. Refer to the [User Guide](docs/SETUP_GUIDE.md#8-first-sync) for more details on day-to-day operations.
 
 **Once you have completed the first sync, type 'done' to mark the setup as complete!**
