@@ -7,8 +7,6 @@
 > *   **Follow the Assistant:** The assistant will guide you interactively. Refer to this guide for the manual steps you'll need to perform in your web browser. The assistant will tell you when.
 > *   **Be Patient:** The initial Codespaces setup can take a few minutes.
 > *   **Read the Chat:** The assistant will show you the commands it's running. You don't need to read all of the output, just focus on the assistant's chat responses.
-> *   **Open in Preview Mode:** If this guide opens as raw Markdown, switch to preview mode with `Ctrl+Shift+V` (Windows/Linux) or `Cmd+Shift+V` (macOS).
-> *   **Hide the Chat Pane:** If VS Code opens with the chat pane visible, you can hide it via **View → Appearance → Toggle Chat** or by running **View: Toggle Chat** from the Command Palette. VS Code will remember the layout the next time you open it.
 > *   **You're in Control:** While the assistant can run commands for you, you can always choose to copy the commands and run them manually in a separate terminal.
 > *   **Codespaces by default:** The assistant runs inside GitHub Codespaces unless you choose to run it locally. See [What is Codespaces?](CODESPACES_OVERVIEW.md) for details and cost/management tips.
 
