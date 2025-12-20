@@ -170,12 +170,6 @@ function setupControlSheets_() {
 
   // Check for SheetEditors_G sheet
   let sheetEditorsSheet = ss.getSheetByName(SHEET_EDITORS_SHEET_NAME);
-  const legacySheetEditorsSheet = ss.getSheetByName(SHEET_EDITORS_LEGACY_SHEET_NAME);
-  if (!sheetEditorsSheet && legacySheetEditorsSheet) {
-    legacySheetEditorsSheet.setName(SHEET_EDITORS_SHEET_NAME);
-    sheetEditorsSheet = legacySheetEditorsSheet;
-    log_('Renamed "' + SHEET_EDITORS_LEGACY_SHEET_NAME + '" sheet to "' + SHEET_EDITORS_SHEET_NAME + '".');
-  }
   const sheetEditorsHeaders = ['Sheet Editor Emails', 'Disabled'];
   if (!sheetEditorsSheet) {
     sheetEditorsSheet = ss.insertSheet(SHEET_EDITORS_SHEET_NAME);
@@ -209,6 +203,13 @@ function setupControlSheets_() {
     log_('Updated UserGroups headers with Delete column.');
   }
   userGroupsSheet.setFrozenRows(1);
+
+  // Remove legacy SheetEditors group row if it still exists in UserGroups.
+  const legacyGroupRow = findRowByValue_(userGroupsSheet, 1, 'SheetEditors');
+  if (legacyGroupRow > 1) {
+    userGroupsSheet.deleteRow(legacyGroupRow);
+    log_('Removed legacy "SheetEditors" row from UserGroups.');
+  }
 
   // Ensure SheetEditors_G row exists in UserGroups
   const groupNameColData = userGroupsSheet.getRange(1, 1, userGroupsSheet.getLastRow(), 1).getValues().flat();
