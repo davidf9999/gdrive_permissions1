@@ -29,7 +29,7 @@ The system uses **three risk levels** based on consequence of error and reversib
 | Risk Level | Operations | Impact if Wrong | AutoSync Treatment | Admin Action |
 |:-----------|:-----------|:----------------|:--------------------|:-------------|
 | **SAFE**<br>*(Additive)* | • Add users to groups<br>• Create folders & share with groups<br>• Add spreadsheet editors<br>• Create Google Groups<br>• All `syncAdds()` operations including sheet editors | Users get unintended access (easily reverted and detected) | ✅ **Automatic**<br>Runs every 5 minutes with post-notification email | Review summary email; revert if needed |
-| **DESTRUCTIVE**<br>*(Reversible Removals)* | • Remove users from groups<br>• Remove spreadsheet editors<br>• Revoke folder permissions<br>• All `syncDeletes()` operations | Users lose access they need, work blocked, requires restoration | 🛑 **Manual Only**<br>Notifies admin, does NOT execute | Run "Remove/Disable Users from Groups" manually after review |
+| **DESTRUCTIVE**<br>*(Reversible Removals)* | • Remove users from groups<br>• Remove spreadsheet editors<br>• Revoke folder permissions<br>• All `syncDeletes()` operations | Users lose access they need, work blocked, requires restoration | 🛑 **Manual Only**<br>Notifies Super Admin, does NOT execute | Run \"Sync Groups - Remove/Disable Users\" manually after review |
 | **CRITICAL**<br>*(Irreversible)* | • `mergeSync()` - Approve manual changes<br>• Delete Google Groups (permanent)<br>• Delete Drive folders (data loss)<br>• Domain-wide bulk changes | Permanent data loss or inadvertent approval of unauthorized access | 🚫 **Always Manual**<br>Never automated, requires human judgment | Run manually with full context |
 
 ### Why This Model is Safe
@@ -38,7 +38,7 @@ The system uses **three risk levels** based on consequence of error and reversib
 
 **Why Sheet Editor Additions are SAFE**:
 - Adding wrong editor = Reversible (remove from SheetEditors_G sheet, sync again)
-- Detected quickly (admin email notification immediately after)
+- Detected quickly (Super Admin email notification immediately after)
 - Low blast radius (one person, not mass-change)
 - Same recovery path as any wrong permission grant
 
@@ -85,7 +85,7 @@ Add these settings to the **Config sheet**:
 | `EnableAutoSync` | `TRUE` | Master switch: enable/disable automatic synchronization |
 | `NotifyAfterSync` | `TRUE` | Send email summary after each AutoSync completion |
 | `NotifyDeletionsPending` | `TRUE` | Send email when deletions detected (require manual action) |
-| `AutoSyncMaxDeletions` | `10` | Safety limit: if deletions exceed this, notify admin but don't allow manual sync without review |
+| `AutoSyncMaxDeletions` | `10` | Safety limit: if deletions exceed this, notify the Super Admin but don't allow manual sync without review |
 | `MaxFileSizeMB` | `100` | Safety limit: if the total spreadsheet file size exceeds this limit in MB, AutoSync is aborted to prevent uncontrolled file history growth. |
 | `_SyncHistory` | Always enabled | (Informational only) Sync history is automatically tracked in the SyncHistory sheet with revision links for auditing (30-100 days retention). |
 
@@ -98,7 +98,7 @@ Add these settings to the **Config sheet**:
 
 **Single, Simple Behavior**:
 1. **Automatic**: All SAFE operations (additive) run on schedule
-2. **Detect & Notify**: Check for pending DESTRUCTIVE operations, email admin
+2. **Detect & Notify**: Check for pending DESTRUCTIVE operations, email the Super Admin
 3. **Never Execute**: DESTRUCTIVE and CRITICAL operations never run automatically
 
 **Implementation**:
@@ -163,32 +163,32 @@ Sent when DESTRUCTIVE operations detected:
 
 ---
 
-## User/Admin Workflows
+## User/Super Admin Workflows
 
 ### Workflow for Standard Users
 
 1. **Add users**: Edit permission sheets, add email addresses to group sheets
-   - **Result**: Auto-sync grants access within 5 minutes (no admin action needed)
+   - **Result**: Auto-sync grants access within 5 minutes (no Super Admin action needed)
 
 2. **Remove users**: Delete email addresses from group sheets
-   - **Result**: Auto-sync detects change, notifies admin (admin must approve deletion)
+   - **Result**: Auto-sync detects change, notifies a Super Admin (Super Admin must approve deletion)
 
 3. **Check status**: View "Status" column in sheets
    - `OK` = Synced successfully
-   - `Pending deletion - admin approval needed` = Waiting for admin
+   - `Pending deletion - Super Admin approval needed` = Waiting for a Super Admin
 
-### Workflow for Admins
+### Workflow for Super Admins
 
-| Scenario | What Happens Automatically | Admin Action Required |
+| Scenario | What Happens Automatically | Super Admin Action Required |
 |:---------|:---------------------------|:---------------------|
 | **Users added to sheets** | Auto-sync grants access within 5 minutes | ✅ None (review summary email periodically) |
-| **Users removed from sheets** | Auto-sync detects, sends "Action Required" email | ⚠️ Check email → Run "Remove/Disable Users from Groups" manually → Review → Confirm |
-| **Sheet Editor list changed in SheetEditors_G sheet** | Auto-sync detects, sends "Action Required" email | ⚠️ Check email → Run "Sync Sheet Editors" manually → Review → Confirm |
-| **Manual changes in Google Groups** | Auto-sync continues normal operations | ⚠️ Run "Merge & Reconcile" to document manual changes |
+| **Users removed from sheets** | Auto-sync detects, sends "Action Required" email | ⚠️ Check email → Run \"Sync Groups - Remove/Disable Users\" manually → Review → Confirm |
+| **Sheet Editor list changed in SheetEditors_G sheet** | Auto-sync detects, sends "Action Required" email | ⚠️ Check email → Run \"ManualSync → Granular Sync → Sync Sheet Editors\" manually → Review → Confirm |
+| **Manual changes in Google Groups** | Auto-sync continues normal operations | ⚠️ Review changes and run a manual sync if needed |
 | **Auto-sync error occurs** | Error email sent with details | ⚠️ Check logs, fix issue, optionally run manual sync |
 | **Edit Mode enabled** | Auto-sync suspended (skips all operations) | ✅ None (resume when Edit Mode disabled) |
 
-### Admin Email Examples
+### Super Admin Email Examples
 
 #### Example 1: Summary Email (Routine)
 ```
@@ -221,7 +221,7 @@ From Group 'ProjectY-Viewers':
 
 To execute these deletions:
 1. Open the control spreadsheet
-2. Go to: Permissions Manager → ManualSync → Remove/Disable Users from Groups
+2. Go to: Permissions Manager → ManualSync → Sync Groups - Remove/Disable Users
 3. Review the deletion list carefully
 4. Confirm to proceed
 
@@ -262,7 +262,7 @@ Note: Deletions will NOT execute automatically.
 
 7. **Edit Mode Detection**
    - Auto-sync automatically skips when spreadsheet is in Edit Mode
-   - Prevents conflicts during bulk administrative changes
+   - Prevents conflicts during bulk Super Admin changes
 
 ### Risk Mitigation Matrix
 
@@ -286,7 +286,7 @@ Note: Deletions will NOT execute automatically.
 1. Update `autoSync()` function to call `syncAdds()` instead of `fullSync()`
 2. Add new Config sheet settings with safe defaults
 3. Add notification helper functions for pending deletions
-4. Update admin documentation
+4. Update Super Admin documentation
 
 **Backward Compatibility**:
 - New behavior is safer than current implementation
@@ -309,7 +309,7 @@ Config Sheet Settings:
 This simple configuration provides:
 - ✅ Automatic permission grants including sheet editors (low friction)
 - ✅ Manual approval required for all deletions (high safety)
-- ✅ Admin visibility of all changes (summary emails)
+- ✅ Super Admin visibility of all changes (summary emails)
 - ✅ Protection against mass-deletion mistakes (safety threshold)
 
 ---
@@ -318,9 +318,9 @@ This simple configuration provides:
 
 By classifying operations by **consequence of error** rather than just technical complexity, we can safely automate low-risk additive operations while requiring explicit manual approval for high-risk destructive operations. This approach:
 
-1. **Reduces admin burden**: Routine permission grants happen automatically
+1. **Reduces Super Admin burden**: Routine permission grants happen automatically
 2. **Maintains safety**: Deletions always require manual review and confirmation
-3. **Increases visibility**: Admins receive clear notifications of pending actions
+3. **Increases visibility**: Super Admins receive clear notifications of pending actions
 4. **Prevents silent failures**: Background triggers never attempt to show UI dialogs
 5. **Provides flexibility**: Configurable risk levels for different organizational needs
 
