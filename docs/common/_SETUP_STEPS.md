@@ -99,7 +99,7 @@ This step gives `gcloud` permission to manage resources in your Google Cloud pro
 
 ## 8. Run the first sync
 
-1. In the spreadsheet, open **Permissions Manager → ManualSync → Granular Sync → Sync Sheet Editors**.
+1. In the spreadsheet, open **Permissions Manager → Setup → Setup All Sheets & Sync Admins**.
 2. Grant the script the requested permissions.
 
 <details>
