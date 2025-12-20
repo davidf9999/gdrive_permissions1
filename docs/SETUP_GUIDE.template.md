@@ -8,8 +8,7 @@
 > *   **Be Patient:** The initial Codespaces setup can take a few minutes.
 > *   **Read the Chat:** The assistant will show you the commands it's running. You don't need to read all of the output, just focus on the assistant's chat responses.
 > *   **You're in Control:** While the assistant can run commands for you, you can always choose to copy the commands and run them manually in a separate terminal.
-> *   **Codespaces by default:** The assistant runs inside GitHub Codespaces unless you choose to run it locally. See [What is Codespaces?](CODESPACES_OVERVIEW.md) for a quick overview.
-> *   **Codespaces billing:** Codespaces usage is metered. The Usage page may show a gross amount while billed remains $0 if you are within included quota.
+> *   **Codespaces by default:** The assistant runs inside GitHub Codespaces unless you choose to run it locally. See [What is Codespaces?](CODESPACES_OVERVIEW.md) for details and cost/management tips.
 
 This document is the comprehensive, step-by-step guide for setting up the Google Drive Permission Manager. For a successful deployment, follow these steps in the presented order.
 
@@ -20,14 +19,6 @@ This document is the comprehensive, step-by-step guide for setting up the Google
 *   **Administrative Skills:** Even with the AI assistant, this setup requires a basic understanding of administrative concepts like domain management and user permissions.
 *   **GitHub Account:** Required to run the assistant in Codespaces or manage Codespaces settings.
 *   **Google Account:** For authenticating the `gemini` CLI tool, you will need a standard Google account (like a `@gmail.com` address). This account does **not** need to be your GitHub or Google Workspace admin account.
-
-### Codespaces costs & alternatives (short)
-
-*   **What is it?** Short overview and key terms: [CODESPACES_OVERVIEW.md](CODESPACES_OVERVIEW.md).
-*   **Manage or delete Codespaces:** https://github.com/codespaces (stop to halt compute, delete to halt storage).
-*   **Disable Codespaces:** https://github.com/settings/codespaces (personal) or `https://github.com/organizations/YOUR_ORG/settings/codespaces`.
-*   **Avoid Codespaces entirely:** run locally instead using the steps in this guide.
-*   **Quota resets:** Codespaces usage follows your billing month; see **Billing and licensing → Usage** for dates and totals.
 
 ### Authenticating the Gemini CLI
 
