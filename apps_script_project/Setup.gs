@@ -114,7 +114,7 @@ function migrateConfigSettings_() {
 }
 
 /**
- * Ensures the control sheets (ManagedFolders, SheetEditors) exist.
+ * Ensures the control sheets (ManagedFolders, SheetEditors_G) exist.
  */
 function setupControlSheets_() {
   migrateConfigSettings_(); // Run config migration first
@@ -168,12 +168,18 @@ function setupControlSheets_() {
     deleteRange.setDataValidation(checkboxRule);
   }
 
-  // Check for SheetEditors sheet
+  // Check for SheetEditors_G sheet
   let sheetEditorsSheet = ss.getSheetByName(SHEET_EDITORS_SHEET_NAME);
+  const legacySheetEditorsSheet = ss.getSheetByName(SHEET_EDITORS_LEGACY_SHEET_NAME);
+  if (!sheetEditorsSheet && legacySheetEditorsSheet) {
+    legacySheetEditorsSheet.setName(SHEET_EDITORS_SHEET_NAME);
+    sheetEditorsSheet = legacySheetEditorsSheet;
+    log_('Renamed "' + SHEET_EDITORS_LEGACY_SHEET_NAME + '" sheet to "' + SHEET_EDITORS_SHEET_NAME + '".');
+  }
   const sheetEditorsHeaders = ['Sheet Editor Emails', 'Disabled'];
   if (!sheetEditorsSheet) {
     sheetEditorsSheet = ss.insertSheet(SHEET_EDITORS_SHEET_NAME);
-    log_('Created "SheetEditors" sheet.');
+    log_('Created "' + SHEET_EDITORS_SHEET_NAME + '" sheet.');
   }
 
   // Always set the headers to ensure correctness and overwrite old formats.
@@ -204,7 +210,7 @@ function setupControlSheets_() {
   }
   userGroupsSheet.setFrozenRows(1);
 
-  // Ensure SheetEditors row exists in UserGroups
+  // Ensure SheetEditors_G row exists in UserGroups
   const groupNameColData = userGroupsSheet.getRange(1, 1, userGroupsSheet.getLastRow(), 1).getValues().flat();
   if (!groupNameColData.includes(SHEET_EDITORS_SHEET_NAME)) {
     // Find the first completely empty row to insert into, to avoid appending to the bottom of a large empty sheet.
@@ -222,7 +228,7 @@ function setupControlSheets_() {
     }
     
     userGroupsSheet.getRange(firstEmptyRow, 1, 1, 6).setValues([[SHEET_EDITORS_SHEET_NAME, '', '', '', '', false]]);
-    log_('Added missing "SheetEditors" entry to the UserGroups sheet at row ' + firstEmptyRow);
+    log_('Added missing "' + SHEET_EDITORS_SHEET_NAME + '" entry to the UserGroups sheet at row ' + firstEmptyRow);
   }
 
   // Add checkbox validation for the Delete column (column F)

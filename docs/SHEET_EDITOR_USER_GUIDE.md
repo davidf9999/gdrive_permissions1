@@ -48,7 +48,7 @@ This sheet allows you to create your own reusable groups of people (e.g., "Marke
 *   For each `GroupName` you define, a sheet named `GroupName_G` is created. You list the members of that group in that sheet.
 *   You can then use the `GroupEmail` (from Column B) in any of your other user sheets to grant access to everyone in that group at once.
 
-### 4. `SheetEditors`
+### 4. `SheetEditors_G`
 
 This sheet controls who is a **Sheet Editor** for this spreadsheet. Add the email addresses of anyone who should have permission to edit this control panel.
 
@@ -114,4 +114,3 @@ Each managed folder is shared through a Google Group (the `GroupEmail` shown on 
 
 - **Recommended (copy/move):** Create the file in the managed folder or move a copy there. The folder’s group permission applies automatically.
 - **Only when you know the group email:** If the file must stay elsewhere, share the file with that group's email address. You can find the group's email in the `GroupEmail` column of the `ManagedFolders` sheet.
-

@@ -229,9 +229,9 @@ A comprehensive review and update of all project documentation was performed to 
 *   Updated all menu paths in documentation to consistently include the "Permissions Manager" prefix.
 *   Ensured all documentation correctly describes current functionality and is free of outdated information (e.g., removed `gcloud` CLI note from `AUTO_SYNC_GUIDE.md`).
 
-### Rename 'Admins' Sheet to 'SheetEditors' (November 2025)
+### Rename 'Admins' Sheet to 'SheetEditors_G' (November 2025)
 
-The generic 'Admins' control sheet was renamed to 'SheetEditors' for improved clarity and to avoid ambiguity with Google Workspace administrative roles. This refactoring involved:
+The generic 'Admins' control sheet was renamed to 'SheetEditors_G' for improved clarity and to avoid ambiguity with Google Workspace administrative roles. This refactoring involved:
 *   Updating constants (`ADMINS_SHEET_NAME`, `ADMINS_GROUP_NAME`) in `apps_script_project/Code.js` to `SHEET_EDITORS_SHEET_NAME` and `SHEET_EDITORS_GROUP_NAME`.
 *   Renaming functions like `syncAdmins` to `syncSheetEditors` and `syncAdminsGroup_` to `syncSheetEditorsGroup_` in `apps_script_project/Sync.gs`.
 *   Adjusting sheet creation logic in `apps_script_project/Setup.gs`.

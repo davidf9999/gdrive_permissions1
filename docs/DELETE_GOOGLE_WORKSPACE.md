@@ -89,7 +89,7 @@ This step ensures that all user- and script-created resources within the Workspa
   - **How to find:** Go to the Admin console > **Directory** > **[Groups](https://admin.google.com/ac/groups)**.
   - **What to delete:** Delete all groups. The `gdrive_permissions` script creates groups with specific naming patterns that you should look for and delete:
     - `managed.folder.<FolderName>.<Role>@yourdomain.com` (e.g., `managed.folder.MyProject.viewer@yourdomain.com`)
-    - `SheetEditors@yourdomain.com`
+    - `sheet-editors@yourdomain.com`
 
 - **Migrate or Delete Shared Drives**
   - **How to find:** Go to the Admin console > **Apps** > **Google Workspace** > **[Drive and Docs](https://admin.google.com/ac/managedsettings/55656082996/mc)** > **Manage shared drives**.

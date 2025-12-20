@@ -37,7 +37,7 @@ The system uses **three risk levels** based on consequence of error and reversib
 **Key Design Principle**: The distinction between SAFE and DESTRUCTIVE is based on **user impact**, not privilege level.
 
 **Why Sheet Editor Additions are SAFE**:
-- Adding wrong editor = Reversible (remove from SheetEditors sheet, sync again)
+- Adding wrong editor = Reversible (remove from SheetEditors_G sheet, sync again)
 - Detected quickly (admin email notification immediately after)
 - Low blast radius (one person, not mass-change)
 - Same recovery path as any wrong permission grant
@@ -183,7 +183,7 @@ Sent when DESTRUCTIVE operations detected:
 |:---------|:---------------------------|:---------------------|
 | **Users added to sheets** | Auto-sync grants access within 5 minutes | ✅ None (review summary email periodically) |
 | **Users removed from sheets** | Auto-sync detects, sends "Action Required" email | ⚠️ Check email → Run "Remove/Disable Users from Groups" manually → Review → Confirm |
-| **Sheet Editor list changed in SheetEditors sheet** | Auto-sync detects, sends "Action Required" email | ⚠️ Check email → Run "Sync Sheet Editors" manually → Review → Confirm |
+| **Sheet Editor list changed in SheetEditors_G sheet** | Auto-sync detects, sends "Action Required" email | ⚠️ Check email → Run "Sync Sheet Editors" manually → Review → Confirm |
 | **Manual changes in Google Groups** | Auto-sync continues normal operations | ⚠️ Run "Merge & Reconcile" to document manual changes |
 | **Auto-sync error occurs** | Error email sent with details | ⚠️ Check logs, fix issue, optionally run manual sync |
 | **Edit Mode enabled** | Auto-sync suspended (skips all operations) | ✅ None (resume when Edit Mode disabled) |
