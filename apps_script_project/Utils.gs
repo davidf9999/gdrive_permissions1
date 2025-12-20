@@ -946,7 +946,7 @@ function validateGroupNesting_() {
 
     // Determine the parent group's email
     if (sheetName === SHEET_EDITORS_SHEET_NAME) {
-      parentGroupEmail = getConfiguration_()['AdminGroupEmail'];
+      parentGroupEmail = getConfiguration_()['SheetEditorsGroupEmail'] || getConfiguration_()['AdminGroupEmail'];
     } else {
       const groupName = sheetName.slice(0, -2); // Remove '_G'
       // Find this group's email in UserGroups or ManagedFolders
