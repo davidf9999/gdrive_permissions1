@@ -23,7 +23,7 @@ This document is the comprehensive, step-by-step guide for setting up the Google
 
 *   **Manage or delete Codespaces:** https://github.com/codespaces (stop to halt compute, delete to halt storage).
 *   **Disable Codespaces:** https://github.com/settings/codespaces (personal) or `https://github.com/organizations/YOUR_ORG/settings/codespaces`.
-*   **Avoid Codespaces entirely:** run locally instead; for a containerized local setup, use the **Docker-based infra (optional)** steps in this guide.
+*   **Avoid Codespaces entirely:** run locally instead; for a containerized local setup, use the **Docker-based infra (optional)** steps in this guide (`docker compose build` / `docker compose up`).
 *   **Quota resets:** Codespaces usage follows your billing month; see **Billing and licensing → Usage** for dates and totals.
 
 ### Authenticating the Gemini CLI
