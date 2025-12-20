@@ -170,12 +170,6 @@ function setupControlSheets_() {
 
   // Check for SheetEditors_G sheet
   let sheetEditorsSheet = ss.getSheetByName(SHEET_EDITORS_SHEET_NAME);
-  const legacySheetEditorsSheet = ss.getSheetByName(SHEET_EDITORS_LEGACY_SHEET_NAME);
-  if (!sheetEditorsSheet && legacySheetEditorsSheet) {
-    legacySheetEditorsSheet.setName(SHEET_EDITORS_SHEET_NAME);
-    sheetEditorsSheet = legacySheetEditorsSheet;
-    log_('Renamed "' + SHEET_EDITORS_LEGACY_SHEET_NAME + '" sheet to "' + SHEET_EDITORS_SHEET_NAME + '".');
-  }
   const sheetEditorsHeaders = ['Sheet Editor Emails', 'Disabled'];
   if (!sheetEditorsSheet) {
     sheetEditorsSheet = ss.insertSheet(SHEET_EDITORS_SHEET_NAME);
