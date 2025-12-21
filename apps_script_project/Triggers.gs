@@ -75,6 +75,7 @@ function autoSync(options = {}) {
     return;
   }
 
+  let syncStartTime;
   try {
     const props = PropertiesService.getDocumentProperties();
     const now = Date.now();
@@ -94,6 +95,7 @@ function autoSync(options = {}) {
 
     if (isInEditMode_()) {
       log_('AutoSync skipped: spreadsheet is in Edit Mode.', 'DEBUG');
+      updateSyncStatus_('Skipped', { source: 'AutoSync' });
       return;
     }
 
@@ -101,11 +103,14 @@ function autoSync(options = {}) {
     const changeDetection = detectAutoSyncChanges_();
 
     if (!changeDetection.shouldRun) {
+      updateSyncStatus_('Skipped', { source: 'AutoSync' });
       return { skipped: true, added: 0, removed: 0, failed: 0 };
     }
 
     // Only log start message if sync will actually run
     log_('*** Starting scheduled AutoSync...');
+    updateSyncStatus_('Running', { source: 'AutoSync' });
+    syncStartTime = new Date();
 
     // Log reasons for sync
     log_('AutoSync triggered. Reasons:', 'INFO');
@@ -130,10 +135,20 @@ function autoSync(options = {}) {
       changeDetection.snapshot.lastSyncSuccessful = true;
       props.setProperty(AUTO_SYNC_CHANGE_SIGNATURE_KEY, JSON.stringify(changeDetection.snapshot));
       log_('*** Scheduled AutoSync completed successfully.');
+      updateSyncStatus_('Success', {
+        summary: syncResult,
+        durationSeconds: syncStartTime ? (new Date() - syncStartTime) / 1000 : undefined,
+        source: 'AutoSync'
+      });
     } else {
       changeDetection.snapshot.lastSyncSuccessful = false;
       props.setProperty(AUTO_SYNC_CHANGE_SIGNATURE_KEY, JSON.stringify(changeDetection.snapshot));
       log_('AutoSync did not complete successfully. Will retry on next run.', 'WARN');
+      updateSyncStatus_('Failed', {
+        summary: syncResult,
+        durationSeconds: syncStartTime ? (new Date() - syncStartTime) / 1000 : undefined,
+        source: 'AutoSync'
+      });
     }
     return syncResult;
 
@@ -141,6 +156,11 @@ function autoSync(options = {}) {
     const errorMessage = 'FATAL ERROR in autoSync: ' + e.toString() + '\n' + e.stack;
     log_(errorMessage, 'ERROR');
     sendErrorNotification_(errorMessage);
+    updateSyncStatus_('Failed', {
+      errorMessage: errorMessage,
+      durationSeconds: syncStartTime ? (new Date() - syncStartTime) / 1000 : undefined,
+      source: 'AutoSync'
+    });
 
     // Mark sync as failed in snapshot so we retry on next run
     try {
@@ -342,10 +362,10 @@ function updateAutoSyncStatusIndicator_() {
     } else {
       statusToDisplay = 'DISABLED';
     }
-    updateConfigSetting_('AutoSync Trigger Status', statusToDisplay);
+    updateStatusSetting_('AutoSync Trigger Status', statusToDisplay);
   } catch (e) {
     if (e.message.includes('sufficient')) { // Catches 'not sufficient permissions'
-      updateConfigSetting_('AutoSync Trigger Status', 'AUTH_REQUIRED');
+      updateStatusSetting_('AutoSync Trigger Status', 'AUTH_REQUIRED');
       log_('Could not update AutoSync status indicator due to missing permissions. A super admin can fix this by running an item from the "AutoSync" menu to re-authorize.', 'WARN');
     } else {
       log_('Could not update AutoSync status indicator: ' + e.message, 'WARN');
