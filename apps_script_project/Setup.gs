@@ -364,6 +364,7 @@ function setupControlSheets_() {
   markSystemSheet_(configSheet);
   applyConfigValidation_();
   setupStatusSheet_();
+  arrangeSheetOrder_();
 }
 
 function applyConfigValidation_() {
@@ -470,6 +471,12 @@ function setupStatusSheet_() {
 
   statusSheet.getRange('E1').setValue('Sync Status Indicator').setFontWeight('bold');
   const panelRange = statusSheet.getRange('E2:F3');
+  const existingMergedRanges = panelRange.getMergedRanges();
+  if (existingMergedRanges.length > 0) {
+    existingMergedRanges.forEach(function(range) {
+      range.breakApart();
+    });
+  }
   panelRange.merge();
   panelRange.setHorizontalAlignment('center')
     .setVerticalAlignment('middle')
@@ -515,6 +522,94 @@ function setupLogSheets_() {
 
   // Check for Help sheet
   setupHelpSheet_();
+
+  // Ensure consistent sheet ordering
+  arrangeSheetOrder_();
+}
+
+function arrangeSheetOrder_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const orderedNames = [
+    STATUS_SHEET_NAME,
+    CONFIG_SHEET_NAME,
+    SHEET_EDITORS_SHEET_NAME,
+    USER_GROUPS_SHEET_NAME,
+    MANAGED_FOLDERS_SHEET_NAME,
+    LOG_SHEET_NAME,
+    TEST_LOG_SHEET_NAME,
+    SYNC_HISTORY_SHEET_NAME,
+    FOLDER_AUDIT_LOG_SHEET_NAME,
+    'DeepFolderAuditLog',
+    'Help'
+  ];
+
+  const groupSheets = [];
+  const userGroupsSheet = ss.getSheetByName(USER_GROUPS_SHEET_NAME);
+  if (userGroupsSheet && userGroupsSheet.getLastRow() > 1) {
+    const groupNames = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 1).getValues().flat();
+    groupNames.forEach(function(groupName) {
+      if (groupName) {
+        const sheetName = getUserGroupSheetName_(groupName);
+        if (sheetName !== SHEET_EDITORS_SHEET_NAME) {
+          groupSheets.push(sheetName);
+        }
+      }
+    });
+  }
+
+  const folderSheets = [];
+  const managedSheet = ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+  if (managedSheet && managedSheet.getLastRow() > 1) {
+    const headers = getHeaderMap_(managedSheet);
+    const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+    const userSheetNames = managedSheet.getRange(2, userSheetNameCol, managedSheet.getLastRow() - 1, 1).getValues().flat();
+    userSheetNames.forEach(function(sheetName) {
+      if (sheetName) {
+        folderSheets.push(sheetName);
+      }
+    });
+  }
+
+  const testSheets = [];
+  const remainingSheets = [];
+  const allSheets = ss.getSheets();
+  allSheets.forEach(function(sheet) {
+    const name = sheet.getName();
+    if (orderedNames.indexOf(name) !== -1) {
+      return;
+    }
+    if (groupSheets.indexOf(name) !== -1) {
+      return;
+    }
+    if (folderSheets.indexOf(name) !== -1) {
+      return;
+    }
+    if (isTestSheet_(name)) {
+      testSheets.push(name);
+    } else {
+      remainingSheets.push(name);
+    }
+  });
+
+  const finalOrder = orderedNames
+    .concat(groupSheets)
+    .concat(folderSheets)
+    .concat(remainingSheets)
+    .concat(testSheets);
+
+  const seen = new Set();
+  let targetIndex = 1;
+  finalOrder.forEach(function(name) {
+    if (!name || seen.has(name)) {
+      return;
+    }
+    seen.add(name);
+    const sheet = ss.getSheetByName(name);
+    if (sheet) {
+      sheet.setIndex(targetIndex);
+      targetIndex++;
+    }
+  });
 }
 
 function setupHelpSheet_() {
