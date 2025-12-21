@@ -519,6 +519,7 @@ function checkForOrphanSheets_() {
     requiredSheetNames.add(TEST_LOG_SHEET_NAME);
     requiredSheetNames.add(FOLDER_AUDIT_LOG_SHEET_NAME);
     requiredSheetNames.add(SYNC_HISTORY_SHEET_NAME);
+    requiredSheetNames.add(STATUS_SHEET_NAME);
     requiredSheetNames.add('DeepFolderAuditLog');
     requiredSheetNames.add('Help');
 
@@ -544,9 +545,21 @@ function checkForOrphanSheets_() {
         }
     }
 
-    const orphanSheetNames = allSheetNames.filter(function(name) {
-        return !requiredSheetNames.has(name) && !isTestSheet_(name);
-    });
+    const orphanSheetNames = allSheets
+      .filter(function(sheet) {
+        const name = sheet.getName();
+        if (requiredSheetNames.has(name)) {
+          return false;
+        }
+        if (isTestSheet_(name)) {
+          return false;
+        }
+        if (isSystemSheet_(sheet)) {
+          return false;
+        }
+        return true;
+      })
+      .map(function(sheet) { return sheet.getName(); });
 
     if (orphanSheetNames.includes('Sheet1')) {
       const sheet1 = spreadsheet.getSheetByName('Sheet1');
