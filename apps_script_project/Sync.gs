@@ -727,6 +727,14 @@ function fullSync(options = {}) {
     const durationSeconds = (endTime - startTime) / 1000;
     logSyncHistory_(null, totalSummary, durationSeconds);
 
+    if (shouldUpdateSyncStatus_(options)) {
+      updateSyncStatus_(totalSummary.failed === 0 ? 'Success' : 'Failed', {
+        summary: totalSummary,
+        durationSeconds: durationSeconds,
+        source: getSyncSourceLabel_(options)
+      });
+    }
+
     // Clear the infinite toast
     if (!silentMode) showToast_('Full sync complete!', 'Full Sync', 5);
 

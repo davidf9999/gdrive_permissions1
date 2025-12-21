@@ -28,9 +28,7 @@ let SCRIPT_EXECUTION_MODE = 'DEFAULT'; // Can be 'DEFAULT' or 'TEST'
  */
 function onOpen() {
   // Validate environment first (Google Workspace with Admin SDK required)
-  if (!validateEnvironment_()) {
-    return; // Abort setup if environment is not suitable
-  }
+  validateEnvironment_();
 
   const superAdmin = isSuperAdmin_();
   const ui = SpreadsheetApp.getUi();
@@ -199,18 +197,19 @@ function buildRestrictedMenu_() {
 function isSuperAdmin_() {
   try {
     const userEmail = getActiveUserEmail_();
-    if (!userEmail) {
+    const ownerEmail = getSpreadsheetOwnerEmail_();
+    const resolvedEmail = userEmail || ownerEmail;
+    if (!resolvedEmail) {
       log_('Could not resolve active user email. Defaulting to restricted mode.', 'WARN');
       return false;
     }
 
     const superAdmins = getSuperAdminEmails_();
     if (!superAdmins.length) {
-      const ownerEmail = getSpreadsheetOwnerEmail_();
-      if (ownerEmail && ownerEmail === userEmail) {
+      if (ownerEmail && ownerEmail === resolvedEmail) {
         return true;
       }
-      log_('No super admin emails configured. Defaulting to restricted mode for ' + userEmail + '.', 'WARN');
+      log_('No super admin emails configured. Defaulting to restricted mode for ' + resolvedEmail + '.', 'WARN');
       return false;
     }
 
@@ -218,13 +217,13 @@ function isSuperAdmin_() {
       return true;
     }
 
-    const domain = userEmail.indexOf('@') !== -1 ? userEmail.split('@')[1] : '';
+    const domain = resolvedEmail.indexOf('@') !== -1 ? resolvedEmail.split('@')[1] : '';
     const isSuperAdmin = superAdmins.some(function (entry) {
-      if (entry === userEmail) {
+      if (entry === resolvedEmail) {
         return true;
       }
       if (entry.startsWith('*@') && domain) {
-        return userEmail.endsWith(entry.substring(1));
+        return resolvedEmail.endsWith(entry.substring(1));
       }
       if (entry.startsWith('@') && domain) {
         return domain === entry.substring(1);
@@ -234,7 +233,7 @@ function isSuperAdmin_() {
       }
       return false;
     });
-    log_('Super admin check for ' + userEmail + ': ' + (isSuperAdmin ? 'GRANTED' : 'DENIED'), 'DEBUG');
+    log_('Super admin check for ' + resolvedEmail + ': ' + (isSuperAdmin ? 'GRANTED' : 'DENIED'), 'DEBUG');
     return isSuperAdmin;
   } catch (e) {
     log_('Could not determine super admin status: ' + e.message, 'WARN');
@@ -379,6 +378,14 @@ function getActiveUserEmail_() {
       const email = activeUser.getEmail();
       if (email) {
         return email.toLowerCase();
+      }
+    }
+
+    const effectiveUser = Session.getEffectiveUser();
+    if (effectiveUser) {
+      const effectiveEmail = effectiveUser.getEmail();
+      if (effectiveEmail) {
+        return effectiveEmail.toLowerCase();
       }
     }
   } catch (e) {
@@ -526,93 +533,4 @@ function runAutoSyncNow() {
     log_('Manual AutoSync did not complete successfully. Check logs for details.', 'WARN');
     SpreadsheetApp.getUi().alert('Manual AutoSync did not complete successfully. Check logs for details.');
   }
-}
-
-function getActiveUserEmail_() {
-  try {
-    const activeUser = Session.getActiveUser();
-    if (activeUser) {
-      const email = activeUser.getEmail();
-      if (email) {
-        return email.toLowerCase();
-      }
-    }
-  } catch (e) {
-    log_('Failed to read active user email: ' + e.message, 'WARN');
-  }
-  return '';
-}
-
-function isSuperAdmin_() {
-  try {
-    const userEmail = getActiveUserEmail_();
-    if (!userEmail) {
-      log_('Could not resolve active user email. Defaulting to restricted mode.', 'WARN');
-      return false;
-    }
-
-    const superAdmins = getSuperAdminEmails_();
-    if (!superAdmins.length) {
-      return true;
-    }
-
-    if (superAdmins.indexOf('*') !== -1 || superAdmins.indexOf('all') !== -1) {
-      return true;
-    }
-
-    const domain = userEmail.indexOf('@') !== -1 ? userEmail.split('@')[1] : '';
-    return superAdmins.some(function (entry) {
-      if (entry === userEmail) {
-        return true;
-      }
-      if (entry.startsWith('*@') && domain) {
-        return userEmail.endsWith(entry.substring(1));
-      }
-      if (entry.startsWith('@') && domain) {
-        return domain === entry.substring(1);
-      }
-      if (domain && entry === domain) {
-        return true;
-      }
-      return false;
-    });
-  } catch (e) {
-    log_('Could not determine super admin status: ' + e.message, 'WARN');
-    return true;
-  }
-}
-
-function getSuperAdminEmails_() {
-  const config = typeof getConfiguration_ === 'function' ? getConfiguration_() : {};
-  const rawValue = config['SuperAdminEmails'];
-  let values = [];
-
-  if (rawValue === undefined || rawValue === null) {
-    values = [];
-  } else if (Array.isArray(rawValue)) {
-    values = rawValue;
-  } else if (typeof rawValue === 'string') {
-    values = rawValue.split(/[\n,;]+/);
-  } else {
-    values = [String(rawValue)];
-  }
-
-  const normalized = values
-    .map(function (value) { return value.trim().toLowerCase(); })
-    .filter(function (value) { return value.length > 0; });
-
-  if (normalized.length === 0) {
-    const fallbacks = [];
-    try {
-      const owner = SpreadsheetApp.getActive().getOwner();
-      if (owner && owner.getEmail()) {
-        fallbacks.push(owner.getEmail().toLowerCase());
-      }
-    } catch (e) {
-      // Ignore
-    }
-    return Array.from(new Set(fallbacks.filter(function (email) { return email && email.length > 0; })));
-  }
-
-  return Array.from(new Set(normalized));
 }
