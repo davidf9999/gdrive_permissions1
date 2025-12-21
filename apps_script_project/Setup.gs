@@ -472,7 +472,7 @@ function setupStatusSheet_() {
   statusSheet.getRange('E1').setValue('Sync Status Indicator').setFontWeight('bold');
   const panelRange = statusSheet.getRange('E2:F3');
   const panelBoundaryRange = statusSheet.getRange('E2:H6');
-  const existingMergedRanges = statusSheet.getMergedRanges();
+  const existingMergedRanges = statusSheet.getDataRange().getMergedRanges();
   if (existingMergedRanges.length > 0) {
     existingMergedRanges.forEach(function(range) {
       const intersectsRows = range.getLastRow() >= panelBoundaryRange.getRow() &&
