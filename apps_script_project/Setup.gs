@@ -249,10 +249,6 @@ function setupControlSheets_() {
   }
 
   const defaultConfig = {
-    '--- Status ---': {
-      'ScriptVersion': { value: '', description: 'The current version of the installed script. (Read-only)' },
-      'AutoSync Trigger Status': { value: 'DISABLED', description: 'A visual indicator of the AutoSync trigger status. (Read-only)' }
-    },
     '--- Access Control ---': {
       'SuperAdminEmails': { value: currentUserEmail, description: 'Comma-separated list of super admin email addresses. Super admins see the full menu and test sheets.' },
       'SheetEditorsGroupEmail': { value: '', description: 'The email address for the Google Group containing all Sheet Editors. Uses AdminGroupEmail if set; auto-generates only when both are blank.' }
@@ -268,8 +264,9 @@ function setupControlSheets_() {
       'MembershipBatchSize': { value: 10, description: 'The number of users to process in a single batch for group membership changes. Helps avoid API rate limits.'},
     },
     '--- Email Notifications ---': {
-      'EnableEmailNotifications': { value: false, description: 'Check to receive emails for errors and other notifications.' },
+      'EnableEmailNotifications': { value: true, description: 'Check to receive emails for errors and other notifications.' },
       'NotificationEmail': { value: '', description: 'The email address to send notifications to. Defaults to the script owner if left blank.' },
+      'NotifySheetEditorsOnErrors': { value: false, description: 'Optional: also send error notifications to all active Sheet Editors.' },
       'NotifyOnSyncSuccess': { value: false, description: 'Check to receive a summary email after each successful AutoSync.' },
       'NotifyDeletionsPending': { value: true, description: 'Check to receive an email alert when an AutoSync detects that a user needs to be manually removed. (This is ignored if AllowAutosyncDeletion is checked).' },
       'NotifyOnGroupFolderDeletion': { value: true, description: 'Send email notification when groups or folder-role bindings are deleted during sync. Recommended to keep enabled for audit purposes.' },
@@ -362,6 +359,7 @@ function setupControlSheets_() {
     configSheet.getRange(2, 1, newSettings.length, 3).setValues(newSettings);
   }
   applyConfigValidation_();
+  setupStatusSheet_();
 }
 
 function applyConfigValidation_() {
@@ -372,7 +370,7 @@ function applyConfigValidation_() {
   const booleanSettings = [
     'EnableSheetLocking', 'AllowAutosyncDeletion', 'AllowGroupFolderDeletion', 'EnableCircularDependencyCheck',
     'EnableEmailNotifications', 'NotifyOnSyncSuccess', 'NotifyDeletionsPending', 'NotifyOnGroupFolderDeletion',
-    'EnableGCPLogging', 'EnableToasts', 'ShowTestPrompts', 'TestCleanup', 'TestAutoConfirm'
+    'NotifySheetEditorsOnErrors', 'EnableGCPLogging', 'EnableToasts', 'ShowTestPrompts', 'TestCleanup', 'TestAutoConfirm'
   ];
 
   // Add dropdown validation for LogLevel
@@ -412,6 +410,67 @@ function applyConfigValidation_() {
     }
   }
   // log_('Applied checkbox validation rules to Config sheet.');
+}
+
+function setupStatusSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let statusSheet = ss.getSheetByName(STATUS_SHEET_NAME);
+  const statusHeaders = ['Status Item', 'Value', 'Notes'];
+
+  if (!statusSheet) {
+    statusSheet = ss.insertSheet(STATUS_SHEET_NAME);
+  }
+
+  statusSheet.getRange(1, 1, 1, statusHeaders.length).setValues([statusHeaders]).setFontWeight('bold');
+  statusSheet.setFrozenRows(1);
+
+  const defaultStatus = {
+    'Script Version': { value: SCRIPT_VERSION, description: 'Current version of the installed script.' },
+    'AutoSync Trigger Status': { value: 'DISABLED', description: 'Current AutoSync trigger status.' },
+    'Last Sync Status': { value: 'Unknown', description: 'Result of the most recent sync attempt.' },
+    'Last Sync Attempt': { value: '', description: 'Timestamp of the most recent sync attempt.' },
+    'Last Successful Sync': { value: '', description: 'Timestamp of the most recent successful sync.' },
+    'Last Sync Duration (seconds)': { value: '', description: 'Duration of the most recent sync attempt.' },
+    'Last Sync Summary': { value: '', description: 'Summary of the most recent sync changes.' },
+    'Last Sync Error': { value: '', description: 'Most recent sync error message (if any).' },
+    'Last Sync Source': { value: '', description: 'Origin of the last sync (AutoSync or Manual).' }
+  };
+
+  const existingSettings = new Map();
+  const lastRow = statusSheet.getLastRow();
+  if (lastRow > 1) {
+    const existingData = statusSheet.getRange(2, 1, lastRow - 1, 3).getValues();
+    existingData.forEach(row => {
+      if (row[0]) {
+        existingSettings.set(row[0], { value: row[1], description: row[2] });
+      }
+    });
+  }
+
+  const newSettings = [];
+  for (const key in defaultStatus) {
+    const existing = existingSettings.get(key);
+    let finalValue = existing ? existing.value : defaultStatus[key].value;
+    if (key === 'Script Version') {
+      finalValue = SCRIPT_VERSION;
+    }
+    newSettings.push([key, finalValue, defaultStatus[key].description]);
+  }
+
+  if (newSettings.length > 0) {
+    statusSheet.getRange(2, 1, newSettings.length, 3).setValues(newSettings);
+  }
+
+  statusSheet.autoResizeColumns(1, 3);
+
+  statusSheet.getRange('E1').setValue('Sync Status Indicator').setFontWeight('bold');
+  const panelRange = statusSheet.getRange('E2:H6');
+  panelRange.merge();
+  panelRange.setHorizontalAlignment('center')
+    .setVerticalAlignment('middle')
+    .setFontSize(16)
+    .setFontWeight('bold');
+  updateSyncStatusPanel_(statusSheet, 'Unknown');
 }
 
 function setupLogSheets_() {

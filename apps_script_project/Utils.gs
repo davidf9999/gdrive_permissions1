@@ -563,14 +563,49 @@ function clearAuxiliaryLogs() {
   ui.alert('Auxiliary logs have been cleared.\n\nThe main "Log" sheet has been preserved.');
 }
 
+function getSheetEditorNotificationEmails_() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_EDITORS_SHEET_NAME);
+  if (!sheet) {
+    return [];
+  }
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) {
+    return [];
+  }
+  const data = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
+  return data.reduce((emails, row) => {
+    const email = String(row[0] || '').trim().toLowerCase();
+    const disabled = row[1] === true || String(row[1]).toUpperCase() === 'TRUE';
+    if (email && !disabled) {
+      emails.push(email);
+    }
+    return emails;
+  }, []);
+}
+
 function sendErrorNotification_(errorMessage) {
   try {
-    const config = getConfiguration_();
-    const enableEmailNotifications = config['EnableEmailNotifications'];
-    const adminEmail = config['NotificationEmail'];
+    const enableEmailNotifications = getConfigValue_('EnableEmailNotifications', true);
+    if (enableEmailNotifications !== true) {
+      return;
+    }
 
-    if (enableEmailNotifications === true && adminEmail) {
-      MailApp.sendEmail(adminEmail, 'Permissions Manager Script - Fatal Error', errorMessage);
+    const adminEmail = getConfigValue_('NotificationEmail', '') || getSpreadsheetOwnerEmail_();
+    const recipients = [];
+    if (adminEmail) {
+      recipients.push(adminEmail);
+    }
+
+    const notifySheetEditors = getConfigValue_('NotifySheetEditorsOnErrors', false);
+    if (notifySheetEditors === true) {
+      recipients.push.apply(recipients, getSheetEditorNotificationEmails_());
+    }
+
+    const uniqueRecipients = Array.from(new Set(recipients.filter(Boolean)));
+    if (uniqueRecipients.length > 0) {
+      MailApp.sendEmail(uniqueRecipients.join(','), 'Permissions Manager Script - Fatal Error', errorMessage);
+    } else {
+      log_('No recipients configured for error notifications.', 'WARN');
     }
   } catch (e) {
     log_('Failed to send error notification email: ' + e.toString(), 'ERROR');
@@ -634,6 +669,105 @@ function updateConfigSetting_(settingName, value) {
 
   // Clear the cache so the new value is picked up
   CacheService.getScriptCache().remove('config');
+}
+
+function updateStatusSetting_(settingName, value) {
+  const statusSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(STATUS_SHEET_NAME);
+  if (!statusSheet) {
+    log_('Status sheet not found. Cannot update setting: ' + settingName, 'WARN');
+    return;
+  }
+
+  const settings = statusSheet.getRange('A:A').getValues().flat();
+  const rowIndex = settings.indexOf(settingName);
+
+  if (rowIndex !== -1) {
+    statusSheet.getRange(rowIndex + 1, 2).setValue(value);
+  } else {
+    const lastRow = statusSheet.getLastRow();
+    statusSheet.getRange(lastRow + 1, 1, 1, 2).setValues([[settingName, value]]);
+  }
+}
+
+function formatSyncSummary_(summary) {
+  if (!summary) {
+    return '';
+  }
+  const added = summary.added || 0;
+  const removed = summary.removed || 0;
+  const failed = summary.failed || 0;
+  return 'Added: ' + added + ', Removed: ' + removed + ', Failed: ' + failed;
+}
+
+function updateSyncStatusPanel_(statusSheet, status) {
+  if (!statusSheet) {
+    return;
+  }
+
+  const normalizedStatus = status || 'Unknown';
+  let label = 'SYNC STATUS UNKNOWN';
+  let background = '#DADCE0';
+  let fontColor = '#000000';
+
+  if (normalizedStatus === 'Success') {
+    label = 'SYNC OK';
+    background = '#00B050';
+    fontColor = '#FFFFFF';
+  } else if (normalizedStatus === 'Failed') {
+    label = 'SYNC ERROR';
+    background = '#D93025';
+    fontColor = '#FFFFFF';
+  } else if (normalizedStatus === 'Running') {
+    label = 'SYNC RUNNING';
+    background = '#F9AB00';
+    fontColor = '#000000';
+  } else if (normalizedStatus === 'Skipped') {
+    label = 'SYNC SKIPPED';
+    background = '#9AA0A6';
+    fontColor = '#FFFFFF';
+  }
+
+  const panelRange = statusSheet.getRange('E2:H6');
+  panelRange.setValue(label)
+    .setBackground(background)
+    .setFontColor(fontColor)
+    .setFontWeight('bold');
+}
+
+function updateSyncStatus_(status, options = {}) {
+  const statusSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(STATUS_SHEET_NAME);
+  if (!statusSheet) {
+    return;
+  }
+
+  const timestamp = Utilities.formatDate(new Date(), SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+  const normalizedStatus = status || 'Unknown';
+
+  updateStatusSetting_('Last Sync Status', normalizedStatus);
+  updateStatusSetting_('Last Sync Attempt', timestamp);
+  if (normalizedStatus === 'Success') {
+    updateStatusSetting_('Last Successful Sync', timestamp);
+  }
+
+  if (options.durationSeconds !== undefined) {
+    updateStatusSetting_('Last Sync Duration (seconds)', Math.round(options.durationSeconds));
+  }
+
+  if (options.summary) {
+    updateStatusSetting_('Last Sync Summary', formatSyncSummary_(options.summary));
+  }
+
+  if (options.source) {
+    updateStatusSetting_('Last Sync Source', options.source);
+  }
+
+  if (options.errorMessage) {
+    updateStatusSetting_('Last Sync Error', options.errorMessage);
+  } else if (normalizedStatus === 'Success' || normalizedStatus === 'Skipped') {
+    updateStatusSetting_('Last Sync Error', '');
+  }
+
+  updateSyncStatusPanel_(statusSheet, normalizedStatus);
 }
 
 /**

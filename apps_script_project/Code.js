@@ -7,6 +7,7 @@ const LOG_SHEET_NAME = 'Log';
 const TEST_LOG_SHEET_NAME = 'TestLog';
 const USER_GROUPS_SHEET_NAME = 'UserGroups';
 const CONFIG_SHEET_NAME = 'Config';
+const STATUS_SHEET_NAME = 'Status';
 const FOLDER_AUDIT_LOG_SHEET_NAME = 'FoldersAuditLog';
 const SYNC_HISTORY_SHEET_NAME = 'SyncHistory';
 const DEFAULT_MAX_LOG_LENGTH = 10000;
@@ -88,7 +89,7 @@ function validateEnvironment_() {
  * Handles multiple edit scenarios:
  * 1. Warns users if they try to delete rows from ManagedFolders or UserGroups
  * 2. Protects Config sheet Description column from edits
- * 3. Prevents edits to read-only Config status indicators
+ * 3. Prevents edits to read-only Status indicators
  * @param {Event} e The onEdit event object
  */
 function onEdit(e) {
@@ -156,17 +157,21 @@ function onEdit(e) {
       return;
     }
 
-    const settingCell = sheet.getRange(editedRow, settingCol);
-    const valueCell = sheet.getRange(editedRow, valueCol);
-    const settingName = settingCell.getValue();
+  }
 
-    // Handle Read-Only Status Indicator
-    if (settingName === 'AutoSync Trigger Status') {
-      // Revert the change and inform the user
-      valueCell.setValue(oldValue);
-      SpreadsheetApp.getActiveSpreadsheet().toast('This is a read-only status indicator.', 'Edit Reverted', 10);
+  // --- Handle Status sheet protection ---
+  if (sheetName === STATUS_SHEET_NAME) {
+    if (range.getNumRows() > 1 || range.getNumColumns() > 1) {
       return;
     }
+
+    if (oldValue !== undefined) {
+      range.setValue(oldValue);
+    } else {
+      range.clearContent();
+    }
+    SpreadsheetApp.getActiveSpreadsheet().toast('Status indicators are read-only.', 'Edit Reverted', 10);
+    return;
   }
 }
 
