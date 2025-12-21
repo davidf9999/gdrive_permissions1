@@ -606,7 +606,8 @@ function arrangeSheetOrder_() {
     seen.add(name);
     const sheet = ss.getSheetByName(name);
     if (sheet) {
-      sheet.setIndex(targetIndex);
+      ss.setActiveSheet(sheet);
+      ss.moveActiveSheet(targetIndex);
       targetIndex++;
     }
   });
