@@ -42,10 +42,40 @@ function buildDocs() {
     console.log('Successfully generated docs/common/_SETUP_STEPS.md');
 
     const aiAssistantSteps = steps
-      .map(step => step.ai_assistant_guide)
-      .filter(guide => guide && guide.trim() !== '')
-      .join('\n\n');
-    fs.writeFileSync(path.join(commonDir, '_AI_ASSISTANT_STEPS.md'), aiAssistantSteps);
+      .map((step, index) => {
+        const stepNumber = index + 1;
+        const anchor = `${stepNumber}-${step.id.replace(/_/g, '-')}`;
+        const menuTitle = step.menu_title || step.title;
+        const stateLine = `*** Current state: ${stepNumber} "${menuTitle}" out of ${steps.length} steps. ***`;
+        const header = `### Step ${stepNumber}: ${step.title}`;
+        if (step.manual) {
+          return [
+            header,
+            stateLine,
+            'This step is manual and requires your action in a web browser.',
+            '',
+            '**Manual Action Required:**',
+            `Follow the instructions in the [Setup Guide](docs/SETUP_GUIDE.md#${anchor}).`,
+            '',
+            "**Once you've completed the manual steps, type 'done' to continue.**",
+          ].join('\n');
+        }
+        return [
+          header,
+          stateLine,
+          'This step includes automated commands with some manual follow-up in your browser.',
+          '',
+          '**Automated Action (with your approval):**',
+          'I can run the required commands for you.',
+          '',
+          '**Manual Action Required:**',
+          `Follow the instructions in the [Setup Guide](docs/SETUP_GUIDE.md#${anchor}) for any browser-based steps.`,
+          '',
+          '**Do you want me to proceed? (yes/no)**',
+        ].join('\n');
+      })
+      .join('\n');
+    fs.writeFileSync(path.join(commonDir, '_AI_ASSISTANT_STEPS.md'), `${aiAssistantSteps}\n`);
     console.log('Successfully generated docs/common/_AI_ASSISTANT_STEPS.md');
 
 

@@ -7,6 +7,7 @@
 > *   **Follow the Assistant:** The assistant will guide you interactively. Refer to this guide for the manual steps you'll need to perform in your web browser. The assistant will tell you when.
 > *   **Be Patient:** The initial Codespaces setup can take a few minutes.
 > *   **Read the Chat:** The assistant will show you the commands it's running. You don't need to read all of the output, just focus on the assistant's chat responses.
+> *   **Sharing Screenshots:** If you need to show the assistant something from your screen, you can copy text and paste it into the chat. For images, save a screenshot to a file and share the file path with the assistant so it can open the image.
 > *   **Open in Preview Mode:** If this guide opens as raw Markdown, switch to preview mode with `Ctrl+Shift+V` (Windows/Linux) or `Cmd+Shift+V` (macOS).
 > *   **Hide the Chat Pane:** If VS Code opens with the chat pane visible, you can hide it via **View → Appearance → Toggle Chat** or by running **View: Toggle Chat** from the Command Palette. VS Code will remember the layout the next time you open it.
 > *   **You're in Control:** While the assistant can run commands for you, you can always choose to copy the commands and run them manually in a separate terminal.
@@ -24,7 +25,7 @@ This document is the comprehensive, step-by-step guide for setting up the Google
 
 ### Authenticating the Gemini CLI
 
-Before starting, you need to authenticate the `gemini` command-line tool.
+Before starting the Setup Steps, you need to authenticate the `gemini` command-line tool.
 
 1.  In the terminal, you will be prompted to authenticate.
 2.  Select **1: Login with Google**.
@@ -74,10 +75,10 @@ This setup requires acting as an **Installer** using a **Google Workspace Super 
 
 ## 2. Prepare the Super Admin account
 
-1. Sign in to [admin.google.com](https://admin.google.com/) using the admin account.
+1. Sign in to [admin.google.com](https://admin.google.com/) using the Super Admin account.
 2. Confirm the account has the **Super Admin** role by visiting **Directory → Users → [your user] → Admin roles and privileges**.
 3. Enable the Google Groups service if it is not already active: go to **Apps → Google Workspace → Groups for Business** and set it to **On for everyone**.
-4. **Note on 2-Step Verification (2SV):** Google Cloud requires 2SV for admin accounts. If it's not enabled, you will be prompted to set it up during the Google Cloud login process.
+4. **Note on 2-Step Verification (2SV):** Google Cloud requires 2SV for Super Admin accounts. If it's not enabled, you will be prompted to set it up during the Google Cloud login process.
 5. Open a new tab to [console.cloud.google.com](https://console.cloud.google.com) and accept the Terms of Service.
 
 > **Why Super Admin?** The script needs Super Admin privileges to create and manage Google Groups via the Admin SDK.
@@ -110,7 +111,7 @@ This step must be performed while signed in as the **Google Workspace Super Admi
 
 ## 5. Configure the Google Cloud CLI (gcloud)
 
-> **Note for AI Assistant Users:** The assistant will handle these command-line steps. You can either approve the commands or copy-paste them into a separate terminal.
+> **Note for AI Assistant Users:** The assistant should ask you to run these commands in your own terminal. It should not try to authenticate `gcloud` for you.
 
 This step gives `gcloud` permission to manage resources in your Google Cloud project.
 
@@ -130,7 +131,7 @@ This step gives `gcloud` permission to manage resources in your Google Cloud pro
 3.  **Configure the OAuth Consent Screen.** In the [Cloud Console](https://console.cloud.google.com), go to **APIs & Services → OAuth consent screen**.
     *   User type: **Internal**.
     *   App name: A descriptive name like `Drive Permission Manager`.
-    *   Save and continue. You do not need to add test users for an Internal app.
+    *   Save and continue.
 
 
 ## 7. Deploy the Apps Script project
@@ -149,6 +150,9 @@ This step gives `gcloud` permission to manage resources in your Google Cloud pro
     *   Copy the content from `apps_script_project/appsscript.json` in this repository and paste it into the editor's `appsscript.json`.
     *   In the editor, set the `timeZone` to your organization's timezone (e.g., `America/New_York`). Save the file.
 6.  **Link the GCP Project.** In **Project Settings** (⚙️), scroll to **Google Cloud Platform (GCP) Project**, click **Change project**, and enter your GCP **Project Number**.
+    *   Find the Project Number in the Cloud Console under **Project info**.
+    *   Or run `gcloud projects describe YOUR_PROJECT_ID --format='value(projectNumber)'` in your terminal.
+    *   **Do not** try to infer the Project Number from the Project ID.
 7.  Return to your spreadsheet and **refresh the page**. The **Permissions Manager** menu should appear.
 
 > **Note on Configuration:** The script's configuration (like Sheet ID) is stored in a sheet named `Config`, which will be created automatically on the first run.
@@ -156,8 +160,9 @@ This step gives `gcloud` permission to manage resources in your Google Cloud pro
 
 ## 8. Run the first sync
 
-1. In the spreadsheet, open **Permissions Manager → Setup → Setup All Sheets & Sync Admins**.
-2. Grant the script the requested permissions.
+1. Refresh the spreadsheet so the **Permissions Manager** menu appears (only Google Workspace Super Admins can use the menu items).
+2. In the spreadsheet, open **Permissions Manager → ManualSync → Granular Sync → Sync Sheet Editors**.
+3. Grant the script the requested permissions.
 
 <details>
 <summary>Visual aid: Authorization prompt</summary>
