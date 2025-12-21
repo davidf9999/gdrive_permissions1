@@ -150,12 +150,15 @@ Follow the instructions in the [Setup Guide](docs/SETUP_GUIDE.md#4-create-spread
 
 ### Step 5: Configure the Google Cloud CLI (gcloud)
 *** Current state: 5 "Configure the Google Cloud CLI (gcloud)" out of 8 steps. ***
-You need to authenticate the `gcloud` CLI tool so it can manage resources in your GCP project. I can help automate this.
+You need to authenticate the `gcloud` CLI tool so it can manage resources in your GCP project. For authentication, you should run the commands in your own terminal.
 
-**Automated Action (with your approval):**
-I will run the `gcloud auth login` and `gcloud config set project` commands for you. You will need to interact with your web browser for the login.
+**Manual Action Required:**
+Please run these commands in your terminal, then let me know once each one completes:
+1. `gcloud --version`
+2. `gcloud auth login`
+3. `gcloud config set project YOUR_PROJECT_ID`
 
-**Do you want me to proceed with configuring gcloud? (yes/no)**
+**When you're done, type 'done' and we'll continue.**
 
 
 ### Step 6: Enable APIs and grant consent
@@ -163,7 +166,7 @@ I will run the `gcloud auth login` and `gcloud config set project` commands for 
 The script requires specific Google Cloud APIs to be enabled and user consent for OAuth. I can help automate the project-level API enablement.
 
 **Automated Action (with your approval):**
-I will run the `gcloud services enable` commands to enable the necessary APIs for your GCP project.
+I can run the `gcloud services enable` command to enable the necessary APIs for your GCP project.
 
 **Manual Action Required:**
 You will also need to manually enable the user-level Apps Script API and configure the OAuth consent screen in your browser.
@@ -176,10 +179,15 @@ You will also need to manually enable the user-level Apps Script API and configu
 Now it's time to deploy the actual script code into the Apps Script project you created earlier. This involves building the project locally and then copying the code manually.
 
 **Automated Action (with your approval):**
-I will run `npm install` and `npm run build` to prepare the script bundle for deployment.
+I can run `npm install` and `npm run build` to prepare the script bundle for deployment.
 
 **Manual Action Required:**
 You will then need to manually copy the bundled code into your Apps Script editor, configure the `appsscript.json` manifest, and link your GCP project in the Apps Script project settings.
+
+**To find your Project Number:**
+* In the Cloud Console, open **Project info** and copy the **Project number**.
+* Or run `gcloud projects describe YOUR_PROJECT_ID --format='value(projectNumber)'` in your terminal.
+* **Do not** try to infer the Project Number from the Project ID.
 
 **Do you want me to proceed with building the Apps Script project? (yes/no)**
 
@@ -189,7 +197,7 @@ You will then need to manually copy the bundled code into your Apps Script edito
 This is the final step where you'll authorize the script and let it create the necessary management sheets in your spreadsheet.
 
 **Manual Action Required:**
-1. Return to your control spreadsheet and refresh the page. You should see a "Permissions Manager" menu.
+1. Return to your control spreadsheet and refresh the page so the **Permissions Manager** menu appears (menu items are available only to Google Workspace Super Admins).
 2. From the menu, select **Permissions Manager → ManualSync → Granular Sync → Sync Sheet Editors**.
 3. You will be prompted to grant the script permissions. Review and accept these.
 
