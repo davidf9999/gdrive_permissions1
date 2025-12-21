@@ -62,6 +62,12 @@ This setup requires acting as an **Installer** using a **Google Workspace Super 
 2. When prompted, provide a domain you own or purchase one through Google Domains (the default option during setup).
 3. Complete the sign-up form to create the administrator account.
 4. Verify domain ownership via a DNS record. Follow the official [domain verification steps](https://support.google.com/a/answer/183895).
+5. (Optional) Run DNS sanity checks to confirm delegation and verification records:
+   ```bash
+   ./scripts/dns_sanity_check.sh your-domain.com [subdomain]
+   ```
+   * After setup, expect TXT/MX records to appear.
+   * After teardown, SOA/NS should still exist; empty A/AAAA/MX/TXT answers (NOERROR with SOA) are expected.
 
 <details>
 <summary>Visual aid: Domain verification TXT record</summary>
