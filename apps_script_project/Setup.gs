@@ -151,6 +151,7 @@ function setupControlSheets_() {
       log_('Added "Delete" column to ManagedFolders sheet.');
     }
   }
+  markSystemSheet_(managedSheet);
 
   // Add data validation for the Role column
   const roleRange = managedSheet.getRange('C2:C');
@@ -175,6 +176,7 @@ function setupControlSheets_() {
     sheetEditorsSheet = ss.insertSheet(SHEET_EDITORS_SHEET_NAME);
     log_('Created "' + SHEET_EDITORS_SHEET_NAME + '" sheet.');
   }
+  markSystemSheet_(sheetEditorsSheet);
 
   // Always set the headers to ensure correctness and overwrite old formats.
   sheetEditorsSheet.getRange(1, 1, 1, sheetEditorsHeaders.length).setValues([sheetEditorsHeaders]).setFontWeight('bold');
@@ -194,6 +196,7 @@ function setupControlSheets_() {
     userGroupsSheet = ss.insertSheet(USER_GROUPS_SHEET_NAME);
     log_('Created "UserGroups" sheet.');
   }
+  markSystemSheet_(userGroupsSheet);
 
   // Update headers (adding Delete column if needed)
   const userGroupsHeaderRange = userGroupsSheet.getRange(1, 1, 1, Math.max(6, userGroupsSheet.getLastColumn()));
@@ -358,6 +361,7 @@ function setupControlSheets_() {
     }
     configSheet.getRange(2, 1, newSettings.length, 3).setValues(newSettings);
   }
+  markSystemSheet_(configSheet);
   applyConfigValidation_();
   setupStatusSheet_();
 }
@@ -420,6 +424,7 @@ function setupStatusSheet_() {
   if (!statusSheet) {
     statusSheet = ss.insertSheet(STATUS_SHEET_NAME);
   }
+  markSystemSheet_(statusSheet);
 
   statusSheet.getRange(1, 1, 1, statusHeaders.length).setValues([statusHeaders]).setFontWeight('bold');
   statusSheet.setFrozenRows(1);
@@ -464,11 +469,11 @@ function setupStatusSheet_() {
   statusSheet.autoResizeColumns(1, 3);
 
   statusSheet.getRange('E1').setValue('Sync Status Indicator').setFontWeight('bold');
-  const panelRange = statusSheet.getRange('E2:H6');
+  const panelRange = statusSheet.getRange('E2:F3');
   panelRange.merge();
   panelRange.setHorizontalAlignment('center')
     .setVerticalAlignment('middle')
-    .setFontSize(16)
+    .setFontSize(12)
     .setFontWeight('bold');
   updateSyncStatusPanel_(statusSheet, 'Unknown');
 }
@@ -483,6 +488,7 @@ function setupLogSheets_() {
     logSheet.getRange('A1:C1').setValues([['Timestamp', 'Level', 'Message']]).setFontWeight('bold');
     logSheet.setFrozenRows(1);
   }
+  markSystemSheet_(logSheet);
 
   // Check for TestLog sheet
   let testLogSheet = ss.getSheetByName(TEST_LOG_SHEET_NAME);
@@ -491,6 +497,7 @@ function setupLogSheets_() {
     testLogSheet.getRange('A1:C1').setValues([['Timestamp', 'Level', 'Message']]).setFontWeight('bold');
     testLogSheet.setFrozenRows(1);
   }
+  markSystemSheet_(testLogSheet);
 
   // Check for FolderAuditLog sheet
   let auditLogSheet = ss.getSheetByName(FOLDER_AUDIT_LOG_SHEET_NAME);
@@ -498,6 +505,7 @@ function setupLogSheets_() {
     auditLogSheet = ss.insertSheet(FOLDER_AUDIT_LOG_SHEET_NAME);
     setupFolderAuditLogSheet_(auditLogSheet);
   }
+  markSystemSheet_(auditLogSheet);
 
   // Check for DeepAuditLog sheet
   setupDeepAuditLogSheet_();
@@ -516,6 +524,7 @@ function setupHelpSheet_() {
   if (!helpSheet) {
     helpSheet = ss.insertSheet('Help');
   }
+  markSystemSheet_(helpSheet);
 
   // Clear existing content
   helpSheet.clear();
@@ -643,6 +652,7 @@ function setupSyncHistorySheet_() {
       }
     }
   }
+  markSystemSheet_(sheet);
   return sheet;
 }
 
@@ -658,6 +668,7 @@ function setupDeepAuditLogSheet_() {
     sheet.setFrozenRows(1);
     log_('Created "DeepFolderAuditLog" sheet.');
   }
+  markSystemSheet_(sheet);
   return sheet;
 }
 
@@ -665,4 +676,5 @@ function setupFolderAuditLogSheet_(sheet) {
     const headers = ['Timestamp', 'Type', 'Identifier', 'Issue', 'Details'];
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
     sheet.setFrozenRows(1);
+    markSystemSheet_(sheet);
 }

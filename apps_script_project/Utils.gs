@@ -671,6 +671,35 @@ function updateConfigSetting_(settingName, value) {
   CacheService.getScriptCache().remove('config');
 }
 
+function markSystemSheet_(sheet) {
+  if (!sheet) {
+    return;
+  }
+  try {
+    const existing = sheet.getDeveloperMetadata().some(function(metadata) {
+      return metadata.getKey() === 'SystemSheet';
+    });
+    if (!existing) {
+      sheet.addDeveloperMetadata('SystemSheet', 'true', SpreadsheetApp.DeveloperMetadataVisibility.DOCUMENT);
+    }
+  } catch (e) {
+    log_('Failed to mark system sheet "' + sheet.getName() + '": ' + e.message, 'WARN');
+  }
+}
+
+function isSystemSheet_(sheet) {
+  if (!sheet) {
+    return false;
+  }
+  try {
+    return sheet.getDeveloperMetadata().some(function(metadata) {
+      return metadata.getKey() === 'SystemSheet' && metadata.getValue() === 'true';
+    });
+  } catch (e) {
+    return false;
+  }
+}
+
 function updateStatusSetting_(settingName, value) {
   const statusSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(STATUS_SHEET_NAME);
   if (!statusSheet) {
@@ -727,11 +756,12 @@ function updateSyncStatusPanel_(statusSheet, status) {
     fontColor = '#FFFFFF';
   }
 
-  const panelRange = statusSheet.getRange('E2:H6');
+  const panelRange = statusSheet.getRange('E2:F3');
   panelRange.setValue(label)
     .setBackground(background)
     .setFontColor(fontColor)
-    .setFontWeight('bold');
+    .setFontWeight('bold')
+    .setFontSize(12);
 }
 
 function updateSyncStatus_(status, options = {}) {
