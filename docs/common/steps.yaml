@@ -153,18 +153,6 @@ steps:
           *   User type: **Internal**.
           *   App name: A descriptive name like `Drive Permission Manager`.
           *   Save and continue.
-    ai_assistant_guide: |
-      ### Step 6: Enable APIs and grant consent
-      *** Current state: 6 "Enable APIs and grant consent" out of 8 steps. ***
-      The script requires specific Google Cloud APIs to be enabled and user consent for OAuth. I can help automate the project-level API enablement.
-
-      **Automated Action (with your approval):**
-      I can run the `gcloud services enable` command to enable the necessary APIs for your GCP project.
-
-      **Manual Action Required:**
-      You will also need to manually enable the user-level Apps Script API and configure the OAuth consent screen in your browser.
-
-      **Do you want me to proceed with enabling the project-level APIs? (yes/no)**
   - id: "deploy_script"
     title: "Deploy the Apps Script project"
     state: "SCRIPT_DEPLOYED"
@@ -228,16 +216,3 @@ steps:
       </details>
 
       After the script finishes, the management sheets will be created. See the [User Guide](USER_GUIDE.md) for next steps.
-    ai_assistant_guide: |
-      ### Step 8: Run the first sync
-      *** Current state: 8 "Run the first sync" out of 8 steps. ***
-      This is the final step where you'll authorize the script and let it create the necessary management sheets in your spreadsheet.
-
-      **Manual Action Required:**
-      1. Return to your control spreadsheet and refresh the page so the **Permissions Manager** menu appears (menu items are available only to Google Workspace Super Admins).
-      2. From the menu, select **Permissions Manager → ManualSync → Granular Sync → Sync Sheet Editors**.
-      3. You will be prompted to grant the script permissions. Review and accept these.
-
-      After the sync completes, the necessary sheets will be created, and you can begin populating them. Refer to the [User Guide](docs/SETUP_GUIDE.md#8-run-the-first-sync) for more details on day-to-day operations.
-
-      **Once you have completed the first sync, type 'done' to mark the setup as complete!**

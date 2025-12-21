@@ -8,4 +8,5 @@ clear
 code docs/SETUP_GUIDE.md
 
 # Now that auth is handled, launch the Gemini CLI with the master prompt.
-gemini -i "$(cat AI_ASSISTANT_PROMPT.md)"
+gemini -i "$(cat AI_ASSISTANT_PROMPT.md)" \
+  2> >(grep -v "No installer is available for GitHub Codespaces" >&2)
