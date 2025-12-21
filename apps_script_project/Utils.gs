@@ -766,6 +766,10 @@ function updateSyncStatusPanel_(statusSheet, status) {
 }
 
 function updateSyncStatus_(status, options = {}) {
+  if (SCRIPT_EXECUTION_MODE === 'TEST' && options.source === 'AutoSync') {
+    return;
+  }
+
   const statusSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(STATUS_SHEET_NAME);
   if (!statusSheet) {
     return;
