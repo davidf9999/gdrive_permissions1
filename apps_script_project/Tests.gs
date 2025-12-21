@@ -996,11 +996,15 @@ function runEmailCapabilityTest() {
     const startTime = new Date();
     const ui = SpreadsheetApp.getUi();
     const defaultRecipient = getConfigValue_('NotificationEmail', Session.getEffectiveUser().getEmail());
+    const effectiveUserEmail = Session.getEffectiveUser().getEmail();
+    const activeUserEmail = Session.getActiveUser().getEmail();
 
     try {
         log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
         log_('║  Email Capability Test                                       ║', 'INFO');
         log_('╚══════════════════════════════════════════════════════════════╝', 'INFO');
+        log_('Sender context: effectiveUser=' + (effectiveUserEmail || 'unknown') +
+            ', activeUser=' + (activeUserEmail || 'unknown'), 'INFO');
 
         const promptMessage = 'Enter the email address that should receive the test message.' +
             (defaultRecipient ? '\n\nLeave blank to send it to the configured NotificationEmail (' + defaultRecipient + ').' : '');
@@ -1038,7 +1042,9 @@ function runEmailCapabilityTest() {
         });
 
         log_('VERIFICATION PASSED: Test email sent to ' + recipient + '.', 'INFO');
-        showTestMessage_('Email Sent', 'A test email was sent to ' + recipient + '. Please confirm it arrived.');
+        showTestMessage_('Email Sent', 'A test email was sent to ' + recipient + '. Please confirm it arrived.' +
+            '\n\nIf it does not arrive (especially for external addresses), check Admin Console > Email Log Search ' +
+            'for routing/rejections and confirm external mail policies for Apps Script/API sends.');
         success = true;
     } catch (e) {
         log_('TEST FAILED: ' + e.toString() + ' Stack: ' + e.stack, 'ERROR');
