@@ -440,6 +440,13 @@ function syncAdds(options = {}) {
         source: getSyncSourceLabel_(options)
       });
     }
+    if (shouldUpdateSyncStatus_(options)) {
+      updateSyncStatus_(totalSummary.failed === 0 ? 'Success' : 'Failed', {
+        summary: totalSummary,
+        durationSeconds: durationSeconds,
+        source: getSyncSourceLabel_(options)
+      });
+    }
 
     // Clear the infinite toast
     if (!silentMode) showToast_('User addition complete!', 'Add Users', 5);
@@ -617,7 +624,7 @@ function fullSync(options = {}) {
   const silentMode = options && options.silentMode !== undefined ? options.silentMode : false;
   const skipSetup = options && options.skipSetup !== undefined ? options.skipSetup : false;
 
-  log_('Running script version 2.0');
+  log_('Running script version ' + SCRIPT_VERSION);
 
   if (!skipSetup) {
     setupControlSheets_(); // Ensure control sheets exist

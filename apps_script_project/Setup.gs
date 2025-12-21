@@ -471,12 +471,20 @@ function setupStatusSheet_() {
 
   statusSheet.getRange('E1').setValue('Sync Status Indicator').setFontWeight('bold');
   const panelRange = statusSheet.getRange('E2:F3');
-  const existingMergedRanges = panelRange.getMergedRanges();
+  const panelBoundaryRange = statusSheet.getRange('E2:H6');
+  const existingMergedRanges = statusSheet.getMergedRanges();
   if (existingMergedRanges.length > 0) {
     existingMergedRanges.forEach(function(range) {
-      range.breakApart();
+      const intersectsRows = range.getLastRow() >= panelBoundaryRange.getRow() &&
+        range.getRow() <= panelBoundaryRange.getLastRow();
+      const intersectsCols = range.getLastColumn() >= panelBoundaryRange.getColumn() &&
+        range.getColumn() <= panelBoundaryRange.getLastColumn();
+      if (intersectsRows && intersectsCols) {
+        range.breakApart();
+      }
     });
   }
+  panelBoundaryRange.setBackground(null).setFontColor(null);
   panelRange.merge();
   panelRange.setHorizontalAlignment('center')
     .setVerticalAlignment('middle')
@@ -529,6 +537,9 @@ function setupLogSheets_() {
 
 function arrangeSheetOrder_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (typeof isSuperAdmin_ === 'function' && !isSuperAdmin_()) {
+    return;
+  }
   const orderedNames = [
     STATUS_SHEET_NAME,
     CONFIG_SHEET_NAME,
@@ -606,9 +617,16 @@ function arrangeSheetOrder_() {
     seen.add(name);
     const sheet = ss.getSheetByName(name);
     if (sheet) {
-      ss.setActiveSheet(sheet);
-      ss.moveActiveSheet(targetIndex);
-      targetIndex++;
+      if (sheet.isSheetHidden && sheet.isSheetHidden()) {
+        return;
+      }
+      try {
+        ss.setActiveSheet(sheet);
+        ss.moveActiveSheet(targetIndex);
+        targetIndex++;
+      } catch (e) {
+        log_('Could not reorder sheet "' + name + '": ' + e.message, 'WARN');
+      }
     }
   });
 }

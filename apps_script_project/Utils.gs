@@ -757,6 +757,7 @@ function updateSyncStatusPanel_(statusSheet, status) {
   }
 
   const panelRange = statusSheet.getRange('E2:F3');
+  statusSheet.getRange('E2:H6').setBackground(null).setFontColor(null);
   panelRange.setValue(label)
     .setBackground(background)
     .setFontColor(fontColor)
