@@ -349,6 +349,20 @@ function syncUserGroups(options = {}) {
   return totalSummary;
 }
 
+function getSyncSourceLabel_(options) {
+  if (options && options.executionSource) {
+    if (options.executionSource === 'AUTO_SYNC') {
+      return 'AutoSync';
+    }
+    return options.executionSource;
+  }
+  return 'Manual';
+}
+
+function shouldUpdateSyncStatus_(options) {
+  return !(options && options.executionSource === 'AUTO_SYNC');
+}
+
 function syncAdds(options = {}) {
   const silentMode = options && options.silentMode !== undefined ? options.silentMode : false;
   const skipSetup = options && options.skipSetup !== undefined ? options.skipSetup : false;
@@ -419,6 +433,13 @@ function syncAdds(options = {}) {
     const endTime = new Date();
     const durationSeconds = (endTime - startTime) / 1000;
     logSyncHistory_(null, totalSummary, durationSeconds);
+    if (shouldUpdateSyncStatus_(options)) {
+      updateSyncStatus_(totalSummary.failed === 0 ? 'Success' : 'Failed', {
+        summary: totalSummary,
+        durationSeconds: durationSeconds,
+        source: getSyncSourceLabel_(options)
+      });
+    }
 
     // Clear the infinite toast
     if (!silentMode) showToast_('User addition complete!', 'Add Users', 5);
@@ -437,6 +458,13 @@ function syncAdds(options = {}) {
     if (!silentMode) showToast_('User addition failed with a fatal error.', 'Add Users', 5);
     if (!silentMode) SpreadsheetApp.getUi().alert('A fatal error occurred during user addition: ' + e.message);
     sendErrorNotification_(errorMessage);
+    if (shouldUpdateSyncStatus_(options)) {
+      updateSyncStatus_('Failed', {
+        errorMessage: errorMessage,
+        durationSeconds: (new Date() - startTime) / 1000,
+        source: getSyncSourceLabel_(options)
+      });
+    }
   } finally {
     lock.releaseLock();
     hideSyncInProgress_();
@@ -445,6 +473,7 @@ function syncAdds(options = {}) {
 
 function syncDeletes() {
   const ui = SpreadsheetApp.getUi();
+  const startTime = new Date();
   
   // --- Phase 1: Planning ---
   log_('*** Starting user removal planning phase...');
@@ -462,6 +491,11 @@ function syncDeletes() {
     showToast_('User removal planning failed with a fatal error.', 'Remove Users', 5);
     ui.alert('A fatal error occurred during the user removal planning phase: ' + e.message);
     sendErrorNotification_(errorMessage);
+    updateSyncStatus_('Failed', {
+      errorMessage: errorMessage,
+      durationSeconds: (new Date() - startTime) / 1000,
+      source: 'Manual'
+    });
     return;
   }
 
@@ -510,6 +544,11 @@ function syncDeletes() {
     showToast_('User removal re-planning failed with a fatal error.', 'Remove Users', 5);
     ui.alert('A fatal error occurred during the user removal re-planning phase: ' + e.message);
     sendErrorNotification_(errorMessage);
+    updateSyncStatus_('Failed', {
+      errorMessage: errorMessage,
+      durationSeconds: (new Date() - startTime) / 1000,
+      source: 'Manual'
+    });
     return;
   }
 
@@ -551,6 +590,11 @@ function syncDeletes() {
 
     showToast_('User removal complete!', 'Remove Users', 5);
     ui.alert(summaryMessage + '\n\nCheck the \'Status\' column in the sheets for details.');
+    updateSyncStatus_(totalSummary.failed === 0 ? 'Success' : 'Failed', {
+      summary: totalSummary,
+      durationSeconds: (new Date() - startTime) / 1000,
+      source: 'Manual'
+    });
 
   } catch (e) {
     const errorMessage = 'FATAL ERROR in syncDeletes: ' + e.toString() + '\n' + e.stack;
@@ -558,6 +602,11 @@ function syncDeletes() {
     showToast_('Delete-only sync failed with a fatal error.', 'Sync Deletes', 5);
     ui.alert('A fatal error occurred during delete-only sync: ' + e.message);
     sendErrorNotification_(errorMessage);
+    updateSyncStatus_('Failed', {
+      errorMessage: errorMessage,
+      durationSeconds: (new Date() - startTime) / 1000,
+      source: 'Manual'
+    });
   } finally {
     lock.releaseLock();
     hideSyncInProgress_();
@@ -688,6 +737,13 @@ function fullSync(options = {}) {
     if (!silentMode) showToast_('Full sync failed with a fatal error.', 'Full Sync', 5);
     if (!silentMode) SpreadsheetApp.getUi().alert('A fatal error occurred: ' + e.message);
     sendErrorNotification_(errorMessage);
+    if (shouldUpdateSyncStatus_(options)) {
+      updateSyncStatus_('Failed', {
+        errorMessage: errorMessage,
+        durationSeconds: (new Date() - startTime) / 1000,
+        source: getSyncSourceLabel_(options)
+      });
+    }
   } finally {
     lock.releaseLock();
     hideSyncInProgress_();
@@ -702,6 +758,7 @@ function syncManagedFoldersAdds() {
     return;
   }
 
+  const startTime = new Date();
   try {
     showToast_('Starting folder-only sync (adds only)...', 'Sync Folders - Adds', -1);
     log_('*** Starting Managed Folders only synchronization (adds only)...');
@@ -712,6 +769,11 @@ function syncManagedFoldersAdds() {
 
     showToast_('Folder-only sync (adds) complete!', 'Sync Folders - Adds', 5);
     SpreadsheetApp.getUi().alert(summaryMessage + '\n\nCheck the \'Status\' column in the \'ManagedFolders\' sheet for details.');
+    updateSyncStatus_(summary.failed === 0 ? 'Success' : 'Failed', {
+      summary: summary,
+      durationSeconds: (new Date() - startTime) / 1000,
+      source: 'Manual'
+    });
 
   } catch (e) {
     const errorMessage = 'FATAL ERROR in syncManagedFoldersAdds: ' + e.toString() + '\n' + e.stack;
@@ -719,6 +781,11 @@ function syncManagedFoldersAdds() {
     showToast_('Folder-only sync (adds) failed with a fatal error.', 'Sync Folders - Adds', 5);
     SpreadsheetApp.getUi().alert('A fatal error occurred during folder-only sync (adds): ' + e.message);
     sendErrorNotification_(errorMessage);
+    updateSyncStatus_('Failed', {
+      errorMessage: errorMessage,
+      durationSeconds: (new Date() - startTime) / 1000,
+      source: 'Manual'
+    });
   } finally {
     lock.releaseLock();
     hideSyncInProgress_();
@@ -727,6 +794,7 @@ function syncManagedFoldersAdds() {
 
 function syncManagedFoldersDeletes() {
   const ui = SpreadsheetApp.getUi();
+  const startTime = new Date();
   
   // --- Phase 1: Planning ---
   log_('*** Starting folder deletion planning phase...');
@@ -742,6 +810,11 @@ function syncManagedFoldersDeletes() {
     showToast_('Deletion planning failed with a fatal error.', 'Sync Deletes', 5);
     ui.alert('A fatal error occurred during the deletion planning phase: ' + e.message);
     sendErrorNotification_(errorMessage);
+    updateSyncStatus_('Failed', {
+      errorMessage: errorMessage,
+      durationSeconds: (new Date() - startTime) / 1000,
+      source: 'Manual'
+    });
     return;
   }
 
@@ -788,6 +861,11 @@ function syncManagedFoldersDeletes() {
     showToast_('Folder deletion re-planning failed with a fatal error.', 'Sync Deletes', 5);
     ui.alert('A fatal error occurred during the folder deletion re-planning phase: ' + e.message);
     sendErrorNotification_(errorMessage);
+    updateSyncStatus_('Failed', {
+      errorMessage: errorMessage,
+      durationSeconds: (new Date() - startTime) / 1000,
+      source: 'Manual'
+    });
     return;
   }
 
@@ -829,6 +907,11 @@ function syncManagedFoldersDeletes() {
 
     showToast_('Folder-only sync (deletes) complete!', 'Sync Folders - Deletes', 5);
     ui.alert(summaryMessage + '\n\nCheck the \'Status\' column in the \'ManagedFolders\' sheet for details.');
+    updateSyncStatus_(totalSummary.failed === 0 ? 'Success' : 'Failed', {
+      summary: totalSummary,
+      durationSeconds: (new Date() - startTime) / 1000,
+      source: 'Manual'
+    });
 
   } catch (e) {
     const errorMessage = 'FATAL ERROR in syncManagedFoldersDeletes: ' + e.toString() + '\n' + e.stack;
@@ -836,6 +919,11 @@ function syncManagedFoldersDeletes() {
     showToast_('Folder-only sync (deletes) failed with a fatal error.', 'Sync Folders - Deletes', 5);
     ui.alert('A fatal error occurred during folder-only sync (deletes): ' + e.message);
     sendErrorNotification_(errorMessage);
+    updateSyncStatus_('Failed', {
+      errorMessage: errorMessage,
+      durationSeconds: (new Date() - startTime) / 1000,
+      source: 'Manual'
+    });
   } finally {
     lock.releaseLock();
     hideSyncInProgress_();
