@@ -27,7 +27,7 @@ This guide provides an end-to-end process for safely deleting a Google Workspace
 **Priority: High (cost/blocker)** — These steps prevent ongoing charges and unblock account deletion.
 
 ### 3.1 Cancel Workspace Subscriptions
-- Go to [admin.google.com](http://admin.google.com/).
+- Go to [admin.google.com](http://admin.google.com/) (direct link: https://admin.google.com/ac/billing/subscriptions).
 - Navigate to **Billing** > **Subscriptions**.
 - Select the subscription you want to cancel.
 - Click the three dots menu (⋮) and select **Cancel Subscription**.
@@ -63,10 +63,20 @@ Projects will show `DELETE_REQUESTED` while pending deletion.
 
 ### 3.3 Clean Up Cloud Resources
 - App Engine: disable application.
+  - Open **App Engine** in the Cloud Console or go to https://console.cloud.google.com/appengine.
+  - If prompted, select the project, then open **Settings** → **Disable application**.
 - Cloud Storage: delete buckets.
+  - Navigate to **Storage** → **Browser** or go to https://console.cloud.google.com/storage/browser.
+  - Select each bucket and delete it.
 - BigQuery: delete datasets.
+  - Navigate to **BigQuery** or go to https://console.cloud.google.com/bigquery.
+  - In the Explorer, select the dataset, then **Delete**.
 - Service accounts: delete if needed.
+  - Navigate to **IAM & Admin** → **Service Accounts** or go to https://console.cloud.google.com/iam-admin/serviceaccounts.
+  - Delete unused service accounts for the project.
 - APIs: disable active APIs.
+  - Navigate to **APIs & Services** → **Enabled APIs & services** or go to https://console.cloud.google.com/apis/dashboard.
+  - Disable any APIs you no longer need for the project.
 
 ### 3.4 Close Billing Accounts
 - https://console.cloud.google.com/billing  
