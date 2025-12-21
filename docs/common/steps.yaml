@@ -1,5 +1,5 @@
 steps:
-  - id: "create_workspace"
+  - id: "create_or_reuse_a_google_workspace_tenant"
     title: "Create or reuse a Google Workspace tenant"
     state: "WORKSPACE_TENANT_CREATED"
     manual: true
@@ -34,7 +34,7 @@ steps:
       Follow the instructions in the [Setup Guide](docs/SETUP_GUIDE.md#1-create-or-reuse-a-google-workspace-tenant) to either create a new Google Workspace tenant or sign into an existing one.
 
       **Once you have successfully set up or signed into your Google Workspace tenant, type 'done' to continue.**
-  - id: "prepare_admin"
+  - id: "prepare_the_super_admin_account"
     title: "Prepare the Super Admin account"
     state: "SUPER_ADMIN_PREPARED"
     manual: true
@@ -61,7 +61,7 @@ steps:
       4. Ensure 2-Step Verification (2SV) is enabled or be prepared to enable it.
 
       **Once your Super Admin account is prepared, type 'done' to continue.**
-  - id: "create_gcp_project"
+  - id: "create_or_select_a_google_cloud_project"
     title: "Create or select a Google Cloud Project"
     state: "GCP_PROJECT_CREATED"
     manual: true
@@ -86,7 +86,7 @@ steps:
       3. **Copy the Project ID and save it.** You will need it in subsequent steps.
 
       **Once you have your Google Cloud Project ID, type 'done' to continue.**
-  - id: "create_spreadsheet"
+  - id: "create_the_control_spreadsheet"
     title: "Create the control spreadsheet"
     state: "CONTROL_SPREADSHEET_CREATED"
     manual: true
@@ -116,7 +116,7 @@ steps:
       3. In the Apps Script editor, open **Project Settings** (the gear icon ⚙️) and copy the **Script ID**. You will need this later.
 
       **Once your control spreadsheet is created and you have noted its Script ID, type 'done' to continue.**
-  - id: "configure_gcloud"
+  - id: "configure_the_google_cloud_cli_gcloud"
     title: "Configure the Google Cloud CLI (gcloud)"
     state: "GCLOUD_CLI_CONFIGURED"
     manual: false
@@ -142,7 +142,7 @@ steps:
       3. `gcloud config set project YOUR_PROJECT_ID`
 
       **When you're done, type 'done' and we'll continue.**
-  - id: "enable_apis"
+  - id: "enable_apis_and_grant_consent"
     title: "Enable APIs and grant consent"
     state: "APIS_ENABLED_AND_CONSENT_GRANTED"
     manual: false
@@ -159,7 +159,7 @@ steps:
           *   User type: **Internal**.
           *   App name: A descriptive name like `Drive Permission Manager`.
           *   Save and continue.
-  - id: "deploy_script"
+  - id: "deploy_the_apps_script_project"
     title: "Deploy the Apps Script project"
     state: "SCRIPT_DEPLOYED"
     manual: true
@@ -203,7 +203,7 @@ steps:
       * **Do not** try to infer the Project Number from the Project ID.
 
       **Do you want me to proceed with building the Apps Script project? (yes/no)**
-  - id: "first_sync"
+  - id: "run_the_first_sync"
     title: "Run the first sync"
     state: "FIRST_SYNC_COMPLETE"
     manual: true
