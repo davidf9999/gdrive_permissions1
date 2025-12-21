@@ -3,7 +3,7 @@
 This step is manual and requires your action in a web browser.
 
 **Manual Action Required:**
-Follow the instructions in the [Setup Guide](docs/SETUP_GUIDE.md#1-create-workspace).
+Follow the instructions in the [Setup Guide](docs/SETUP_GUIDE.md#1-create-or-reuse-a-google-workspace-tenant).
 
 **Once you've completed the manual steps, type 'done' to continue.**
 ### Step 2: Prepare the Super Admin account
@@ -11,7 +11,7 @@ Follow the instructions in the [Setup Guide](docs/SETUP_GUIDE.md#1-create-worksp
 This step is manual and requires your action in a web browser.
 
 **Manual Action Required:**
-Follow the instructions in the [Setup Guide](docs/SETUP_GUIDE.md#2-prepare-admin).
+Follow the instructions in the [Setup Guide](docs/SETUP_GUIDE.md#2-prepare-the-super-admin-account).
 
 **Once you've completed the manual steps, type 'done' to continue.**
 ### Step 3: Create or select a Google Cloud Project
@@ -19,7 +19,7 @@ Follow the instructions in the [Setup Guide](docs/SETUP_GUIDE.md#2-prepare-admin
 This step is manual and requires your action in a web browser.
 
 **Manual Action Required:**
-Follow the instructions in the [Setup Guide](docs/SETUP_GUIDE.md#3-create-gcp-project).
+Follow the instructions in the [Setup Guide](docs/SETUP_GUIDE.md#3-create-or-select-a-google-cloud-project).
 
 **Once you've completed the manual steps, type 'done' to continue.**
 ### Step 4: Create the control spreadsheet
@@ -27,7 +27,7 @@ Follow the instructions in the [Setup Guide](docs/SETUP_GUIDE.md#3-create-gcp-pr
 This step is manual and requires your action in a web browser.
 
 **Manual Action Required:**
-Follow the instructions in the [Setup Guide](docs/SETUP_GUIDE.md#4-create-spreadsheet).
+Follow the instructions in the [Setup Guide](docs/SETUP_GUIDE.md#4-create-the-control-spreadsheet).
 
 **Once you've completed the manual steps, type 'done' to continue.**
 ### Step 5: Configure the Google Cloud CLI (gcloud)
@@ -38,7 +38,7 @@ This step includes automated commands with some manual follow-up in your browser
 I can run the required commands for you.
 
 **Manual Action Required:**
-Follow the instructions in the [Setup Guide](docs/SETUP_GUIDE.md#5-configure-gcloud) for any browser-based steps.
+Follow the instructions in the [Setup Guide](docs/SETUP_GUIDE.md#5-configure-the-google-cloud-cli-gcloud) for any browser-based steps.
 
 **Do you want me to proceed? (yes/no)**
 ### Step 6: Enable APIs and grant consent
@@ -49,7 +49,7 @@ This step includes automated commands with some manual follow-up in your browser
 I can run the required commands for you.
 
 **Manual Action Required:**
-Follow the instructions in the [Setup Guide](docs/SETUP_GUIDE.md#6-enable-apis) for any browser-based steps.
+Follow the instructions in the [Setup Guide](docs/SETUP_GUIDE.md#6-enable-apis-and-grant-consent) for any browser-based steps.
 
 **Do you want me to proceed? (yes/no)**
 ### Step 7: Deploy the Apps Script project
@@ -57,7 +57,7 @@ Follow the instructions in the [Setup Guide](docs/SETUP_GUIDE.md#6-enable-apis) 
 This step is manual and requires your action in a web browser.
 
 **Manual Action Required:**
-Follow the instructions in the [Setup Guide](docs/SETUP_GUIDE.md#7-deploy-script).
+Follow the instructions in the [Setup Guide](docs/SETUP_GUIDE.md#7-deploy-the-apps-script-project).
 
 **Once you've completed the manual steps, type 'done' to continue.**
 ### Step 8: Run the first sync
@@ -65,6 +65,6 @@ Follow the instructions in the [Setup Guide](docs/SETUP_GUIDE.md#7-deploy-script
 This step is manual and requires your action in a web browser.
 
 **Manual Action Required:**
-Follow the instructions in the [Setup Guide](docs/SETUP_GUIDE.md#8-first-sync).
+Follow the instructions in the [Setup Guide](docs/SETUP_GUIDE.md#8-run-the-first-sync).
 
 **Once you've completed the manual steps, type 'done' to continue.**
