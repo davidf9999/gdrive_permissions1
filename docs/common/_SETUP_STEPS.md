@@ -41,6 +41,8 @@ The script requires a Google Cloud Platform (GCP) project to manage APIs.
 3.  Either select an existing, unused project or click **NEW PROJECT**.
 4.  Once your project is created and selected, find the **Project ID** on the project dashboard. **Copy this ID and save it for later.**
 
+> **Tip:** While you can use an existing project (like the default "My First Project"), it is **highly recommended** to create a new project with a descriptive name (e.g., `gdrive-permission-manager`). This improves clarity, security, and makes it easier to manage resources and billing.
+
 
 ## 4. Create the control spreadsheet
 
