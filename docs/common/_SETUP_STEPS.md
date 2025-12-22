@@ -14,6 +14,8 @@
 
 > **Tip:** If your organisation already has Workspace, sign into the [Admin console](https://admin.google.com/) with an existing Super Admin account.
 
+> **Note on DKIM:** While not strictly required for this script's email functions (as Google automatically handles DKIM for Apps Script emails), it is a strong security best practice for any Google Workspace domain administrator to set up a custom DKIM key for their domain. This improves email deliverability and helps protect against spoofing for all emails sent from your domain.
+
 
 ## 2. Prepare the Super Admin account
 
