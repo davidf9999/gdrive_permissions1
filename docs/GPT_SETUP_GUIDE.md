@@ -16,16 +16,15 @@ This guide explains how to configure a Custom GPT to assist with the `gdrive_per
 ## Configure the Custom GPT
 1. Open ChatGPT and create a new Custom GPT.
 2. Set the **System Instructions** to the content of `GPT_PROMPT.md`.
-3. Upload **GPT_KNOWLEDGE.md** in the Knowledge section.
-4. Enable browsing if you want the GPT to read additional files from GitHub.
-   - If browsing is disabled, provide any extra files manually.
+3. Enable browsing so the GPT can fetch `GPT_KNOWLEDGE.md` at runtime.
+4. Do not upload `GPT_KNOWLEDGE.md` in the Knowledge section; it must be read live from GitHub.
 5. Save the GPT.
 
 ## Updating the knowledge
 Whenever setup steps or docs change:
 1. Run `npm run build:docs`.
-2. Re-upload the regenerated `GPT_KNOWLEDGE.md` to the Custom GPT.
+2. Commit the regenerated `GPT_KNOWLEDGE.md` so the GPT fetches the latest version at runtime.
 
 ## Notes
 - The prompt is intended to stay stable. Prefer updating the knowledge file instead of changing the prompt.
-- If you enable browsing, the GPT can read public GitHub URLs, but you should still treat `GPT_KNOWLEDGE.md` as the source of truth.
+- If the GPT fails to fetch `GPT_KNOWLEDGE.md`, treat it as an error and retry after verifying the URL.

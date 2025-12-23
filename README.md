@@ -69,6 +69,12 @@ To launch the assistant, you will need a GitHub account.
 
 [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/davidf9999/gdrive_permissions1?ref=main)
 
+### Custom GPT Assistant (No Backend)
+
+If you prefer a ChatGPT-based assistant without running infrastructure, use the Custom GPT setup guide. It uses a stable prompt and a regenerated knowledge file from this repo.
+
+**➡️ See [Custom GPT setup guide](docs/GPT_SETUP_GUIDE.md).**
+
 ### Manual Setup
 
 If you prefer to set up the project manually, we have a comprehensive, step-by-step guide that covers every required action.
