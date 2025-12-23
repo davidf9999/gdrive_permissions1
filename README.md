@@ -168,13 +168,14 @@ If the underlying Apps Script code is updated (for example, after pulling new ch
 
 The process is simple:
 
-1.  **Generate the new bundle:** Run the bundling script from your terminal to combine all the project files into a single file for deployment.
+1.  **Use the latest bundle:** The repository includes a prebuilt bundle at `dist/apps_scripts_bundle.gs`. You can copy it directly without running any commands.
 
+    If you prefer to build locally, run:
     ```bash
     node create_apps_scripts_bundle.js
     ```
 
-2.  **Copy the bundle:** This command will create or update a file at `dist/apps_scripts_bundle.gs`. Open this file and copy its entire contents.
+2.  **Copy the bundle:** Open `dist/apps_scripts_bundle.gs` and copy its entire contents.
 
 3.  **Update Apps Script:**
     -   Open your control spreadsheet.

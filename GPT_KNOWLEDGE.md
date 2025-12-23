@@ -1,3 +1,35 @@
+# GPT Knowledge Pack (gdrive_permissions1)
+
+> This file is generated. Do not edit directly.
+> Source: `GPT_KNOWLEDGE.template.md` and `docs/common/steps.yaml` via `npm run build:docs`.
+
+## Purpose
+This knowledge pack provides a compact, deterministic reference for a Custom GPT assisting installers and admins of the gdrive_permissions1 project. It prioritizes stable instructions and references the full docs for detailed steps.
+
+## Project summary
+- Spreadsheet-first permissions manager for Google Drive.
+- Uses Apps Script + Google Workspace Admin SDK + Drive API.
+- Control sheet is the single source of truth for access and group membership.
+
+## Key artifacts
+- Apps Script bundle: `dist/apps_scripts_bundle.gs`
+- Bundle build command: `npm run build:bundle`
+- Apps Script source: `apps_script_project/`
+- Setup guide: `docs/SETUP_GUIDE.md`
+- User guide: `docs/USER_GUIDE.md`
+- Roles overview: `docs/ROLES_AND_RESPONSIBILITIES.md`
+
+## Setup steps overview
+1. [Create or reuse a Google Workspace tenant](#1-create-or-reuse-a-google-workspace-tenant)
+2. [Prepare the Super Admin account](#2-prepare-the-super-admin-account)
+3. [Create or select a Google Cloud Project](#3-create-or-select-a-google-cloud-project)
+4. [Create the control spreadsheet](#4-create-the-control-spreadsheet)
+5. [Configure the Google Cloud CLI (gcloud)](#5-configure-the-google-cloud-cli-gcloud)
+6. [Enable APIs and grant consent](#6-enable-apis-and-grant-consent)
+7. [Deploy the Apps Script project](#7-deploy-the-apps-script-project)
+8. [Run the first sync](#8-run-the-first-sync)
+
+## Setup steps (full text)
 ## 1. Create or reuse a Google Workspace tenant
 
 1. Go to [workspace.google.com](https://workspace.google.com/) to start a free trial or sign in.
@@ -121,3 +153,9 @@ This step gives `gcloud` permission to manage resources in your Google Cloud pro
 </details>
 
 After the script finishes, the management sheets will be created. See the [User Guide](USER_GUIDE.md) for next steps.
+
+
+## Operational notes
+- The bundle is copied into the Apps Script editor (`Code.gs`).
+- The script uses a `Config` sheet that is created on first run.
+- Permissions and logs are managed within the control spreadsheet.

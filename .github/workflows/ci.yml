@@ -29,9 +29,9 @@ jobs:
 
       - name: Check for up-to-date documentation
         run: |
-          npm run build
+          npm run build:docs
           if ! git diff --quiet; then
-            echo "Error: Generated documentation is out of date. Please run 'npm run build' and commit the changes."
+            echo "Error: Generated documentation is out of date. Please run 'npm run build:docs' and commit the changes."
             echo "The following differences were found:"
             git diff
             exit 1
