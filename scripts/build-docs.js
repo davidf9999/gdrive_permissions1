@@ -78,11 +78,17 @@ function buildDocs() {
     const stepsData = yaml.load(stepsFile);
     const steps = stepsData.steps;
 
-    const gcpStepsFile = fs.readFileSync(path.join(commonDir, 'gcp_steps.yaml'), 'utf8');
-    const gcpStepsData = yaml.load(gcpStepsFile);
-    const gcpSteps = gcpStepsData.steps;
+    const filterByGuide = (items, guide) => items.filter(step => {
+      if (!step.guides) {
+        return guide === 'core';
+      }
+      return step.guides.includes(guide);
+    });
 
-    const coreArtifacts = buildStepArtifacts(steps, {
+    const coreSteps = filterByGuide(steps, 'core');
+    const gcpSteps = filterByGuide(steps, 'gcp');
+
+    const coreArtifacts = buildStepArtifacts(coreSteps, {
       guidePath: 'docs/SETUP_GUIDE.md',
       guideLabel: 'Setup Guide',
     });

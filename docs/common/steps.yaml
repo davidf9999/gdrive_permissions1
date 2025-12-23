@@ -3,6 +3,9 @@ steps:
     title: "Create or reuse a Google Workspace tenant"
     state: "WORKSPACE_TENANT_CREATED"
     manual: true
+    guides:
+      - core
+      - gcp
     setup_guide: |
       ## 1. Create or reuse a Google Workspace tenant
 
@@ -38,6 +41,9 @@ steps:
     title: "Prepare the Super Admin account"
     state: "SUPER_ADMIN_PREPARED"
     manual: true
+    guides:
+      - core
+      - gcp
     setup_guide: |
       ## 2. Prepare the Super Admin account
 
@@ -65,6 +71,9 @@ steps:
     title: "Create or select a Google Cloud Project"
     state: "GCP_PROJECT_CREATED"
     manual: true
+    guides:
+      - core
+      - gcp
     setup_guide: |
       ## 3. Create or select a Google Cloud Project
 
@@ -90,6 +99,8 @@ steps:
     title: "Create the control spreadsheet"
     state: "CONTROL_SPREADSHEET_CREATED"
     manual: true
+    guides:
+      - core
     setup_guide: |
       ## 4. Create the control spreadsheet
 
@@ -120,6 +131,8 @@ steps:
     title: "Configure the Google Cloud CLI (gcloud)"
     state: "GCLOUD_CLI_CONFIGURED"
     manual: false
+    guides:
+      - core
     setup_guide: |
       ## 5. Configure the Google Cloud CLI (gcloud)
 
@@ -146,6 +159,9 @@ steps:
     title: "Enable APIs and grant consent"
     state: "APIS_ENABLED_AND_CONSENT_GRANTED"
     manual: false
+    guides:
+      - core
+      - gcp
     setup_guide: |
       ## 6. Enable APIs and grant consent
 
@@ -163,6 +179,8 @@ steps:
     title: "Deploy the Apps Script project"
     state: "SCRIPT_DEPLOYED"
     manual: true
+    guides:
+      - core
     setup_guide: |
       ## 7. Deploy the Apps Script project
 
@@ -207,6 +225,8 @@ steps:
     title: "Run the first sync"
     state: "FIRST_SYNC_COMPLETE"
     manual: true
+    guides:
+      - core
     setup_guide: |
       ## 8. Run the first sync
 
