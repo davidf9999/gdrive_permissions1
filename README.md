@@ -75,6 +75,8 @@ If you prefer to set up the project manually, we have a comprehensive, step-by-s
 
 **➡️ See the full [Setup Guide](docs/SETUP_GUIDE.md) to get started.**
 
+If you need to prepare Google Workspace and Google Cloud before running the Apps Script deployment, use the dedicated **[Google Workspace + GCP Setup Guide](docs/GCP_SETUP_GUIDE.md)**.
+
 ---
 
 ## System life cycle

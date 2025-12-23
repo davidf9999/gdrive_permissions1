@@ -12,7 +12,7 @@
     "build": "npm run build:docs && npm run build:bundle",
     "build:docs": "node scripts/build-docs.js",
     "build:bundle": "node create_apps_scripts_bundle.js",
-    "clean": "rm -rf dist && rm -f docs/SETUP_GUIDE.md && rm -f AI_ASSISTANT_PROMPT.md && rm -f docs/common/_AI_MENU.md && rm -f docs/common/_AI_STATE_DEFINITIONS.md && rm -f docs/common/_SETUP_STEPS_LIST.md && rm -f docs/common/_SETUP_STEPS.md",
+    "clean": "rm -rf dist && rm -f docs/SETUP_GUIDE.md && rm -f docs/GCP_SETUP_GUIDE.md && rm -f AI_ASSISTANT_PROMPT.md && rm -f AI_ASSISTANT_PROMPT_GCP.md && rm -f docs/common/_AI_MENU.md && rm -f docs/common/_AI_STATE_DEFINITIONS.md && rm -f docs/common/_SETUP_STEPS_LIST.md && rm -f docs/common/_SETUP_STEPS.md",
     "format": "prettier --write apps_script_project/"
   },
   "repository": {
