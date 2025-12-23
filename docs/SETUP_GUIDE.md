@@ -142,11 +142,12 @@ This step gives `gcloud` permission to manage resources in your Google Cloud pro
 
 ## 7. Deploy the Apps Script project
 
-1.  **Install dependencies.** In your terminal, run `npm install`.
-2.  **Build the script bundle.** This command combines all source files into a single file for deployment.
+1.  **Install dependencies (optional).** If you want to build the bundle locally, run `npm install`.
+2.  **Build the script bundle (optional).** This command combines all source files into a single file for deployment.
     ```bash
     npm run build
     ```
+    If you prefer not to run build commands locally, use the prebuilt bundle committed in `dist/apps_scripts_bundle.gs`.
 3.  **Copy the bundled code.** Open `dist/apps_scripts_bundle.gs`, select all text, and copy it.
 4.  **Paste into the Apps Script Editor.** Return to the Apps Script editor, delete any code in `Code.gs`, paste the bundled code, and save.
 5.  **Configure Project Settings.**
