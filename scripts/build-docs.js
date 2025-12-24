@@ -95,6 +95,22 @@ function buildDocs() {
     fs.writeFileSync(path.join(projectRoot, 'AI_ASSISTANT_PROMPT.md'), assistantPrompt);
     console.log('Successfully generated AI_ASSISTANT_PROMPT.md');
 
+    const gptKnowledgeTemplate = fs.readFileSync(path.join(projectRoot, 'GPT_KNOWLEDGE.template.md'), 'utf8');
+    const gptKnowledge = gptKnowledgeTemplate
+      .replace('{{SETUP_STEPS_LIST}}', setupStepsList)
+      .replace('{{SETUP_STEPS}}', setupSteps)
+      .replace('{{BUNDLE_PATH}}', 'dist/apps_scripts_bundle.gs')
+      .replace('{{BUILD_COMMAND}}', 'npm run build:bundle');
+    fs.writeFileSync(path.join(projectRoot, 'GPT_KNOWLEDGE.md'), gptKnowledge);
+    console.log('Successfully generated GPT_KNOWLEDGE.md');
+
+    const gptPromptTemplate = fs.readFileSync(path.join(projectRoot, 'GPT_PROMPT.template.md'), 'utf8');
+    const gptPrompt = gptPromptTemplate
+      .replace('{{KNOWLEDGE_FILE}}', 'GPT_KNOWLEDGE.md')
+      .replace('{{REPO_URL}}', 'https://github.com/davidf9999/gdrive_permissions1');
+    fs.writeFileSync(path.join(projectRoot, 'GPT_PROMPT.md'), gptPrompt);
+    console.log('Successfully generated GPT_PROMPT.md');
+
 
     console.log('\n✅ Documentation build complete.');
   } catch (error) {
