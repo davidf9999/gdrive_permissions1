@@ -28,3 +28,4 @@ Whenever setup steps or docs change:
 ## Notes
 - The prompt is intended to stay stable. Prefer updating the knowledge file instead of changing the prompt.
 - If the GPT fails to fetch `GPT_KNOWLEDGE.md`, treat it as an error and retry after verifying the URL.
+- If you deploy the optional backend (`backend/server.js`), point the GPT to that `/file` endpoint instead of the raw GitHub URL to reduce fetch brittleness.

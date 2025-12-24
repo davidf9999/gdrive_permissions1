@@ -69,11 +69,13 @@ To launch the assistant, you will need a GitHub account.
 
 [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/davidf9999/gdrive_permissions1?ref=main)
 
-### Custom GPT Assistant (No Backend)
+### Custom GPT Assistant (No Backend by default)
 
 If you prefer a ChatGPT-based assistant without running infrastructure, use the Custom GPT setup guide. It uses a stable prompt and a regenerated knowledge file from this repo.
 
 **➡️ See [Custom GPT setup guide](docs/GPT_SETUP_GUIDE.md).**
+
+If you decide to host the runtime files for the GPT (knowledge file, bundle, and Markdown docs), deploy the minimal read-only backend in `backend/server.js`. See [Minimal backend for GPT file access](docs/BACKEND_SERVER.md) and the broader [backend considerations](docs/BACKEND_CONSIDERATIONS.md).
 
 ### Manual Setup
 
