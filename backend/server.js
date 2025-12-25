@@ -1,104 +1,238 @@
 const http = require('http');
-const { readFile, stat } = require('fs/promises');
+const { readFile } = require('fs/promises');
+const crypto = require('crypto');
 const path = require('path');
-const url = require('url');
+const yaml = require('js-yaml');
+const { URL } = require('url');
 
 const PORT = process.env.PORT || 8080;
-const BASE_DIR = path.resolve(__dirname, '..');
-const MAX_BYTES = 2 * 1024 * 1024; // 2MB safety limit
+const ROOT = path.resolve(__dirname, '..');
+const KNOWLEDGE_PATH = path.join(ROOT, 'GPT_KNOWLEDGE.md');
+const STEPS_PATH = path.join(ROOT, 'docs', 'common', 'steps.yaml');
+const BUNDLE_PATH = path.join(ROOT, 'dist', 'apps_scripts_bundle.gs');
+const META_PATH = path.join(ROOT, 'meta.json');
+const GITHUB_HEAD_URL =
+  process.env.GITHUB_HEAD_URL ||
+  'https://api.github.com/repos/davidf9999/gdrive_permissions1/commits/main';
 
-const allowedExtensions = new Set(['.md', '.gs']);
-const allowlistFiles = new Set([
-  path.join(BASE_DIR, 'GPT_KNOWLEDGE.md'),
-  path.join(BASE_DIR, 'dist', 'apps_scripts_bundle.gs'),
-]);
+let stepsIndex = [];
+let stepsById = new Map();
+let metaCache;
 
-function isAllowed(resolvedPath) {
-  if (!resolvedPath.startsWith(BASE_DIR)) {
-    return false;
+function jsonResponse(res, statusCode, body) {
+  if (res.writableEnded) {
+    return;
   }
-  const ext = path.extname(resolvedPath).toLowerCase();
-  if (!allowedExtensions.has(ext)) {
-    return false;
-  }
-  if (ext === '.md') {
-    return true; // allow markdown anywhere inside repo
-  }
-  return allowlistFiles.has(resolvedPath);
+  res.statusCode = statusCode;
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.end(JSON.stringify(body));
 }
 
-function contentTypeFor(ext) {
-  switch (ext) {
-    case '.md':
-      return 'text/markdown; charset=utf-8';
-    case '.gs':
-      return 'text/plain; charset=utf-8';
-    default:
-      return 'application/octet-stream';
+function textResponse(res, statusCode, body, contentType) {
+  if (res.writableEnded) {
+    return;
   }
+  res.statusCode = statusCode;
+  res.setHeader('Content-Type', contentType);
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.end(body);
 }
 
-async function handleFileRequest(req, res) {
-  const parsed = url.parse(req.url, true);
-  const requestPath = parsed.query.path;
+async function loadMeta() {
+  if (!metaCache) {
+    const raw = await readFile(META_PATH, 'utf8');
+    metaCache = JSON.parse(raw);
+  }
+  return metaCache;
+}
 
-  if (!requestPath || typeof requestPath !== 'string') {
-    res.writeHead(400, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: 'Missing path query parameter' }));
+async function loadSteps() {
+  const raw = await readFile(STEPS_PATH, 'utf8');
+  const parsed = yaml.load(raw);
+  const steps = Array.isArray(parsed?.steps) ? parsed.steps : [];
+
+  stepsIndex = steps.map((step) => {
+    const compact = {
+      id: step.id,
+      title: step.title,
+      manual: Boolean(step.manual),
+    };
+
+    if (step.state) {
+      compact.state = step.state;
+    }
+
+    return compact;
+  });
+
+  stepsById = new Map(
+    steps.map((step) => [
+      step.id,
+      {
+        id: step.id,
+        title: step.title,
+        manual: Boolean(step.manual),
+        setup_guide_markdown: step.setup_guide || '',
+        state: step.state,
+      },
+    ]),
+  );
+}
+
+function logRequest(req, res, startedAt, requestId) {
+  const latencyMs = Date.now() - startedAt;
+  const payload = {
+    severity: res.statusCode >= 500 ? 'ERROR' : 'INFO',
+    request_id: requestId,
+    method: req.method,
+    path: req.url,
+    status: res.statusCode,
+    latency_ms: latencyMs,
+  };
+  console.log(JSON.stringify(payload));
+}
+
+async function handleMeta(res) {
+  const meta = await loadMeta();
+  jsonResponse(res, 200, meta);
+}
+
+async function handleKnowledge(res) {
+  const content = await readFile(KNOWLEDGE_PATH, 'utf8');
+  textResponse(res, 200, content, 'text/markdown; charset=utf-8');
+}
+
+async function handleSteps(res) {
+  jsonResponse(res, 200, stepsIndex);
+}
+
+async function handleStepDetail(res, stepId) {
+  if (!stepId) {
+    jsonResponse(res, 404, { error: 'not_found', message: 'Step not found' });
     return;
   }
 
-  const resolvedPath = path.resolve(BASE_DIR, requestPath);
-  if (!isAllowed(resolvedPath)) {
-    res.writeHead(403, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: 'Access denied for requested file' }));
+  const step = stepsById.get(stepId);
+  if (!step) {
+    jsonResponse(res, 404, { error: 'not_found', message: 'Step not found' });
     return;
   }
+
+  jsonResponse(res, 200, step);
+}
+
+async function handleBundle(res) {
+  const bundle = await readFile(BUNDLE_PATH, 'utf8');
+  textResponse(res, 200, bundle, 'text/plain; charset=utf-8');
+}
+
+async function handleLatest(res) {
+  const meta = await loadMeta();
+  try {
+    const response = await fetch(GITHUB_HEAD_URL, {
+      headers: {
+        Accept: 'application/vnd.github+json',
+        'User-Agent': 'gdrive-permissions-backend',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`GitHub returned status ${response.status}`);
+    }
+
+    const data = await response.json();
+    const githubSha = data?.sha || data?.commit?.sha || null;
+    const payload = {
+      status: 'ok',
+      deployed_git_sha: meta.git_sha,
+    };
+
+    if (githubSha) {
+      payload.github_head_sha = githubSha;
+      payload.is_outdated = Boolean(meta.git_sha && githubSha !== meta.git_sha);
+    }
+
+    jsonResponse(res, 200, payload);
+  } catch (err) {
+    jsonResponse(res, 200, {
+      status: 'unknown',
+      deployed_git_sha: meta.git_sha,
+      reason: err.message,
+    });
+  }
+}
+
+async function routeRequest(req, res) {
+  const startedAt = Date.now();
+  const requestId = req.headers['x-request-id'] || crypto.randomUUID();
+  res.setHeader('x-request-id', requestId);
+  res.on('finish', () => logRequest(req, res, startedAt, requestId));
+
+  const parsedUrl = new URL(req.url, 'http://localhost');
+  const pathName = parsedUrl.pathname;
 
   try {
-    const fileStat = await stat(resolvedPath);
-    if (!fileStat.isFile()) {
-      res.writeHead(404, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Not a file' }));
-      return;
-    }
-    if (fileStat.size > MAX_BYTES) {
-      res.writeHead(413, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'File too large' }));
+    if (req.method === 'GET' && pathName === '/healthz') {
+      jsonResponse(res, 200, { status: 'ok' });
       return;
     }
 
-    const data = await readFile(resolvedPath);
-    const ext = path.extname(resolvedPath).toLowerCase();
-    res.writeHead(200, {
-      'Content-Type': contentTypeFor(ext),
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-    });
-    res.end(data);
+    if (req.method === 'GET' && pathName === '/meta') {
+      await handleMeta(res);
+      return;
+    }
+
+    if (req.method === 'GET' && pathName === '/knowledge') {
+      await handleKnowledge(res);
+      return;
+    }
+
+    if (req.method === 'GET' && pathName === '/steps') {
+      await handleSteps(res);
+      return;
+    }
+
+    if (req.method === 'GET' && pathName.startsWith('/steps/')) {
+      const stepId = decodeURIComponent(pathName.replace('/steps/', ''));
+      await handleStepDetail(res, stepId);
+      return;
+    }
+
+    if (req.method === 'GET' && pathName === '/bundle') {
+      await handleBundle(res);
+      return;
+    }
+
+    if (req.method === 'GET' && pathName === '/latest') {
+      await handleLatest(res);
+      return;
+    }
+
+    jsonResponse(res, 404, { error: 'not_found', message: 'Resource not found' });
   } catch (err) {
-    console.error('Error serving file', err);
-    res.writeHead(404, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: 'File not found' }));
+    console.error('Unhandled error', err);
+    jsonResponse(res, 500, {
+      error: 'internal_error',
+      message: 'Unexpected server error',
+    });
   }
 }
 
-function requestHandler(req, res) {
-  const parsed = url.parse(req.url);
-  if (parsed.pathname === '/healthz') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ status: 'ok' }));
-    return;
-  }
+async function bootstrap() {
+  await loadSteps();
+  await loadMeta();
 
-  if (parsed.pathname === '/file' && req.method === 'GET') {
-    handleFileRequest(req, res);
-    return;
-  }
+  const server = http.createServer((req, res) => {
+    routeRequest(req, res);
+  });
 
-  res.writeHead(404, { 'Content-Type': 'application/json' });
-  res.end(JSON.stringify({ error: 'Not found' }));
+  server.listen(PORT, () => {
+    console.log(`GPT backend listening on :${PORT}`);
+  });
 }
 
-http.createServer(requestHandler).listen(PORT, () => {
-  console.log(`GPT backend listening on :${PORT}`);
+bootstrap().catch((err) => {
+  console.error('Failed to start server', err);
+  process.exit(1);
 });

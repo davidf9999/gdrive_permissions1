@@ -1,0 +1,11 @@
+{
+  "service": "gdrive-permissions-backend",
+  "version_tag": "unknown",
+  "git_sha": "d912df399309cb9a2f57a2950205dc10d91daa96",
+  "build_time_utc": "2025-12-25T07:04:20.106Z",
+  "artifacts": {
+    "knowledge_sha256": "bf3005b5f8a99aa108fa149cc8429a2c746283a9c0ec92dce99b80b3e842b318",
+    "steps_sha256": "9c69d44b0f6fba384921fb121b9add93e6d2dfeaf490b8c5fe7826b6a41b9a69",
+    "bundle_sha256": "e512ee9b0571e341c93aef8ad5fdbea5826c5c1b42d9734f863464cdd41c3b26"
+  }
+}
