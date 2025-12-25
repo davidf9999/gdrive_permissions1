@@ -32,10 +32,19 @@ function safeGit(cmd, fallback) {
 }
 
 async function main() {
+  const versionTag =
+    process.env.VERSION_TAG ||
+    process.env.GITHUB_REF_NAME ||
+    safeGit('git describe --tags --abbrev=0', 'unknown');
+  const gitSha =
+    process.env.GIT_SHA ||
+    process.env.GITHUB_SHA ||
+    safeGit('git rev-parse HEAD', 'unknown');
+
   const meta = {
     service: process.env.SERVICE_NAME || 'gdrive-permissions-backend',
-    version_tag: safeGit('git describe --tags --abbrev=0', 'unknown'),
-    git_sha: safeGit('git rev-parse HEAD', 'unknown'),
+    version_tag: versionTag,
+    git_sha: gitSha,
     build_time_utc: new Date().toISOString(),
     artifacts: {
       knowledge_sha256: await hashFile(KNOWLEDGE_PATH),

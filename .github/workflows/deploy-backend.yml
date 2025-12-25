@@ -10,6 +10,8 @@ env:
   REGION: ${{ secrets.GCP_REGION }}
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   REPOSITORY: ${{ secrets.GCP_ARTIFACT_REGISTRY_REPO }}
+  VERSION_TAG: ${{ github.ref_name }}
+  GIT_SHA: ${{ github.sha }}
 
 jobs:
   deploy:
@@ -39,7 +41,11 @@ jobs:
         run: |
           IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/${SERVICE_NAME}:${GITHUB_REF_NAME}"
           echo "IMAGE=${IMAGE}" >> "$GITHUB_ENV"
-          docker build -t "${IMAGE}" -f backend/Dockerfile .
+          docker build -t "${IMAGE}" -f backend/Dockerfile \
+            --build-arg VERSION_TAG="${VERSION_TAG}" \
+            --build-arg GIT_SHA="${GIT_SHA}" \
+            --build-arg SERVICE_NAME="${SERVICE_NAME}" \
+            .
 
       - name: Push backend image
         run: docker push "${IMAGE}"

@@ -14,28 +14,63 @@ const META_PATH = path.join(ROOT, 'meta.json');
 const GITHUB_HEAD_URL =
   process.env.GITHUB_HEAD_URL ||
   'https://api.github.com/repos/davidf9999/gdrive_permissions1/commits/main';
+const STATIC_CACHE_CONTROL =
+  process.env.STATIC_CACHE_CONTROL || 'public, max-age=300';
+const LATEST_CACHE_MS = Number(process.env.LATEST_CACHE_MS || 60_000);
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN || process.env.GITHUB_API_TOKEN || null;
 
 let stepsIndex = [];
 let stepsById = new Map();
 let metaCache;
+let latestCache;
 
-function jsonResponse(res, statusCode, body) {
+function applyCacheHeaders(res, options = {}) {
+  if (options.cacheControl) {
+    res.setHeader('Cache-Control', options.cacheControl);
+  }
+
+  if (options.etag) {
+    res.setHeader('ETag', options.etag);
+  }
+}
+
+function isFresh(req, etag) {
+  const ifNoneMatch = req.headers['if-none-match'];
+  return Boolean(etag && ifNoneMatch && ifNoneMatch === etag);
+}
+
+function notModified(res, options = {}) {
+  if (res.writableEnded) {
+    return;
+  }
+  res.statusCode = 304;
+  applyCacheHeaders(res, options);
+  res.end();
+}
+
+function jsonResponse(res, statusCode, body, options = {}) {
   if (res.writableEnded) {
     return;
   }
   res.statusCode = statusCode;
   res.setHeader('Content-Type', 'application/json');
-  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  applyCacheHeaders(res, {
+    cacheControl: options.cacheControl || 'no-cache, no-store, must-revalidate',
+    etag: options.etag,
+  });
   res.end(JSON.stringify(body));
 }
 
-function textResponse(res, statusCode, body, contentType) {
+function textResponse(res, statusCode, body, contentType, options = {}) {
   if (res.writableEnded) {
     return;
   }
   res.statusCode = statusCode;
   res.setHeader('Content-Type', contentType);
-  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  applyCacheHeaders(res, {
+    cacheControl: options.cacheControl || 'no-cache, no-store, must-revalidate',
+    etag: options.etag,
+  });
   res.end(body);
 }
 
@@ -98,16 +133,38 @@ async function handleMeta(res) {
   jsonResponse(res, 200, meta);
 }
 
-async function handleKnowledge(res) {
+async function handleKnowledge(req, res) {
+  const meta = await loadMeta();
+  const etag = meta.artifacts?.knowledge_sha256;
+
+  if (isFresh(req, etag)) {
+    notModified(res, { cacheControl: STATIC_CACHE_CONTROL, etag });
+    return;
+  }
+
   const content = await readFile(KNOWLEDGE_PATH, 'utf8');
-  textResponse(res, 200, content, 'text/markdown; charset=utf-8');
+  textResponse(res, 200, content, 'text/markdown; charset=utf-8', {
+    cacheControl: STATIC_CACHE_CONTROL,
+    etag,
+  });
 }
 
-async function handleSteps(res) {
-  jsonResponse(res, 200, stepsIndex);
+async function handleSteps(req, res) {
+  const meta = await loadMeta();
+  const etag = meta.artifacts?.steps_sha256;
+
+  if (isFresh(req, etag)) {
+    notModified(res, { cacheControl: STATIC_CACHE_CONTROL, etag });
+    return;
+  }
+
+  jsonResponse(res, 200, stepsIndex, {
+    cacheControl: STATIC_CACHE_CONTROL,
+    etag,
+  });
 }
 
-async function handleStepDetail(res, stepId) {
+async function handleStepDetail(req, res, stepId) {
   if (!stepId) {
     jsonResponse(res, 404, { error: 'not_found', message: 'Step not found' });
     return;
@@ -119,22 +176,66 @@ async function handleStepDetail(res, stepId) {
     return;
   }
 
-  jsonResponse(res, 200, step);
+  const meta = await loadMeta();
+  const etag = meta.artifacts?.steps_sha256;
+
+  if (isFresh(req, etag)) {
+    notModified(res, { cacheControl: STATIC_CACHE_CONTROL, etag });
+    return;
+  }
+
+  jsonResponse(res, 200, step, {
+    cacheControl: STATIC_CACHE_CONTROL,
+    etag,
+  });
 }
 
-async function handleBundle(res) {
+async function handleBundle(req, res) {
+  const meta = await loadMeta();
+  const etag = meta.artifacts?.bundle_sha256;
+
+  if (isFresh(req, etag)) {
+    notModified(res, { cacheControl: STATIC_CACHE_CONTROL, etag });
+    return;
+  }
+
   const bundle = await readFile(BUNDLE_PATH, 'utf8');
-  textResponse(res, 200, bundle, 'text/plain; charset=utf-8');
+  textResponse(res, 200, bundle, 'text/plain; charset=utf-8', {
+    cacheControl: STATIC_CACHE_CONTROL,
+    etag,
+  });
+}
+
+function readLatestCache() {
+  if (latestCache && Date.now() - latestCache.timestamp < LATEST_CACHE_MS) {
+    return latestCache.payload;
+  }
+  return null;
 }
 
 async function handleLatest(res) {
   const meta = await loadMeta();
+
+  const cached = readLatestCache();
+  if (cached) {
+    jsonResponse(res, 200, cached, {
+      cacheControl: `public, max-age=${Math.floor(LATEST_CACHE_MS / 1000)}`,
+    });
+    return;
+  }
+
   try {
+    const headers = {
+      Accept: 'application/vnd.github+json',
+      'User-Agent': 'gdrive-permissions-backend',
+    };
+
+    if (GITHUB_TOKEN) {
+      headers.Authorization = `Bearer ${GITHUB_TOKEN}`;
+    }
+
     const response = await fetch(GITHUB_HEAD_URL, {
-      headers: {
-        Accept: 'application/vnd.github+json',
-        'User-Agent': 'gdrive-permissions-backend',
-      },
+      headers,
     });
 
     if (!response.ok) {
@@ -153,12 +254,19 @@ async function handleLatest(res) {
       payload.is_outdated = Boolean(meta.git_sha && githubSha !== meta.git_sha);
     }
 
-    jsonResponse(res, 200, payload);
+    latestCache = { timestamp: Date.now(), payload };
+    jsonResponse(res, 200, payload, {
+      cacheControl: `public, max-age=${Math.floor(LATEST_CACHE_MS / 1000)}`,
+    });
   } catch (err) {
-    jsonResponse(res, 200, {
+    const payload = {
       status: 'unknown',
       deployed_git_sha: meta.git_sha,
       reason: err.message,
+    };
+    latestCache = { timestamp: Date.now(), payload };
+    jsonResponse(res, 200, payload, {
+      cacheControl: `public, max-age=${Math.floor(LATEST_CACHE_MS / 1000)}`,
     });
   }
 }
@@ -184,23 +292,23 @@ async function routeRequest(req, res) {
     }
 
     if (req.method === 'GET' && pathName === '/knowledge') {
-      await handleKnowledge(res);
+      await handleKnowledge(req, res);
       return;
     }
 
     if (req.method === 'GET' && pathName === '/steps') {
-      await handleSteps(res);
+      await handleSteps(req, res);
       return;
     }
 
     if (req.method === 'GET' && pathName.startsWith('/steps/')) {
       const stepId = decodeURIComponent(pathName.replace('/steps/', ''));
-      await handleStepDetail(res, stepId);
+      await handleStepDetail(req, res, stepId);
       return;
     }
 
     if (req.method === 'GET' && pathName === '/bundle') {
-      await handleBundle(res);
+      await handleBundle(req, res);
       return;
     }
 

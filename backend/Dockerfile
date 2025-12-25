@@ -1,6 +1,14 @@
 FROM node:20-slim AS build
 WORKDIR /app
 
+ARG VERSION_TAG
+ARG GIT_SHA
+ARG SERVICE_NAME=gdrive-permissions-backend
+
+ENV VERSION_TAG=${VERSION_TAG}
+ENV GIT_SHA=${GIT_SHA}
+ENV SERVICE_NAME=${SERVICE_NAME}
+
 COPY package*.json ./
 COPY . .
 
@@ -14,7 +22,6 @@ WORKDIR /app
 
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/backend ./backend
-COPY --from=build /app/backend/openapi.yaml ./backend/openapi.yaml
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/docs/common ./docs/common
 COPY --from=build /app/GPT_KNOWLEDGE.md ./GPT_KNOWLEDGE.md
