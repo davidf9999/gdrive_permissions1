@@ -5,6 +5,12 @@ const yaml = require('js-yaml');
 const projectRoot = path.join(__dirname, '..');
 const commonDir = path.join(projectRoot, 'docs', 'common');
 
+function replaceAll(template, replacements) {
+  return Object.entries(replacements).reduce((updated, [needle, value]) => {
+    return updated.split(needle).join(value);
+  }, template);
+}
+
 function buildDocs() {
   console.log('Starting documentation build...');
 
@@ -105,9 +111,10 @@ function buildDocs() {
     console.log('Successfully generated GPT_KNOWLEDGE.md');
 
     const gptPromptTemplate = fs.readFileSync(path.join(projectRoot, 'GPT_PROMPT.template.md'), 'utf8');
-    const gptPrompt = gptPromptTemplate
-      .replace('{{KNOWLEDGE_FILE}}', 'GPT_KNOWLEDGE.md')
-      .replace('{{REPO_URL}}', 'https://github.com/davidf9999/gdrive_permissions1');
+    const gptPrompt = replaceAll(gptPromptTemplate, {
+      '{{KNOWLEDGE_FILE}}': 'GPT_KNOWLEDGE.md',
+      '{{REPO_URL}}': 'https://github.com/davidf9999/gdrive_permissions1',
+    });
     fs.writeFileSync(path.join(projectRoot, 'GPT_PROMPT.md'), gptPrompt);
     console.log('Successfully generated GPT_PROMPT.md');
 

@@ -1,0 +1,231 @@
+openapi: 3.1.0
+info:
+  title: gdrive_permissions1 GPT Backend API
+  version: "v1"
+  description: |
+    Read-only API used by a Custom GPT to retrieve a curated knowledge pack,
+    step-by-step setup guidance, and exact build artifacts for the public
+    gdrive_permissions1 project. This API is designed for deterministic behavior
+    (content baked into the deployed container image) with an optional best-effort
+    drift check against GitHub.
+servers:
+  - url: https://YOUR_CLOUD_RUN_SERVICE_URL
+    description: Cloud Run service base URL
+  - url: http://localhost:8080
+    description: Local development
+paths:
+  /meta:
+    get:
+      tags: [meta]
+      operationId: getMeta
+      summary: Get build provenance and artifact hashes
+      description: Returns the deployed service version/tag, git SHA, build time, and artifact hashes.
+      responses:
+        "200":
+          description: Build provenance and artifact hashes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetaResponse"
+  /knowledge:
+    get:
+      tags: [knowledge]
+      operationId: getKnowledge
+      summary: Get the curated knowledge pack (markdown)
+      description: Returns the full content of GPT_KNOWLEDGE.md as text/markdown.
+      responses:
+        "200":
+          description: Knowledge pack markdown
+          content:
+            text/markdown:
+              schema:
+                type: string
+            text/plain:
+              schema:
+                type: string
+  /steps:
+    get:
+      tags: [steps]
+      operationId: listSteps
+      summary: List setup steps (compact)
+      description: Returns a compact list of setup steps derived from docs/common/steps.yaml.
+      responses:
+        "200":
+          description: Array of steps (compact)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StepListItem"
+  /steps/{id}:
+    get:
+      tags: [steps]
+      operationId: getStep
+      summary: Get a single setup step by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Step identifier as defined in docs/common/steps.yaml
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: A single step including setup guide markdown
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StepDetail"
+        "404":
+          description: Step not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /bundle:
+    get:
+      tags: [artifacts]
+      operationId: getBundle
+      summary: Get the Apps Script bundle
+      description: Returns the content of dist/apps_scripts_bundle.gs as text/plain.
+      responses:
+        "200":
+          description: Apps Script bundle
+          content:
+            text/plain:
+              schema:
+                type: string
+  /latest:
+    get:
+      tags: [meta]
+      operationId: getLatestStatus
+      summary: Best-effort check for drift vs GitHub
+      description: |
+        Best-effort drift check comparing the deployed git SHA against GitHub.
+        Implementations should fail gracefully and may return status=unknown
+        in case of timeouts, rate limits, or network errors.
+      responses:
+        "200":
+          description: Drift status result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LatestResponse"
+  /healthz:
+    get:
+      tags: [ops]
+      operationId: healthz
+      summary: Health check
+      description: Simple health endpoint for uptime checks.
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: ["ok"]
+                required: [status]
+components:
+  schemas:
+    MetaResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        service:
+          type: string
+          description: Service name identifier
+        version_tag:
+          type: string
+          description: Git tag used for deployment (e.g., v1.2.3)
+        git_sha:
+          type: string
+          description: Git commit SHA baked into the image
+        build_time_utc:
+          type: string
+          format: date-time
+          description: Build timestamp (UTC)
+        artifacts:
+          type: object
+          additionalProperties: false
+          properties:
+            knowledge_sha256:
+              type: string
+              description: SHA-256 hash of GPT_KNOWLEDGE.md
+            steps_sha256:
+              type: string
+              description: SHA-256 hash of docs/common/steps.yaml or derived steps JSON
+            bundle_sha256:
+              type: string
+              description: SHA-256 hash of dist/apps_scripts_bundle.gs
+          required: [knowledge_sha256, steps_sha256, bundle_sha256]
+      required: [service, version_tag, git_sha, build_time_utc, artifacts]
+    StepListItem:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          description: Step identifier
+        title:
+          type: string
+          description: Step title
+        state:
+          type: string
+          description: Optional state label from steps.yaml (if present)
+        manual:
+          type: boolean
+          description: Whether the step is manual
+      required: [id, title, manual]
+    StepDetail:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        state:
+          type: string
+        manual:
+          type: boolean
+        setup_guide_markdown:
+          type: string
+          description: The setup_guide content for this step in markdown
+      required: [id, title, manual, setup_guide_markdown]
+    LatestResponse:
+      type: object
+      description: Drift status between deployed content and GitHub
+      additionalProperties: false
+      properties:
+        deployed_git_sha:
+          type: string
+          description: Git SHA baked into the currently deployed service
+        github_head_sha:
+          type: string
+          description: GitHub HEAD SHA for the configured comparison ref (e.g., main)
+        is_outdated:
+          type: boolean
+          description: True if deployed SHA differs from GitHub HEAD SHA
+        status:
+          type: string
+          enum: ["ok", "unknown"]
+          description: ok if comparison succeeded; unknown if best-effort check failed
+        reason:
+          type: string
+          description: Optional explanation when status=unknown
+      required: [status, deployed_git_sha]
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+      required: [error, message]

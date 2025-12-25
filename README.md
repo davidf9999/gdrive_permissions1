@@ -75,7 +75,7 @@ If you prefer a ChatGPT-based assistant without running infrastructure, use the 
 
 **➡️ See [Custom GPT setup guide](docs/GPT_SETUP_GUIDE.md).**
 
-If you decide to host the runtime files for the GPT (knowledge file, bundle, and Markdown docs), deploy the minimal read-only backend in `backend/server.js`. See [Minimal backend for GPT file access](docs/BACKEND_SERVER.md) and the broader [backend considerations](docs/BACKEND_CONSIDERATIONS.md).
+If you decide to host the runtime files for the GPT (knowledge file, bundle, and Markdown docs), deploy the read-only backend in `backend/server.js`. See [Backend for GPT artifacts and steps](docs/BACKEND_SERVER.md) for how to run it locally, in Docker, and on Cloud Run, plus broader [backend considerations](docs/BACKEND_CONSIDERATIONS.md).
 
 ### Manual Setup
 
