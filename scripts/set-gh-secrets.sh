@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+# Usage:
+#   1. gh auth login
+#   2. export required env vars (see README)
+#   3. ./scripts/set-gh-secrets.sh
+#
+# This script sets GitHub Actions secrets for Cloud Run deploy via WIF.
 set -euo pipefail
 
 # Expect these to already be set in the environment
