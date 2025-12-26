@@ -279,40 +279,44 @@ async function routeRequest(req, res) {
 
   const parsedUrl = new URL(req.url, 'http://localhost');
   const pathName = parsedUrl.pathname;
+  const normPath =
+    pathName.endsWith('/') && pathName.length > 1
+      ? pathName.slice(0, -1)
+      : pathName;
 
   try {
-    if (req.method === 'GET' && pathName === '/healthz') {
+    if (req.method === 'GET' && normPath === '/healthz') {
       jsonResponse(res, 200, { status: 'ok' });
       return;
     }
 
-    if (req.method === 'GET' && pathName === '/meta') {
+    if (req.method === 'GET' && normPath === '/meta') {
       await handleMeta(res);
       return;
     }
 
-    if (req.method === 'GET' && pathName === '/knowledge') {
+    if (req.method === 'GET' && normPath === '/knowledge') {
       await handleKnowledge(req, res);
       return;
     }
 
-    if (req.method === 'GET' && pathName === '/steps') {
+    if (req.method === 'GET' && normPath === '/steps') {
       await handleSteps(req, res);
       return;
     }
 
-    if (req.method === 'GET' && pathName.startsWith('/steps/')) {
-      const stepId = decodeURIComponent(pathName.replace('/steps/', ''));
+    if (req.method === 'GET' && normPath.startsWith('/steps/')) {
+      const stepId = decodeURIComponent(normPath.replace('/steps/', ''));
       await handleStepDetail(req, res, stepId);
       return;
     }
 
-    if (req.method === 'GET' && pathName === '/bundle') {
+    if (req.method === 'GET' && normPath === '/bundle') {
       await handleBundle(req, res);
       return;
     }
 
-    if (req.method === 'GET' && pathName === '/latest') {
+    if (req.method === 'GET' && normPath === '/latest') {
       await handleLatest(res);
       return;
     }
