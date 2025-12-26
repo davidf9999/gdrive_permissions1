@@ -12,7 +12,7 @@ structured steps YAML used by the GPT.
 - `GET /steps/{id}` → step detail with embedded setup guide
 - `GET /bundle` → `dist/apps_scripts_bundle.gs`
 - `GET /latest` → optional drift check against GitHub
-- `GET /healthz` → health probe
+- `GET /status` → health probe
 
 Files over 2MB are rejected to keep responses fast and predictable.
 
@@ -35,7 +35,7 @@ Files over 2MB are rejected to keep responses fast and predictable.
    ```
 3) Exercise the endpoints:
    ```bash
-   curl http://localhost:8080/healthz
+   curl http://localhost:8080/status
    curl http://localhost:8080/meta
    curl http://localhost:8080/knowledge
    curl http://localhost:8080/steps
@@ -71,13 +71,15 @@ You can use the provided GitHub Actions workflow or deploy manually.
 - Workflow: `.github/workflows/deploy-backend.yml`
 - Trigger: pushing a git tag that matches `v*`
 - Required secrets:
-  - `GCP_SERVICE_NAME` – Cloud Run service name
-  - `GCP_REGION` – e.g., `us-central1`
   - `GCP_PROJECT_ID`
+  - `GCP_REGION` – e.g., `us-central1`
+  - `GCP_SERVICE_NAME` – Cloud Run service name
   - `GCP_ARTIFACT_REGISTRY_REPO` – Artifact Registry repo name
-  - `GCP_SA_KEY` – JSON key for a deploy-capable service account
+  - `GCP_WORKLOAD_IDENTITY_PROVIDER` – The full resource name of the WIF provider.
+  - `GCP_SERVICE_ACCOUNT` – The email of the service account to impersonate.
 - The workflow builds `backend/Dockerfile`, pushes the image to Artifact Registry,
-  and deploys a new Cloud Run revision with public access.
+  and deploys a new Cloud Run revision. The service is deployed as private and
+  requires authenticated requests.
 
 ### Manual deploy with gcloud
 1) Build and push the image (authenticate to GCP first):
@@ -91,11 +93,16 @@ You can use the provided GitHub Actions workflow or deploy manually.
    gcloud run deploy "$SERVICE_NAME" \
      --image "$IMAGE" \
      --region "$REGION" \
-     --platform managed \
-     --allow-unauthenticated
+     --platform managed
    ```
-3) Verify the service by curling the `/healthz`, `/meta`, and `/knowledge`
-   endpoints on the deployed URL.
+3) Verify the service. Because the service is private, you must use an
+   identity token to make requests.
+   ```bash
+   TOKEN=$(gcloud auth print-identity-token)
+   URL=$(gcloud run services describe "$SERVICE_NAME" --region "$REGION" --format="value(status.url)")
+   curl -H "Authorization: Bearer $TOKEN" "$URL/status"
+   curl -H "Authorization: Bearer $TOKEN" "$URL/meta"
+   ```
 
 ## Operational notes
 - The backend is stateless; CI owns artifact generation. If artifacts are missing,
@@ -104,3 +111,6 @@ You can use the provided GitHub Actions workflow or deploy manually.
 - `/latest` accepts `GITHUB_TOKEN`/`GITHUB_API_TOKEN` to reduce GitHub rate limits.
 - Set `STATIC_CACHE_CONTROL` or `LATEST_CACHE_MS` env vars if you need custom
   caching behavior.
+- The health check endpoint is `/status`, not `/healthz`. The `/healthz` path
+  is reserved by the Google Cloud Run infrastructure and requests to it may be
+  intercepted before they reach the container.

@@ -9,7 +9,7 @@ info:
     (content baked into the deployed container image) with an optional best-effort
     drift check against GitHub.
 servers:
-  - url: https://YOUR_CLOUD_RUN_SERVICE_URL
+  - url: https://gpt-backend-xbfqzvsbiq-ew.a.run.app
     description: Cloud Run service base URL
   - url: http://localhost:8080
     description: Local development
