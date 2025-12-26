@@ -295,7 +295,7 @@ async function routeRequest(req, res) {
   );
 
   try {
-    if (req.method === 'GET' && normPath === '/healthz') {
+    if (req.method === 'GET' && normPath === '/status') {
       jsonResponse(res, 200, { status: 'ok' });
       return;
     }
