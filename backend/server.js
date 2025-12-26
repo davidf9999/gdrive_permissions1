@@ -284,6 +284,16 @@ async function routeRequest(req, res) {
       ? pathName.slice(0, -1)
       : pathName;
 
+  console.log(
+    JSON.stringify({
+      level: 'DEBUG',
+      message: 'Routing request',
+      raw_url: req.url,
+      pathname: pathName,
+      norm_path: normPath,
+    }),
+  );
+
   try {
     if (req.method === 'GET' && normPath === '/healthz') {
       jsonResponse(res, 200, { status: 'ok' });
