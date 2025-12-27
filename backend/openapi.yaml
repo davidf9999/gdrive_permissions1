@@ -129,7 +129,14 @@ paths:
                     type: string
                     enum: ["ok"]
                 required: [status]
+security:
+  - ApiKeyAuth: []
 components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
   schemas:
     MetaResponse:
       type: object

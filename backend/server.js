@@ -20,6 +20,7 @@ const LATEST_CACHE_MS = Number(process.env.LATEST_CACHE_MS || 60_000);
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN || process.env.GITHUB_API_TOKEN || null;
 const ALLOWED_ORIGIN =
   process.env.ALLOWED_ORIGIN || 'https://chat.openai.com';
+const BACKEND_API_KEY = process.env.BACKEND_API_KEY || null;
 
 let stepsIndex = [];
 let stepsById = new Map();
@@ -280,6 +281,17 @@ async function routeRequest(req, res) {
   const requestId = req.headers['x-request-id'] || crypto.randomUUID();
   res.setHeader('x-request-id', requestId);
   res.on('finish', () => logRequest(req, res, startedAt, requestId));
+
+  // Enforce API key authentication
+  if (BACKEND_API_KEY) {
+    if (req.headers['x-api-key'] !== BACKEND_API_KEY) {
+      jsonResponse(res, 401, {
+        error: 'unauthorized',
+        message: 'Missing or invalid API key.',
+      });
+      return;
+    }
+  }
 
   const parsedUrl = new URL(req.url, 'http://localhost');
   const pathName = parsedUrl.pathname;
