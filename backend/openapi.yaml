@@ -11,8 +11,6 @@ info:
 servers:
   - url: https://gpt-backend-xbfqzvsbiq-ew.a.run.app
     description: Cloud Run service base URL
-  - url: http://localhost:8080
-    description: Local development
 paths:
   /meta:
     get:
