@@ -79,6 +79,32 @@ function textResponse(res, statusCode, body, contentType, options = {}) {
   res.end(body);
 }
 
+function sanitizeHeaders(headers) {
+  const redactedHeaders = {};
+  const redactKeys = new Set(['authorization', 'x-api-key', 'cookie']);
+
+  Object.entries(headers || {}).forEach(([key, value]) => {
+    const lowerKey = key.toLowerCase();
+    if (redactKeys.has(lowerKey)) {
+      redactedHeaders[key] = '[redacted]';
+    } else {
+      redactedHeaders[key] = value;
+    }
+  });
+
+  return redactedHeaders;
+}
+
+function handleDebug(req, res, requestId) {
+  jsonResponse(res, 200, {
+    method: req.method,
+    path: req.url,
+    request_id: requestId,
+    timestamp_utc: new Date().toISOString(),
+    headers: sanitizeHeaders(req.headers),
+  });
+}
+
 async function loadMeta() {
   if (!metaCache) {
     const raw = await readFile(META_PATH, 'utf8');
@@ -316,7 +342,7 @@ async function routeRequest(req, res) {
       res.writeHead(204, {
         'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
         'Access-Control-Allow-Methods': 'GET, OPTIONS',
-        'Access-control-allow-headers': 'Authorization, Content-Type',
+        'Access-control-allow-headers': 'Authorization, Content-Type, X-API-Key',
         'Access-Control-Max-Age': '86400', // 24 hours
       });
       res.end();
@@ -325,6 +351,11 @@ async function routeRequest(req, res) {
 
     if (req.method === 'GET' && normPath === '/status') {
       jsonResponse(res, 200, { status: 'ok' });
+      return;
+    }
+
+    if (req.method === 'GET' && normPath === '/debug') {
+      handleDebug(req, res, requestId);
       return;
     }
 

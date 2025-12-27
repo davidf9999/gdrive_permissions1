@@ -143,6 +143,33 @@ paths:
                     type: string
                     enum: ["ok"]
                 required: [status]
+  /debug:
+    get:
+      tags: [ops]
+      operationId: debugRequest
+      summary: Debug request metadata
+      description: Returns request metadata with sensitive headers redacted.
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Debug response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                properties:
+                  method:
+                    type: string
+                  path:
+                    type: string
+                  request_id:
+                    type: string
+                  timestamp_utc:
+                    type: string
+                  headers:
+                    type: object
 security:
   - ApiKeyAuth: []
 components:
