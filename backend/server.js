@@ -18,13 +18,17 @@ const STATIC_CACHE_CONTROL =
   process.env.STATIC_CACHE_CONTROL || 'public, max-age=300';
 const LATEST_CACHE_MS = Number(process.env.LATEST_CACHE_MS || 60_000);
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN || process.env.GITHUB_API_TOKEN || null;
+const ALLOWED_ORIGIN =
+  process.env.ALLOWED_ORIGIN || 'https://chat.openai.com';
 
 let stepsIndex = [];
 let stepsById = new Map();
 let metaCache;
 let latestCache;
 
-function applyCacheHeaders(res, options = {}) {
+function applyStandardHeaders(res, options = {}) {
+  res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
+
   if (options.cacheControl) {
     res.setHeader('Cache-Control', options.cacheControl);
   }
@@ -44,7 +48,7 @@ function notModified(res, options = {}) {
     return;
   }
   res.statusCode = 304;
-  applyCacheHeaders(res, options);
+  applyStandardHeaders(res, options);
   res.end();
 }
 
@@ -54,7 +58,7 @@ function jsonResponse(res, statusCode, body, options = {}) {
   }
   res.statusCode = statusCode;
   res.setHeader('Content-Type', 'application/json');
-  applyCacheHeaders(res, {
+  applyStandardHeaders(res, {
     cacheControl: options.cacheControl || 'no-cache, no-store, must-revalidate',
     etag: options.etag,
   });
@@ -67,7 +71,7 @@ function textResponse(res, statusCode, body, contentType, options = {}) {
   }
   res.statusCode = statusCode;
   res.setHeader('Content-Type', contentType);
-  applyCacheHeaders(res, {
+  applyStandardHeaders(res, {
     cacheControl: options.cacheControl || 'no-cache, no-store, must-revalidate',
     etag: options.etag,
   });
@@ -295,6 +299,18 @@ async function routeRequest(req, res) {
   );
 
   try {
+    // Handle CORS preflight requests
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204, {
+        'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        'Access-control-allow-headers': 'Authorization, Content-Type',
+        'Access-Control-Max-Age': '86400', // 24 hours
+      });
+      res.end();
+      return;
+    }
+
     if (req.method === 'GET' && normPath === '/status') {
       jsonResponse(res, 200, { status: 'ok' });
       return;
