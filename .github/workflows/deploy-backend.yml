@@ -58,4 +58,5 @@ jobs:
             --region "${REGION}" \
             --platform managed \
             --set-env-vars "BACKEND_API_KEY=${{ secrets.BACKEND_API_KEY }}" \
+            --allow-unauthenticated \
             --quiet
