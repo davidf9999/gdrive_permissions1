@@ -84,6 +84,7 @@ You can use the provided GitHub Actions workflow or deploy manually.
 ### Manual deploy with gcloud
 1) Build and push the image (authenticate to GCP first):
    ```bash
+   gcloud auth configure-docker "${REGION}-docker.pkg.dev"
    IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/${SERVICE_NAME}:manual"
    docker build -f backend/Dockerfile -t "$IMAGE" .
    docker push "$IMAGE"
@@ -93,10 +94,13 @@ You can use the provided GitHub Actions workflow or deploy manually.
    gcloud run deploy "$SERVICE_NAME" \
      --image "$IMAGE" \
      --region "$REGION" \
-     --platform managed
+     --platform managed \
+     --set-env-vars "BACKEND_API_KEY=your_secret_key"
    ```
-3) Verify the service. Because the service is private, you must use an
-   identity token to make requests.
+   - Add `--allow-unauthenticated` if you want a public endpoint and enforce
+     access exclusively with `BACKEND_API_KEY`.
+3) Verify the service. If the service is private, you must use an identity
+   token to make requests.
    ```bash
    TOKEN=$(gcloud auth print-identity-token)
    URL=$(gcloud run services describe "$SERVICE_NAME" --region "$REGION" --format="value(status.url)")
