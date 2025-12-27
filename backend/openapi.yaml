@@ -18,6 +18,8 @@ paths:
       operationId: getMeta
       summary: Get build provenance and artifact hashes
       description: Returns the deployed service version/tag, git SHA, build time, and artifact hashes.
+      security:
+        - ApiKeyAuth: []
       responses:
         "200":
           description: Build provenance and artifact hashes
@@ -31,6 +33,8 @@ paths:
       operationId: getKnowledge
       summary: Get the curated knowledge pack (markdown)
       description: Returns the full content of GPT_KNOWLEDGE.md as text/markdown.
+      security:
+        - ApiKeyAuth: []
       responses:
         "200":
           description: Knowledge pack markdown
@@ -47,6 +51,8 @@ paths:
       operationId: listSteps
       summary: List setup steps (compact)
       description: Returns a compact list of setup steps derived from docs/common/steps.yaml.
+      security:
+        - ApiKeyAuth: []
       responses:
         "200":
           description: Array of steps (compact)
@@ -61,6 +67,8 @@ paths:
       tags: [steps]
       operationId: getStep
       summary: Get a single setup step by id
+      security:
+        - ApiKeyAuth: []
       parameters:
         - name: id
           in: path
@@ -88,6 +96,8 @@ paths:
       operationId: getBundle
       summary: Get the Apps Script bundle
       description: Returns the content of dist/apps_scripts_bundle.gs as text/plain.
+      security:
+        - ApiKeyAuth: []
       responses:
         "200":
           description: Apps Script bundle
@@ -104,6 +114,8 @@ paths:
         Best-effort drift check comparing the deployed git SHA against GitHub.
         Implementations should fail gracefully and may return status=unknown
         in case of timeouts, rate limits, or network errors.
+      security:
+        - ApiKeyAuth: []
       responses:
         "200":
           description: Drift status result
@@ -117,6 +129,8 @@ paths:
       operationId: healthz
       summary: Health check
       description: Simple health endpoint for uptime checks.
+      security:
+        - ApiKeyAuth: []
       responses:
         "200":
           description: Service is healthy
