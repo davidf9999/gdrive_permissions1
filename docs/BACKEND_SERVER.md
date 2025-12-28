@@ -22,6 +22,16 @@ Files over 2MB are rejected to keep responses fast and predictable.
 - Docker (for container builds)
 - gcloud CLI configured for your GCP project (for manual Cloud Run deploys)
 
+## Generate a backend API key
+Create a strong `BACKEND_API_KEY` and store it securely. One option:
+```bash
+openssl rand -base64 32
+```
+You will use this value as the `BACKEND_API_KEY` environment variable and, if
+deploying with GitHub Actions, as a repository secret.
+For local development only, you can bypass auth by setting `ALLOW_ANON=true`
+or `NODE_ENV=development`.
+
 ## Run and test on your computer
 1) Install dependencies and build artifacts (knowledge, bundle, meta):
    ```bash
@@ -33,6 +43,10 @@ Files over 2MB are rejected to keep responses fast and predictable.
    npm run start:backend
    # listens on http://localhost:8080
    ```
+   - Optional: bypass API key checks locally:
+     ```bash
+     ALLOW_ANON=true npm run start:backend
+     ```
 3) Exercise the endpoints:
    ```bash
    curl http://localhost:8080/status
@@ -77,6 +91,7 @@ You can use the provided GitHub Actions workflow or deploy manually.
   - `GCP_ARTIFACT_REGISTRY_REPO` – Artifact Registry repo name
   - `GCP_WORKLOAD_IDENTITY_PROVIDER` – The full resource name of the WIF provider.
   - `GCP_SERVICE_ACCOUNT` – The email of the service account to impersonate.
+  - `BACKEND_API_KEY` – Generated secret used to authenticate API requests.
 - The workflow builds `backend/Dockerfile`, pushes the image to Artifact Registry,
   and deploys a new Cloud Run revision. The service is deployed as private and
   requires authenticated requests.
@@ -99,6 +114,15 @@ You can use the provided GitHub Actions workflow or deploy manually.
    ```
    - Add `--allow-unauthenticated` if you want a public endpoint and enforce
      access exclusively with `BACKEND_API_KEY`.
+   - To store the key in Secret Manager instead of a plaintext env var:
+     ```bash
+     printf '%s' "$BACKEND_API_KEY" | gcloud secrets create BACKEND_API_KEY --replication-policy="automatic" --data-file=-
+     gcloud run deploy "$SERVICE_NAME" \
+       --image "$IMAGE" \
+       --region "$REGION" \
+       --platform managed \
+       --set-secrets "BACKEND_API_KEY=BACKEND_API_KEY:latest"
+     ```
 3) Verify the service. If the service is private, you must use an identity
    token to make requests.
    ```bash

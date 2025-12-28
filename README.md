@@ -61,21 +61,19 @@ This tool is most effective for managing access for ad-hoc teams and projects th
 
 We offer two ways to set up the Google Drive Permission Manager:
 
-### AI-Assisted Setup (Recommended)
+### Custom GPT Assistant
 
-For the easiest and fastest setup experience, you can use our AI-powered assistant. The assistant runs in a pre-configured cloud environment (GitHub Codespaces) and will guide you through every step of the process.
+For the fastest setup experience, use the Custom GPT: https://chatgpt.com/g/g-694f76da8b348191a1c7c497663106d2-custom-gpt-prompt-gdrive-permissions1. It is intuitive, supports pasting screenshots to debug issues, and provides step-by-step guidance, but it can only suggest actions and cannot run `gcloud` or other commands for you.
+
+The Custom GPT relies on a backend to stay current and reliable; see [Backend for GPT artifacts and steps](docs/BACKEND_SERVER.md) and [Backend considerations](docs/BACKEND_CONSIDERATIONS.md).[^gpt-backend]
+
+### AI-Assisted Setup (Commands + Guidance)
+
+If you want an assistant that can run commands instead of only suggesting them, use the AI-powered assistant. It runs in a pre-configured cloud environment (GitHub Codespaces) and will guide you through every step of the process.
 
 To launch the assistant, you will need a GitHub account.
 
 [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/davidf9999/gdrive_permissions1?ref=main)
-
-### Custom GPT Assistant (No Backend by default)
-
-If you prefer a ChatGPT-based assistant without running infrastructure, use the Custom GPT setup guide. It uses a stable prompt and a regenerated knowledge file from this repo.
-
-**➡️ See [Custom GPT setup guide](docs/GPT_SETUP_GUIDE.md).**
-
-If you decide to host the runtime files for the GPT (knowledge file, bundle, and Markdown docs), deploy the read-only backend in `backend/server.js`. See [Backend for GPT artifacts and steps](docs/BACKEND_SERVER.md) for how to run it locally, in Docker, and on Cloud Run, plus broader [backend considerations](docs/BACKEND_CONSIDERATIONS.md).
 
 ### Manual Setup
 
@@ -84,6 +82,8 @@ If you prefer to set up the project manually, we have a comprehensive, step-by-s
 **➡️ See the full [Setup Guide](docs/SETUP_GUIDE.md) to get started.**
 
 ---
+
+[^gpt-backend]: Advanced users can host the GPT backend (`backend/server.js`) to control access, caching, and artifact freshness.
 
 ## System life cycle
 
@@ -240,6 +240,7 @@ reduce API calls during large syncs).
 | Topic | Location |
 | ----- | -------- |
 | AI assistant setup & development | [`docs/AI_ASSISTANT_GUIDE.md`](docs/AI_ASSISTANT_GUIDE.md) |
+| Custom GPT setup guide | [`docs/GPT_SETUP_GUIDE.md`](docs/GPT_SETUP_GUIDE.md) |
 | End-user how-to guide | [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) |
 | Testing menus and stress scenarios | [`docs/TESTING.md`](docs/TESTING.md) |
 | Edit-only mode walkthrough | [`docs/EDIT_MODE_GUIDE.md`](docs/EDIT_MODE_GUIDE.md) |

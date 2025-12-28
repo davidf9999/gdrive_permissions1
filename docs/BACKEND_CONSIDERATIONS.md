@@ -1,9 +1,9 @@
 # Backend considerations for serving GPT-readable artifacts
 
-This note summarizes how to introduce a minimal backend (running on GCP) so a Custom GPT can reliably read repo content, including the bundle, without changing the GPT prompt.
+This note summarizes the minimal backend (running on GCP) required for a Custom GPT to reliably read repo content, including the bundle, without changing the GPT prompt.
 
 ## Why a backend is needed
-- A Custom GPT cannot read arbitrary GitHub files by default. You either upload files manually or enable browsing. If you want guaranteed access to the latest `GPT_KNOWLEDGE.md` and other files without manual uploads, a backend (or other hosted endpoint) must serve them.
+- The Custom GPT relies on a backend to read the latest `GPT_KNOWLEDGE.md`, setup steps, and bundle artifacts.
 - Browsing direct GitHub URLs can be brittle (rate limits, raw URL changes). A backend gives you a stable, controlled endpoint and clear error handling when fetches fail.
 
 ## Build/source of truth
@@ -36,6 +36,7 @@ Pick the runtime your team supports best; functionality is similar for a thin fi
 
 ## Security, reliability, and ops
 - Use read-only GitHub credentials (deploy key or GitHub App token) or serve from a public bucket with signed URLs if acceptable.
+- Require `BACKEND_API_KEY` in production; you may allow anonymous access in local development only.
 - Add request logging, basic rate limiting, and health checks (can the backend fetch the target file?).
 - Fail closed: if the GPT cannot fetch the knowledge file, treat it as an error to be fixed, not something to silently ignore.
 - Cost should be low on Cloud Run/Cloud Storage for light usage (likely near-zero at small scale).

@@ -14,6 +14,7 @@ set -euo pipefail
 : "${GCP_ARTIFACT_REGISTRY_REPO:?}"
 : "${GCP_WORKLOAD_IDENTITY_PROVIDER:?}"
 : "${GCP_SERVICE_ACCOUNT:?}"
+: "${BACKEND_API_KEY:?}"
 
 gh secret set GCP_PROJECT_ID --body "$GCP_PROJECT_ID"
 gh secret set GCP_REGION --body "$GCP_REGION"
@@ -21,4 +22,5 @@ gh secret set GCP_SERVICE_NAME --body "$GCP_SERVICE_NAME"
 gh secret set GCP_ARTIFACT_REGISTRY_REPO --body "$GCP_ARTIFACT_REGISTRY_REPO"
 gh secret set GCP_WORKLOAD_IDENTITY_PROVIDER --body "$GCP_WORKLOAD_IDENTITY_PROVIDER"
 gh secret set GCP_SERVICE_ACCOUNT --body "$GCP_SERVICE_ACCOUNT"
+gh secret set BACKEND_API_KEY --body "$BACKEND_API_KEY"
 echo "GitHub Actions secrets for GCP have been set successfully."

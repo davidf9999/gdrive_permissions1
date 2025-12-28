@@ -8,6 +8,8 @@ info:
     gdrive_permissions1 project. This API is designed for deterministic behavior
     (content baked into the deployed container image) with an optional best-effort
     drift check against GitHub.
+    Authentication uses the X-API-Key header (BACKEND_API_KEY). Local development
+    can bypass auth by setting ALLOW_ANON=true or NODE_ENV=development.
 servers:
   - url: https://gpt-backend-13688487856.europe-west1.run.app
     description: Cloud Run service base URL

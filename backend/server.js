@@ -21,6 +21,8 @@ const GITHUB_TOKEN = process.env.GITHUB_TOKEN || process.env.GITHUB_API_TOKEN ||
 const ALLOWED_ORIGIN =
   process.env.ALLOWED_ORIGIN || 'https://chat.openai.com';
 const BACKEND_API_KEY = process.env.BACKEND_API_KEY || null;
+const ALLOW_ANON =
+  process.env.ALLOW_ANON === 'true' || process.env.NODE_ENV === 'development';
 
 let stepsIndex = [];
 let stepsById = new Map();
@@ -308,8 +310,16 @@ async function routeRequest(req, res) {
   res.setHeader('x-request-id', requestId);
   res.on('finish', () => logRequest(req, res, startedAt, requestId));
 
-  // Enforce API key authentication
-  if (BACKEND_API_KEY) {
+  // Enforce API key authentication unless explicitly allowing anonymous access.
+  if (!ALLOW_ANON) {
+    if (!BACKEND_API_KEY) {
+      jsonResponse(res, 500, {
+        error: 'misconfigured',
+        message: 'BACKEND_API_KEY is required unless ALLOW_ANON=true.',
+      });
+      return;
+    }
+
     if (req.headers['x-api-key'] !== BACKEND_API_KEY) {
       jsonResponse(res, 401, {
         error: 'unauthorized',

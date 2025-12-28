@@ -1,6 +1,6 @@
 ## 1. Create or reuse a Google Workspace tenant
 
-1. Go to [workspace.google.com](https://workspace.google.com/) to start a free trial or sign in.
+1. Go to [workspace.google.com/business](https://workspace.google.com/business/) and select a plan, then click the related **Get started** button to begin signup.
 2. When prompted, provide a domain you own or purchase one through Google Domains (the default option during setup).
 3. Complete the sign-up form to create the administrator account.
 4. Verify domain ownership via a DNS record. Follow the official [domain verification steps](https://support.google.com/a/answer/183895).

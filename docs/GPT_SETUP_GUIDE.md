@@ -1,11 +1,11 @@
-# Custom GPT setup guide (no backend)
+# Custom GPT setup guide (backend required)
 
-This guide explains how to configure a Custom GPT to assist with the `gdrive_permissions1` setup flow without running any backend services.
+This guide explains how to configure a Custom GPT to assist with the `gdrive_permissions1` setup flow using the required backend service.
 
 ## Goals
 - Provide consistent setup guidance.
-- Avoid backend infrastructure.
 - Keep the GPT prompt stable while allowing setup steps to evolve.
+- Ensure the GPT stays current by retrieving artifacts from the backend.
 
 ## Files to use
 - **Prompt file (stable):** `GPT_PROMPT.md`
@@ -16,8 +16,8 @@ This guide explains how to configure a Custom GPT to assist with the `gdrive_per
 ## Configure the Custom GPT
 1. Open ChatGPT and create a new Custom GPT.
 2. Set the **System Instructions** to the content of `GPT_PROMPT.md`.
-3. Enable browsing so the GPT can fetch `GPT_KNOWLEDGE.md` at runtime.
-4. Do not upload `GPT_KNOWLEDGE.md` in the Knowledge section; it must be read live from GitHub.
+3. Ensure the GPT can access the backend base URL that serves `/knowledge`, `/steps`, and `/bundle`.
+4. Do not upload `GPT_KNOWLEDGE.md` in the Knowledge section; it must be fetched from the backend at runtime.
 5. Save the GPT.
 
 ## Updating the knowledge
@@ -27,5 +27,6 @@ Whenever setup steps or docs change:
 
 ## Notes
 - The prompt is intended to stay stable. Prefer updating the knowledge file instead of changing the prompt.
-- If the GPT fails to fetch `GPT_KNOWLEDGE.md`, treat it as an error and retry after verifying the URL.
-- If you deploy the optional backend (`backend/server.js`), point the GPT to that `/file` endpoint instead of the raw GitHub URL to reduce fetch brittleness.
+- If the GPT fails to fetch `GPT_KNOWLEDGE.md` from the backend, treat it as an error and retry after verifying the backend URL and availability.
+- Production usage requires `BACKEND_API_KEY`; local development can bypass auth with `ALLOW_ANON=true`.
+- The backend endpoint for the knowledge file is `/knowledge`.
