@@ -73,6 +73,8 @@ steps:
       1.  Go to the [Google Cloud Console](https://console.cloud.google.com).
       2.  In the top menu bar, click the project selection dropdown.
       3.  Either select an existing, unused project or click **NEW PROJECT**.
+          - If reusing a project, make sure you have **Owner** access.
+          - If creating a new project, give it a clear name and choose your Google Workspace organization as the parent if prompted.
       4.  Once your project is created and selected, find the **Project ID** on the project dashboard. **Copy this ID and save it for later.**
     ai_assistant_guide: |
       ### Step 3: Create or select a Google Cloud Project
