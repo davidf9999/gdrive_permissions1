@@ -85,7 +85,9 @@ This step must be performed while signed in as the **Google Workspace Super Admi
 
 <details>
 <summary>Visual aid: Finding the Apps Script ID</summary>
+
 ![Screenshot of the Apps Script editor showing Project Settings and the location of the Script ID.](./images/workspace_setup/03-script-id.png)
+
 </details>
 
 

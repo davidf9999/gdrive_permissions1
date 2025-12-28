@@ -53,32 +53,35 @@ function buildDocs() {
         const anchor = `${stepNumber}-${step.id.replace(/_/g, '-')}`;
         const menuTitle = step.menu_title || step.title;
         const stateLine = `*** Current state: ${stepNumber} "${menuTitle}" out of ${steps.length} steps. ***`;
+        const guideLine = `We recommend following this step at [Setup Guide](docs/SETUP_GUIDE.md#${anchor}).`;
         const header = `### Step ${stepNumber}: ${step.title}`;
         if (step.manual) {
           return [
             header,
             stateLine,
+            guideLine,
             'This step is manual and requires your action in a web browser.',
             '',
             '**Manual Action Required:**',
-            `Follow the instructions in the [Setup Guide](docs/SETUP_GUIDE.md#${anchor}).`,
+            'Follow the instructions in the Setup Guide above.',
             '',
             "**Once you've completed the manual steps, type 'done' to continue.**",
           ].join('\n');
         }
         return [
           header,
-          stateLine,
-          'This step includes automated commands with some manual follow-up in your browser.',
-          '',
-          '**Automated Action (with your approval):**',
-          'I can run the required commands for you.',
-          '',
-          '**Manual Action Required:**',
-          `Follow the instructions in the [Setup Guide](docs/SETUP_GUIDE.md#${anchor}) for any browser-based steps.`,
-          '',
-          '**Do you want me to proceed? (yes/no)**',
-        ].join('\n');
+            stateLine,
+            guideLine,
+            'This step includes automated commands with some manual follow-up in your browser.',
+            '',
+            '**Automated Action (with your approval):**',
+            'I can run the required commands for you.',
+            '',
+            '**Manual Action Required:**',
+            'Follow the instructions in the Setup Guide above for any browser-based steps.',
+            '',
+            '**Do you want me to proceed? (yes/no)**',
+          ].join('\n');
       })
       .join('\n');
     fs.writeFileSync(path.join(commonDir, '_AI_ASSISTANT_STEPS.md'), `${aiAssistantSteps}\n`);
