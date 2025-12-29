@@ -692,6 +692,7 @@ function processUserGroupDeletions_(summary) {
 
   const headers = getHeaderMap_(sheet);
   const deleteCol = resolveColumn_(headers, 'delete', 6);
+  const statusCol = resolveColumn_(headers, 'status', 5);
   
   const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, deleteCol).getValues();
   const rowsToDelete = [];
@@ -707,7 +708,7 @@ function processUserGroupDeletions_(summary) {
 
     try {
       log_(`Deleting UserGroup: "${groupName}" (${groupEmail})`, 'INFO');
-      sheet.getRange(rowNum, 5).setValue('🗑️ DELETING...'); // Status column
+      sheet.getRange(rowNum, statusCol).setValue('🗑️ DELETING...');
       SpreadsheetApp.flush();
 
       // 1. Delete Google Group
@@ -746,7 +747,7 @@ function processUserGroupDeletions_(summary) {
 
     } catch (e) {
       log_(`✗ Failed to delete UserGroup "${groupName}": ${e.message}`, 'ERROR');
-      sheet.getRange(rowNum, 5).setValue(`❌ Deletion failed: ${e.message}`);
+      sheet.getRange(rowNum, statusCol).setValue(`❌ Deletion failed: ${e.message}`);
       summary.errors.push({ type: 'UserGroup', name: groupName, error: e.message });
     }
   }

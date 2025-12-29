@@ -89,6 +89,16 @@ The `Log`, `TestLog`, and `FoldersAuditLog` sheets contain detailed, timestamped
 
 ---
 
+## Config Settings & Common Pitfalls
+
+Some behavior depends on settings in the `Config` sheet. Sheet Editors should be aware of these because they directly affect when changes take effect.
+
+*   **AutoSync deletions (`AllowAutosyncDeletion`):** If enabled, removing a user from a sheet will revoke their access on the next AutoSync. If you need a “review before revoke” flow, ask a Super Admin to disable this setting.
+*   **Delete checkboxes (`AllowGroupFolderDeletion`):** The Delete columns in `ManagedFolders` and `UserGroups` only work when this setting is enabled by a Super Admin. When disabled, delete checkboxes are ignored.
+*   **Manual sync required:** Your edits do not take effect until a Super Admin runs a sync (or AutoSync is enabled).
+
+---
+
 ## Working with Non-ASCII Characters
 
 The system fully supports non-ASCII characters (e.g., Hebrew, Chinese) in folder and group names. However, **Google Group email addresses must use only ASCII characters** (a-z, 0-9, hyphens).

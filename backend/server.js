@@ -18,8 +18,13 @@ const STATIC_CACHE_CONTROL =
   process.env.STATIC_CACHE_CONTROL || 'public, max-age=300';
 const LATEST_CACHE_MS = Number(process.env.LATEST_CACHE_MS || 60_000);
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN || process.env.GITHUB_API_TOKEN || null;
-const ALLOWED_ORIGIN =
-  process.env.ALLOWED_ORIGIN || 'https://chat.openai.com';
+const DEFAULT_ALLOWED_ORIGINS =
+  process.env.ALLOWED_ORIGINS ||
+  process.env.ALLOWED_ORIGIN ||
+  'https://chatgpt.com,https://chat.openai.com';
+const ALLOWED_ORIGINS = DEFAULT_ALLOWED_ORIGINS.split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 const BACKEND_API_KEY = process.env.BACKEND_API_KEY || null;
 const ALLOW_ANON =
   process.env.ALLOW_ANON === 'true' || process.env.NODE_ENV === 'development';
@@ -30,7 +35,8 @@ let metaCache;
 let latestCache;
 
 function applyStandardHeaders(res, options = {}) {
-  res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
+  const allowedOrigin = options.allowedOrigin || ALLOWED_ORIGINS[0];
+  res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
 
   if (options.cacheControl) {
     res.setHeader('Cache-Control', options.cacheControl);
@@ -64,6 +70,7 @@ function jsonResponse(res, statusCode, body, options = {}) {
   applyStandardHeaders(res, {
     cacheControl: options.cacheControl || 'no-cache, no-store, must-revalidate',
     etag: options.etag,
+    allowedOrigin: options.allowedOrigin,
   });
   res.end(JSON.stringify(body));
 }
@@ -77,8 +84,17 @@ function textResponse(res, statusCode, body, contentType, options = {}) {
   applyStandardHeaders(res, {
     cacheControl: options.cacheControl || 'no-cache, no-store, must-revalidate',
     etag: options.etag,
+    allowedOrigin: options.allowedOrigin,
   });
   res.end(body);
+}
+
+function getAllowedOrigin(req) {
+  const origin = req.headers.origin;
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    return origin;
+  }
+  return ALLOWED_ORIGINS[0];
 }
 
 function sanitizeHeaders(headers) {
@@ -97,14 +113,14 @@ function sanitizeHeaders(headers) {
   return redactedHeaders;
 }
 
-function handleDebug(req, res, requestId) {
+function handleDebug(req, res, requestId, allowedOrigin) {
   jsonResponse(res, 200, {
     method: req.method,
     path: req.url,
     request_id: requestId,
     timestamp_utc: new Date().toISOString(),
     headers: sanitizeHeaders(req.headers),
-  });
+  }, { allowedOrigin });
 }
 
 async function loadMeta() {
@@ -161,17 +177,17 @@ function logRequest(req, res, startedAt, requestId) {
   console.log(JSON.stringify(payload));
 }
 
-async function handleMeta(res) {
+async function handleMeta(res, allowedOrigin) {
   const meta = await loadMeta();
-  jsonResponse(res, 200, meta);
+  jsonResponse(res, 200, meta, { allowedOrigin });
 }
 
-async function handleKnowledge(req, res) {
+async function handleKnowledge(req, res, allowedOrigin) {
   const meta = await loadMeta();
   const etag = meta.artifacts?.knowledge_sha256;
 
   if (isFresh(req, etag)) {
-    notModified(res, { cacheControl: STATIC_CACHE_CONTROL, etag });
+    notModified(res, { cacheControl: STATIC_CACHE_CONTROL, etag, allowedOrigin });
     return;
   }
 
@@ -179,33 +195,35 @@ async function handleKnowledge(req, res) {
   textResponse(res, 200, content, 'text/markdown; charset=utf-8', {
     cacheControl: STATIC_CACHE_CONTROL,
     etag,
+    allowedOrigin,
   });
 }
 
-async function handleSteps(req, res) {
+async function handleSteps(req, res, allowedOrigin) {
   const meta = await loadMeta();
   const etag = meta.artifacts?.steps_sha256;
 
   if (isFresh(req, etag)) {
-    notModified(res, { cacheControl: STATIC_CACHE_CONTROL, etag });
+    notModified(res, { cacheControl: STATIC_CACHE_CONTROL, etag, allowedOrigin });
     return;
   }
 
   jsonResponse(res, 200, stepsIndex, {
     cacheControl: STATIC_CACHE_CONTROL,
     etag,
+    allowedOrigin,
   });
 }
 
-async function handleStepDetail(req, res, stepId) {
+async function handleStepDetail(req, res, stepId, allowedOrigin) {
   if (!stepId) {
-    jsonResponse(res, 404, { error: 'not_found', message: 'Step not found' });
+    jsonResponse(res, 404, { error: 'not_found', message: 'Step not found' }, { allowedOrigin });
     return;
   }
 
   const step = stepsById.get(stepId);
   if (!step) {
-    jsonResponse(res, 404, { error: 'not_found', message: 'Step not found' });
+    jsonResponse(res, 404, { error: 'not_found', message: 'Step not found' }, { allowedOrigin });
     return;
   }
 
@@ -213,22 +231,23 @@ async function handleStepDetail(req, res, stepId) {
   const etag = meta.artifacts?.steps_sha256;
 
   if (isFresh(req, etag)) {
-    notModified(res, { cacheControl: STATIC_CACHE_CONTROL, etag });
+    notModified(res, { cacheControl: STATIC_CACHE_CONTROL, etag, allowedOrigin });
     return;
   }
 
   jsonResponse(res, 200, step, {
     cacheControl: STATIC_CACHE_CONTROL,
     etag,
+    allowedOrigin,
   });
 }
 
-async function handleBundle(req, res) {
+async function handleBundle(req, res, allowedOrigin) {
   const meta = await loadMeta();
   const etag = meta.artifacts?.bundle_sha256;
 
   if (isFresh(req, etag)) {
-    notModified(res, { cacheControl: STATIC_CACHE_CONTROL, etag });
+    notModified(res, { cacheControl: STATIC_CACHE_CONTROL, etag, allowedOrigin });
     return;
   }
 
@@ -236,6 +255,7 @@ async function handleBundle(req, res) {
   textResponse(res, 200, bundle, 'text/plain; charset=utf-8', {
     cacheControl: STATIC_CACHE_CONTROL,
     etag,
+    allowedOrigin,
   });
 }
 
@@ -246,13 +266,14 @@ function readLatestCache() {
   return null;
 }
 
-async function handleLatest(res) {
+async function handleLatest(res, allowedOrigin) {
   const meta = await loadMeta();
 
   const cached = readLatestCache();
   if (cached) {
     jsonResponse(res, 200, cached, {
       cacheControl: `public, max-age=${Math.floor(LATEST_CACHE_MS / 1000)}`,
+      allowedOrigin,
     });
     return;
   }
@@ -290,6 +311,7 @@ async function handleLatest(res) {
     latestCache = { timestamp: Date.now(), payload };
     jsonResponse(res, 200, payload, {
       cacheControl: `public, max-age=${Math.floor(LATEST_CACHE_MS / 1000)}`,
+      allowedOrigin,
     });
   } catch (err) {
     const payload = {
@@ -300,6 +322,7 @@ async function handleLatest(res) {
     latestCache = { timestamp: Date.now(), payload };
     jsonResponse(res, 200, payload, {
       cacheControl: `public, max-age=${Math.floor(LATEST_CACHE_MS / 1000)}`,
+      allowedOrigin,
     });
   }
 }
@@ -310,13 +333,27 @@ async function routeRequest(req, res) {
   res.setHeader('x-request-id', requestId);
   res.on('finish', () => logRequest(req, res, startedAt, requestId));
 
+  const allowedOrigin = getAllowedOrigin(req);
+
+  // Handle CORS preflight requests before auth.
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, {
+      'Access-Control-Allow-Origin': allowedOrigin,
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-API-Key',
+      'Access-Control-Max-Age': '86400', // 24 hours
+    });
+    res.end();
+    return;
+  }
+
   // Enforce API key authentication unless explicitly allowing anonymous access.
   if (!ALLOW_ANON) {
     if (!BACKEND_API_KEY) {
       jsonResponse(res, 500, {
         error: 'misconfigured',
         message: 'BACKEND_API_KEY is required unless ALLOW_ANON=true.',
-      });
+      }, { allowedOrigin });
       return;
     }
 
@@ -324,7 +361,7 @@ async function routeRequest(req, res) {
       jsonResponse(res, 401, {
         error: 'unauthorized',
         message: 'Missing or invalid API key.',
-      });
+      }, { allowedOrigin });
       return;
     }
   }
@@ -347,66 +384,54 @@ async function routeRequest(req, res) {
   );
 
   try {
-    // Handle CORS preflight requests
-    if (req.method === 'OPTIONS') {
-      res.writeHead(204, {
-        'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
-        'Access-Control-Allow-Methods': 'GET, OPTIONS',
-        'Access-control-allow-headers': 'Authorization, Content-Type, X-API-Key',
-        'Access-Control-Max-Age': '86400', // 24 hours
-      });
-      res.end();
-      return;
-    }
-
     if (req.method === 'GET' && normPath === '/status') {
-      jsonResponse(res, 200, { status: 'ok' });
+      jsonResponse(res, 200, { status: 'ok' }, { allowedOrigin });
       return;
     }
 
     if (req.method === 'GET' && normPath === '/debug') {
-      handleDebug(req, res, requestId);
+      handleDebug(req, res, requestId, allowedOrigin);
       return;
     }
 
     if (req.method === 'GET' && normPath === '/meta') {
-      await handleMeta(res);
+      await handleMeta(res, allowedOrigin);
       return;
     }
 
     if (req.method === 'GET' && normPath === '/knowledge') {
-      await handleKnowledge(req, res);
+      await handleKnowledge(req, res, allowedOrigin);
       return;
     }
 
     if (req.method === 'GET' && normPath === '/steps') {
-      await handleSteps(req, res);
+      await handleSteps(req, res, allowedOrigin);
       return;
     }
 
     if (req.method === 'GET' && normPath.startsWith('/steps/')) {
       const stepId = decodeURIComponent(normPath.replace('/steps/', ''));
-      await handleStepDetail(req, res, stepId);
+      await handleStepDetail(req, res, stepId, allowedOrigin);
       return;
     }
 
     if (req.method === 'GET' && normPath === '/bundle') {
-      await handleBundle(req, res);
+      await handleBundle(req, res, allowedOrigin);
       return;
     }
 
     if (req.method === 'GET' && normPath === '/latest') {
-      await handleLatest(res);
+      await handleLatest(res, allowedOrigin);
       return;
     }
 
-    jsonResponse(res, 404, { error: 'not_found', message: 'Resource not found' });
+    jsonResponse(res, 404, { error: 'not_found', message: 'Resource not found' }, { allowedOrigin });
   } catch (err) {
     console.error('Unhandled error', err);
     jsonResponse(res, 500, {
       error: 'internal_error',
       message: 'Unexpected server error',
-    });
+    }, { allowedOrigin });
   }
 }
 

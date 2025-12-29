@@ -112,6 +112,10 @@ You can use the provided GitHub Actions workflow or deploy manually.
      --platform managed \
      --set-env-vars "BACKEND_API_KEY=your_secret_key"
    ```
+   - For browser-based GPT Actions, allow both ChatGPT origins:
+     ```bash
+     --set-env-vars "ALLOWED_ORIGINS=https://chatgpt.com,https://chat.openai.com"
+     ```
    - Add `--allow-unauthenticated` if you want a public endpoint and enforce
      access exclusively with `BACKEND_API_KEY`.
    - To store the key in Secret Manager instead of a plaintext env var:
