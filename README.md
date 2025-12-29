@@ -4,9 +4,9 @@
 
 The Google Drive Permission Manager offers a convenient, spreadsheet-based solution for organizations seeking centralized control over data sharing. It empowers people that are not professional administrators to be"sheet_editors" and manage complex access permissions for Google Drive folders directly from a Google Sheet. The sheet serves as the single source of truth. Hence, it is particularly well-suited for environments where teams and projects are dynamic, and traditional identity management systems may not be feasible.
 
-This project supports accessibility for organizations at a low cost: Any user with a Google-affiliated account (including free @gmail.com addresses) can be granted access, while the management of these permissions can be delegated to a list of trusted users who also do not need to be paid Google Workspace administrators. It requires only a registered domain (~$10/year) and a single Google Workspace user license (starting from ~$8/month) to operate.
+This project supports accessibility for organizations at a low cost: Any user with a Google-affiliated account (including free @gmail.com addresses) can be granted access, while the management of these permissions can be delegated to a list of trusted users who also do not need to be paid Google Workspace administrators. It requires only a registered domain (~USD10/year) and a single Google Workspace user license (starting from ~USD8/month) to operate.
 
-The system has Apps Scripts that synchronizes the permissions defined in the control sheet with Google Workspace. This synchronization can be triggered manually by a super admin (paid) user at any time or configured to run automatically at regular intervals. To manage permissions efficiently and at scale, the script creates and maintains Google Groups for each folder and role combination, ensuring a robust and maintainable access control structure. This repository provides the complete scripts, an AI setup assistant, accompanied by comprehensive setup guides, and automated tests to enable a smooth and consistent rollout.
+The system has Apps Scripts that synchronizes the permissions defined in the control sheet with Google Workspace. This synchronization can be triggered manually by a super admin (paid) user at any time or configured to run automatically at regular intervals. To manage permissions efficiently and at scale, the script creates and maintains Google Groups for each folder and role combination, ensuring a robust and maintainable access control structure. This repository provides the complete scripts, two AI setup assistants, accompanied by comprehensive setup guides, and automated tests to enable a smooth and consistent rollout.
 
 ---
 
@@ -43,7 +43,7 @@ The system has Apps Scripts that synchronizes the permissions defined in the con
   notifications make auditing straightforward.
 - **Extensive test helpers** – Built-in stress tests and manual access tests are
   available directly from the spreadsheet UI.
-- **AI setup assistant** – Guides you through the setup process in a pre-configured cloud environment, simplifying deployment.
+- **AI setup assistants** – Guide you through the setup process, simplifying deployment.
 
 ---
 
@@ -61,15 +61,15 @@ This tool is most effective for managing access for ad-hoc teams and projects th
 
 We offer two ways to set up the Google Drive Permission Manager:
 
-### Custom GPT Assistant
+### OpenAI GPT Assistant
 
-For the fastest setup experience, use the Custom GPT: https://chatgpt.com/g/g-694f76da8b348191a1c7c497663106d2-custom-gpt-prompt-gdrive-permissions1. It is intuitive, supports pasting screenshots to debug issues, and provides step-by-step guidance, but it can only suggest actions and cannot run `gcloud` or other commands for you.
+For a faster setup experience, use the OpenAI GPT Assistant: https://chatgpt.com/g/g-694f76da8b348191a1c7c497663106d2-custom-gpt-prompt-gdrive-permissions1. It is intuitive, supports pasting screenshots to debug issues, and provides step-by-step guidance, but it can only suggest actions and cannot run `gcloud` or other commands for you.
 
-**Technicalities** - The Custom GPT relies on a backend to stay current and reliable; see [Backend for GPT artifacts and steps](docs/BACKEND_SERVER.md) and [Backend considerations](docs/BACKEND_CONSIDERATIONS.md).[^gpt-backend]
+**Technicalities** - The OpenAI GPT Assistant relies on a backend to stay current and reliable; see [Backend for GPT artifacts and steps](docs/BACKEND_SERVER.md) and [Backend considerations](docs/BACKEND_CONSIDERATIONS.md).[^gpt-backend]
 
-### AI-Assisted Setup (Commands + Guidance)
+### Gemini CLI Assistant (Commands + Guidance)
 
-If you want an assistant that can run commands instead of only suggesting them, use the AI-powered assistant. It runs in a pre-configured cloud environment (GitHub Codespaces) and will guide you through every step of the process.
+If you want an assistant that can run commands instead of only suggesting them, use the Gemini CLI Assistant. It runs in a pre-configured cloud environment (GitHub Codespaces) and will guide you through every step of the process.
 
 To launch the assistant, you will need a GitHub account.
 
@@ -239,8 +239,8 @@ reduce API calls during large syncs).
 
 | Topic | Location |
 | ----- | -------- |
-| AI assistant setup & development | [`docs/AI_ASSISTANT_GUIDE.md`](docs/AI_ASSISTANT_GUIDE.md) |
-| Custom GPT setup guide | [`docs/GPT_SETUP_GUIDE.md`](docs/GPT_SETUP_GUIDE.md) |
+| Gemini CLI Assistant setup & development | [`docs/AI_ASSISTANT_GUIDE.md`](docs/AI_ASSISTANT_GUIDE.md) |
+| OpenAI GPT setup guide | [`docs/GPT_SETUP_GUIDE.md`](docs/GPT_SETUP_GUIDE.md) |
 | End-user how-to guide | [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) |
 | Testing menus and stress scenarios | [`docs/TESTING.md`](docs/TESTING.md) |
 | Edit-only mode walkthrough | [`docs/EDIT_MODE_GUIDE.md`](docs/EDIT_MODE_GUIDE.md) |

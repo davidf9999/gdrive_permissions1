@@ -248,7 +248,7 @@ Identified and addressed a performance bottleneck in `syncGroupMembership_` rela
 Resolved a failing Jest test (`tests/Utils.test.js`) related to `logSyncHistory_`.
 *   The `logSyncHistory_` function in `apps_script_project/Utils.gs` was updated to use the correct header format (`Timestamp`, `Status`, `Added`, `Removed`, `Failed`, `Duration (seconds)`, `Revision Link`) and argument handling, aligning with the intended project behavior and test expectations.
 
-## AI Assistant Setup Planning (November 2025)
+## Gemini CLI Assistant Setup Planning (November 2025)
 
 This section summarizes the ongoing discussion and planning for an AI agent to assist users in setting up the `gdrive_permissions` system. The goal is to provide step-by-step guidance, automate where feasible, and simplify the process for non-technical users.
 
@@ -260,7 +260,7 @@ This section summarizes the ongoing discussion and planning for an AI agent to a
 
 ### Agent Execution Strategy
 
-The most effective approach is an **AI-assisted interactive setup wizard** where the AI (this CLI agent) drives the process, automating CLI/file system operations, and providing clear instructions for manual browser-based steps.
+The most effective approach is a **Gemini CLI Assistant-driven interactive setup wizard** where the assistant (this CLI agent) drives the process, automating CLI/file system operations, and providing clear instructions for manual browser-based steps.
 
 *   **CLI Agent Advantages:** Direct access to the local filesystem and shell (via `run_shell_command`, `write_file`, etc.) allows for automated prerequisite checking, config file generation, command execution, and direct log analysis, significantly reducing user effort and errors compared to a web-based AI.
 *   **Browser Blind Spot:** Neither the CLI nor web-based AI can directly see or interact with the user's web browser for manual steps (e.g., OAuth consent, GCP Console navigation).
@@ -270,7 +270,7 @@ The most effective approach is an **AI-assisted interactive setup wizard** where
 To address the "Browser Blind Spot," methods for providing visual context to the AI were explored:
 
 1.  **User-Provided Screenshots (Primary Method):**
-    *   **Recommendation:** For reliability and user-friendliness, the most robust method is for the user to take screenshots using their preferred native OS tools (Print Screen, Snipping Tool, macOS shortcuts) and upload them to the AI assistant.
+    *   **Recommendation:** For reliability and user-friendliness, the most robust method is for the user to take screenshots using their preferred native OS tools (Print Screen, Snipping Tool, macOS shortcuts) and upload them to the Gemini CLI Assistant.
     *   **Reasoning:** This leverages familiar user tools and avoids complex technical issues with CLI-based screenshot utilities across diverse operating systems and display environments.
 
 2.  **Exploration of Automated CLI Screenshot Tools (Unsuccessful):**
@@ -288,7 +288,7 @@ To address the "Browser Blind Spot," methods for providing visual context to the
 
 The immediate strategy is to proceed with the CLI agent driving the setup process. When manual browser interaction is required, the AI will provide clear instructions, and the user will manually take and upload screenshots as needed for troubleshooting and verification.
 
-## AI Assistant CDE Implementation & Debugging (November 2025)
+## Gemini CLI Assistant CDE Implementation & Debugging (November 2025)
 
 This section details the implementation and debugging of the Cloud Development Environment (CDE) for the AI Setup Assistant, which was created on the `main` branch.
 
@@ -297,7 +297,7 @@ This section details the implementation and debugging of the Cloud Development E
 The chosen architecture uses a CDE (like GitHub Codespaces) to provide a zero-install, consistent environment for the user. The initial implementation involved:
 1.  Creating a `.devcontainer/` directory with `devcontainer.json` to define the environment.
 2.  Configuring the environment to install `node`, `gcloud`, and `gemini-cli`.
-3.  Creating `post-create.sh` and `start-assistant.sh` scripts to handle installation and auto-launch the AI assistant.
+3.  Creating `post-create.sh` and `start-assistant.sh` scripts to handle installation and auto-launch the Gemini CLI Assistant.
 4.  Adding an `AI_ASSISTANT_PROMPT.md` file to instruct the AI.
 5.  Updating `README.md` with a "Launch in Codespaces" button.
 

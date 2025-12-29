@@ -63,7 +63,7 @@ This step must be performed while signed in as the **Google Workspace Super Admi
 
 ## 5. Configure the Google Cloud CLI (gcloud)
 
-> **Note for AI Assistant Users:** The assistant should ask you to run these commands in your own terminal. It should not try to authenticate `gcloud` for you.
+> **Note for Gemini CLI Assistant users:** The assistant should ask you to run these commands in your own terminal. It should not try to authenticate `gcloud` for you.
 
 This step gives `gcloud` permission to manage resources in your Google Cloud project.
 

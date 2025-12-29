@@ -1,6 +1,6 @@
 # Codespaces overview (short)
 
-GitHub Codespaces provides a hosted development environment for a repository. In this project, the AI assistant runs inside a Codespace by default unless you choose a local setup.
+GitHub Codespaces provides a hosted development environment for a repository. In this project, the Gemini CLI Assistant runs inside a Codespace by default unless you choose a local setup.
 
 ## Key points
 
