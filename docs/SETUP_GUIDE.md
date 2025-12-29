@@ -151,33 +151,27 @@ This step gives `gcloud` permission to manage resources in your Google Cloud pro
     - **Google Apps Script API** (`script.googleapis.com`)
 2.  **Enable User-Level API.** Visit **[script.google.com/home/usersettings](https://script.google.com/home/usersettings)** and toggle the "Google Apps Script API" setting **ON**.
 3.  **Configure the OAuth Consent Screen.** In the [Cloud Console](https://console.cloud.google.com), go to **APIs & Services → OAuth consent screen**.
-    *   User type: **Internal**.
     *   App name: A descriptive name like `Drive Permission Manager`.
+    *   User type: **Internal**.
     *   Save and continue.
 
 
 ## 7. Deploy the Apps Script project
 
-1.  **Install dependencies (optional).** If you want to build the bundle locally, run `npm install`.
-    **GPT note (no terminal):** Skip this and use the prebuilt bundle from `dist/apps_scripts_bundle.gs` in the repository.
-2.  **Build the script bundle (optional).** This command combines all source files into a single file for deployment.
-    ```bash
-    npm run build
-    ```
-    If you prefer not to run build commands locally, use the prebuilt bundle committed in `dist/apps_scripts_bundle.gs`.
-3.  **Copy the bundled code.** Open `dist/apps_scripts_bundle.gs`, select all text, and copy it.
-4.  **Paste into the Apps Script Editor.** Return to the Apps Script editor, delete any code in `Code.gs`, paste the bundled code, and save.
-5.  **Configure Project Settings.**
-    *   In the Apps Script editor, open **Project Settings** (⚙️).
-    *   Check the box for **Show "appsscript.json" manifest file in editor**.
-    *   Return to the editor and open the new `appsscript.json` file.
-    *   Copy the content from `apps_script_project/appsscript.json` in this repository and paste it into the editor's `appsscript.json`.
-    *   In the editor, set the `timeZone` to your organization's timezone (e.g., `America/New_York`). Save the file.
-6.  **Link the GCP Project.** In **Project Settings** (⚙️), scroll to **Google Cloud Platform (GCP) Project**, click **Change project**, and enter your GCP **Project Number**.
-    *   Find the Project Number in the Cloud Console under **Project info**.
-    *   Or run `gcloud projects describe YOUR_PROJECT_ID --format='value(projectNumber)'` in your terminal.
-    *   **Do not** try to infer the Project Number from the Project ID.
-7.  Return to your spreadsheet and **refresh the page**. The **Permissions Manager** menu should appear.
+1.  **Copy the bundled code.** Open [apps_scripts_bundle.gs](https://raw.githubusercontent.com/davidf9999/gdrive_permissions1/refs/heads/main/dist/apps_scripts_bundle.gs), select all text, and copy it.
+    *Optional (local build):* run `npm install` then `npm run build` to regenerate the bundle from source.
+2.  **Paste into the Apps Script Editor.** Return to the Apps Script editor, delete any code in `Code.gs`, paste the bundled code, and save.
+3.  **Configure Project Settings.**
+*   In the Apps Script editor, open **Project Settings** (⚙️).
+*   Check the box for **Show "appsscript.json" manifest file in editor**.
+*   Return to the editor and open the new `appsscript.json` file.
+*   Copy the content from `apps_script_project/appsscript.json` in this repository and paste it into the editor's `appsscript.json`.
+*   In the editor, set the `timeZone` to your organization's timezone (e.g., `America/New_York`). Save the file.
+4.  **Link the GCP Project.** In **Project Settings** (⚙️), scroll to **Google Cloud Platform (GCP) Project**, click **Change project**, and enter your GCP **Project Number**.
+*   Find the Project Number in the Cloud Console under **Project info**.
+*   Or run `gcloud projects describe YOUR_PROJECT_ID --format='value(projectNumber)'` in your terminal.
+*   **Do not** try to infer the Project Number from the Project ID.
+5.  Return to your spreadsheet and **refresh the page**. The **Permissions Manager** menu should appear.
 
 > **Note on Configuration:** The script's configuration (like Sheet ID) is stored in a sheet named `Config`, which will be created automatically on the first run.
 
