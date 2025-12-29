@@ -104,6 +104,8 @@ The script requires a Google Cloud Platform (GCP) project to manage APIs.
     - If reusing a project, make sure you have **Owner** access.
     - If creating a new project, give it a clear name and choose your Google Workspace organization as the parent if prompted.
 4.  Once your project is created and selected, find the **Project ID** on the project dashboard. **Copy this ID and save it for later.**
+5.  Find the **Project Number** in the Cloud Console under **Project info** and save it for later (you will need it to link Apps Script to GCP).
+    - You can also run `gcloud projects describe YOUR_PROJECT_ID --format='value(projectNumber)'`.
 
 
 ## 4. Create the control spreadsheet

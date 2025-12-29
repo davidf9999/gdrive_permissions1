@@ -76,6 +76,8 @@ steps:
           - If reusing a project, make sure you have **Owner** access.
           - If creating a new project, give it a clear name and choose your Google Workspace organization as the parent if prompted.
       4.  Once your project is created and selected, find the **Project ID** on the project dashboard. **Copy this ID and save it for later.**
+      5.  Find the **Project Number** in the Cloud Console under **Project info** and save it for later (you will need it to link Apps Script to GCP).
+          - You can also run `gcloud projects describe YOUR_PROJECT_ID --format='value(projectNumber)'`.
     ai_assistant_guide: |
       ### Step 3: Create or select a Google Cloud Project
       *** Current state: 3 "Create or select a Google Cloud Project" out of 8 steps. ***
@@ -85,9 +87,9 @@ steps:
       Follow the instructions in the [Setup Guide](docs/SETUP_GUIDE.md#3-create-or-select-a-google-cloud-project) to:
       1. Navigate to the Google Cloud Console.
       2. Create a **NEW PROJECT** or select an existing, unused project.
-      3. **Copy the Project ID and save it.** You will need it in subsequent steps.
+      3. **Copy the Project ID and Project Number.** You will need both in subsequent steps.
 
-      **Once you have your Google Cloud Project ID, type 'done' to continue.**
+      **Once you have your Google Cloud Project ID and Project Number, type 'done' to continue.**
   - id: "create_the_control_spreadsheet"
     title: "Create the control spreadsheet"
     state: "CONTROL_SPREADSHEET_CREATED"
