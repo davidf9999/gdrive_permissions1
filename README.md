@@ -63,7 +63,9 @@ We offer two ways to set up the Google Drive Permission Manager:
 
 ### OpenAI GPT Assistant
 
-For a faster setup experience, use the OpenAI GPT Assistant: https://chatgpt.com/g/g-694f76da8b348191a1c7c497663106d2-custom-gpt-prompt-gdrive-permissions1. It is intuitive, supports pasting screenshots to debug issues, and provides step-by-step guidance, but it can only suggest actions and cannot run `gcloud` or other commands for you.
+For a faster setup experience, use the OpenAI GPT Assistant. It is intuitive, supports pasting screenshots to debug issues, and provides step-by-step guidance, but it can only suggest actions and cannot run `gcloud` or other commands for you.
+
+[![OpenAI GPT Assistant](https://img.shields.io/badge/OpenAI%20GPT%20Assistant-ChatGPT-10a37f?style=for-the-badge)](https://chatgpt.com/g/g-694f76da8b348191a1c7c497663106d2-custom-gpt-prompt-gdrive-permissions1)
 
 **Technicalities** - The OpenAI GPT Assistant relies on a backend to stay current and reliable; see [Backend for GPT artifacts and steps](docs/BACKEND_SERVER.md) and [Backend considerations](docs/BACKEND_CONSIDERATIONS.md).[^gpt-backend]
 
@@ -73,7 +75,7 @@ If you want an assistant that can run commands instead of only suggesting them, 
 
 To launch the assistant, you will need a GitHub account.
 
-[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/davidf9999/gdrive_permissions1?ref=main)
+[![Gemini CLI Assistant](https://github.com/codespaces/badge.svg)](https://codespaces.new/davidf9999/gdrive_permissions1?ref=main)
 
 ### Manual Setup
 
