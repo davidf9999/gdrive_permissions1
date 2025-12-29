@@ -63,7 +63,7 @@ We offer two ways to set up the Google Drive Permission Manager:
 
 ### OpenAI GPT Assistant
 
-For a faster setup experience, use the OpenAI GPT Assistant. It is intuitive, supports pasting screenshots to debug issues, and provides step-by-step guidance, but it can only suggest actions and cannot run `gcloud` or other commands for you.
+For a faster setup experience, use the OpenAI GPT Assistant. It is intuitive, supports pasting screenshots to debug issues, and provides step-by-step guidance, but it can only suggest actions and cannot run `gcloud` or other commands for you. A free ChatGPT account is sufficient to use it.
 
 [![OpenAI GPT Assistant](https://img.shields.io/badge/OpenAI%20GPT%20Assistant-ChatGPT-10a37f?style=for-the-badge)](https://chatgpt.com/g/g-694f76da8b348191a1c7c497663106d2-custom-gpt-prompt-gdrive-permissions1)
 
