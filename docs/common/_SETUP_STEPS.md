@@ -111,14 +111,17 @@ This step gives `gcloud` permission to manage resources in your Google Cloud pro
 *   **Do not** try to infer the Project Number from the Project ID.
 5.  Return to your spreadsheet and **refresh the page**. The **Permissions Manager** menu should appear.
 
-> **Note on Configuration:** The script's configuration (like Sheet ID) is stored in a sheet named `Config`, which will be created automatically on the first run.
+> **Notes on Configuration:** 
+> The script's configuration (like Sheet ID) is stored in a sheet named `Config`, which will be created automatically on the first run.
+> The original sheet called "Sheet1" may be deleted.
 
 
-## 8. Run the first sync
+## 8. Run the first sync (only Google Workspace Super Admins can use the menu items)
 
-1. Refresh the spreadsheet so the **Permissions Manager** menu appears (only Google Workspace Super Admins can use the menu items).
-2. In the spreadsheet, open **Permissions Manager → ManualSync → Granular Sync → Sync Sheet Editors**.
+1. Refresh the spreadsheet so the **Permissions Manager** menu appears.
+2. In the spreadsheet, open **Permissions Manager → ManualSync → Full Sync**.
 3. Grant the script the requested permissions.
+4. Check the execution log in sheet **Logs** for progress and errors.
 
 <details>
 <summary>Visual aid: Authorization prompt</summary>

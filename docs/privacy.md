@@ -1,6 +1,6 @@
 # Privacy Policy
 
-Last updated: 2025-02-14
+Last updated: 2025-12-29
 
 This page describes how information is handled when using the OpenAI GPT Assistant for the Google Drive Permission Manager project.
 
