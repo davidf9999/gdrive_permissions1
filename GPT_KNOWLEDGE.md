@@ -74,7 +74,7 @@ The script requires a Google Cloud Platform (GCP) project to manage APIs.
     - If reusing a project, make sure you have **Owner** access.
     - If creating a new project, give it a clear name and choose your Google Workspace organization as the parent if prompted.
 4.  Once your project is created and selected, find the **Project ID** on the project dashboard. **Copy this ID and save it for later.**
-5.  Find the **Project Number** in the Cloud Console under **Project info** and save it for later (you will need it to link Apps Script to GCP).
+5.  Find the **Project Number** in the Cloud Console,in **Cloud overview** menu under **Project info** and save it for later (you will need it to link Apps Script to GCP).
     - You can also run `gcloud projects describe YOUR_PROJECT_ID --format='value(projectNumber)'`.
 
 
@@ -97,7 +97,9 @@ This step must be performed while signed in as the **Google Workspace Super Admi
 
 ## 5. Configure the Google Cloud CLI (gcloud)
 
-> **Note for Gemini CLI Assistant users:** The assistant should ask you to run these commands in your own terminal. It should not try to authenticate `gcloud` for you.
+> **GPT note:** This step is not required if you are following the setup with the OpenAI GPT Assistant and do not plan to use a terminal.
+>
+> **Gemini note:** The assistant should ask you to run these commands in your own terminal. It should not try to authenticate `gcloud` for you.
 
 This step gives `gcloud` permission to manage resources in your Google Cloud project.
 
@@ -113,6 +115,10 @@ This step gives `gcloud` permission to manage resources in your Google Cloud pro
     # Enable Admin SDK, Drive, and Apps Script APIs
     gcloud services enable admin.googleapis.com drive.googleapis.com script.googleapis.com --project=YOUR_PROJECT_ID
     ```
+    **GPT note (no terminal):** In the Cloud Console, go to **APIs & Services → Library**, then search for and enable:
+    - **Admin SDK API** (`admin.googleapis.com`)
+    - **Google Drive API** (`drive.googleapis.com`)
+    - **Google Apps Script API** (`script.googleapis.com`)
 2.  **Enable User-Level API.** Visit **[script.google.com/home/usersettings](https://script.google.com/home/usersettings)** and toggle the "Google Apps Script API" setting **ON**.
 3.  **Configure the OAuth Consent Screen.** In the [Cloud Console](https://console.cloud.google.com), go to **APIs & Services → OAuth consent screen**.
     *   User type: **Internal**.
@@ -123,6 +129,7 @@ This step gives `gcloud` permission to manage resources in your Google Cloud pro
 ## 7. Deploy the Apps Script project
 
 1.  **Install dependencies (optional).** If you want to build the bundle locally, run `npm install`.
+    **GPT note (no terminal):** Skip this and use the prebuilt bundle from `dist/apps_scripts_bundle.gs` in the repository.
 2.  **Build the script bundle (optional).** This command combines all source files into a single file for deployment.
     ```bash
     npm run build

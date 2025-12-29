@@ -40,7 +40,8 @@ __pycache__/
 
 # Distribution / packaging
 build/
-dist/
+dist/*
+!dist/
 !dist/apps_scripts_bundle.gs
 *.egg-info/
 
