@@ -6,16 +6,13 @@ state. It serves Markdown files, the Apps Script bundle built by CI, and the
 structured steps YAML used by the GPT.
 
 ## What it serves
-- `GET /meta` → build provenance + artifact hashes
-- `GET /knowledge` → `GPT_KNOWLEDGE.md`
-- `GET /usage/overview` → `docs/USER_GUIDE.md`
-- `GET /usage/super-admin` → `docs/SUPER_ADMIN_USER_GUIDE.md`
-- `GET /usage/sheet-editor` → `docs/SHEET_EDITOR_USER_GUIDE.md`
-- `GET /steps` → compact list of steps from `docs/common/steps.yaml`
-- `GET /steps/{id}` → step detail with embedded setup guide
-- `GET /bundle` → `dist/apps_scripts_bundle.gs`
-- `GET /latest` → optional drift check against GitHub
-- `GET /status` → health probe
+See `backend/openapi.yaml` for the authoritative list of supported endpoints
+and request/response details.
+
+You can also print a compact list from the CLI:
+```bash
+node scripts/print-backend-endpoints.js
+```
 
 Files over 2MB are rejected to keep responses fast and predictable.
 

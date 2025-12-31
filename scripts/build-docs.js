@@ -121,7 +121,6 @@ function buildDocs() {
     fs.writeFileSync(path.join(projectRoot, 'GPT_PROMPT.md'), gptPrompt);
     console.log('Successfully generated GPT_PROMPT.md');
 
-
     console.log('\n✅ Documentation build complete.');
   } catch (error) {
     console.error('❌ An error occurred during the build process:', error);
