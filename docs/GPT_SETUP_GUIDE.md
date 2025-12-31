@@ -1,9 +1,9 @@
-# OpenAI GPT Assistant setup guide (backend required)
+# OpenAI GPT Assistant configuration guide (backend required)
 
-This guide explains how to configure an OpenAI GPT Assistant to assist with the `gdrive_permissions1` setup flow using the required backend service.
+This guide explains how to configure an OpenAI GPT Assistant to assist with `gdrive_permissions1` setup and usage using the required backend service.
 
 ## Goals
-- Provide consistent setup guidance.
+- Provide consistent setup and usage guidance.
 - Keep the GPT prompt stable while allowing setup steps to evolve.
 - Ensure the GPT stays current by retrieving artifacts from the backend.
 
@@ -23,6 +23,18 @@ This guide explains how to configure an OpenAI GPT Assistant to assist with the 
 3. Ensure the GPT can access the backend base URL that serves `/knowledge`, `/steps`, and `/bundle`.
 4. Do not upload `GPT_KNOWLEDGE.md` in the Knowledge section; it must be fetched from the backend at runtime.
 5. Save the GPT.
+
+## Usage knowledge sources
+- The GPT should fetch usage guides from the backend endpoints:
+  - `/usage/overview` → `docs/USER_GUIDE.md`
+  - `/usage/super-admin` → `docs/SUPER_ADMIN_USER_GUIDE.md`
+  - `/usage/sheet-editor` → `docs/SHEET_EDITOR_USER_GUIDE.md`
+- This avoids manual GPT Knowledge uploads and keeps usage guidance in sync with the repo.
+
+## Scope and behavior
+- The GPT supports **setup** and **usage** guidance. Testing is out of scope; refer testers to `docs/TESTING.md`.
+- Usage answers are **role-specific**: Super Admin vs Sheet Editor.
+- The role is fixed per chat. To switch roles, start a new chat.
 
 ## Updating the knowledge
 Whenever setup steps or docs change:

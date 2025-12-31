@@ -6,6 +6,10 @@ Welcome! This guide explains how to use the Google Spreadsheet to manage folder 
 
 ---
 
+## Assistant Scope
+
+The OpenAI GPT Assistant can answer setup and usage questions for Sheet Editors, but it will first confirm your role. Testing guidance is out of scope; refer to `docs/TESTING.md`.
+
 ## The Core Concept
 
 This system works by linking Google Drive folders to Google Groups. Instead of sharing a folder with multiple (even hundreds) of individual email addresses, you share it with a single group (e.g., `my-project-editors@your-domain.com`). You then control who has access by simply adding or removing people from that group.

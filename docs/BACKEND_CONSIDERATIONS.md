@@ -17,6 +17,13 @@ This note summarizes the minimal backend (running on GCP) required for a Custom 
 
 Keeping the surface small lowers bandwidth and security risk.
 
+## Usage docs as single source of truth
+- Serve the usage guides directly from the backend to avoid manual GPT Knowledge updates and drift.
+- Recommended endpoints:
+  - `/usage/overview`
+  - `/usage/super-admin`
+  - `/usage/sheet-editor`
+
 ## Backend role and shape
 - **Role:** act as a thin, read-only file server that returns the latest committed artifacts. It can fetch from GitHub (main branch) or from a mirrored bucket (e.g., Cloud Storage) populated by CI.
 - **Shape:** a small HTTP service (Cloud Run) that returns files by path and responds with clear errors when a file is missing or stale. A reference implementation now lives at `backend/server.js`; see [Minimal backend for GPT file access](./BACKEND_SERVER.md) for how to run or deploy it.

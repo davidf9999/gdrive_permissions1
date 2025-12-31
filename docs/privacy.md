@@ -13,7 +13,7 @@ This page describes how information is handled when using the OpenAI GPT Assista
 We do not collect personal data directly. If you share information in the chat, it is processed by OpenAI to generate responses.
 
 ## Data Use
-Information shared in the chat is used only to provide setup guidance and troubleshooting help.
+Information shared in the chat is used only to provide setup and usage guidance plus troubleshooting help.
 
 ## Data Sharing
 We do not sell or share your data with third parties. OpenAI may process and store chat data according to their policies.

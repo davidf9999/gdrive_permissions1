@@ -8,8 +8,8 @@ keep the content current.
 | [`README.md`](../README.md) | Front door for the project, covering prerequisites, setup options, and the documentation map. | New administrators & contributors | Keep in sync with the supported deployment paths (manual `create_apps_scripts_bundle.js` for users, `clasp` for developers) and update when APIs or menus change. |
 | [`docs/ARCHITECTURE_OVERVIEW.md`](ARCHITECTURE_OVERVIEW.md) | Architectural walkthrough of the Apps Script modules and spreadsheet layout. | Developers & reviewers | Update when new modules are added or the execution flow changes. |
 | [`docs/SETUP_GUIDE.md`](SETUP_GUIDE.md) | The canonical, step-by-step guide for a full manual installation. | First-time administrators | Update when Google Cloud, Workspace, or Apps Script UI flows change. |
-| [`docs/ONBOARDING.md`](ONBOARDING.md) | A high-level checklist that complements the Setup Guide. | Workspace Super Admins | Use during training sessions; revise if prerequisites shift. |
-| [`docs/USER_GUIDE.md`](USER_GUIDE.md) | Hub page that directs users to the correct role-based guide. | All Users | - |
+| [`docs/ONBOARDING.md`](ONBOARDING.md) | A high-level checklist that complements the Setup Guide. | Workspace Super Admins | Includes assistant scope; revise if prerequisites shift. |
+| [`docs/USER_GUIDE.md`](USER_GUIDE.md) | Hub page that directs users to the correct role-based guide. | All Users | Notes assistant scope and role gating. |
 | [`docs/SUPER_ADMIN_USER_GUIDE.md`](SUPER_ADMIN_USER_GUIDE.md) | Guide for Super Admins covering setup, syncs, and advanced tasks. | Super Admins | Contains all instructions requiring Super Admin privileges. |
 | [`docs/SHEET_EDITOR_USER_GUIDE.md`](SHEET_EDITOR_USER_GUIDE.md) | Guide for Sheet Editors covering day-to-day permission management. | Sheet Editors | Explains how to edit the sheets to manage permissions. |
 | [`docs/SYSTEM_LIFE_CYCLE.md`](SYSTEM_LIFE_CYCLE.md) | Describes the setup, usage, and teardown stages at a glance and links to the detailed guides. | Super Admins & operators | Update when prerequisites or retirement steps change. |

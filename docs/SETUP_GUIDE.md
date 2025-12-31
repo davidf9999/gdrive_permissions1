@@ -4,7 +4,7 @@
 
 *   **Manual:** You follow the steps in this guide without a specialized chatbot.
 *   **Gemini CLI Assistant:** A terminal-based helper that can automate commands and prompts, often used in GitHub Codespaces. See the [Gemini CLI Assistant Guide](AI_ASSISTANT_GUIDE.md).
-*   **OpenAI GPT Assistant:** A chat-based helper that explains steps and generates commands, but does not run them for you. A free ChatGPT account is sufficient for usage.
+*   **OpenAI GPT Assistant:** A chat-based helper that explains steps and generates commands, but does not run them for you. It also supports usage questions after setup. A free ChatGPT account is sufficient for usage.
 
 For brevity, this guide refers to these modes as **manual**, **gemini**, and **gpt**.
 

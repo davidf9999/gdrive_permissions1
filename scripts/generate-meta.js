@@ -7,6 +7,9 @@ const ROOT = path.resolve(__dirname, '..');
 const KNOWLEDGE_PATH = path.join(ROOT, 'GPT_KNOWLEDGE.md');
 const STEPS_PATH = path.join(ROOT, 'docs', 'common', 'steps.yaml');
 const BUNDLE_PATH = path.join(ROOT, 'dist', 'apps_scripts_bundle.gs');
+const USER_GUIDE_PATH = path.join(ROOT, 'docs', 'USER_GUIDE.md');
+const SUPER_ADMIN_GUIDE_PATH = path.join(ROOT, 'docs', 'SUPER_ADMIN_USER_GUIDE.md');
+const SHEET_EDITOR_GUIDE_PATH = path.join(ROOT, 'docs', 'SHEET_EDITOR_USER_GUIDE.md');
 const META_PATH = path.join(ROOT, 'meta.json');
 
 async function hashFile(filePath) {
@@ -50,6 +53,9 @@ async function main() {
       knowledge_sha256: await hashFile(KNOWLEDGE_PATH),
       steps_sha256: await hashFile(STEPS_PATH),
       bundle_sha256: await hashFile(BUNDLE_PATH),
+      user_guide_sha256: await hashFile(USER_GUIDE_PATH),
+      super_admin_guide_sha256: await hashFile(SUPER_ADMIN_GUIDE_PATH),
+      sheet_editor_guide_sha256: await hashFile(SHEET_EDITOR_GUIDE_PATH),
     },
   };
 

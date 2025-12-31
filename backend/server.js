@@ -10,6 +10,13 @@ const ROOT = path.resolve(__dirname, '..');
 const KNOWLEDGE_PATH = path.join(ROOT, 'GPT_KNOWLEDGE.md');
 const STEPS_PATH = path.join(ROOT, 'docs', 'common', 'steps.yaml');
 const BUNDLE_PATH = path.join(ROOT, 'dist', 'apps_scripts_bundle.gs');
+const USER_GUIDE_PATH = path.join(ROOT, 'docs', 'USER_GUIDE.md');
+const SUPER_ADMIN_GUIDE_PATH = path.join(ROOT, 'docs', 'SUPER_ADMIN_USER_GUIDE.md');
+const SHEET_EDITOR_GUIDE_PATH = path.join(
+  ROOT,
+  'docs',
+  'SHEET_EDITOR_USER_GUIDE.md',
+);
 const META_PATH = path.join(ROOT, 'meta.json');
 const GITHUB_HEAD_URL =
   process.env.GITHUB_HEAD_URL ||
@@ -33,6 +40,21 @@ let stepsIndex = [];
 let stepsById = new Map();
 let metaCache;
 let latestCache;
+
+const USAGE_DOCS = {
+  overview: {
+    path: USER_GUIDE_PATH,
+    etagKey: 'user_guide_sha256',
+  },
+  'super-admin': {
+    path: SUPER_ADMIN_GUIDE_PATH,
+    etagKey: 'super_admin_guide_sha256',
+  },
+  'sheet-editor': {
+    path: SHEET_EDITOR_GUIDE_PATH,
+    etagKey: 'sheet_editor_guide_sha256',
+  },
+};
 
 function applyStandardHeaders(res, options = {}) {
   const allowedOrigin = options.allowedOrigin || ALLOWED_ORIGINS[0];
@@ -192,6 +214,29 @@ async function handleKnowledge(req, res, allowedOrigin) {
   }
 
   const content = await readFile(KNOWLEDGE_PATH, 'utf8');
+  textResponse(res, 200, content, 'text/markdown; charset=utf-8', {
+    cacheControl: STATIC_CACHE_CONTROL,
+    etag,
+    allowedOrigin,
+  });
+}
+
+async function handleUsageDoc(req, res, docKey, allowedOrigin) {
+  const usageDoc = USAGE_DOCS[docKey];
+  if (!usageDoc) {
+    jsonResponse(res, 404, { error: 'not_found', message: 'Resource not found' }, { allowedOrigin });
+    return;
+  }
+
+  const meta = await loadMeta();
+  const etag = meta.artifacts?.[usageDoc.etagKey];
+
+  if (isFresh(req, etag)) {
+    notModified(res, { cacheControl: STATIC_CACHE_CONTROL, etag, allowedOrigin });
+    return;
+  }
+
+  const content = await readFile(usageDoc.path, 'utf8');
   textResponse(res, 200, content, 'text/markdown; charset=utf-8', {
     cacheControl: STATIC_CACHE_CONTROL,
     etag,
@@ -401,6 +446,21 @@ async function routeRequest(req, res) {
 
     if (req.method === 'GET' && normPath === '/knowledge') {
       await handleKnowledge(req, res, allowedOrigin);
+      return;
+    }
+
+    if (req.method === 'GET' && normPath === '/usage/overview') {
+      await handleUsageDoc(req, res, 'overview', allowedOrigin);
+      return;
+    }
+
+    if (req.method === 'GET' && normPath === '/usage/super-admin') {
+      await handleUsageDoc(req, res, 'super-admin', allowedOrigin);
+      return;
+    }
+
+    if (req.method === 'GET' && normPath === '/usage/sheet-editor') {
+      await handleUsageDoc(req, res, 'sheet-editor', allowedOrigin);
       return;
     }
 

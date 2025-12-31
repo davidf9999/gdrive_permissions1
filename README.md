@@ -43,7 +43,7 @@ The system has Apps Scripts that synchronizes the permissions defined in the con
   notifications make auditing straightforward.
 - **Extensive test helpers** – Built-in stress tests and manual access tests are
   available directly from the spreadsheet UI.
-- **AI setup assistants** – Guide you through the setup process, simplifying deployment.
+- **AI assistants** – OpenAI GPT supports setup + day-to-day usage (role-aware); Gemini CLI supports setup.
 
 ---
 
@@ -63,7 +63,7 @@ We offer two ways to set up the Google Drive Permission Manager:
 
 ### OpenAI GPT Assistant
 
-For a faster setup experience, use the OpenAI GPT Assistant. It is intuitive, supports pasting screenshots to debug issues, and provides step-by-step guidance, but it can only suggest actions and cannot run `gcloud` or other commands for you. A free ChatGPT account is sufficient to use it.
+For setup and usage guidance, use the OpenAI GPT Assistant. It is intuitive, supports pasting screenshots to debug issues, and provides step-by-step guidance, but it can only suggest actions and cannot run `gcloud` or other commands for you. A free ChatGPT account is sufficient to use it.
 
 [![OpenAI GPT Assistant](https://img.shields.io/badge/OpenAI%20GPT%20Assistant-ChatGPT-10a37f?style=for-the-badge)](https://chatgpt.com/g/g-694f76da8b348191a1c7c497663106d2-custom-gpt-prompt-gdrive-permissions1)
 
@@ -71,7 +71,7 @@ For a faster setup experience, use the OpenAI GPT Assistant. It is intuitive, su
 
 ### Gemini CLI Assistant (Commands + Guidance)
 
-If you want an assistant that can run commands instead of only suggesting them, use the Gemini CLI Assistant. It runs in a pre-configured cloud environment (GitHub Codespaces) and will guide you through every step of the process.
+If you want an assistant that can run commands instead of only suggesting them, use the Gemini CLI Assistant. It runs in a pre-configured cloud environment (GitHub Codespaces) and will guide you through setup only.
 
 To launch the assistant, you will need a GitHub account.
 
@@ -242,7 +242,7 @@ reduce API calls during large syncs).
 | Topic | Location |
 | ----- | -------- |
 | Gemini CLI Assistant setup & development | [`docs/AI_ASSISTANT_GUIDE.md`](docs/AI_ASSISTANT_GUIDE.md) |
-| OpenAI GPT setup guide | [`docs/GPT_SETUP_GUIDE.md`](docs/GPT_SETUP_GUIDE.md) |
+| OpenAI GPT assistant guide (setup + usage) | [`docs/GPT_SETUP_GUIDE.md`](docs/GPT_SETUP_GUIDE.md) |
 | End-user how-to guide | [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) |
 | Testing menus and stress scenarios | [`docs/TESTING.md`](docs/TESTING.md) |
 | Edit-only mode walkthrough | [`docs/EDIT_MODE_GUIDE.md`](docs/EDIT_MODE_GUIDE.md) |

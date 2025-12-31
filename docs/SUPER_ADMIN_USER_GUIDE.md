@@ -10,6 +10,10 @@ Being a Super Admin alone does **not** automatically grant you access to the she
 
 ---
 
+## Assistant Scope
+
+The OpenAI GPT Assistant can answer setup and usage questions for Super Admins, but it will first confirm your role. Testing guidance is out of scope; refer to `docs/TESTING.md`.
+
 ## The Super Admin Role
 
 As a Super Admin, your primary responsibilities are:

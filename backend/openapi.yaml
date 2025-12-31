@@ -47,6 +47,60 @@ paths:
             text/plain:
               schema:
                 type: string
+  /usage/overview:
+    get:
+      tags: [usage]
+      operationId: getUsageOverview
+      summary: Get the usage overview guide
+      description: Returns the content of docs/USER_GUIDE.md as text/markdown.
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Usage overview markdown
+          content:
+            text/markdown:
+              schema:
+                type: string
+            text/plain:
+              schema:
+                type: string
+  /usage/super-admin:
+    get:
+      tags: [usage]
+      operationId: getUsageSuperAdmin
+      summary: Get the Super Admin usage guide
+      description: Returns the content of docs/SUPER_ADMIN_USER_GUIDE.md as text/markdown.
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Super Admin guide markdown
+          content:
+            text/markdown:
+              schema:
+                type: string
+            text/plain:
+              schema:
+                type: string
+  /usage/sheet-editor:
+    get:
+      tags: [usage]
+      operationId: getUsageSheetEditor
+      summary: Get the Sheet Editor usage guide
+      description: Returns the content of docs/SHEET_EDITOR_USER_GUIDE.md as text/markdown.
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Sheet Editor guide markdown
+          content:
+            text/markdown:
+              schema:
+                type: string
+            text/plain:
+              schema:
+                type: string
   /steps:
     get:
       tags: [steps]
@@ -211,7 +265,24 @@ components:
             bundle_sha256:
               type: string
               description: SHA-256 hash of dist/apps_scripts_bundle.gs
-          required: [knowledge_sha256, steps_sha256, bundle_sha256]
+            user_guide_sha256:
+              type: string
+              description: SHA-256 hash of docs/USER_GUIDE.md
+            super_admin_guide_sha256:
+              type: string
+              description: SHA-256 hash of docs/SUPER_ADMIN_USER_GUIDE.md
+            sheet_editor_guide_sha256:
+              type: string
+              description: SHA-256 hash of docs/SHEET_EDITOR_USER_GUIDE.md
+          required:
+            [
+              knowledge_sha256,
+              steps_sha256,
+              bundle_sha256,
+              user_guide_sha256,
+              super_admin_guide_sha256,
+              sheet_editor_guide_sha256,
+            ]
       required: [service, version_tag, git_sha, build_time_utc, artifacts]
     StepListItem:
       type: object

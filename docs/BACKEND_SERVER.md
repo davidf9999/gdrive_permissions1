@@ -8,6 +8,9 @@ structured steps YAML used by the GPT.
 ## What it serves
 - `GET /meta` → build provenance + artifact hashes
 - `GET /knowledge` → `GPT_KNOWLEDGE.md`
+- `GET /usage/overview` → `docs/USER_GUIDE.md`
+- `GET /usage/super-admin` → `docs/SUPER_ADMIN_USER_GUIDE.md`
+- `GET /usage/sheet-editor` → `docs/SHEET_EDITOR_USER_GUIDE.md`
 - `GET /steps` → compact list of steps from `docs/common/steps.yaml`
 - `GET /steps/{id}` → step detail with embedded setup guide
 - `GET /bundle` → `dist/apps_scripts_bundle.gs`
@@ -52,6 +55,9 @@ or `NODE_ENV=development`.
    curl http://localhost:8080/status
    curl http://localhost:8080/meta
    curl http://localhost:8080/knowledge
+   curl http://localhost:8080/usage/overview
+   curl http://localhost:8080/usage/super-admin
+   curl http://localhost:8080/usage/sheet-editor
    curl http://localhost:8080/steps
    curl http://localhost:8080/steps/setup-admin  # replace with a real step id
    curl http://localhost:8080/bundle
