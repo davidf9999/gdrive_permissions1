@@ -198,11 +198,11 @@ function isSuperAdmin_() {
   try {
     const userEmail = getActiveUserEmail_();
     const ownerEmail = getSpreadsheetOwnerEmail_();
-    const resolvedEmail = userEmail || ownerEmail;
-    if (!resolvedEmail) {
+    if (!userEmail) {
       log_('Could not resolve active user email. Defaulting to restricted mode.', 'WARN');
       return false;
     }
+    const resolvedEmail = userEmail;
 
     const superAdmins = getSuperAdminEmails_();
     if (!superAdmins.length) {

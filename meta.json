@@ -1,12 +1,12 @@
 {
   "service": "gdrive-permissions-backend",
-  "version_tag": "v1.0.12",
-  "git_sha": "cdfd6234b8e8e541b4a294510beba31c00434792",
-  "build_time_utc": "2025-12-31T10:03:39.645Z",
+  "version_tag": "v1.0.13",
+  "git_sha": "f00e1bb65f6c525b04bca1dbd1631313d12a518a",
+  "build_time_utc": "2026-01-01T12:42:43.874Z",
   "artifacts": {
-    "knowledge_sha256": "df61d1a2014372d68782dedc2d801ac8842afb5fe5c48bfe400fe86defa1116f",
-    "steps_sha256": "96a358ffe66d3aad4ffbf8cf100fd3a96b694076181b6c842ae8b6563517c83d",
-    "bundle_sha256": "e25f199a29ebfc343619582cd678c62e73b8e48f07535371c9ec43cfb43b0e9d",
+    "knowledge_sha256": "fe5617c0181be3e6fe563855d7582cfd065f654b7fcb85c7bfbaba1412ef35cf",
+    "steps_sha256": "a0096b52d559168e47b028fd7038359ccd45fb03ce88929f28ee1b996982eccc",
+    "bundle_sha256": "50aa449c65dce0632c4ab13d457a8be6f6bdc966a5561e83947bc4bd51c2624e",
     "user_guide_sha256": "fde3f63cb2ec6b9bf9a638ad879641dbea688a0142f29dfe9471738231fd85ae",
     "super_admin_guide_sha256": "75cb7a0b74927661c6341d95477c59fac53169bea7c3e6c52cab97e31c7a390b",
     "sheet_editor_guide_sha256": "b73e39db12ef8d9a707bbb8b720e2df104204a66c83caef09ceb40d01e79bf27"

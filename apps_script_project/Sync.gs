@@ -440,13 +440,6 @@ function syncAdds(options = {}) {
         source: getSyncSourceLabel_(options)
       });
     }
-    if (shouldUpdateSyncStatus_(options)) {
-      updateSyncStatus_(totalSummary.failed === 0 ? 'Success' : 'Failed', {
-        summary: totalSummary,
-        durationSeconds: durationSeconds,
-        source: getSyncSourceLabel_(options)
-      });
-    }
 
     // Clear the infinite toast
     if (!silentMode) showToast_('User addition complete!', 'Add Users', 5);

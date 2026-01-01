@@ -253,13 +253,15 @@ function _buildSyncJobs(sheet, lastRow, options, headers) {
  * [HELPER] Uses Drive API search to find all existing folders in a single API call.
  */
 function _batchFindFolders(jobs, sheet, folderIdCol) {
-  const folderNamesToFind = jobs.filter(j => j.folderName && !j.folderId).map(j => `'${j.folderName.replace(/'/g, "\'" )}'`);
+  const folderNamesToFind = jobs
+    .filter(j => j.folderName && !j.folderId)
+    .map(j => escapeDriveQueryValue_(j.folderName));
   if (folderNamesToFind.length === 0) {
     log_('No folder names to find, all are specified by ID or none exist.');
     return;
   }
 
-  const query = `mimeType = 'application/vnd.google-apps.folder' and trashed = false and (${folderNamesToFind.map(name => `name = ${name}`).join(' or ')})`;
+  const query = `mimeType = 'application/vnd.google-apps.folder' and trashed = false and (${folderNamesToFind.map(name => `name = '${name}'`).join(' or ')})`;
   const existingFolders = new Map(); // name -> [folder]
   
   try {
@@ -296,6 +298,14 @@ function _batchFindFolders(jobs, sheet, folderIdCol) {
     log_('Error during batch folder search: ' + e.message, 'ERROR');
     throw e;
   }
+}
+
+function escapeDriveQueryValue_(value) {
+  return String(value)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/\r/g, ' ')
+    .replace(/\n/g, ' ');
 }
 
 /**

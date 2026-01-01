@@ -202,11 +202,11 @@ function isSuperAdmin_() {
   try {
     const userEmail = getActiveUserEmail_();
     const ownerEmail = getSpreadsheetOwnerEmail_();
-    const resolvedEmail = userEmail || ownerEmail;
-    if (!resolvedEmail) {
+    if (!userEmail) {
       log_('Could not resolve active user email. Defaulting to restricted mode.', 'WARN');
       return false;
     }
+    const resolvedEmail = userEmail;
 
     const superAdmins = getSuperAdminEmails_();
     if (!superAdmins.length) {
@@ -2366,13 +2366,15 @@ function _buildSyncJobs(sheet, lastRow, options, headers) {
  * [HELPER] Uses Drive API search to find all existing folders in a single API call.
  */
 function _batchFindFolders(jobs, sheet, folderIdCol) {
-  const folderNamesToFind = jobs.filter(j => j.folderName && !j.folderId).map(j => `'${j.folderName.replace(/'/g, "\'" )}'`);
+  const folderNamesToFind = jobs
+    .filter(j => j.folderName && !j.folderId)
+    .map(j => escapeDriveQueryValue_(j.folderName));
   if (folderNamesToFind.length === 0) {
     log_('No folder names to find, all are specified by ID or none exist.');
     return;
   }
 
-  const query = `mimeType = 'application/vnd.google-apps.folder' and trashed = false and (${folderNamesToFind.map(name => `name = ${name}`).join(' or ')})`;
+  const query = `mimeType = 'application/vnd.google-apps.folder' and trashed = false and (${folderNamesToFind.map(name => `name = '${name}'`).join(' or ')})`;
   const existingFolders = new Map(); // name -> [folder]
   
   try {
@@ -2409,6 +2411,14 @@ function _batchFindFolders(jobs, sheet, folderIdCol) {
     log_('Error during batch folder search: ' + e.message, 'ERROR');
     throw e;
   }
+}
+
+function escapeDriveQueryValue_(value) {
+  return String(value)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/\r/g, ' ')
+    .replace(/\n/g, ' ');
 }
 
 /**
@@ -6077,13 +6087,6 @@ function syncAdds(options = {}) {
     const endTime = new Date();
     const durationSeconds = (endTime - startTime) / 1000;
     logSyncHistory_(null, totalSummary, durationSeconds);
-    if (shouldUpdateSyncStatus_(options)) {
-      updateSyncStatus_(totalSummary.failed === 0 ? 'Success' : 'Failed', {
-        summary: totalSummary,
-        durationSeconds: durationSeconds,
-        source: getSyncSourceLabel_(options)
-      });
-    }
     if (shouldUpdateSyncStatus_(options)) {
       updateSyncStatus_(totalSummary.failed === 0 ? 'Success' : 'Failed', {
         summary: totalSummary,
