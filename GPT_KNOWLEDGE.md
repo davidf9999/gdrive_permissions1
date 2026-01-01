@@ -34,6 +34,7 @@ This knowledge pack provides a compact, deterministic reference for a Custom GPT
 6. [Enable APIs and grant consent](#6-enable-apis-and-grant-consent)
 7. [Deploy the Apps Script project](#7-deploy-the-apps-script-project)
 8. [Run the first sync](#8-run-the-first-sync)
+9. [Post-Setup Verification](#9-post-setup-verification)
 
 ## Setup steps (full text)
 ## 1. Create or reuse a Google Workspace tenant
@@ -169,6 +170,29 @@ This step gives `gcloud` permission to manage resources in your Google Cloud pro
 </details>
 
 After the script finishes, the management sheets will be created. See the [User Guide](USER_GUIDE.md) for next steps.
+
+
+## 9. Post-Setup Verification
+
+After the initial setup and first sync, it's a good practice to verify a few key configurations to ensure the long-term health of the system.
+
+### Verify Email Authentication (SPF & DKIM)
+
+**Why is this important?** The script sends email notifications for audits, errors, and other events. Without proper email authentication, these important emails are likely to be marked as spam or bounce.
+
+1.  **Check SPF Record:** Run the built-in sanity check script to ensure you have a correct SPF record, which tells mail servers that Google is an authorized sender for your domain.
+    ```bash
+    ./scripts/dns_sanity_check.sh your-domain.com
+    ```
+    The output should show `OK: SPF includes _spf.google.com`.
+
+2.  **Check DKIM Record:** DKIM provides a digital signature to your emails, which is critical for deliverability. Check if it's set up correctly:
+    ```bash
+    dig TXT google._domainkey.your-domain.com
+    ```
+    You should see a `v=DKIM1...` record in the output.
+
+3.  **If Records are Missing:** If your SPF record is missing or the `dig` command returns `NXDOMAIN` for DKIM, it means your setup is incomplete. For a detailed guide on how to fix this, see the **[Emails Sent from the Script are Bouncing](TROUBLESHOOTING.md#emails-sent-from-the-script-are-bouncing)** section in our troubleshooting guide.
 
 
 ## Operational notes

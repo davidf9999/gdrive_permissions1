@@ -23,3 +23,6 @@
 9. 
 *`FIRST_SYNC_COMPLETE`
 `Run the first sync`
+10. 
+*`VERIFICATION_COMPLETE`
+`Post-Setup Verification`
