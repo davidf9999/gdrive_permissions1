@@ -81,6 +81,9 @@ function createMockSheet(name, data) {
         setNote(note) {
           sheetRef.notes[row + ',' + col] = note;
         },
+        clearNote() {
+          delete sheetRef.notes[row + ',' + col];
+        },
       };
     },
     getDataRange() {
@@ -135,6 +138,10 @@ beforeEach(() => {
   global.log_ = jest.fn();
   global.getConfigValue_ = jest.fn();
   global.isUserRowDisabled_ = jest.fn(() => false);
+});
+
+afterEach(() => {
+  jest.useRealTimers();
 });
 
 describe('collectApprovalsFromRow_', () => {
@@ -212,6 +219,42 @@ describe('processChangeRequests_', () => {
 
     expect(changeSheet.notes['1,1']).toContain('exceeds active sheet editors');
     expect(changeSheet.data[1][CHANGE_REQUEST_STATUS_COL - 1]).toBe('PENDING');
+    expect(targetSheet.data[1][1]).toBe('Original Name');
+  });
+
+  it('expires pending requests after configured hours', () => {
+    const now = new Date('2024-01-02T00:00:00Z');
+    jest.useFakeTimers().setSystemTime(now);
+
+    const changeRequestsData = [
+      ['ID', 'RequestedBy', 'RequestedAt', 'TargetSheet', 'TargetRowKey', 'Action', 'ProposedRowSnapshot', 'Status', 'ApprovalsNeeded', 'Approver1', 'Approver2', 'Extra', 'DenyReason', 'AppliedAt'],
+      ['CR-1', 'requester@example.com', new Date('2024-01-01T00:00:00Z'), 'ManagedFolders', 1, 'UPDATE', JSON.stringify(['1', 'Updated Name', '']), 'PENDING', 2, '', '', '', '', ''],
+    ];
+
+    const targetSheetData = [
+      ['ID', 'Name', 'Delete'],
+      [1, 'Original Name', false],
+    ];
+
+    const changeSheet = createMockSheet(CHANGE_REQUESTS_SHEET_NAME, changeRequestsData);
+    const targetSheet = createMockSheet('ManagedFolders', targetSheetData);
+    const spreadsheet = createMockSpreadsheet([changeSheet, targetSheet]);
+
+    global.SpreadsheetApp = {
+      getActiveSpreadsheet: jest.fn(() => spreadsheet),
+    };
+
+    jest.spyOn(global, 'getApprovalsConfig_').mockReturnValue({
+      enabled: true,
+      requiredApprovals: 2,
+      expiryHours: 1,
+      availableEditors: 3,
+    });
+
+    processChangeRequests_({ silentMode: true });
+
+    expect(changeSheet.data[1][CHANGE_REQUEST_STATUS_COL - 1]).toBe(CHANGE_REQUEST_STATUS_EXPIRED);
+    expect(changeSheet.data[1][CHANGE_REQUEST_DENY_REASON_COL - 1]).toContain('Expired');
     expect(targetSheet.data[1][1]).toBe('Original Name');
   });
 });

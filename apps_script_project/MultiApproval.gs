@@ -37,6 +37,7 @@ function processChangeRequests_(options = {}) {
     return;
   }
 
+  sheet.getRange(1, 1).clearNote();
   if (approvalsConfig.enabled && approvalsConfig.availableEditors > 0 && approvalsConfig.requiredApprovals > approvalsConfig.availableEditors) {
     const warning = 'Required approvals (' + approvalsConfig.requiredApprovals + ') exceeds active sheet editors (' + approvalsConfig.availableEditors + ').';
     sheet.getRange(1, 1).setNote(warning);
