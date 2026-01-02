@@ -2,6 +2,30 @@
  * MultiApproval.gs - Sheet-only change request gating
  */
 
+const CHANGE_REQUESTS_SHEET_NAME = 'ChangeRequests';
+
+// Column mapping for the ChangeRequests sheet
+const CHANGE_REQUEST_ID_COL = 1;
+const CHANGE_REQUEST_REQUESTED_BY_COL = 2;
+const CHANGE_REQUEST_REQUESTED_AT_COL = 3;
+const CHANGE_REQUEST_TARGET_SHEET_COL = 4;
+const CHANGE_REQUEST_TARGET_ROW_KEY_COL = 5;
+const CHANGE_REQUEST_ACTION_COL = 6;
+const CHANGE_REQUEST_PROPOSED_SNAPSHOT_COL = 7;
+const CHANGE_REQUEST_STATUS_COL = 8;
+const CHANGE_REQUEST_APPROVALS_NEEDED_COL = 9;
+const CHANGE_REQUEST_FIRST_APPROVER_COL = 10;
+const CHANGE_REQUEST_DENY_REASON_COL = 13;
+const CHANGE_REQUEST_APPLIED_AT_COL = 14;
+
+// Change request statuses
+const CHANGE_REQUEST_STATUS_PENDING = 'PENDING';
+const CHANGE_REQUEST_STATUS_APPROVED = 'APPROVED';
+const CHANGE_REQUEST_STATUS_DENIED = 'DENIED';
+const CHANGE_REQUEST_STATUS_CANCELLED = 'CANCELLED';
+const CHANGE_REQUEST_STATUS_APPLIED = 'APPLIED';
+const CHANGE_REQUEST_STATUS_EXPIRED = 'EXPIRED';
+
 /**
  * Handles edits within the ChangeRequests sheet (simple trigger friendly).
  * Normalizes requester metadata and updates approval counts in-place.
