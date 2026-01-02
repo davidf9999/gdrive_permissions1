@@ -61,7 +61,18 @@ function processManagedFolders_(options = {}) {
     return;
   }
 
-  if (!returnPlanOnly && !silentMode) setSheetUiStyles_();
+  // Get header map for dynamic column resolution
+  const headers = getHeaderMap_(sheet);
+  const folderNameCol = resolveColumn_(headers, 'foldername', 1);
+  const folderIdCol = resolveColumn_(headers, 'folderid', 2);
+  const roleCol = resolveColumn_(headers, 'role', 3);
+  const groupEmailCol = resolveColumn_(headers, 'groupemail', 4);
+  const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+  const lastSyncedCol = resolveColumn_(headers, 'last synced', 6);
+  const statusCol = resolveColumn_(headers, 'status', 7);
+  const urlCol = resolveColumn_(headers, 'url', 8);
+
+  if (!returnPlanOnly && !silentMode) setSheetUiStyles_(headers);
 
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) {
@@ -71,7 +82,7 @@ function processManagedFolders_(options = {}) {
 
   const executionId = new Date().getTime() + '_' + Math.random().toString().substring(2);
   const lockManager = createSheetLockManager_(options.enableSheetLocking, executionId);
-  const jobs = _buildSyncJobs(sheet, lastRow, options);
+  const jobs = _buildSyncJobs(sheet, lastRow, options, headers);
 
   if (jobs.length === 0) {
     log_('No valid jobs to process.');
@@ -133,13 +144,13 @@ function processManagedFolders_(options = {}) {
 
     // --- Full Batch Sync ---
     log_('Step 1/5: Finding existing folders...');
-    _batchFindFolders(jobsToProcess, sheet);
+    _batchFindFolders(jobsToProcess, sheet, folderIdCol);
 
     log_('Step 2/5: Creating new folders...');
-    _sequentiallyCreateFolders(jobsToProcess, sheet, silentMode, totalSummary);
+    _sequentiallyCreateFolders(jobsToProcess, sheet, silentMode, totalSummary, { folderIdCol, folderNameCol, urlCol, statusCol });
 
     log_('Step 3/5: Creating groups and user sheets...');
-    _sequentiallyCreateGroupsAndSheets(jobsToProcess, sheet, lockManager, totalSummary);
+    _sequentiallyCreateGroupsAndSheets(jobsToProcess, sheet, lockManager, totalSummary, { userSheetNameCol, groupEmailCol, statusCol });
 
     log_('Step 4/5: Batch-setting folder permissions...');
     const permSummary = _batchSetPermissions(jobsToProcess);
@@ -155,17 +166,17 @@ function processManagedFolders_(options = {}) {
                 totalSummary.added += syncSummary.added;
                 totalSummary.removed += syncSummary.removed;
                 totalSummary.failed += syncSummary.failed;
-                sheet.getRange(job.rowIndex, STATUS_COL).setValue('OK');
-                sheet.getRange(job.rowIndex, LAST_SYNCED_COL).setValue(formatSpreadsheetTimestamp_(ss));
+                sheet.getRange(job.rowIndex, statusCol).setValue('OK');
+                sheet.getRange(job.rowIndex, lastSyncedCol).setValue(formatSpreadsheetTimestamp_(ss));
             } catch (e) {
                 log_(`Error syncing members for ${job.folderName}: ${e.message}`, 'ERROR');
                 totalSummary.failed++;
-                sheet.getRange(job.rowIndex, STATUS_COL).setValue('Error');
+                sheet.getRange(job.rowIndex, statusCol).setValue('Error');
             }
         });
     } else {
         log_('Skipping group membership sync (Admin SDK not available).', 'WARN');
-        jobsToProcess.forEach(job => sheet.getRange(job.rowIndex, STATUS_COL).setValue('SKIPPED (No Admin SDK)'));
+        jobsToProcess.forEach(job => sheet.getRange(job.rowIndex, statusCol).setValue('SKIPPED (No Admin SDK)'));
     }
 
     log_('*** Batch-oriented processing finished.');
@@ -185,19 +196,27 @@ function processManagedFolders_(options = {}) {
 /**
  * [HELPER] Reads the ManagedFolders sheet and builds a list of job objects.
  */
-function _buildSyncJobs(sheet, lastRow, options) {
+function _buildSyncJobs(sheet, lastRow, options, headers) {
   const onlySyncPrefixes = options.onlySyncPrefixes;
   const onlySyncRowIndexes = options.onlySyncRowIndexes;
+  
+  // Resolve columns from headers map
+  const folderNameCol = resolveColumn_(headers, 'foldername', 1);
+  const folderIdCol = resolveColumn_(headers, 'folderid', 2);
+  const roleCol = resolveColumn_(headers, 'role', 3);
+  const groupEmailCol = resolveColumn_(headers, 'groupemail', 4);
+  const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+  const statusCol = resolveColumn_(headers, 'status', 7);
 
   log_('Building sync jobs from ManagedFolders sheet...');
   const jobs = [];
-  const data = sheet.getRange(2, 1, lastRow - 1, Math.max(FOLDER_NAME_COL, ROLE_COL, GROUP_EMAIL_COL, USER_SHEET_NAME_COL)).getValues();
+  const data = sheet.getRange(2, 1, lastRow - 1, Math.max(...Object.values(headers))).getValues();
 
   data.forEach((row, i) => {
     const rowIndex = i + 2;
-    const folderName = row[FOLDER_NAME_COL - 1];
-    const folderId = row[FOLDER_ID_COL - 1];
-    const role = row[ROLE_COL - 1];
+    const folderName = row[folderNameCol - 1];
+    const folderId = row[folderIdCol - 1];
+    const role = row[roleCol - 1];
 
     if (!folderName && !folderId) return; // Skip empty rows
 
@@ -211,7 +230,7 @@ function _buildSyncJobs(sheet, lastRow, options) {
     
     if (!role) {
         log_(`Skipping row ${rowIndex} due to missing role for folder "${folderName}".`, 'ERROR');
-        sheet.getRange(rowIndex, STATUS_COL).setValue('Error: Role is missing');
+        sheet.getRange(rowIndex, statusCol).setValue('Error: Role is missing');
         return;
     }
 
@@ -220,8 +239,8 @@ function _buildSyncJobs(sheet, lastRow, options) {
       folderName: folderName,
       folderId: folderId,
       role: role,
-      existingGroupEmail: row[GROUP_EMAIL_COL - 1],
-      existingUserSheetName: row[USER_SHEET_NAME_COL - 1],
+      existingGroupEmail: row[groupEmailCol - 1],
+      existingUserSheetName: row[userSheetNameCol - 1],
       folder: null // To be populated later
     };
     jobs.push(job);
@@ -233,14 +252,16 @@ function _buildSyncJobs(sheet, lastRow, options) {
 /**
  * [HELPER] Uses Drive API search to find all existing folders in a single API call.
  */
-function _batchFindFolders(jobs, sheet) {
-  const folderNamesToFind = jobs.filter(j => j.folderName && !j.folderId).map(j => `'${j.folderName.replace(/'/g, "\'" )}'`);
+function _batchFindFolders(jobs, sheet, folderIdCol) {
+  const folderNamesToFind = jobs
+    .filter(j => j.folderName && !j.folderId)
+    .map(j => escapeDriveQueryValue_(j.folderName));
   if (folderNamesToFind.length === 0) {
     log_('No folder names to find, all are specified by ID or none exist.');
     return;
   }
 
-  const query = `mimeType = 'application/vnd.google-apps.folder' and trashed = false and (${folderNamesToFind.map(name => `name = ${name}`).join(' or ')})`;
+  const query = `mimeType = 'application/vnd.google-apps.folder' and trashed = false and (${folderNamesToFind.map(name => `name = '${name}'`).join(' or ')})`;
   const existingFolders = new Map(); // name -> [folder]
   
   try {
@@ -270,7 +291,7 @@ function _batchFindFolders(jobs, sheet) {
         }
         job.folder = found[0];
         job.folderId = found[0].id;
-        sheet.getRange(job.rowIndex, FOLDER_ID_COL).setValue(job.folderId);
+        sheet.getRange(job.rowIndex, folderIdCol).setValue(job.folderId);
       }
     });
   } catch(e) {
@@ -279,10 +300,19 @@ function _batchFindFolders(jobs, sheet) {
   }
 }
 
+function escapeDriveQueryValue_(value) {
+  return String(value)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/\r/g, ' ')
+    .replace(/\n/g, ' ');
+}
+
 /**
  * [HELPER] Sequentially creates folders that were not found in the batch find operation.
  */
-function _sequentiallyCreateFolders(jobs, sheet, silentMode, totalSummary) {
+function _sequentiallyCreateFolders(jobs, sheet, silentMode, totalSummary, colMap) {
+    const { folderIdCol, folderNameCol, urlCol, statusCol } = colMap;
     jobs.forEach(job => {
         try {
             if (job.folder) return; // Already found or processed
@@ -295,12 +325,12 @@ function _sequentiallyCreateFolders(jobs, sheet, silentMode, totalSummary) {
             }
 
             // Write updates to sheet immediately
-            sheet.getRange(job.rowIndex, FOLDER_ID_COL).setValue(job.folderId);
-            sheet.getRange(job.rowIndex, FOLDER_NAME_COL).setValue(job.folderName);
-            sheet.getRange(job.rowIndex, URL_COL).setValue(result.folder.getUrl());
+            sheet.getRange(job.rowIndex, folderIdCol).setValue(job.folderId);
+            sheet.getRange(job.rowIndex, folderNameCol).setValue(job.folderName);
+            sheet.getRange(job.rowIndex, urlCol).setValue(result.folder.getUrl());
         } catch (e) {
             log_(`Failed to get/create folder for row ${job.rowIndex}: ${e.message}`, 'ERROR');
-            sheet.getRange(job.rowIndex, STATUS_COL).setValue('Error: Folder creation failed');
+            sheet.getRange(job.rowIndex, statusCol).setValue('Error: Folder creation failed');
             job.error = true; // Mark job as failed
             totalSummary.failed++;
         }
@@ -310,7 +340,8 @@ function _sequentiallyCreateFolders(jobs, sheet, silentMode, totalSummary) {
 /**
  * [HELPER] Sequentially creates groups and user sheets for jobs that need them.
  */
-function _sequentiallyCreateGroupsAndSheets(jobs, sheet, lockManager, totalSummary) {
+function _sequentiallyCreateGroupsAndSheets(jobs, sheet, lockManager, totalSummary, colMap) {
+  const { userSheetNameCol, groupEmailCol, statusCol } = colMap;
   if (shouldSkipGroupOps_()) {
       log_('Skipping group/sheet creation (Admin SDK not available).', 'WARN');
       return;
@@ -331,7 +362,7 @@ function _sequentiallyCreateGroupsAndSheets(jobs, sheet, lockManager, totalSumma
         groupEmail = generateGroupEmail_(userSheetName);
       } catch (e) {
         log_(`Failed to generate group email for row ${job.rowIndex}: ${e.message}`, 'ERROR');
-        sheet.getRange(job.rowIndex, STATUS_COL).setValue('Error: Bad group name');
+        sheet.getRange(job.rowIndex, statusCol).setValue('Error: Bad group name');
         job.error = true;
         totalSummary.failed++;
         return;
@@ -340,8 +371,8 @@ function _sequentiallyCreateGroupsAndSheets(jobs, sheet, lockManager, totalSumma
     job.groupEmail = groupEmail;
 
     // Write updates to sheet
-    sheet.getRange(job.rowIndex, USER_SHEET_NAME_COL).setValue(job.userSheetName);
-    sheet.getRange(job.rowIndex, GROUP_EMAIL_COL).setValue(job.groupEmail);
+    sheet.getRange(job.rowIndex, userSheetNameCol).setValue(job.userSheetName);
+    sheet.getRange(job.rowIndex, groupEmailCol).setValue(job.groupEmail);
 
     // Create resources
     const sheetResult = getOrCreateUserSheet_(job.userSheetName);
@@ -498,12 +529,15 @@ function checkForOrphanSheets_() {
     requiredSheetNames.add(TEST_LOG_SHEET_NAME);
     requiredSheetNames.add(FOLDER_AUDIT_LOG_SHEET_NAME);
     requiredSheetNames.add(SYNC_HISTORY_SHEET_NAME);
+    requiredSheetNames.add(STATUS_SHEET_NAME);
     requiredSheetNames.add('DeepFolderAuditLog');
     requiredSheetNames.add('Help');
 
     const managedSheet = spreadsheet.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
     if (managedSheet && managedSheet.getLastRow() > 1) {
-      const userSheetNames = managedSheet.getRange(2, USER_SHEET_NAME_COL, managedSheet.getLastRow() - 1, 1).getValues();
+      const headers = getHeaderMap_(managedSheet);
+      const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+      const userSheetNames = managedSheet.getRange(2, userSheetNameCol, managedSheet.getLastRow() - 1, 1).getValues();
       if (userSheetNames) {
           userSheetNames.forEach(function(row) {
             if (row[0]) requiredSheetNames.add(row[0]);
@@ -516,14 +550,26 @@ function checkForOrphanSheets_() {
         const groupSheetNames = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 1).getValues();
         if (groupSheetNames) {
             groupSheetNames.forEach(function(row) {
-                if (row[0]) requiredSheetNames.add(row[0] + '_G');
+                if (row[0]) requiredSheetNames.add(getUserGroupSheetName_(row[0]));
             });
         }
     }
 
-    const orphanSheetNames = allSheetNames.filter(function(name) {
-        return !requiredSheetNames.has(name) && !isTestSheet_(name);
-    });
+    const orphanSheetNames = allSheets
+      .filter(function(sheet) {
+        const name = sheet.getName();
+        if (requiredSheetNames.has(name)) {
+          return false;
+        }
+        if (isTestSheet_(name)) {
+          return false;
+        }
+        if (isSystemSheet_(sheet)) {
+          return false;
+        }
+        return true;
+      })
+      .map(function(sheet) { return sheet.getName(); });
 
     if (orphanSheetNames.includes('Sheet1')) {
       const sheet1 = spreadsheet.getSheetByName('Sheet1');
@@ -654,13 +700,17 @@ function processUserGroupDeletions_(summary) {
   const sheet = ss.getSheetByName(USER_GROUPS_SHEET_NAME);
   if (!sheet || sheet.getLastRow() < 2) return;
 
-  const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, USERGROUPS_DELETE_COL).getValues();
+  const headers = getHeaderMap_(sheet);
+  const deleteCol = resolveColumn_(headers, 'delete', 6);
+  const statusCol = resolveColumn_(headers, 'status', 5);
+  
+  const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, deleteCol).getValues();
   const rowsToDelete = [];
 
   for (let i = data.length - 1; i >= 0; i--) {
     const groupName = data[i][0];
     const groupEmail = data[i][1];
-    const deleteFlag = data[i][USERGROUPS_DELETE_COL - 1]; // Column F
+    const deleteFlag = data[i][deleteCol - 1];
 
     if (!deleteFlag) continue; // Skip unchecked
 
@@ -668,7 +718,7 @@ function processUserGroupDeletions_(summary) {
 
     try {
       log_(`Deleting UserGroup: "${groupName}" (${groupEmail})`, 'INFO');
-      sheet.getRange(rowNum, 5).setValue('🗑️ DELETING...'); // Status column
+      sheet.getRange(rowNum, statusCol).setValue('🗑️ DELETING...');
       SpreadsheetApp.flush();
 
       // 1. Delete Google Group
@@ -686,7 +736,7 @@ function processUserGroupDeletions_(summary) {
       }
 
       // 2. Delete user sheet (GroupName_G)
-      const userSheetName = groupName + '_G';
+      const userSheetName = getUserGroupSheetName_(groupName);
       const userSheet = ss.getSheetByName(userSheetName);
       if (userSheet) {
         ss.deleteSheet(userSheet);
@@ -707,7 +757,7 @@ function processUserGroupDeletions_(summary) {
 
     } catch (e) {
       log_(`✗ Failed to delete UserGroup "${groupName}": ${e.message}`, 'ERROR');
-      sheet.getRange(rowNum, 5).setValue(`❌ Deletion failed: ${e.message}`);
+      sheet.getRange(rowNum, statusCol).setValue(`❌ Deletion failed: ${e.message}`);
       summary.errors.push({ type: 'UserGroup', name: groupName, error: e.message });
     }
   }
@@ -729,14 +779,23 @@ function processManagedFolderDeletions_(summary) {
   const sheet = ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
   if (!sheet || sheet.getLastRow() < 2) return;
 
-  const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, DELETE_COL).getValues();
+  const headers = getHeaderMap_(sheet);
+  const folderIdCol = resolveColumn_(headers, 'folderid', 2);
+  const deleteCol = resolveColumn_(headers, 'delete', 9);
+  const folderNameCol = resolveColumn_(headers, 'foldername', 1);
+  const roleCol = resolveColumn_(headers, 'role', 3);
+  const groupEmailCol = resolveColumn_(headers, 'groupemail', 4);
+  const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+  const statusCol = resolveColumn_(headers, 'status', 7);
+
+  const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, deleteCol).getValues();
   const rowsToDelete = [];
 
   // Track folders to detect when last binding is deleted
   const folderBindingCounts = {};
   for (let i = 0; i < data.length; i++) {
-    const folderId = data[i][FOLDER_ID_COL - 1];
-    const deleteFlag = data[i][DELETE_COL - 1];
+    const folderId = data[i][folderIdCol - 1];
+    const deleteFlag = data[i][deleteCol - 1];
     if (folderId) {
       if (!folderBindingCounts[folderId]) {
         folderBindingCounts[folderId] = { total: 0, toDelete: 0 };
@@ -749,12 +808,12 @@ function processManagedFolderDeletions_(summary) {
   }
 
   for (let i = data.length - 1; i >= 0; i--) {
-    const folderName = data[i][FOLDER_NAME_COL - 1];
-    const folderId = data[i][FOLDER_ID_COL - 1];
-    const role = data[i][ROLE_COL - 1];
-    const groupEmail = data[i][GROUP_EMAIL_COL - 1];
-    const userSheetName = data[i][USER_SHEET_NAME_COL - 1];
-    const deleteFlag = data[i][DELETE_COL - 1]; // Column I
+    const folderName = data[i][folderNameCol - 1];
+    const folderId = data[i][folderIdCol - 1];
+    const role = data[i][roleCol - 1];
+    const groupEmail = data[i][groupEmailCol - 1];
+    const userSheetName = data[i][userSheetNameCol - 1];
+    const deleteFlag = data[i][deleteCol - 1];
 
     if (!deleteFlag) continue; // Skip unchecked
 
@@ -762,7 +821,7 @@ function processManagedFolderDeletions_(summary) {
 
     try {
       log_(`Deleting folder-role binding: "${folderName}" (${role})`, 'INFO');
-      sheet.getRange(rowNum, STATUS_COL).setValue('🗑️ DELETING...'); // Status column
+      sheet.getRange(rowNum, statusCol).setValue('🗑️ DELETING...');
       SpreadsheetApp.flush();
 
       // 1. Remove group from folder permissions
@@ -819,7 +878,7 @@ function processManagedFolderDeletions_(summary) {
 
     } catch (e) {
       log_(`✗ Failed to delete folder-role binding "${folderName}" (${role}): ${e.message}`, 'ERROR');
-      sheet.getRange(rowNum, STATUS_COL).setValue(`❌ Deletion failed: ${e.message}`);
+      sheet.getRange(rowNum, statusCol).setValue(`❌ Deletion failed: ${e.message}`);
       summary.errors.push({ type: 'FolderRole', name: `${folderName} (${role})`, error: e.message });
     }
   }
@@ -840,11 +899,14 @@ function updateDeleteStatusWarnings_() {
   // Update ManagedFolders sheet
   const managedSheet = ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
   if (managedSheet && managedSheet.getLastRow() >= 2) {
-    const data = managedSheet.getRange(2, 1, managedSheet.getLastRow() - 1, DELETE_COL).getValues();
+    const headers = getHeaderMap_(managedSheet);
+    const deleteCol = resolveColumn_(headers, 'delete', 9);
+    const statusCol = resolveColumn_(headers, 'status', 7);
+    const data = managedSheet.getRange(2, 1, managedSheet.getLastRow() - 1, deleteCol).getValues();
     for (let i = 0; i < data.length; i++) {
-      const deleteFlag = data[i][DELETE_COL - 1];
+      const deleteFlag = data[i][deleteCol - 1];
       if (deleteFlag) {
-        managedSheet.getRange(i + 2, STATUS_COL).setValue('⚠️ Deletion disabled in Config');
+        managedSheet.getRange(i + 2, statusCol).setValue('⚠️ Deletion disabled in Config');
       }
     }
   }
@@ -852,11 +914,14 @@ function updateDeleteStatusWarnings_() {
   // Update UserGroups sheet
   const userGroupsSheet = ss.getSheetByName(USER_GROUPS_SHEET_NAME);
   if (userGroupsSheet && userGroupsSheet.getLastRow() >= 2) {
-    const data = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, USERGROUPS_DELETE_COL).getValues();
+    const headers = getHeaderMap_(userGroupsSheet);
+    const deleteCol = resolveColumn_(headers, 'delete', 6);
+    const statusCol = resolveColumn_(headers, 'status', 5);
+    const data = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, deleteCol).getValues();
     for (let i = 0; i < data.length; i++) {
-      const deleteFlag = data[i][USERGROUPS_DELETE_COL - 1];
+      const deleteFlag = data[i][deleteCol - 1];
       if (deleteFlag) {
-        userGroupsSheet.getRange(i + 2, 5).setValue('⚠️ Deletion disabled in Config'); // Status column
+        userGroupsSheet.getRange(i + 2, statusCol).setValue('⚠️ Deletion disabled in Config');
       }
     }
   }
@@ -1444,7 +1509,7 @@ function setFolderPermission_(folderId, groupEmail, role) {
   }
 }
 
-function setSheetUiStyles_() {
+function setSheetUiStyles_(headers) {
   try {
     const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
     if (managedSheet && managedSheet.getLastRow() >= 2) {
@@ -1457,11 +1522,13 @@ function setSheetUiStyles_() {
         });
 
         // Clear old background colors from columns that might have been protected before
-        const clearBgRange = managedSheet.getRange(2, 1, managedSheet.getLastRow() - 1, URL_COL);
+        const urlCol = resolveColumn_(headers, 'url', 8);
+        const clearBgRange = managedSheet.getRange(2, 1, managedSheet.getLastRow() - 1, urlCol);
         clearBgRange.setBackground(null);
 
         // Now apply new protection and styling to columns 5-8 only
-        const range = managedSheet.getRange(2, USER_SHEET_NAME_COL, managedSheet.getLastRow() - 1, 4);
+        const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+        const range = managedSheet.getRange(2, userSheetNameCol, managedSheet.getLastRow() - 1, 4);
         range.setBackground('#f3f3f3');
         const protection = range.protect().setDescription('These columns are managed by the script.');
         protection.setWarningOnly(true);
@@ -1502,7 +1569,9 @@ function getAllManagedSheetNames_() {
   // From ManagedFolders
   const managedFoldersSheet = ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
   if (managedFoldersSheet && managedFoldersSheet.getLastRow() > 1) {
-    const userSheetNames = managedFoldersSheet.getRange(2, USER_SHEET_NAME_COL, managedFoldersSheet.getLastRow() - 1, 1).getValues();
+    const headers = getHeaderMap_(managedFoldersSheet);
+    const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+    const userSheetNames = managedFoldersSheet.getRange(2, userSheetNameCol, managedFoldersSheet.getLastRow() - 1, 1).getValues();
     userSheetNames.forEach(function(row) {
       if (row[0]) {
         managedSheetNames.add(row[0]);
@@ -1516,7 +1585,7 @@ function getAllManagedSheetNames_() {
     const groupNames = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 1).getValues();
     groupNames.forEach(function(row) {
       if (row[0]) {
-        managedSheetNames.add(row[0] + '_G');
+        managedSheetNames.add(getUserGroupSheetName_(row[0]));
       }
     });
   }
@@ -1535,7 +1604,7 @@ function updateUserSheetHeaders_() {
       // Only process user sheets (not control sheets)
       if (managedSheetNames.has(sheetName) &&
           sheetName !== MANAGED_FOLDERS_SHEET_NAME &&
-          sheetName !== ADMINS_SHEET_NAME &&
+          sheetName !== SHEET_EDITORS_SHEET_NAME &&
           sheetName !== USER_GROUPS_SHEET_NAME &&
           sheetName !== CONFIG_SHEET_NAME &&
           sheetName !== LOG_SHEET_NAME &&
@@ -1562,15 +1631,20 @@ function validateManagedFolders_() {
   if (lastRow < 2) {
     return; // No data rows to validate.
   }
+  
+  const headers = getHeaderMap_(sheet);
+  const folderNameCol = resolveColumn_(headers, 'foldername', 1);
+  const folderIdCol = resolveColumn_(headers, 'folderid', 2);
+  const roleCol = resolveColumn_(headers, 'role', 3);
 
-  const data = sheet.getRange(2, 1, lastRow - 1, ROLE_COL).getValues();
+  const data = sheet.getRange(2, 1, lastRow - 1, Math.max(folderNameCol, folderIdCol, roleCol)).getValues();
   const errors = [];
 
   for (let i = 0; i < data.length; i++) {
     const row = data[i];
-    const folderName = row[FOLDER_NAME_COL - 1];
-    const folderId = row[FOLDER_ID_COL - 1];
-    const role = row[ROLE_COL - 1];
+    const folderName = row[folderNameCol - 1];
+    const folderId = row[folderIdCol - 1];
+    const role = row[roleCol - 1];
 
     if ((folderName || folderId) && !role) {
       errors.push(`Row ${i + 2}: Role is not specified.`);

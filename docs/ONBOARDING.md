@@ -5,6 +5,10 @@ Use this quick reference while following the main setup instructions in the
 [Workspace setup guide](WORKSPACE_SETUP.md). It highlights the prerequisites you
 must satisfy before running the Apps Script for the first time.
 
+## Assistant scope
+
+The OpenAI GPT Assistant supports setup and usage questions, with answers tailored to **Super Admin** and **Sheet Editor** roles. Testing guidance is out of scope; refer to `docs/TESTING.md`.
+
 ## Workspace prerequisites
 
 - [ ] You are using a **Google Workspace** domain (consumer Gmail accounts are

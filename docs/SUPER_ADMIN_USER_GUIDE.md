@@ -4,11 +4,15 @@
 
 **Crucial Prerequisite:** To perform any of the actions in this guide, you must be a Google Workspace Super Admin **and** have permission to edit the Permissions Manager Google Sheet. This permission is granted in one of two ways:
 *   **By being the Owner of the spreadsheet file.**
-*   **By being listed as an active user in the `SheetEditors` sheet.**
+*   **By being listed as an active user in the `SheetEditors_G` sheet.**
 
-Being a Super Admin alone does **not** automatically grant you access to the sheet. The script will always treat the spreadsheet Owner as an editor, even if they are not listed in the `SheetEditors` sheet.
+Being a Super Admin alone does **not** automatically grant you access to the sheet. The script will always treat the spreadsheet Owner as an editor, even if they are not listed in the `SheetEditors_G` sheet.
 
 ---
+
+## Assistant Scope
+
+The OpenAI GPT Assistant can answer setup and usage questions for Super Admins, but it will first confirm your role. Testing guidance is out of scope; refer to `docs/TESTING.md`.
 
 ## The Super Admin Role
 
@@ -29,14 +33,14 @@ All core actions are run from the spreadsheet menu: **Permissions Manager**.
 
 These functions read the control sheets and apply the defined state to Google Drive and Google Groups.
 
-*   **`Add/Enable Users in Groups`**: A non-destructive sync. It **adds or re-enables** members in groups based on the control sheets. It will create new folders and groups if they don't exist. It will **not** disable anyone. This is safe to run to apply additions or reversals of prior disables.
-*   **`Remove/Disable Users from Groups`**: A destructive sync. It **removes/marks users as disabled** in groups when they have been removed from the user sheets. It will **not** add or re-enable anyone. You will be asked to confirm before it proceeds.
+*   **`Sync Groups - Add/Enable Users`**: A non-destructive sync. It **adds or re-enables** members in groups based on the control sheets. It will create new folders and groups if they don't exist. It will **not** disable anyone. This is safe to run to apply additions or reversals of prior disables.
+*   **`Sync Groups - Remove/Disable Users`**: A destructive sync. It **removes/marks users as disabled** in groups when they have been removed from the user sheets. It will **not** add or re-enable anyone. You will be asked to confirm before it proceeds.
 *   **`Full Sync`**: Performs both additions and removals in one operation. It also processes deletion requests for entire groups or folder-role bindings. **This is the most powerful sync and should be used with care.**
 
 For changes made by Sheet Editors to be reflected in Google Drive and Google Groups, these synchronization functions must be executed. This can happen in two ways:
 
 1.  **Manual Sync:** A Super Admin (or the Script Owner) manually selects one of the above menu items. This provides immediate application of changes.
-2.  **Auto Sync:** The `autoSync` feature, if enabled and configured (refer to the `Config` sheet settings and the "Setup AutoSync" menu option), will periodically run the synchronization in the background. A Super Admin must ensure `autoSync` is correctly configured for automated application of changes.
+2.  **Auto Sync:** The `autoSync` feature, if enabled and configured (refer to the `Config` sheet settings and the "Enable/Update AutoSync" menu option), will periodically run the synchronization in the background. A Super Admin must ensure `autoSync` is correctly configured for automated application of changes.
 
 ### Verifying Permissions with the Folders Audit
 
@@ -44,7 +48,7 @@ The script includes a powerful, read-only **Folders Audit** feature that lets yo
 
 #### How to Run the Audit
 
-From the spreadsheet menu, select **Permissions Manager > Folders Audit**.
+From the spreadsheet menu, select **Permissions Manager > Audits > Folders Audit**.
 
 The script will run in the background and post its findings to a dedicated log sheet.
 
@@ -74,7 +78,7 @@ When this setting is `FALSE`, any rows marked for deletion will show a status wa
 ### How to Delete
 
 1.  A Sheet Editor (or you) marks the item for deletion by checking the **Delete** checkbox in the `ManagedFolders` (Column I) or `UserGroups` (Column F) sheet.
-2.  You, the Super Admin, run **Permissions Manager > Full Sync**.
+2.  You, the Super Admin, run **Permissions Manager > ManualSync > Full Sync**.
 
 **What happens:**
 - The Google Group is deleted from Google Workspace.
@@ -97,7 +101,8 @@ The `Config` sheet allows you to configure advanced settings.
 
 | Setting | Description |
 | :--- | :--- |
-| `EnableAutoSync` | Set to `TRUE` to allow the time-based trigger to run. `FALSE` pauses automatic syncing. |
+| `AutoSyncInterval` | The interval in minutes for the AutoSync trigger. Minimum is 5 minutes. Use **Permissions Manager → AutoSync → 🚀 Enable/Update AutoSync** to apply a new interval. |
+| `AllowAutosyncDeletion` | When `TRUE`, AutoSync will remove users from groups automatically. When `FALSE`, deletions require manual approval. |
 | `NotificationEmail` | The email address where important notifications (like errors or pending deletions) will be sent. |
 | `AllowGroupFolderDeletion` | Set to `TRUE` to allow the `Full Sync` operation to process deletions marked with the Delete checkbox. |
 | `EnableGCPLogging` | Experimental; keep `FALSE` on the main branch. Use the `feature/gcp-logging-experimental` branch and set to `TRUE` there to send logs to Google Cloud Logging (requires a linked GCP project). |

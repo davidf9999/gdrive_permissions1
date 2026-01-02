@@ -9,10 +9,12 @@
   "scripts": {
     "test": "jest",
     "test:email": "RUN_EMAIL_TEST=1 jest --runTestsByPath tests/manual/EmailCapability.test.js",
-    "build": "npm run build:docs && npm run build:bundle",
+    "build": "npm run build:docs && npm run build:bundle && npm run build:meta",
     "build:docs": "node scripts/build-docs.js",
     "build:bundle": "node create_apps_scripts_bundle.js",
-    "clean": "rm -rf dist && rm -f docs/SETUP_GUIDE.md && rm -f AI_ASSISTANT_PROMPT.md && rm -f docs/common/_AI_MENU.md && rm -f docs/common/_AI_STATE_DEFINITIONS.md && rm -f docs/common/_SETUP_STEPS_LIST.md && rm -f docs/common/_SETUP_STEPS.md",
+    "build:meta": "node scripts/generate-meta.js",
+    "start:backend": "node backend/server.js",
+    "clean": "rm -rf dist && rm -f docs/SETUP_GUIDE.md && rm -f AI_ASSISTANT_PROMPT.md && rm -f GPT_KNOWLEDGE.md && rm -f GPT_PROMPT.md && rm -f docs/common/_AI_MENU.md && rm -f docs/common/_AI_STATE_DEFINITIONS.md && rm -f docs/common/_SETUP_STEPS_LIST.md && rm -f docs/common/_SETUP_STEPS.md",
     "format": "prettier --write apps_script_project/"
   },
   "repository": {

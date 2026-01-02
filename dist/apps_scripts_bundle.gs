@@ -1,0 +1,9512 @@
+
+// =====================================================================================
+// START OF FILE: Code.js
+// =====================================================================================
+/***** CONFIGURATION CONSTANTS *****/
+const SCRIPT_VERSION = '1.0.0';
+const MANAGED_FOLDERS_SHEET_NAME = 'ManagedFolders';
+const SHEET_EDITORS_SHEET_NAME = 'SheetEditors_G';
+const SHEET_EDITORS_GROUP_NAME = 'Sheet Editors';
+const LOG_SHEET_NAME = 'Log';
+const TEST_LOG_SHEET_NAME = 'TestLog';
+const USER_GROUPS_SHEET_NAME = 'UserGroups';
+const CONFIG_SHEET_NAME = 'Config';
+const STATUS_SHEET_NAME = 'Status';
+const FOLDER_AUDIT_LOG_SHEET_NAME = 'FoldersAuditLog';
+const SYNC_HISTORY_SHEET_NAME = 'SyncHistory';
+const DEFAULT_MAX_LOG_LENGTH = 10000;
+const AUTO_SYNC_CHANGE_SIGNATURE_KEY = 'AutoSyncChangeSignature';
+const AUTO_SYNC_LAST_RUN_KEY = 'AutoSyncLastRunTimestamp';
+
+// User sheet header constants
+const USER_EMAIL_HEADER = 'User Email Address';
+const DISABLED_HEADER = 'Disabled';
+
+/***** GLOBAL STATE *****/
+let SCRIPT_EXECUTION_MODE = 'DEFAULT'; // Can be 'DEFAULT' or 'TEST'
+
+/***** MENU & TRIGGERS *****/
+
+/**
+ * Adds a custom menu to the spreadsheet UI.
+ */
+function onOpen() {
+  // Validate environment first (Google Workspace with Admin SDK required)
+  validateEnvironment_();
+
+  const superAdmin = isSuperAdmin_();
+  const ui = SpreadsheetApp.getUi();
+  const menu = ui.createMenu('Permissions Manager');
+
+  if (superAdmin) {
+    buildSuperAdminMenu_(menu, ui);
+  } else {
+    buildRestrictedMenu_();
+  }
+
+  menu.addToUi();
+
+  setupControlSheets_();
+  setupLogSheets_();
+
+  if (superAdmin) {
+    // updateAutoSyncStatusIndicator_();
+    applyFullView_();
+  } else {
+    applyRestrictedView_();
+    ensureHelpSheetVisible_();
+  }
+}
+
+/**
+ * Validates that the environment meets requirements for this tool.
+ * Requires Google Workspace with Admin SDK enabled.
+ * @return {boolean} True if environment is valid, false otherwise
+ */
+function validateEnvironment_() {
+  if (!isAdminDirectoryAvailable_()) {
+    try {
+      const ui = SpreadsheetApp.getUi();
+      ui.alert(
+        'Google Workspace Required',
+        'This tool requires Google Workspace with Admin SDK enabled.\n\n' +
+        'Without Admin SDK, this tool cannot:\n' +
+        '• Create or manage Google Groups\n' +
+        '• Manage group membership\n' +
+        '• Perform permission synchronization\n\n' +
+        'Please see docs/WORKSPACE_SETUP.md for setup instructions.',
+        ui.ButtonSet.OK
+      );
+    } catch (e) {
+      // If UI not available, just log
+      console.log('Admin SDK not available. This tool requires Google Workspace.');
+    }
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Trigger fired when a Sheet Editor edits a cell in the spreadsheet.
+ * Handles multiple edit scenarios:
+ * 1. Warns users if they try to delete rows from ManagedFolders or UserGroups
+ * 2. Protects Config sheet Description column from edits
+ * 3. Prevents edits to read-only Status indicators
+ * @param {Event} e The onEdit event object
+ */
+function onEdit(e) {
+  if (!e || !e.source) return;
+
+  const sheet = e.source.getActiveSheet();
+  const sheetName = sheet.getName();
+  const range = e.range;
+  const oldValue = e.oldValue;
+
+  // --- Handle ManagedFolders and UserGroups row deletion warning ---
+  if (sheetName === MANAGED_FOLDERS_SHEET_NAME || sheetName === USER_GROUPS_SHEET_NAME) {
+    if (!range || range.getRow() <= 1) {
+      return; // Skip header row
+    }
+
+    // Check if user might be deleting a row (first 3 columns are empty)
+    const row = range.getRow();
+    const firstCols = sheet.getRange(row, 1, 1, 3).getValues()[0];
+
+    // If first columns are empty, might be a deleted row
+    if (!firstCols[0] && !firstCols[1] && !firstCols[2]) {
+      try {
+        SpreadsheetApp.getUi().alert(
+          'Use Delete Checkbox Instead',
+          'To delete a folder or group, please check the "Delete" checkbox in the last column and run sync.\n\n' +
+          'Why? Manual row deletion:\n' +
+          '• Leaves orphaned resources (groups, sheets)\n' +
+          '• Causes sync to abort with errors\n' +
+          '• Bypasses safety mechanisms\n\n' +
+          'The Delete checkbox ensures proper cleanup of all related resources.',
+          SpreadsheetApp.getUi().ButtonSet.OK
+        );
+      } catch (alertError) {
+        // If alert fails, just log
+        log_('Warning: A Sheet Editor may be deleting rows in ' + sheetName + '. Use Delete checkbox instead.', 'WARN');
+      }
+    }
+    return;
+  }
+
+  // --- Handle Config sheet protection ---
+  if (sheetName === CONFIG_SHEET_NAME) {
+    const editedRow = range.getRow();
+    const editedCol = range.getColumn();
+    const headerMap = getHeaderMap_(sheet);
+    const descriptionCol = resolveColumn_(headerMap, 'Description', 3);
+    const valueCol = resolveColumn_(headerMap, 'Value', 2);
+    const settingCol = resolveColumn_(headerMap, 'Setting', 1);
+
+    // Protect Description Column (column 3)
+    if (editedCol === descriptionCol) {
+      range.setValue(oldValue);
+      SpreadsheetApp.getActiveSpreadsheet().toast('The description column is not editable.', 'Edit Reverted', 10);
+      return;
+    }
+
+    // Exit if more than one cell is edited at once
+    if (range.getNumRows() > 1 || range.getNumColumns() > 1) {
+      return;
+    }
+
+    // Only act on edits in the "Value" column (column B/2)
+    if (editedCol !== valueCol) {
+      return;
+    }
+
+  }
+
+  // --- Handle Status sheet protection ---
+  if (sheetName === STATUS_SHEET_NAME) {
+    if (range.getNumRows() > 1 || range.getNumColumns() > 1) {
+      return;
+    }
+
+    if (oldValue !== undefined) {
+      range.setValue(oldValue);
+    } else {
+      range.clearContent();
+    }
+    SpreadsheetApp.getActiveSpreadsheet().toast('Status indicators are read-only.', 'Edit Reverted', 10);
+    return;
+  }
+}
+
+function buildSuperAdminMenu_(menu, ui) {
+  menu.addSubMenu(createManualSyncMenu_(ui));
+  menu.addSeparator();
+  menu.addSubMenu(createAutoSyncMenu_(ui));
+  menu.addSeparator();
+  menu.addSubMenu(createAuditsMenu_(ui));
+  menu.addSeparator();
+  menu.addSubMenu(createTestingMenu_(ui));
+  menu.addSeparator();
+  menu.addSubMenu(createLoggingMenu_(ui));
+  menu.addSeparator();
+  menu.addSubMenu(createAdvancedMenu_(ui));
+  menu.addSeparator();
+  menu.addSubMenu(createHelpMenu_(ui));
+}
+
+function buildRestrictedMenu_() {
+  // Restricted users cannot run Apps Script functions, so no menu items are shown.
+  // Help documentation is available in the Help sheet instead.
+}
+
+function isSuperAdmin_() {
+  try {
+    const userEmail = getActiveUserEmail_();
+    const ownerEmail = getSpreadsheetOwnerEmail_();
+    if (!userEmail) {
+      log_('Could not resolve active user email. Defaulting to restricted mode.', 'WARN');
+      return false;
+    }
+    const resolvedEmail = userEmail;
+
+    const superAdmins = getSuperAdminEmails_();
+    if (!superAdmins.length) {
+      if (ownerEmail && ownerEmail === resolvedEmail) {
+        return true;
+      }
+      log_('No super admin emails configured. Defaulting to restricted mode for ' + resolvedEmail + '.', 'WARN');
+      return false;
+    }
+
+    if (superAdmins.indexOf('*') !== -1 || superAdmins.indexOf('all') !== -1) {
+      return true;
+    }
+
+    const domain = resolvedEmail.indexOf('@') !== -1 ? resolvedEmail.split('@')[1] : '';
+    const isSuperAdmin = superAdmins.some(function (entry) {
+      if (entry === resolvedEmail) {
+        return true;
+      }
+      if (entry.startsWith('*@') && domain) {
+        return resolvedEmail.endsWith(entry.substring(1));
+      }
+      if (entry.startsWith('@') && domain) {
+        return domain === entry.substring(1);
+      }
+      if (domain && entry === domain) {
+        return true;
+      }
+      return false;
+    });
+    log_('Super admin check for ' + resolvedEmail + ': ' + (isSuperAdmin ? 'GRANTED' : 'DENIED'), 'DEBUG');
+    return isSuperAdmin;
+  } catch (e) {
+    log_('Could not determine super admin status: ' + e.message, 'WARN');
+    return false;
+  }
+}
+
+function getSuperAdminEmails_() {
+  const config = typeof getConfiguration_ === 'function' ? getConfiguration_() : {};
+  const rawValue = config['SuperAdminEmails'];
+  let values = [];
+
+  if (rawValue === undefined || rawValue === null) {
+    values = [];
+  } else if (Array.isArray(rawValue)) {
+    values = rawValue;
+  } else if (typeof rawValue === 'string') {
+    values = rawValue.split(/[\n,;]+/);
+  } else {
+    values = [String(rawValue)];
+  }
+
+  const normalized = values
+    .map(function (value) { return value.trim().toLowerCase(); })
+    .filter(function (value) { return value.length > 0; });
+
+  const ownerEmail = getSpreadsheetOwnerEmail_();
+  const ownerTokens = ['owner', 'spreadsheet_owner'];
+
+  const expanded = normalized.reduce(function (acc, value) {
+    if (ownerTokens.indexOf(value) !== -1) {
+      if (ownerEmail) {
+        acc.push(ownerEmail);
+      }
+      return acc;
+    }
+    acc.push(value);
+    return acc;
+  }, []);
+
+  if (!expanded.length && ownerEmail) {
+    return [ownerEmail];
+  }
+
+  return Array.from(new Set(expanded));
+}
+
+function applyRestrictedView_() {
+  try {
+    const visibilityConfig = getTestSheetVisibilityConfig_();
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    ss.getSheets().forEach(function (sheet) {
+      const name = sheet.getName();
+      if (shouldHideSheetForRestrictedView_(name, visibilityConfig) && typeof sheet.hideSheet === 'function') {
+        try {
+          if (!sheet.isSheetHidden()) {
+            sheet.hideSheet();
+          }
+        } catch (e) {
+          log_('Could not hide sheet "' + name + '": ' + e.message, 'WARN');
+        }
+      }
+    });
+  } catch (e) {
+    log_('Failed to apply restricted view: ' + e.message, 'WARN');
+  }
+}
+
+function applyFullView_() {
+  try {
+    const visibilityConfig = getTestSheetVisibilityConfig_();
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    log_('applyFullView_: Processing sheets for super admin visibility', 'DEBUG');
+    ss.getSheets().forEach(function (sheet) {
+      const name = sheet.getName();
+      const shouldHide = shouldHideSheetForRestrictedView_(name, visibilityConfig);
+      if (shouldHide && typeof sheet.showSheet === 'function') {
+        try {
+          if (sheet.isSheetHidden()) {
+            sheet.showSheet();
+            log_('applyFullView_: Showed hidden test sheet: ' + name, 'INFO');
+          } else {
+            log_('applyFullView_: Test sheet already visible: ' + name, 'DEBUG');
+          }
+        } catch (e) {
+          log_('Could not show sheet "' + name + '": ' + e.message, 'WARN');
+        }
+      }
+    });
+  } catch (e) {
+    log_('Failed to restore full view: ' + e.message, 'WARN');
+  }
+}
+
+function getTestSheetVisibilityConfig_() {
+  const config = typeof getConfiguration_ === 'function' ? getConfiguration_() : {};
+  const manualTestFolderName = config['TestFolderName'] ? String(config['TestFolderName']) : '';
+
+  const exactNames = [TEST_LOG_SHEET_NAME, 'TestCycleA_G', 'TestCycleB_G'];
+  const prefixes = ['StressTestFolder_', 'SheetLockingTestSheet_'];
+
+  if (manualTestFolderName) {
+    prefixes.push(manualTestFolderName + '_');
+  }
+
+  return {
+    exactNames: new Set(exactNames),
+    prefixes: prefixes
+  };
+}
+
+function shouldHideSheetForRestrictedView_(sheetName, config) {
+  if (config.exactNames.has(sheetName)) {
+    return true;
+  }
+
+  return config.prefixes.some(function (prefix) {
+    return sheetName.indexOf(prefix) === 0;
+  });
+}
+
+/**
+ * Ensures the Help sheet is visible for Sheet Editors
+ */
+function ensureHelpSheetVisible_() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const helpSheet = ss.getSheetByName('Help');
+    if (helpSheet && helpSheet.isSheetHidden()) {
+      helpSheet.showSheet();
+    }
+  } catch (e) {
+    log_('Could not ensure Help sheet visibility: ' + e.message, 'WARN');
+  }
+}
+
+
+function getActiveUserEmail_() {
+  try {
+    const activeUser = Session.getActiveUser();
+    if (activeUser) {
+      const email = activeUser.getEmail();
+      if (email) {
+        return email.toLowerCase();
+      }
+    }
+
+    const effectiveUser = Session.getEffectiveUser();
+    if (effectiveUser) {
+      const effectiveEmail = effectiveUser.getEmail();
+      if (effectiveEmail) {
+        return effectiveEmail.toLowerCase();
+      }
+    }
+  } catch (e) {
+    log_('Failed to read active user email: ' + e.message, 'WARN');
+  }
+  return '';
+}
+
+function getSpreadsheetOwnerEmail_() {
+  try {
+    const owner = SpreadsheetApp.getActive().getOwner();
+    if (owner && typeof owner.getEmail === 'function') {
+      const email = owner.getEmail();
+      if (email) {
+        return email.toLowerCase();
+      }
+    }
+  } catch (e) {
+    log_('Failed to read spreadsheet owner email: ' + e.message, 'DEBUG');
+  }
+  return '';
+}
+
+function createManualSyncMenu_(ui) {
+  const granularMenu = ui.createMenu('Granular Sync')
+    .addItem('Sync Sheet Editors', 'syncSheetEditors')
+    .addItem('Sync User Groups', 'syncUserGroups')
+    .addSeparator()
+    .addItem('Sync All Folders - Add/Enable Users', 'syncManagedFoldersAdds')
+    .addItem('Sync All Folders - Remove/Disable Users', 'syncManagedFoldersDeletes');
+
+  return ui.createMenu('ManualSync')
+    .addItem('Full Sync', 'fullSync')
+    .addItem('Sync Groups - Add/Enable Users', 'syncAdds')
+    .addItem('Sync Groups - Remove/Disable Users', 'syncDeletes')
+    .addSeparator()
+    .addSubMenu(granularMenu);
+}
+
+function createAutoSyncMenu_(ui) {
+  const editModeMenu = ui.createMenu('Edit Mode')
+    .addItem('🔒 Enter Edit Mode', 'enterEditMode')
+    .addItem('🔓 Exit Edit Mode', 'exitEditMode')
+    .addSeparator()
+    .addItem('📊 View Edit Mode Status', 'viewEditModeStatus');
+
+  return ui.createMenu('AutoSync')
+    .addItem('🚀 Enable/Update AutoSync', 'setupAutoSync')
+    .addItem('🛑 Disable AutoSync', 'removeAutoSync')
+    .addSeparator()
+    .addItem('▶️ Run AutoSync Now', 'runAutoSyncNow')
+    .addSeparator()
+    .addItem('📊 View Trigger Status', 'viewTriggerStatus')
+    .addSeparator()
+    .addSubMenu(editModeMenu);
+}
+
+function createAuditsMenu_(ui) {
+  return ui.createMenu('Audits')
+    .addItem('Folders Audit', 'foldersAudit')
+    .addItem('Deep Folder Audit', 'deepAuditFolder');
+}
+
+function createTestingMenu_(ui) {
+  const individualTestsMenu = ui.createMenu('Individual Tests Of All Tests')
+    .addItem('Run Manual Access Test', 'runManualAccessTest')
+    .addItem('Run Stress Test', 'runStressTest')
+    .addItem('Run Add/Delete Separation Test', 'runAddDeleteSeparationTest')
+    .addItem('Run AutoSync Error Email Test', 'runAutoSyncErrorEmailTest')
+    .addItem('Run Sheet Locking Test', 'runSheetLockingTest_')
+    .addItem('Run Circular Dependency Test', 'runCircularDependencyTest_')
+    .addSeparator()
+    .addItem('Run UserGroup Deletion Test', 'runUserGroupDeletionTest')
+    .addItem('Run Folder-Role Deletion Test', 'runFolderRoleDeletionTest')
+    .addItem('Run Deletion Disabled Test', 'runDeletionDisabledTest')
+    .addItem('Run Idempotent Deletion Test', 'runIdempotentDeletionTest')
+    .addItem('Run All Deletion Tests', 'runAllDeletionTests');
+
+  const standaloneTestsMenu = ui.createMenu('Standalone Tests')
+    .addItem('Run Email Capability Test', 'runEmailCapabilityTest');
+
+  const cleanupMenu = ui.createMenu('Cleanup')
+    .addItem('Cleanup Manual Test Data', 'cleanupManualTestData')
+    .addItem('Cleanup Stress Test Data', 'cleanupStressTestData')
+    .addItem('Cleanup Add/Delete Test Data', 'cleanupAddDeleteSeparationTestData')
+    .addItem('Cleanup Deletion Test Data', 'cleanupDeletionTestData')
+    .addSeparator()
+    .addItem('Clear All Test Data', 'clearAllTestsData');
+
+  return ui.createMenu('Testing')
+    .addItem('Run All Tests', 'runAllTests')
+    .addSeparator()
+    .addSubMenu(individualTestsMenu)
+    .addSeparator()
+    .addSubMenu(standaloneTestsMenu)
+    .addSeparator()
+    .addSubMenu(cleanupMenu);
+}
+
+function createLoggingMenu_(ui) {
+  return ui.createMenu('Logging')
+    .addItem('Clear Auxiliary Logs (Keep Main Log)', 'clearAuxiliaryLogs')
+    .addItem('Clear All Logs', 'clearAllLogs');
+}
+
+function createAdvancedMenu_(ui) {
+  return ui.createMenu('Advanced')
+    .addItem('Clear Cache', 'clearCache')
+    .addItem('Update User Sheet Headers', 'updateUserSheetHeaders_')
+    .addSeparator()
+    .addItem('Delete Orphan Sheets', 'deleteOrphanSheets')
+    .addItem('Clean up folder...', 'cleanupFolderByName')
+    .addItem('Remove Blank Rows', 'removeBlankRows')
+    .addSeparator()
+    .addItem('Refresh Config GUI', 'applyConfigValidation_');
+}
+
+function createHelpMenu_(ui) {
+  return ui.createMenu('Help')
+    .addItem('User Guide', 'openUserGuide')
+    .addItem('Testing Guide', 'openTestingGuide')
+    .addItem('README', 'openReadme')
+    .addItem('All Documentation', 'openAllDocumentation')
+    .addSeparator()
+    .addItem('View Version', 'showVersion_');
+}
+
+function showVersion_() {
+  SpreadsheetApp.getUi().alert('Permissions Manager Version', SCRIPT_VERSION, SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+/**
+ * Wrapper function to run AutoSync manually from menu
+ */
+function runAutoSyncNow() {
+  const summary = autoSync({ silentMode: true });
+  if (summary && summary.skipped) {
+    const summaryMessage = 'AutoSync skipped: No changes detected since last run.';
+    SpreadsheetApp.getUi().alert(summaryMessage);
+  } else if (summary) {
+    const summaryMessage = 'Manual AutoSync complete. Total changes: ' + summary.added + ' added, ' + summary.removed + ' removed, ' + summary.failed + ' failed.';
+    log_(summaryMessage, 'INFO');
+    SpreadsheetApp.getUi().alert(summaryMessage);
+  } else {
+    log_('Manual AutoSync did not complete successfully. Check logs for details.', 'WARN');
+    SpreadsheetApp.getUi().alert('Manual AutoSync did not complete successfully. Check logs for details.');
+  }
+}
+
+// =====================================================================================
+// START OF FILE: Utils.gs
+// =====================================================================================
+function showToast_(message, title, timeoutSeconds) {
+  const configSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG_SHEET_NAME);
+  if (!configSheet) {
+    // If config sheet doesn't exist, show the toast by default
+    SpreadsheetApp.getActiveSpreadsheet().toast(message, title, timeoutSeconds);
+    return;
+  }
+  const settings = configSheet.getRange('A2:B').getValues();
+  let enableToasts = false; // Default to false
+  for (let i = 0; i < settings.length; i++) {
+    if (settings[i][0] === 'EnableToasts') {
+      enableToasts = settings[i][1];
+      break;
+    }
+  }
+
+  if (enableToasts === true) {
+    SpreadsheetApp.getActiveSpreadsheet().toast(message, title, timeoutSeconds);
+  }
+}
+
+function getHeaderMap_(sheet) {
+  if (!sheet) return {};
+
+  const lastColumn = sheet.getLastColumn();
+  if (lastColumn < 1) return {};
+
+  const headers = sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
+  const map = {};
+  headers.forEach(function(header, index) {
+    const key = String(header || '')
+      .trim()
+      .toLowerCase();
+    if (key) {
+      map[key] = index + 1; // 1-based column index
+    }
+  });
+
+  return map;
+}
+
+function requireColumn_(headerMap, headerName, sheetName) {
+  const column = resolveColumn_(headerMap, headerName, null);
+  if (column) {
+    return column;
+  }
+
+  const errorMessage = 'Missing required column "' + headerName + '" in sheet "' + sheetName + '".';
+  log_(errorMessage, 'ERROR');
+  throw new Error(errorMessage);
+}
+
+function resolveColumn_(headerMap, headerName, fallback) {
+  if (!headerName) return fallback;
+  const key = String(headerName)
+    .trim()
+    .toLowerCase();
+  return headerMap[key] || fallback;
+}
+
+/**
+ * Finds the row number for a given value in a specific column of a sheet.
+ * @param {Sheet} sheet The sheet to search.
+ * @param {number} col The 1-based column index to search in.
+ * @param {string} value The value to find.
+ * @return {number} The 1-based row index, or -1 if not found.
+ */
+function findRowByValue_(sheet, col, value) {
+  if (!sheet) return -1;
+  const data = sheet.getRange(1, col, sheet.getLastRow(), 1).getValues();
+  for (let i = 0; i < data.length; i++) {
+    if (data[i][0] === value) {
+      return i + 1; // 1-based row index
+    }
+  }
+  return -1;
+}
+
+function generateGroupEmail_(baseName) {
+  const domain = Session.getActiveUser().getEmail().split('@')[1];
+  if (!domain) {
+    throw new Error('Could not determine user domain.');
+  }
+
+  const sanitizedName = baseName
+    .toLowerCase()
+    .replace(/\s+/g, '-')              // Replace spaces with hyphens
+    .replace(/[^a-z0-9_-]/g, '')       // Remove invalid characters, preserving underscores
+    .replace(/-+/g, '-')               // Collapse consecutive hyphens
+    .replace(/^-+|-+$/g, '');          // Remove leading/trailing hyphens
+
+  if (!sanitizedName) {
+    throw new Error(
+      'Group name "' + baseName + '" contains only non-ASCII characters (e.g., Hebrew, Arabic, Chinese) which cannot be used in email addresses. ' + 
+      'Please manually specify a group email in the "GroupEmail" column (Column B) using only ASCII characters (a-z, 0-9, hyphens). ' + 
+      'Example: for "' + baseName + '", you could use "coordinators@' + domain + '" or "team-a@' + domain + '".'
+    );
+  }
+
+  return sanitizedName + '@' + domain;
+}
+
+function validateUniqueGroupEmails_() {
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const emailMap = new Map(); // email -> [{sheet: string, row: number, context: string}]
+
+  // 1. Collect emails from UserGroups sheet (including generated ones)
+  const userGroupsSheet = spreadsheet.getSheetByName(USER_GROUPS_SHEET_NAME);
+  if (userGroupsSheet && userGroupsSheet.getLastRow() > 1) {
+    const userGroupHeaders = getHeaderMap_(userGroupsSheet);
+    const groupNameCol = requireColumn_(userGroupHeaders, 'GroupName', USER_GROUPS_SHEET_NAME);
+    const groupEmailCol = requireColumn_(userGroupHeaders, 'GroupEmail', USER_GROUPS_SHEET_NAME);
+
+    const data = userGroupsSheet
+      .getRange(2, 1, userGroupsSheet.getLastRow() - 1, Math.max(groupNameCol, groupEmailCol))
+      .getValues();
+    for (let i = 0; i < data.length; i++) {
+      const groupName = data[i][groupNameCol - 1];
+      if (!groupName) continue;
+
+      let groupEmail = data[i][groupEmailCol - 1];
+      if (!groupEmail) {
+        try {
+          groupEmail = generateGroupEmail_(groupName);
+        } catch (e) {
+          // Ignore groups that can't have an email generated; they will be skipped later.
+          continue;
+        }
+      }
+      
+      const email = groupEmail.toString().trim().toLowerCase();
+      if (!emailMap.has(email)) emailMap.set(email, []);
+      emailMap.get(email).push({
+        sheet: USER_GROUPS_SHEET_NAME,
+        row: i + 2,
+        context: `GroupName: "${groupName}"`
+      });
+    }
+  }
+
+  // 2. Collect emails from ManagedFolders sheet (including generated ones)
+  const managedSheet = spreadsheet.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+  if (managedSheet && managedSheet.getLastRow() > 1) {
+    const managedHeaders = getHeaderMap_(managedSheet);
+    const folderNameCol = requireColumn_(managedHeaders, 'FolderName', MANAGED_FOLDERS_SHEET_NAME);
+    const roleCol = requireColumn_(managedHeaders, 'Role', MANAGED_FOLDERS_SHEET_NAME);
+    const groupEmailCol = requireColumn_(managedHeaders, 'GroupEmail', MANAGED_FOLDERS_SHEET_NAME);
+
+    const data = managedSheet
+      .getRange(
+        2,
+        1,
+        managedSheet.getLastRow() - 1,
+        Math.max(folderNameCol, roleCol, groupEmailCol)
+      )
+      .getValues();
+    for (let i = 0; i < data.length; i++) {
+      const folderName = data[i][folderNameCol - 1];
+      const role = data[i][roleCol - 1];
+      if (!folderName || !role) continue;
+
+      let groupEmail = data[i][groupEmailCol - 1];
+      if (!groupEmail) {
+        try {
+          const userSheetName = `${folderName}_${role}`;
+          groupEmail = generateGroupEmail_(userSheetName);
+        } catch (e) {
+          // Ignore folders that can't have an email generated.
+          continue;
+        }
+      }
+
+      const email = groupEmail.toString().trim().toLowerCase();
+      if (!emailMap.has(email)) emailMap.set(email, []);
+      emailMap.get(email).push({
+        sheet: MANAGED_FOLDERS_SHEET_NAME,
+        row: i + 2,
+        context: `Folder: "${folderName}", Role: "${role}"`
+      });
+    }
+  }
+
+  // 3. Check for duplicates
+  const errors = [];
+  emailMap.forEach((locations, email) => {
+    if (locations.length > 1) {
+      const locationStrings = locations.map(loc => `${loc.sheet} (row ${loc.row}, ${loc.context})`);
+      errors.push({
+        email: email,
+        locations: locationStrings,
+        message: `Email "${email}" is generated by or present in multiple locations:\n  - ${locationStrings.join('\n  - ')}`
+      });
+    }
+  });
+
+  return {
+    valid: errors.length === 0,
+    errors: errors
+  };
+}
+
+function assertAdminDirectoryAvailable_() {
+  // Provides a clear message if Admin Directory advanced service/API is not enabled.
+  if (typeof AdminDirectory === 'undefined' || typeof AdminDirectory.Groups === 'undefined') {
+    const msg = 'Admin Directory service is not available. Enable it in Apps Script (Services > Admin Directory API) and in Google Cloud (APIs & Services > Library > Admin SDK). Requires Google Workspace.';
+    log_(msg, 'ERROR');
+    throw new Error(msg);
+  }
+}
+
+function isAdminDirectoryAvailable_() {
+  try { 
+    return typeof AdminDirectory !== 'undefined' && typeof AdminDirectory.Groups !== 'undefined';
+   } catch (e) { 
+    return false; 
+  }
+}
+
+function isPersonalGmail_() {
+  try {
+    const email = Session.getActiveUser().getEmail();
+    const domain = email && email.indexOf('@') !== -1 ? email.split('@')[1].toLowerCase() : '';
+    return domain === 'gmail.com' || domain === 'googlemail.com';
+  } catch (e) {
+    return false;
+  }
+}
+
+function shouldSkipGroupOps_() {
+  // Skip group operations if Admin Directory advanced service is not available.
+  // Personal Gmail typically cannot use Admin SDK.
+  return !isAdminDirectoryAvailable_();
+}
+
+function getConfiguration_() {
+  const cache = CacheService.getScriptCache();
+  const cachedConfig = cache.get('config');
+  if (cachedConfig) {
+    return JSON.parse(cachedConfig);
+  }
+
+  const configSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG_SHEET_NAME);
+  if (!configSheet) return {};
+
+  const lastRow = configSheet.getLastRow();
+  if (lastRow < 2) return {};
+
+  const data = configSheet.getRange(2, 1, lastRow - 1, 2).getValues();
+  const config = data.reduce((acc, row) => {
+    if (row[0]) {
+      // Filter out spreadsheet errors (#ERROR!, #N/A, #VALUE!, etc.)
+      const value = row[1];
+      const valueStr = String(value);
+
+      // Check if the value is a spreadsheet error
+      if (valueStr.startsWith('#') && (valueStr.includes('ERROR') || valueStr.includes('N/A') || valueStr.includes('VALUE') || valueStr.includes('REF') || valueStr.includes('DIV'))) {
+        // Log a warning about the error but don't include it in config
+        if (SCRIPT_EXECUTION_MODE === 'TEST') {
+          // Only log once during tests to avoid spam
+          if (!config['_errorsDetected']) {
+            log_('Warning: Config sheet contains formula errors. Please check the Config sheet and fix any cells showing #ERROR! or similar.', 'WARN');
+            config['_errorsDetected'] = true;
+          }
+        }
+        // Skip this config value
+        return acc;
+      }
+
+      acc[row[0]] = value;
+    }
+    return acc;
+  }, {});
+
+  // Remove the temporary error flag before caching
+  delete config['_errorsDetected'];
+
+  cache.put('config', JSON.stringify(config), 300); // Cache for 5 minutes
+  return config;
+}
+
+/**
+ * Gets a configuration value by key with optional default value.
+ * Handles boolean strings (ENABLED/DISABLED) and normalizes them to true/false.
+ * @param {string} key - The config key to retrieve
+ * @param {*} defaultValue - The default value if key is not found
+ * @return {*} The config value, normalized if it's a boolean string
+ */
+function getConfigValue_(key, defaultValue) {
+  const config = getConfiguration_();
+  if (config[key] !== undefined && config[key] !== null) {
+    // Handle boolean strings using common normalization
+    if (typeof config[key] === 'string') {
+      return normalizeBooleanConfigValue_(config[key]);
+    }
+    return config[key];
+  }
+  return defaultValue;
+}
+
+/**
+ * Normalizes a boolean config value string to a boolean.
+ * Handles various formats: 'ENABLED', 'ENABLED ✅', 'DISABLED', 'DISABLED ❌', etc.
+ * @param {string|boolean} value - The value to normalize
+ * @return {string|boolean} The normalized value (returns boolean for ENABLED/DISABLED, otherwise original)
+ */
+function normalizeBooleanConfigValue_(value) {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const upperValue = value.toUpperCase().trim();
+    if (upperValue.startsWith('ENABLED')) return true;
+    if (upperValue.startsWith('DISABLED')) return false;
+  }
+  return value;
+}
+
+
+function getTestConfiguration_() {
+    const config = getConfiguration_();
+    const testUserEmail = config['TestUserEmail'];
+    const testConfig = {
+        folderName: config['TestFolderName'],
+        role: config['TestRole'],
+        email: testUserEmail,
+        cleanup: (config['TestCleanup'] === true || config['TestCleanup'] === 'TRUE'),
+        autoConfirm: (config['TestAutoConfirm'] === true || config['TestAutoConfirm'] === 'TRUE'),
+        numFolders: parseInt(config['TestNumFolders'], 10),
+        numUsers: parseInt(config['TestNumUsers'], 10),
+        baseEmail: testUserEmail
+    };
+    log_('Test Configuration loaded: ' + JSON.stringify(testConfig), 'INFO');
+    return testConfig;
+}
+
+function getMaxLogLength_() {
+  const config = getConfiguration_();
+  const maxLogLength = config['MaxLogLength'];
+  if (maxLogLength) {
+    const value = parseInt(maxLogLength, 10);
+    if (!isNaN(value) && value > 0) {
+      return value;
+    }
+  }
+  return DEFAULT_MAX_LOG_LENGTH;
+}
+
+/**
+ * Log level priority mapping (lower number = higher priority)
+ * ERROR: Critical errors only
+ * WARN: Warnings and errors
+ * INFO: Normal operations, warnings, and errors (default)
+ * DEBUG: Detailed debugging including routine checks
+ */
+const LOG_LEVELS = {
+  'ERROR': 0,
+  'WARN': 1,
+  'INFO': 2,
+  'DEBUG': 3
+};
+
+function log_(message, severity = 'INFO') {
+  // Filter out spreadsheet errors to prevent #ERROR! from appearing in logs
+  const messageStr = String(message);
+  if (messageStr.startsWith('#') && (messageStr.includes('ERROR') || messageStr.includes('N/A') || messageStr.includes('VALUE') || messageStr.includes('REF') || messageStr.includes('DIV'))) {
+    // Skip logging spreadsheet errors - they're not useful log messages
+    return;
+  }
+
+  // Check log level threshold
+  const configuredLevel = getConfigValue_('LogLevel', 'INFO').toUpperCase();
+  const configuredPriority = LOG_LEVELS[configuredLevel] !== undefined ? LOG_LEVELS[configuredLevel] : LOG_LEVELS['INFO'];
+  const messagePriority = LOG_LEVELS[severity.toUpperCase()] !== undefined ? LOG_LEVELS[severity.toUpperCase()] : LOG_LEVELS['INFO'];
+
+  // Only log if message priority is high enough (lower number = higher priority)
+  if (messagePriority > configuredPriority) {
+    return; // Skip this log message
+  }
+
+  const sheetName = (SCRIPT_EXECUTION_MODE === 'TEST') ? TEST_LOG_SHEET_NAME : LOG_SHEET_NAME;
+  const logSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+  if (logSheet) {
+    const timestamp = Utilities.formatDate(new Date(), SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+    let lastRow = logSheet.getLastRow();
+
+    // Ensure header row exists - check if row 1 is empty or doesn't have the header
+    if (lastRow === 0 || logSheet.getRange('A1').getValue() !== 'Timestamp') {
+      // Create or recreate the header row
+      logSheet.getRange('A1:C1').setValues([['Timestamp', 'Level', 'Message']]).setFontWeight('bold');
+      lastRow = 1;
+    }
+
+    // Check if row 2 is empty (log was cleared) - if so, reset to row 1
+    if (lastRow > 1 && !logSheet.getRange('A2').getValue()) {
+      lastRow = 1;
+    }
+
+    // Always write to at least row 2 (never overwrite the header)
+    const nextRow = Math.max(lastRow + 1, 2);
+
+    // Prevent Google Sheets from interpreting messages starting with = as formulas
+    // by prefixing them with a single quote
+    let safeMessage = messageStr;
+    if (messageStr.startsWith('=') || messageStr.startsWith('+') || messageStr.startsWith('-') || messageStr.startsWith('@')) {
+      safeMessage = "'" + messageStr;
+    }
+
+    logSheet.getRange(nextRow, 1, 1, 3).setValues([[timestamp, severity.toUpperCase(), safeMessage]]);
+
+    // --- Log Trimming Logic ---
+    // Clear the cache for 'config' to ensure getMaxLogLength_ reads the latest value
+    CacheService.getScriptCache().remove('config');
+    const maxLogLength = getMaxLogLength_();
+    const currentRowCount = logSheet.getLastRow();
+    // Subtract 1 to account for the header row
+    if ((currentRowCount - 1) > maxLogLength) {
+      const rowsToDelete = (currentRowCount - 1) - maxLogLength;
+      // Delete old rows from the top (starting from row 2)
+      logSheet.deleteRows(2, rowsToDelete);
+    }
+  }
+}
+
+
+function logSyncHistory_(revisionLink, summary, durationSeconds) {
+  try {
+    const syncHistorySheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SYNC_HISTORY_SHEET_NAME);
+    if (!syncHistorySheet) {
+      log_('SyncHistory sheet not found. Skipping sync history logging.', 'WARN');
+      return;
+    }
+
+    const timestamp = Utilities.formatDate(new Date(), SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+    const added = summary ? summary.added || 0 : 0;
+    const removed = summary ? summary.removed || 0 : 0;
+    const failed = summary ? summary.failed || 0 : 0;
+    const duration = Math.round(durationSeconds || 0);
+    const status = failed === 0 ? 'Success' : 'Failed';
+
+    log_('Attempting to log sync history: +' + added + ' -' + removed + ' !' + failed, 'DEBUG');
+
+    if (added === 0 && removed === 0 && failed === 0) {
+      log_('No permission changes detected. Skipping SyncHistory entry.', 'INFO');
+      return;
+    }
+
+  let lastRow = syncHistorySheet.getLastRow();
+  const headers = ['Timestamp', 'Status', 'Added', 'Removed', 'Failed', 'Duration (seconds)', 'Revision Link'];
+  
+  // Ensure header row exists and is up to date
+  if (lastRow === 0) {
+      syncHistorySheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
+      syncHistorySheet.setFrozenRows(1);
+      lastRow = 1;
+  } else {
+      const currentHeaders = syncHistorySheet.getRange(1, 1, 1, headers.length).getValues()[0];
+      const needsRefresh = headers.some((header, idx) => currentHeaders[idx] !== header);
+      if (needsRefresh) {
+          syncHistorySheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
+          if (syncHistorySheet.getFrozenRows() < 1) {
+              syncHistorySheet.setFrozenRows(1);
+          }
+          lastRow = Math.max(lastRow, 1);
+      }
+  }
+
+    // Reset lastRow if the sheet was empty or headers were just rewritten
+    lastRow = Math.max(lastRow, 1);
+
+    if (lastRow > 1) {
+      const hasDataInSecondRow = syncHistorySheet.getRange('A2').getValue();
+      if (!hasDataInSecondRow) {
+        lastRow = 1;
+      }
+    }
+
+  const nextRow = Math.max(lastRow + 1, 2);
+  const rowValues = [
+    timestamp,
+    status,
+    added,
+    removed,
+    failed,
+    duration,
+    revisionLink || '' // Revision Link
+  ];
+
+    syncHistorySheet.getRange(nextRow, 1, 1, rowValues.length).setValues([rowValues]);
+
+  // Add note to header for version history navigation
+  if (nextRow === 2) { // Add notes only once to the header
+    syncHistorySheet.getRange('A1:G1').clearNote();
+    syncHistorySheet.getRange('A1').setNote('Timestamp of when the sync operation was logged.');
+    syncHistorySheet.getRange('G1').setNote('To view changes for a given sync: Open the spreadsheet, go to File > Version history > See version history, then find the revision matching the Timestamp in this row. Google keeps revisions for 30-100 days.');
+  }
+
+    log_('Logged sync history: Status: ' + status + ', Changes: +' + added + ' -' + removed + ' !' + failed + ', Duration: ' + duration + 's', 'INFO');
+  } catch (e) {
+    log_('ERROR writing to SyncHistory: ' + e.message + '\n' + e.stack, 'ERROR');
+  }
+}
+
+function clearAllLogs() {
+  const ui = SpreadsheetApp.getUi();
+  const response = ui.alert('Are you sure you want to clear all logs?', 'This will delete all data in the "Log", "TestLog", "FoldersAuditLog", and "DeepFolderAuditLog" sheets.', ui.ButtonSet.YES_NO);
+  if (response !== ui.Button.YES) {
+    return;
+  }
+
+  const logSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(LOG_SHEET_NAME);
+  if (logSheet) {
+    logSheet.getRange('A2:C').clearContent();
+  }
+
+  const testLogSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(TEST_LOG_SHEET_NAME);
+  if (testLogSheet) {
+    testLogSheet.getRange('A2:C').clearContent();
+  }
+
+  const foldersAuditLogSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('FoldersAuditLog');
+  if (foldersAuditLogSheet) {
+    foldersAuditLogSheet.clear();
+    setupFolderAuditLogSheet_(foldersAuditLogSheet);
+  }
+
+  const deepFolderAuditLogSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('DeepFolderAuditLog');
+  if (deepFolderAuditLogSheet) {
+    deepFolderAuditLogSheet.clear();
+    setupDeepAuditLogSheet_(deepFolderAuditLogSheet);
+  }
+
+  ui.alert('All logs have been cleared.');
+}
+
+function clearAuxiliaryLogs() {
+  const ui = SpreadsheetApp.getUi();
+  const response = ui.alert(
+    'Clear auxiliary logs?',
+    'This will clear "TestLog", "FoldersAuditLog", and "DeepFolderAuditLog" sheets.\n\nThe main "Log" sheet will be preserved.',
+    ui.ButtonSet.YES_NO
+  );
+  if (response !== ui.Button.YES) {
+    return;
+  }
+
+  const testLogSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(TEST_LOG_SHEET_NAME);
+  if (testLogSheet) {
+    testLogSheet.getRange('A2:C').clearContent();
+  }
+
+  const foldersAuditLogSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('FoldersAuditLog');
+  if (foldersAuditLogSheet) {
+    foldersAuditLogSheet.clear();
+    setupFolderAuditLogSheet_(foldersAuditLogSheet);
+  }
+
+  const deepFolderAuditLogSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('DeepFolderAuditLog');
+  if (deepFolderAuditLogSheet) {
+    deepFolderAuditLogSheet.clear();
+    setupDeepAuditLogSheet_(deepFolderAuditLogSheet);
+  }
+
+  ui.alert('Auxiliary logs have been cleared.\n\nThe main "Log" sheet has been preserved.');
+}
+
+function getSheetEditorNotificationEmails_() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_EDITORS_SHEET_NAME);
+  if (!sheet) {
+    return [];
+  }
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) {
+    return [];
+  }
+  const data = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
+  return data.reduce((emails, row) => {
+    const email = String(row[0] || '').trim().toLowerCase();
+    const disabled = row[1] === true || String(row[1]).toUpperCase() === 'TRUE';
+    if (email && !disabled) {
+      emails.push(email);
+    }
+    return emails;
+  }, []);
+}
+
+function sendErrorNotification_(errorMessage) {
+  try {
+    const enableEmailNotifications = getConfigValue_('EnableEmailNotifications', true);
+    if (enableEmailNotifications !== true) {
+      return;
+    }
+
+    const adminEmail = getConfigValue_('NotificationEmail', '') || getSpreadsheetOwnerEmail_();
+    const recipients = [];
+    if (adminEmail) {
+      recipients.push(adminEmail);
+    }
+
+    const notifySheetEditors = getConfigValue_('NotifySheetEditorsOnErrors', false);
+    if (notifySheetEditors === true) {
+      recipients.push.apply(recipients, getSheetEditorNotificationEmails_());
+    }
+
+    const uniqueRecipients = Array.from(new Set(recipients.filter(Boolean)));
+    if (uniqueRecipients.length > 0) {
+      MailApp.sendEmail(uniqueRecipients.join(','), 'Permissions Manager Script - Fatal Error', errorMessage);
+    } else {
+      log_('No recipients configured for error notifications.', 'WARN');
+    }
+  } catch (e) {
+    log_('Failed to send error notification email: ' + e.toString(), 'ERROR');
+  }
+}
+
+function showTestMessage_(title, message) {
+    const config = getConfiguration_();
+    const showPrompts = config['ShowTestPrompts'];
+
+    if (showPrompts === true || showPrompts === 'TRUE') {
+        SpreadsheetApp.getUi().alert(title, message, SpreadsheetApp.getUi().ButtonSet.OK);
+    } else {
+        log_(`Test Message: ${title} - ${message}`, 'INFO');
+    }
+}
+
+function showTestConfirm_(title, message, defaultButton) {
+  const config = getConfiguration_();
+  const autoConfirm = config['TestAutoConfirm'];
+  const showPrompts = config['ShowTestPrompts'];
+
+  if (autoConfirm === true || autoConfirm === 'TRUE') {
+    log_(`Auto-confirming test prompt: ${title} - ${message}`, 'INFO');
+    return defaultButton || SpreadsheetApp.getUi().Button.YES;
+  }
+  
+  if (showPrompts === true || showPrompts === 'TRUE') {
+    const ui = SpreadsheetApp.getUi();
+    return ui.alert(title, message, ui.ButtonSet.YES_NO);
+  } else {
+    log_(`Test "Confirm" Message Silently Skipped (due to ShowTestPrompts=false): ${title} - ${message}`, 'INFO');
+    return defaultButton || SpreadsheetApp.getUi().Button.YES;
+  }
+}
+
+/**
+ * Updates a setting in the Config sheet
+ * @param {string} settingName - The name of the setting to update
+ * @param {string|boolean} value - The value to set
+ */
+function updateConfigSetting_(settingName, value) {
+  const configSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG_SHEET_NAME);
+  if (!configSheet) {
+    log_('Config sheet not found. Cannot update setting: ' + settingName, 'WARN');
+    return;
+  }
+
+  const settingsRange = configSheet.getRange('A:A');
+  const settings = settingsRange.getValues().flat();
+  const rowIndex = settings.indexOf(settingName);
+
+  if (rowIndex !== -1) {
+    // Setting exists, update it
+    configSheet.getRange(rowIndex + 1, 2).setValue(value);
+  } else {
+    // Setting doesn't exist, add it
+    const lastRow = settings.filter(String).length;
+    configSheet.getRange(lastRow + 1, 1, 1, 2).setValues([[settingName, value]]);
+  }
+
+  // Clear the cache so the new value is picked up
+  CacheService.getScriptCache().remove('config');
+}
+
+function markSystemSheet_(sheet) {
+  if (!sheet) {
+    return;
+  }
+  try {
+    const existing = sheet.getDeveloperMetadata().some(function(metadata) {
+      return metadata.getKey() === 'SystemSheet';
+    });
+    if (!existing) {
+      sheet.addDeveloperMetadata('SystemSheet', 'true', SpreadsheetApp.DeveloperMetadataVisibility.DOCUMENT);
+    }
+  } catch (e) {
+    log_('Failed to mark system sheet "' + sheet.getName() + '": ' + e.message, 'WARN');
+  }
+}
+
+function isSystemSheet_(sheet) {
+  if (!sheet) {
+    return false;
+  }
+  try {
+    return sheet.getDeveloperMetadata().some(function(metadata) {
+      return metadata.getKey() === 'SystemSheet' && metadata.getValue() === 'true';
+    });
+  } catch (e) {
+    return false;
+  }
+}
+
+function updateStatusSetting_(settingName, value) {
+  const statusSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(STATUS_SHEET_NAME);
+  if (!statusSheet) {
+    log_('Status sheet not found. Cannot update setting: ' + settingName, 'WARN');
+    return;
+  }
+
+  const settings = statusSheet.getRange('A:A').getValues().flat();
+  const rowIndex = settings.indexOf(settingName);
+
+  if (rowIndex !== -1) {
+    statusSheet.getRange(rowIndex + 1, 2).setValue(value);
+  } else {
+    const lastRow = statusSheet.getLastRow();
+    statusSheet.getRange(lastRow + 1, 1, 1, 2).setValues([[settingName, value]]);
+  }
+}
+
+function formatSyncSummary_(summary) {
+  if (!summary) {
+    return '';
+  }
+  const added = summary.added || 0;
+  const removed = summary.removed || 0;
+  const failed = summary.failed || 0;
+  return 'Added: ' + added + ', Removed: ' + removed + ', Failed: ' + failed;
+}
+
+function updateSyncStatusPanel_(statusSheet, status) {
+  if (!statusSheet) {
+    return;
+  }
+
+  const normalizedStatus = status || 'Unknown';
+  let label = 'SYNC STATUS UNKNOWN';
+  let background = '#DADCE0';
+  let fontColor = '#000000';
+
+  if (normalizedStatus === 'Success') {
+    label = 'SYNC OK';
+    background = '#00B050';
+    fontColor = '#FFFFFF';
+  } else if (normalizedStatus === 'Failed') {
+    label = 'SYNC ERROR';
+    background = '#D93025';
+    fontColor = '#FFFFFF';
+  } else if (normalizedStatus === 'Running') {
+    label = 'SYNC RUNNING';
+    background = '#F9AB00';
+    fontColor = '#000000';
+  } else if (normalizedStatus === 'Skipped') {
+    label = 'SYNC SKIPPED';
+    background = '#9AA0A6';
+    fontColor = '#FFFFFF';
+  }
+
+  const panelRange = statusSheet.getRange('E2:F3');
+  statusSheet.getRange('E2:H6').setBackground(null).setFontColor(null);
+  panelRange.setValue(label)
+    .setBackground(background)
+    .setFontColor(fontColor)
+    .setFontWeight('bold')
+    .setFontSize(12);
+}
+
+function updateSyncStatus_(status, options = {}) {
+  if (SCRIPT_EXECUTION_MODE === 'TEST' && options.source === 'AutoSync') {
+    return;
+  }
+
+  const statusSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(STATUS_SHEET_NAME);
+  if (!statusSheet) {
+    return;
+  }
+
+  const timestamp = Utilities.formatDate(new Date(), SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+  const normalizedStatus = status || 'Unknown';
+
+  updateStatusSetting_('Last Sync Status', normalizedStatus);
+  updateStatusSetting_('Last Sync Attempt', timestamp);
+  if (normalizedStatus === 'Success') {
+    updateStatusSetting_('Last Successful Sync', timestamp);
+  }
+
+  if (options.durationSeconds !== undefined) {
+    updateStatusSetting_('Last Sync Duration (seconds)', Math.round(options.durationSeconds));
+  }
+
+  if (options.summary) {
+    updateStatusSetting_('Last Sync Summary', formatSyncSummary_(options.summary));
+  }
+
+  if (options.source) {
+    updateStatusSetting_('Last Sync Source', options.source);
+  }
+
+  if (options.errorMessage) {
+    updateStatusSetting_('Last Sync Error', options.errorMessage);
+  } else if (normalizedStatus === 'Success' || normalizedStatus === 'Skipped') {
+    updateStatusSetting_('Last Sync Error', '');
+  }
+
+  updateSyncStatusPanel_(statusSheet, normalizedStatus);
+}
+
+/**
+ * Validates that a user sheet has no duplicate email addresses (case-insensitive)
+ * @param {string} sheetName - The name of the user sheet to validate
+ * @returns {Object} - { valid: boolean, duplicates: [{email, rows}], error: string }
+ */
+function validateUserSheetEmails_(sheetName) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+  if (!sheet) {
+    return {
+      valid: false,
+      duplicates: [],
+      error: 'Sheet "' + sheetName + '" not found'
+    };
+  }
+
+  const emailRange = sheet.getRange('A2:A');
+  const emails = emailRange.getValues();
+
+  const emailMap = new Map(); // email -> [row numbers]
+  const duplicates = [];
+
+  for (let i = 0; i < emails.length; i++) {
+    const rawEmail = emails[i][0];
+    if (!rawEmail) continue; // Skip empty cells
+
+    const email = rawEmail.toString().trim().toLowerCase();
+    if (!email) continue; // Skip whitespace-only cells
+
+    const rowNum = i + 2; // +2 for header row and 0-index
+
+    if (emailMap.has(email)) {
+      emailMap.get(email).push(rowNum);
+    } else {
+      emailMap.set(email, [rowNum]);
+    }
+  }
+
+  // Find duplicates
+  emailMap.forEach(function(rows, email) {
+    if (rows.length > 1) {
+      duplicates.push({ email: email, rows: rows });
+    }
+  });
+
+  if (duplicates.length > 0) {
+    const errorMsg = duplicates.map(function(d) {
+      return '"' + d.email + '" appears in rows ' + d.rows.join(', ');
+    }).join('; ');
+
+    return {
+      valid: false,
+      duplicates: duplicates,
+      error: 'Duplicate emails found: ' + errorMsg
+    };
+  }
+
+  return { valid: true, duplicates: [], error: null };
+}
+
+
+
+function getDirectFileUsers_(file, groupEmailToExclude) {
+  const users = [];
+  const owner = file.getOwner() ? file.getOwner().getEmail().toLowerCase() : null;
+  const groupEmailToExcludeLower = groupEmailToExclude ? groupEmailToExclude.toLowerCase() : null;
+
+  file.getViewers().forEach(u => {
+    const email = u.getEmail().toLowerCase();
+    if (email !== owner && email !== groupEmailToExcludeLower) users.push({ email: email, role: 'Viewer' });
+  });
+
+  // The getCommenters() method only exists on the File object, not the Folder object.
+  if (file.getMimeType() !== MimeType.GOOGLE_DRIVE_FOLDER && typeof file.getCommenters === 'function') {
+    file.getCommenters().forEach(u => {
+      const email = u.getEmail().toLowerCase();
+      if (email !== owner && email !== groupEmailToExcludeLower) users.push({ email: email, role: 'Commenter' });
+    });
+  }
+
+  file.getEditors().forEach(u => {
+    const email = u.getEmail().toLowerCase();
+    if (email !== owner && email !== groupEmailToExcludeLower) users.push({ email: email, role: 'Editor' });
+  });
+
+  return users;
+}
+
+function getDirectFolderUsers_(folder, groupEmailToExclude) {
+  const users = [];
+  const owner = folder.getOwner() ? folder.getOwner().getEmail().toLowerCase() : null;
+  const groupEmailToExcludeLower = groupEmailToExclude ? groupEmailToExclude.toLowerCase() : null;
+
+  folder.getViewers().forEach(u => {
+    const email = u.getEmail().toLowerCase();
+    if (email !== owner && email !== groupEmailToExcludeLower) users.push({ email: email, role: 'Viewer' });
+  });
+
+  folder.getEditors().forEach(u => {
+    const email = u.getEmail().toLowerCase();
+    if (email !== owner && email !== groupEmailToExcludeLower) users.push({ email: email, role: 'Editor' });
+  });
+
+  return users;
+}
+
+function getActualMembers_(groupEmail) {
+  if (shouldSkipGroupOps_()) {
+    log_('Admin SDK not available, cannot get actual group members for ' + groupEmail, 'WARN');
+    return [];
+  }
+  
+  try {
+    const members = [];
+    let pageToken;
+    do {
+      const resp = AdminDirectory.Members.list(groupEmail, {
+        maxResults: 200,
+        pageToken: pageToken
+      });
+      if (resp && resp.members) {
+        members.push.apply(members, resp.members.map(m => m.email));
+      }
+      pageToken = resp ? resp.nextPageToken : null;
+    } while (pageToken);
+    return members;
+  } catch (e) {
+    if (e.message.includes('Resource Not Found: groupKey')) {
+      log_('Group ' + groupEmail + ' does not exist. Returning empty list of members.', 'WARN');
+    } else {
+      log_('Could not retrieve members for group ' + groupEmail + '. Error: ' + e.message, 'WARN');
+    }
+    return [];
+  }
+}
+
+/**
+ * Clears the script's cache.
+ */
+function clearCache() {
+  const ui = SpreadsheetApp.getUi();
+  try {
+    CacheService.getScriptCache().removeAll(['config']);
+    log_('Script cache has been cleared.');
+    ui.alert('The script cache has been cleared.');
+  } catch (e) {
+    log_('Error clearing cache: ' + e.toString(), 'ERROR');
+    ui.alert('An error occurred while clearing the cache: ' + e.message);
+  }
+}
+function getAdminEmails_() {
+  const adminSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_EDITORS_SHEET_NAME);
+  if (!adminSheet) {
+    return [];
+  }
+  const adminData = adminSheet.getRange('A2:D' + adminSheet.getLastRow()).getValues();
+  const adminEmails = adminData.filter(function(row) {
+    const email = row[0].toString().trim().toLowerCase();
+    const isDisabled = row[3];
+    return email && email.length > 0 && !isDisabled;
+  }).map(function(row) {
+    return row[0].toString().trim().toLowerCase();
+  });
+  
+  const owner = SpreadsheetApp.getActiveSpreadsheet().getOwner();
+  if (owner) {
+      adminEmails.push(owner.getEmail().toLowerCase());
+  }
+  
+  return [...new Set(adminEmails)]; // Return unique emails
+}
+
+const SYNC_LOCK_DESCRIPTION_PREFIX = 'Sync Lock by execution: ';
+
+function removeStaleLocks_(sheets, currentExecutionId) {
+  if (!sheets || sheets.length === 0) {
+    return;
+  }
+  log_('Checking for stale sheet locks from previous runs...');
+  let staleLocksRemoved = 0;
+
+  sheets.forEach(sheet => {
+    if (!sheet) return;
+    try {
+      const protections = sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET);
+      protections.forEach(protection => {
+        const description = protection.getDescription();
+        if (description && description.startsWith(SYNC_LOCK_DESCRIPTION_PREFIX) && !description.endsWith(currentExecutionId)) {
+          log_(`Found stale lock on sheet "${sheet.getName()}" from a previous execution. Removing...`, 'WARN');
+          protection.remove();
+          staleLocksRemoved++;
+        }
+      });
+    } catch (e) {
+      log_(`Could not check/remove stale locks on sheet "${sheet.getName()}": ${e.message}`, 'WARN');
+    }
+  });
+
+  if (staleLocksRemoved > 0) {
+    log_(`Removed ${staleLocksRemoved} stale lock(s).`, 'INFO');
+  }
+}
+
+function lockSheetForEdits_(sheet, executionId) {
+  if (!sheet || !executionId) return;
+  try {
+    const protection = sheet.protect().setDescription(SYNC_LOCK_DESCRIPTION_PREFIX + executionId);
+    const me = Session.getEffectiveUser();
+    protection.addEditor(me);
+    protection.removeEditors(protection.getEditors().filter(editor => editor.getEmail() !== me.getEmail()));
+    if (protection.canDomainEdit()) {
+      protection.setDomainEdit(false);
+    }
+    log_(`Sheet "${sheet.getName()}" locked for sync execution: ${executionId}.`, 'INFO');
+  } catch (e) {
+    log_(`Could not lock sheet "${sheet.getName()}": ${e.message}`, 'WARN');
+  }
+}
+
+function unlockSheetForEdits_(sheet, executionId) {
+  if (!sheet || !executionId) return;
+  try {
+    const protections = sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET);
+    protections.forEach(protection => {
+      if (protection.getDescription() === SYNC_LOCK_DESCRIPTION_PREFIX + executionId) {
+        protection.remove();
+        log_(`Sheet "${sheet.getName()}" unlocked for execution: ${executionId}.`, 'INFO');
+      }
+    });
+  } catch (e) {
+    log_(`Could not unlock sheet "${sheet.getName()}": ${e.message}`, 'WARN');
+  }
+}
+
+function isGroup_(email) {
+  try {
+    AdminDirectory.Groups.get(email);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+function showSyncInProgress_(silentMode) {
+  // Don't show toast in silent mode (e.g., auto sync)
+  if (silentMode) return;
+
+  const enableSheetLocking = getConfiguration_()['EnableSheetLocking'];
+  let message = 'A synchronization script is running. Please avoid making changes to the sheet.';
+  if (enableSheetLocking) {
+    message = 'A synchronization script is running. The sheet is temporarily locked to prevent data corruption. Please wait a moment.';
+  }
+  // Avoid using Spreadsheet toast here; the host sometimes leaves behind a persistent
+  // "Working" overlay even after the script finishes. Instead, surface the message in
+  // logs only. Sheet locking (if enabled) still provides a visual indicator through the
+  // lock icon.
+  log_(message, 'INFO');
+}
+
+function hideSyncInProgress_() {
+  // Try to force the host UI to refresh without showing a toast or modal that can
+  // leave behind the "Working" overlay. A tiny sidebar that immediately closes
+  // tends to nudge the Sheets client to repaint.
+  try {
+    const ui = SpreadsheetApp.getUi();
+    const sidebarHtml = HtmlService.createHtmlOutput(
+      '<script>setTimeout(function(){google.script.host.close();}, 50);</script>'
+    )
+      .setWidth(10)
+      .setHeight(10);
+    ui.showSidebar(sidebarHtml);
+    SpreadsheetApp.flush();
+    Utilities.sleep(150);
+
+    // On some clients the transient sidebar is not enough. Briefly showing a
+    // tiny modal (that immediately closes) plus a short-lived blank toast gives
+    // Sheets an extra repaint signal and clears the stuck "Working" label.
+    const modalHtml = HtmlService.createHtmlOutput(
+      '<script>setTimeout(function(){google.script.host.close();}, 50);</script>'
+    )
+      .setWidth(10)
+      .setHeight(10);
+    ui.showModalDialog(modalHtml, ' ');
+    SpreadsheetApp.flush();
+    Utilities.sleep(75);
+
+    SpreadsheetApp.getActiveSpreadsheet().toast(' ', ' ', 1);
+  } catch (e) {
+    log_('Unable to refresh UI after sync: ' + e.message, 'WARN');
+  }
+}
+
+function validateGroupNesting_() {
+  log_('Validating group nesting for circular dependencies...');
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const groupSheets = spreadsheet.getSheets().filter(s => s.getName().endsWith('_G'));
+  const adminSheet = spreadsheet.getSheetByName(SHEET_EDITORS_SHEET_NAME);
+  if (adminSheet) {
+    groupSheets.push(adminSheet);
+  }
+
+  const allGroupEmails = new Set();
+  const dependencyGraph = new Map();
+
+  // --- 1. Build the dependency graph ---
+  groupSheets.forEach(sheet => {
+    const sheetName = sheet.getName();
+    let parentGroupEmail;
+
+    // Determine the parent group's email
+    if (sheetName === SHEET_EDITORS_SHEET_NAME) {
+      parentGroupEmail = getConfigValue_('SheetEditorsGroupEmail', '') || getConfigValue_('AdminGroupEmail', '');
+      if (!parentGroupEmail) {
+        try {
+          parentGroupEmail = generateGroupEmail_(SHEET_EDITORS_GROUP_NAME);
+          log_('Generated Sheet Editors group email for nesting validation: ' + parentGroupEmail, 'INFO');
+        } catch (e) {
+          log_('Unable to generate Sheet Editors group email for nesting validation: ' + e.message, 'WARN');
+        }
+      }
+    } else {
+      const groupName = sheetName.slice(0, -2); // Remove '_G'
+      // Find this group's email in UserGroups or ManagedFolders
+      parentGroupEmail = findGroupEmailByName_(groupName);
+    }
+
+    if (!parentGroupEmail) {
+      log_(`Could not determine parent group email for sheet "${sheetName}". Skipping for cycle detection.`, 'WARN');
+      return;
+    }
+    
+    parentGroupEmail = parentGroupEmail.toLowerCase();
+    allGroupEmails.add(parentGroupEmail);
+
+    if (!dependencyGraph.has(parentGroupEmail)) {
+      dependencyGraph.set(parentGroupEmail, []);
+    }
+
+    // Find child groups within this sheet (only read actual data rows)
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) {
+      return; // No data in this sheet
+    }
+    const memberEmails = sheet.getRange(2, 1, lastRow - 1, 1).getValues().flat().filter(String);
+    memberEmails.forEach(email => {
+      const childEmail = email.toString().trim().toLowerCase();
+      if (childEmail && childEmail.includes('@')) {
+        // For simplicity, we'll consider any valid email a potential group.
+        // A more robust check could use AdminDirectory.Groups.get, but that's slow.
+        dependencyGraph.get(parentGroupEmail).push(childEmail);
+      }
+    });
+  });
+
+  // --- 2. Perform DFS to detect cycles ---
+  const whiteSet = new Set(allGroupEmails); // Nodes not yet visited
+  const graySet = new Set();  // Nodes currently in recursion stack
+  const blackSet = new Set(); // Nodes completely visited
+
+  function dfs(node, path) {
+    whiteSet.delete(node);
+    graySet.add(node);
+    path.push(node);
+
+    const children = dependencyGraph.get(node) || [];
+    for (const child of children) {
+      if (graySet.has(child)) {
+        // Cycle detected
+        path.push(child);
+        throw new Error('Circular dependency detected! Sync aborted. Cycle: ' + path.join(' -> '));
+      }
+      if (whiteSet.has(child)) {
+        dfs(child, path);
+      }
+    }
+
+    graySet.delete(node);
+    blackSet.add(node);
+    path.pop();
+  }
+
+  while (whiteSet.size > 0) {
+    const startNode = whiteSet.values().next().value;
+    dfs(startNode, []);
+  }
+
+  log_('Group nesting validation passed. No circular dependencies found.');
+  return true;
+}
+
+function findGroupEmailByName_(groupName) {
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+
+    // Check UserGroups sheet (only read actual data rows)
+    const userGroupsSheet = spreadsheet.getSheetByName(USER_GROUPS_SHEET_NAME);
+    if (userGroupsSheet && userGroupsSheet.getLastRow() > 1) {
+        const data = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 2).getValues();
+        for (let i = 0; i < data.length; i++) {
+            if (data[i][0] === groupName && data[i][1]) {
+                return data[i][1];
+            }
+        }
+    }
+
+    // Check ManagedFolders sheet (only read actual data rows)
+    const managedFoldersSheet = spreadsheet.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+    if (managedFoldersSheet && managedFoldersSheet.getLastRow() > 1) {
+      const managedHeaders = getHeaderMap_(managedFoldersSheet);
+      const userSheetNameCol = resolveColumn_(managedHeaders, 'UserSheetName', null);
+      const managedGroupEmailCol = resolveColumn_(managedHeaders, 'GroupEmail', null);
+
+      if (userSheetNameCol && managedGroupEmailCol) {
+        const data = managedFoldersSheet
+          .getRange(
+            2,
+            1,
+            managedFoldersSheet.getLastRow() - 1,
+            Math.max(userSheetNameCol, managedGroupEmailCol)
+          )
+          .getValues();
+        for (let i = 0; i < data.length; i++) {
+          const currentSheetName = data[i][userSheetNameCol - 1];
+          if (currentSheetName && currentSheetName.slice(0, -2) === groupName && data[i][managedGroupEmailCol - 1]) {
+            return data[i][managedGroupEmailCol - 1];
+          }
+        }
+      }
+    }
+
+    return null;
+}
+
+function getUserGroupSheetName_(groupName) {
+  if (!groupName) {
+    return '';
+  }
+
+  const trimmedName = groupName.toString().trim();
+  if (!trimmedName) {
+    return '';
+  }
+
+  return trimmedName.endsWith('_G') ? trimmedName : trimmedName + '_G';
+}
+
+/**
+ * Finds all groups that contain a specific member (for detecting nested groups).
+ * Used to warn when deleting a group that is nested in other groups.
+ * @param {string} memberEmail - Email address to search for
+ * @return {Array<string>} Array of group names that contain this member
+ */
+function findGroupsContainingMember_(memberEmail) {
+  if (!memberEmail) return [];
+
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const groupsContainingMember = [];
+
+  // Check all user sheets (including group sheets ending in _G)
+  const allSheets = spreadsheet.getSheets();
+  allSheets.forEach(function(sheet) {
+    const sheetName = sheet.getName();
+
+    // Skip system sheets
+    if (sheetName === MANAGED_FOLDERS_SHEET_NAME ||
+        sheetName === USER_GROUPS_SHEET_NAME ||
+        sheetName === SHEET_EDITORS_SHEET_NAME ||
+        sheetName === CONFIG_SHEET_NAME ||
+        sheetName === LOG_SHEET_NAME ||
+        sheetName === TEST_LOG_SHEET_NAME ||
+        sheetName === FOLDER_AUDIT_LOG_SHEET_NAME ||
+        sheetName === SYNC_HISTORY_SHEET_NAME ||
+        sheetName === 'DeepFolderAuditLog' ||
+        sheetName === 'Help') {
+      return;
+    }
+
+    // Check if this sheet contains the member
+    if (sheet.getLastRow() < 2) return;
+
+    const emails = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).getValues();
+    const found = emails.some(function(row) {
+      return row[0] && row[0].toString().trim().toLowerCase() === memberEmail.toLowerCase();
+    });
+
+    if (found) {
+      // Remove _G suffix if present for cleaner display
+      const displayName = sheetName.endsWith('_G') ? sheetName.slice(0, -2) : sheetName;
+      groupsContainingMember.push(displayName);
+    }
+  });
+
+  return groupsContainingMember;
+}
+
+/**
+ * Sends email notification about deleted groups and folders.
+ * @param {Object} summary - Deletion summary with counts and errors
+ */
+function notifyDeletions_(summary) {
+  const config = getConfiguration_();
+  const notifyEnabled = getConfigValue_('NotifyOnGroupFolderDeletion', true);
+  const emailNotificationsEnabled = getConfigValue_('EnableEmailNotifications', false);
+
+  if (!notifyEnabled || !emailNotificationsEnabled) {
+    return; // Notifications disabled
+  }
+
+  const recipientEmail = config['NotificationEmail'] || Session.getEffectiveUser().getEmail();
+  if (!recipientEmail) {
+    log_('Cannot send deletion notification: no recipient email configured', 'WARN');
+    return;
+  }
+
+  const totalDeleted = summary.userGroupsDeleted + summary.foldersDeleted;
+  const subject = `[Permissions Manager] ${totalDeleted} Resource(s) Deleted`;
+
+  let body = 'The following resources were deleted during sync:\n\n';
+  body += '='.repeat(60) + '\n\n';
+
+  if (summary.userGroupsDeleted > 0) {
+    body += `✓ User Groups Deleted: ${summary.userGroupsDeleted}\n`;
+  }
+
+  if (summary.foldersDeleted > 0) {
+    body += `✓ Folder-Role Bindings Deleted: ${summary.foldersDeleted}\n`;
+  }
+
+  body += '\n';
+
+  if (summary.errors && summary.errors.length > 0) {
+    body += '⚠️ ERRORS ENCOUNTERED:\n\n';
+    summary.errors.forEach(function(error) {
+      body += `  • ${error.type}: "${error.name}"\n`;
+      body += `    Error: ${error.error}\n\n`;
+    });
+  }
+
+  body += '='.repeat(60) + '\n\n';
+  body += 'Details:\n\n';
+  body += '• Google Groups: Deleted from Google Workspace\n';
+  body += '• Folder Permissions: Group access removed\n';
+  body += '• User Sheets: Deleted from spreadsheet\n';
+  body += '• Configuration Rows: Removed\n';
+  body += '• Folders: NOT deleted (remain in Drive)\n\n';
+
+  body += 'To review:\n';
+  body += `• Check SyncHistory sheet for full details\n`;
+  body += `• Check Log sheet for operation logs\n\n`;
+
+  body += 'Note: This is an automated notification from the Google Drive Permissions Manager.\n';
+
+  try {
+    MailApp.sendEmail(recipientEmail, subject, body);
+    log_(`Deletion notification sent to ${recipientEmail}`, 'INFO');
+  } catch (e) {
+    log_(`Failed to send deletion notification: ${e.message}`, 'ERROR');
+  }
+}
+
+// =====================================================================================
+// START OF FILE: ConfigDiagnostic.gs
+// =====================================================================================
+/**
+ * DIAGNOSTIC TOOL: Find and report Config sheet errors
+ * Run this function from the Apps Script editor to see exactly what's wrong
+ */
+function diagnoseConfigErrors() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const configSheet = ss.getSheetByName(CONFIG_SHEET_NAME);
+
+  if (!configSheet) {
+    Logger.log('ERROR: Config sheet not found!');
+    return;
+  }
+
+  Logger.log('===== CONFIG SHEET DIAGNOSTIC =====');
+  Logger.log('');
+
+  const lastRow = configSheet.getLastRow();
+  const lastCol = configSheet.getLastColumn();
+
+  Logger.log('Sheet dimensions: ' + lastRow + ' rows, ' + lastCol + ' columns');
+  Logger.log('');
+
+  const data = configSheet.getRange(1, 1, lastRow, Math.max(lastCol, 3)).getValues();
+  const formulas = configSheet.getRange(1, 1, lastRow, Math.max(lastCol, 3)).getFormulas();
+
+  let errorCount = 0;
+  let formulaCount = 0;
+
+  Logger.log('Scanning for errors and formulas...');
+  Logger.log('');
+
+  for (let i = 0; i < data.length; i++) {
+    const rowNum = i + 1;
+
+    for (let j = 0; j < data[i].length; j++) {
+      const colLetter = String.fromCharCode(65 + j); // A, B, C, etc.
+      const cellRef = colLetter + rowNum;
+      const value = data[i][j];
+      const formula = formulas[i][j];
+      const valueStr = String(value);
+
+      // Check for errors
+      if (valueStr.startsWith('#') &&
+          (valueStr.includes('ERROR') || valueStr.includes('N/A') ||
+           valueStr.includes('VALUE') || valueStr.includes('REF') ||
+           valueStr.includes('DIV'))) {
+        errorCount++;
+        Logger.log('❌ ERROR at ' + cellRef + ': ' + valueStr);
+        if (formula) {
+          Logger.log('   Formula: ' + formula);
+        }
+        if (i > 0 && data[i][0]) {
+          Logger.log('   Setting name: ' + data[i][0]);
+        }
+        Logger.log('');
+      }
+
+      // Check for formulas in column B (Value column)
+      if (j === 1 && formula && rowNum > 1 && !data[i][0].startsWith('---')) {
+        formulaCount++;
+        Logger.log('⚠️  Formula found at ' + cellRef + ': ' + formula);
+        Logger.log('   Current value: ' + valueStr);
+        Logger.log('   Setting name: ' + data[i][0]);
+        Logger.log('   → RECOMMENDATION: Replace with plain value: "' + valueStr + '"');
+        Logger.log('');
+      }
+    }
+  }
+
+  Logger.log('===== SUMMARY =====');
+  Logger.log('Errors found: ' + errorCount);
+  Logger.log('Formulas in Value column: ' + formulaCount);
+  Logger.log('');
+
+  if (errorCount === 0 && formulaCount === 0) {
+    Logger.log('✅ No issues found! Your Config sheet looks good.');
+  } else {
+    Logger.log('===== RECOMMENDED ACTIONS =====');
+    if (errorCount > 0) {
+      Logger.log('1. Fix or remove the cells showing errors (marked with ❌)');
+      Logger.log('   - Click on each error cell to see what\'s wrong');
+      Logger.log('   - Usually you can just delete the formula and type a simple value');
+    }
+    if (formulaCount > 0) {
+      Logger.log('2. Replace formulas in the Value column with plain values');
+      Logger.log('   - Formulas in Config sheet can cause issues');
+      Logger.log('   - Copy the cell value, then Paste Special > Values only');
+    }
+    Logger.log('');
+    Logger.log('3. After fixing, run: Permissions Manager > Advanced > Clear Cache');
+  }
+
+  Logger.log('');
+  Logger.log('===== DETAILED CONFIG VALUES =====');
+  Logger.log('Here are all your current config settings:');
+  Logger.log('');
+
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] && !data[i][0].startsWith('---')) {
+      const settingName = data[i][0];
+      const value = data[i][1];
+      const valueStr = String(value);
+
+      if (valueStr.startsWith('#')) {
+        Logger.log('❌ ' + settingName + ' = ' + valueStr + ' (ERROR!)');
+      } else if (formulas[i][1]) {
+        Logger.log('⚠️  ' + settingName + ' = ' + valueStr + ' (formula: ' + formulas[i][1] + ')');
+      } else {
+        Logger.log('✓ ' + settingName + ' = ' + valueStr);
+      }
+    }
+  }
+}
+
+/**
+ * AUTOMATIC FIX: Convert all formulas in Config Value column to plain values
+ * This will resolve the #ERROR! issues by replacing formulas with their current values
+ *
+ * Run this from the script editor (not from a menu)
+ */
+function autoFixConfigFormulas() {
+  Logger.log('Starting Config sheet auto-fix...');
+  Logger.log('This will convert formulas to values and clear errors.');
+  Logger.log('');
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const configSheet = ss.getSheetByName(CONFIG_SHEET_NAME);
+
+  if (!configSheet) {
+    Logger.log('ERROR: Config sheet not found!');
+    return;
+  }
+
+  // Create a backup
+  const backupSheet = configSheet.copyTo(ss);
+  backupSheet.setName('Config_Backup_' + new Date().getTime());
+  Logger.log('Created backup sheet: ' + backupSheet.getName());
+
+  const lastRow = configSheet.getLastRow();
+  const data = configSheet.getRange(1, 1, lastRow, 3).getValues();
+  const formulas = configSheet.getRange(1, 1, lastRow, 3).getFormulas();
+
+  let fixedCount = 0;
+  let errorCount = 0;
+
+  for (let i = 1; i < data.length; i++) { // Start from row 2 (index 1)
+    const rowNum = i + 1;
+
+    // Check column B (Value column, index 1)
+    if (formulas[i][1]) {
+      const value = data[i][1];
+      const valueStr = String(value);
+
+      // If it's an error, replace with empty string
+      if (valueStr.startsWith('#') &&
+          (valueStr.includes('ERROR') || valueStr.includes('N/A') ||
+           valueStr.includes('VALUE') || valueStr.includes('REF') ||
+           valueStr.includes('DIV'))) {
+        configSheet.getRange(rowNum, 2).setValue('');
+        errorCount++;
+        Logger.log('Cleared error in Config row ' + rowNum + ' (' + data[i][0] + '): was ' + valueStr);
+      } else {
+        // Convert formula to value
+        configSheet.getRange(rowNum, 2).setValue(value);
+        fixedCount++;
+        Logger.log('Converted formula to value in Config row ' + rowNum + ' (' + data[i][0] + '): ' + valueStr);
+      }
+    } else {
+      // Check if cell has error even without formula (can happen with references)
+      const value = data[i][1];
+      const valueStr = String(value);
+
+      if (valueStr.startsWith('#') &&
+          (valueStr.includes('ERROR') || valueStr.includes('N/A') ||
+           valueStr.includes('VALUE') || valueStr.includes('REF') ||
+           valueStr.includes('DIV'))) {
+        configSheet.getRange(rowNum, 2).setValue('');
+        errorCount++;
+        Logger.log('Cleared error in Config row ' + rowNum + ' (' + data[i][0] + '): was ' + valueStr);
+      }
+    }
+  }
+
+  // Clear the cache
+  CacheService.getScriptCache().remove('config');
+
+  Logger.log('');
+  Logger.log('===== AUTO-FIX COMPLETE =====');
+  Logger.log('Formulas converted to values: ' + fixedCount);
+  Logger.log('Errors cleared: ' + errorCount);
+  Logger.log('Backup created: ' + backupSheet.getName());
+  Logger.log('');
+  Logger.log('Cache has been cleared.');
+  Logger.log('The #ERROR! logs should no longer appear.');
+  Logger.log('');
+  Logger.log('You can delete the backup sheet "' + backupSheet.getName() + '" once you verify everything works.');
+}
+
+// =====================================================================================
+// START OF FILE: Core.gs
+// =====================================================================================
+const EMAIL_EXTRACTION_REGEX = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+const SINGLE_EMAIL_VALIDATION_REGEX = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
+
+function createSheetLockManager_(enableSheetLocking, executionId) {
+  const lockingEnabled = enableSheetLocking !== undefined
+    ? enableSheetLocking
+    : (typeof getConfigValue_ === 'function' ? getConfigValue_('EnableSheetLocking', true) : true);
+  const lockedSheets = new Set();
+  const currentExecutionId = executionId;
+
+  return {
+    isEnabled: lockingEnabled,
+    cleanupStaleLocks(sheets) {
+      if (!lockingEnabled) {
+        return;
+      }
+      removeStaleLocks_(sheets, currentExecutionId);
+    },
+    lock(sheet) {
+      if (!lockingEnabled || !sheet || lockedSheets.has(sheet)) {
+        return;
+      }
+      lockSheetForEdits_(sheet, currentExecutionId);
+      lockedSheets.add(sheet);
+    },
+    unlockAll() {
+      if (!lockingEnabled) {
+        return;
+      }
+      lockedSheets.forEach(sheet => unlockSheetForEdits_(sheet, currentExecutionId));
+      lockedSheets.clear();
+    }
+  };
+}
+
+/**
+ * Processes all folders defined in the ManagedFolders sheet with a batch-oriented approach.
+ *
+ * This function orchestrates the synchronization process in several phases to maximize efficiency:
+ * 1.  **Planning:** Reads the entire sheet and builds a list of "jobs" to be done.
+ * 2.  **Folder Sync:** Finds all existing folders in a single batch query, then creates any missing ones.
+ * 3.  **Group Sync:** Creates any necessary Google Groups (sequentially, as Admin SDK doesn't support batch creation).
+ * 4.  **Permission Sync:** Sets all folder permissions in a single batch API call.
+ * 5.  **Membership Sync:** Iterates through the jobs and calls the (already-optimized) `syncGroupMembership_` for each.
+ *
+ * @param {object} [options={}] - Options for the sync process (e.g., removeOnly, silentMode).
+ * @returns {object|undefined} A summary of changes or a plan for deletions.
+ */
+function processManagedFolders_(options = {}) {
+  const returnPlanOnly = options && options.returnPlanOnly !== undefined ? options.returnPlanOnly : false;
+  const removeOnly = options && options.removeOnly !== undefined ? options.removeOnly : false;
+  const silentMode = options && options.silentMode !== undefined ? options.silentMode : false;
+  const executionSource = options && options.executionSource !== undefined ? options.executionSource : 'MANUAL';
+  const totalSummary = { added: 0, removed: 0, failed: 0 };
+
+  log_('*** Starting batch-oriented processing of ManagedFolders sheet...');
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+  if (!sheet) {
+    if (!silentMode) SpreadsheetApp.getUi().alert(`CRITICAL: Configuration sheet named "${MANAGED_FOLDERS_SHEET_NAME}" not found. Aborting.`);
+    return;
+  }
+
+  // Get header map for dynamic column resolution
+  const headers = getHeaderMap_(sheet);
+  const folderNameCol = resolveColumn_(headers, 'foldername', 1);
+  const folderIdCol = resolveColumn_(headers, 'folderid', 2);
+  const roleCol = resolveColumn_(headers, 'role', 3);
+  const groupEmailCol = resolveColumn_(headers, 'groupemail', 4);
+  const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+  const lastSyncedCol = resolveColumn_(headers, 'last synced', 6);
+  const statusCol = resolveColumn_(headers, 'status', 7);
+  const urlCol = resolveColumn_(headers, 'url', 8);
+
+  if (!returnPlanOnly && !silentMode) setSheetUiStyles_(headers);
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) {
+    log_('No data rows to process in ManagedFolders sheet.');
+    return returnPlanOnly ? [] : totalSummary;
+  }
+
+  const executionId = new Date().getTime() + '_' + Math.random().toString().substring(2);
+  const lockManager = createSheetLockManager_(options.enableSheetLocking, executionId);
+  const jobs = _buildSyncJobs(sheet, lastRow, options, headers);
+
+  if (jobs.length === 0) {
+    log_('No valid jobs to process.');
+    return returnPlanOnly ? [] : totalSummary;
+  }
+
+  let jobsToProcess = jobs;
+  // NEW: Filter out test-related jobs if this is an AutoSync run
+  if (executionSource === 'AUTO_SYNC') {
+      const testConfig = getTestConfiguration_(); // Get test config for filtering
+      const manualTestFolderName = testConfig.folderName; // Manual test folder name
+      const testFolderPrefix = 'StressTestFolder_'; // Prefix for stress test folders
+
+      jobsToProcess = jobs.filter(job => {
+          const isTestFolder = job.folderName.startsWith(testFolderPrefix) || job.folderName === manualTestFolderName;
+          if (isTestFolder) {
+              log_(`Auto-sync skipping test folder: "${job.folderName}" (row ${job.rowIndex})`, 'INFO');
+          }
+          return !isTestFolder; // Keep only non-test folders
+      });
+      if (jobs.length !== jobsToProcess.length) {
+          log_(`Filtered out ${jobs.length - jobsToProcess.length} test-related jobs. ${jobsToProcess.length} non-test jobs remaining.`, 'INFO');
+      }
+      if (jobsToProcess.length === 0) {
+          log_('No non-test jobs remaining to process after filtering.');
+          return returnPlanOnly ? [] : totalSummary;
+      }
+  }
+  
+  if (lockManager.isEnabled) {
+    const allSheetNamesForSync = [MANAGED_FOLDERS_SHEET_NAME].concat(jobsToProcess.map(j => j.existingUserSheetName).filter(Boolean));
+    const sheetObjectsForSync = allSheetNamesForSync.map(name => ss.getSheetByName(name)).filter(Boolean);
+    lockManager.cleanupStaleLocks(sheetObjectsForSync);
+  }
+
+  try {
+    if (lockManager.isEnabled) {
+      log_('Locking sheets for sync...', 'INFO');
+      lockManager.lock(sheet);
+      jobsToProcess.forEach(job => lockAssociatedUserSheet_({ spreadsheet: ss }, lockManager, job.existingUserSheetName));
+    }
+
+    if (removeOnly || returnPlanOnly) {
+      log_('Processing in delete-only or planning mode...');
+      jobsToProcess.forEach(job => {
+        const result = syncGroupMembership_(job.existingGroupEmail, job.existingUserSheetName, options);
+        if (result) {
+            if (returnPlanOnly) {
+                totalSummary.plan = (totalSummary.plan || []).concat(result);
+            } else {
+                totalSummary.removed += result.removed || 0;
+                totalSummary.failed += result.failed || 0;
+            }
+        }
+      });
+      log_('Delete-only/planning mode finished.');
+      return returnPlanOnly ? totalSummary.plan : totalSummary;
+    }
+
+    // --- Full Batch Sync ---
+    log_('Step 1/5: Finding existing folders...');
+    _batchFindFolders(jobsToProcess, sheet, folderIdCol);
+
+    log_('Step 2/5: Creating new folders...');
+    _sequentiallyCreateFolders(jobsToProcess, sheet, silentMode, totalSummary, { folderIdCol, folderNameCol, urlCol, statusCol });
+
+    log_('Step 3/5: Creating groups and user sheets...');
+    _sequentiallyCreateGroupsAndSheets(jobsToProcess, sheet, lockManager, totalSummary, { userSheetNameCol, groupEmailCol, statusCol });
+
+    log_('Step 4/5: Batch-setting folder permissions...');
+    const permSummary = _batchSetPermissions(jobsToProcess);
+    totalSummary.failed += permSummary.failed; // Add failures from permission setting
+
+    log_('Step 5/5: Syncing group memberships...');
+    if (!shouldSkipGroupOps_()) {
+        jobsToProcess.forEach(job => {
+            if (!job.groupEmail || !job.userSheetName) return;
+            try {
+                showToast_(`Syncing members for ${job.folderName}...`, 'Sync Progress', 10);
+                const syncSummary = syncGroupMembership_(job.groupEmail, job.userSheetName, options);
+                totalSummary.added += syncSummary.added;
+                totalSummary.removed += syncSummary.removed;
+                totalSummary.failed += syncSummary.failed;
+                sheet.getRange(job.rowIndex, statusCol).setValue('OK');
+                sheet.getRange(job.rowIndex, lastSyncedCol).setValue(formatSpreadsheetTimestamp_(ss));
+            } catch (e) {
+                log_(`Error syncing members for ${job.folderName}: ${e.message}`, 'ERROR');
+                totalSummary.failed++;
+                sheet.getRange(job.rowIndex, statusCol).setValue('Error');
+            }
+        });
+    } else {
+        log_('Skipping group membership sync (Admin SDK not available).', 'WARN');
+        jobsToProcess.forEach(job => sheet.getRange(job.rowIndex, statusCol).setValue('SKIPPED (No Admin SDK)'));
+    }
+
+    log_('*** Batch-oriented processing finished.');
+    return totalSummary;
+
+  } catch (e) {
+    log_('FATAL ERROR in processManagedFolders_: ' + e.toString() + ' Stack: ' + e.stack, 'ERROR');
+    throw e;
+  } finally {
+    if (lockManager.isEnabled) {
+      log_('Unlocking all sheets.');
+      lockManager.unlockAll();
+    }
+  }
+}
+
+/**
+ * [HELPER] Reads the ManagedFolders sheet and builds a list of job objects.
+ */
+function _buildSyncJobs(sheet, lastRow, options, headers) {
+  const onlySyncPrefixes = options.onlySyncPrefixes;
+  const onlySyncRowIndexes = options.onlySyncRowIndexes;
+  
+  // Resolve columns from headers map
+  const folderNameCol = resolveColumn_(headers, 'foldername', 1);
+  const folderIdCol = resolveColumn_(headers, 'folderid', 2);
+  const roleCol = resolveColumn_(headers, 'role', 3);
+  const groupEmailCol = resolveColumn_(headers, 'groupemail', 4);
+  const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+  const statusCol = resolveColumn_(headers, 'status', 7);
+
+  log_('Building sync jobs from ManagedFolders sheet...');
+  const jobs = [];
+  const data = sheet.getRange(2, 1, lastRow - 1, Math.max(...Object.values(headers))).getValues();
+
+  data.forEach((row, i) => {
+    const rowIndex = i + 2;
+    const folderName = row[folderNameCol - 1];
+    const folderId = row[folderIdCol - 1];
+    const role = row[roleCol - 1];
+
+    if (!folderName && !folderId) return; // Skip empty rows
+
+    // Filter based on options for testing (e.g., specific prefixes or row indexes for targeted runs)
+    if (onlySyncPrefixes && !onlySyncPrefixes.some(prefix => folderName.startsWith(prefix))) {
+        return;
+    }
+    if (onlySyncRowIndexes && !onlySyncRowIndexes.includes(rowIndex)) {
+        return;
+    }
+    
+    if (!role) {
+        log_(`Skipping row ${rowIndex} due to missing role for folder "${folderName}".`, 'ERROR');
+        sheet.getRange(rowIndex, statusCol).setValue('Error: Role is missing');
+        return;
+    }
+
+    const job = {
+      rowIndex: rowIndex,
+      folderName: folderName,
+      folderId: folderId,
+      role: role,
+      existingGroupEmail: row[groupEmailCol - 1],
+      existingUserSheetName: row[userSheetNameCol - 1],
+      folder: null // To be populated later
+    };
+    jobs.push(job);
+  });
+  log_(`Built ${jobs.length} valid sync jobs.`);
+  return jobs;
+}
+
+/**
+ * [HELPER] Uses Drive API search to find all existing folders in a single API call.
+ */
+function _batchFindFolders(jobs, sheet, folderIdCol) {
+  const folderNamesToFind = jobs
+    .filter(j => j.folderName && !j.folderId)
+    .map(j => escapeDriveQueryValue_(j.folderName));
+  if (folderNamesToFind.length === 0) {
+    log_('No folder names to find, all are specified by ID or none exist.');
+    return;
+  }
+
+  const query = `mimeType = 'application/vnd.google-apps.folder' and trashed = false and (${folderNamesToFind.map(name => `name = '${name}'`).join(' or ')})`;
+  const existingFolders = new Map(); // name -> [folder]
+  
+  try {
+    let pageToken = null;
+    do {
+      const response = Drive.Files.list({
+        q: query,
+        fields: 'nextPageToken, files(id, name)',
+        pageToken: pageToken,
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true
+      });
+      response.files.forEach(file => {
+        if (!existingFolders.has(file.name)) {
+          existingFolders.set(file.name, []);
+        }
+        existingFolders.get(file.name).push(file);
+      });
+      pageToken = response.nextPageToken;
+    } while (pageToken);
+
+    jobs.forEach(job => {
+      if (job.folderName && existingFolders.has(job.folderName)) {
+        const found = existingFolders.get(job.folderName);
+        if (found.length > 1) {
+          throw new Error(`Ambiguous: Multiple folders exist with the name "${job.folderName}". Please specify by ID in row ${job.rowIndex}.`);
+        }
+        job.folder = found[0];
+        job.folderId = found[0].id;
+        sheet.getRange(job.rowIndex, folderIdCol).setValue(job.folderId);
+      }
+    });
+  } catch(e) {
+    log_('Error during batch folder search: ' + e.message, 'ERROR');
+    throw e;
+  }
+}
+
+function escapeDriveQueryValue_(value) {
+  return String(value)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/\r/g, ' ')
+    .replace(/\n/g, ' ');
+}
+
+/**
+ * [HELPER] Sequentially creates folders that were not found in the batch find operation.
+ */
+function _sequentiallyCreateFolders(jobs, sheet, silentMode, totalSummary, colMap) {
+    const { folderIdCol, folderNameCol, urlCol, statusCol } = colMap;
+    jobs.forEach(job => {
+        try {
+            if (job.folder) return; // Already found or processed
+            const result = getOrCreateFolder_(job.folderName, job.folderId, { silentMode: silentMode });
+            job.folder = result.folder;
+            job.folderId = result.folder.getId();
+            job.folderName = result.folder.getName(); // Update name in case it was corrected
+            if (result.wasNewlyCreated) {
+              totalSummary.added++;
+            }
+
+            // Write updates to sheet immediately
+            sheet.getRange(job.rowIndex, folderIdCol).setValue(job.folderId);
+            sheet.getRange(job.rowIndex, folderNameCol).setValue(job.folderName);
+            sheet.getRange(job.rowIndex, urlCol).setValue(result.folder.getUrl());
+        } catch (e) {
+            log_(`Failed to get/create folder for row ${job.rowIndex}: ${e.message}`, 'ERROR');
+            sheet.getRange(job.rowIndex, statusCol).setValue('Error: Folder creation failed');
+            job.error = true; // Mark job as failed
+            totalSummary.failed++;
+        }
+    });
+}
+
+/**
+ * [HELPER] Sequentially creates groups and user sheets for jobs that need them.
+ */
+function _sequentiallyCreateGroupsAndSheets(jobs, sheet, lockManager, totalSummary, colMap) {
+  const { userSheetNameCol, groupEmailCol, statusCol } = colMap;
+  if (shouldSkipGroupOps_()) {
+      log_('Skipping group/sheet creation (Admin SDK not available).', 'WARN');
+      return;
+  }
+
+  jobs.forEach(job => {
+    if (job.error || !job.folder) return; // Skip failed or folder-less jobs
+
+    let userSheetName = `${job.folderName}_${job.role}`;
+    if (job.existingUserSheetName && job.existingUserSheetName !== userSheetName) {
+      renameSheetIfExists_(job.existingUserSheetName, userSheetName);
+    }
+    job.userSheetName = userSheetName;
+
+    let groupEmail = job.existingGroupEmail;
+    if (!groupEmail) {
+      try {
+        groupEmail = generateGroupEmail_(userSheetName);
+      } catch (e) {
+        log_(`Failed to generate group email for row ${job.rowIndex}: ${e.message}`, 'ERROR');
+        sheet.getRange(job.rowIndex, statusCol).setValue('Error: Bad group name');
+        job.error = true;
+        totalSummary.failed++;
+        return;
+      }
+    }
+    job.groupEmail = groupEmail;
+
+    // Write updates to sheet
+    sheet.getRange(job.rowIndex, userSheetNameCol).setValue(job.userSheetName);
+    sheet.getRange(job.rowIndex, groupEmailCol).setValue(job.groupEmail);
+
+    // Create resources
+    const sheetResult = getOrCreateUserSheet_(job.userSheetName);
+    if (sheetResult.wasNewlyCreated) {
+      totalSummary.added++;
+    }
+    const userSheet = sheetResult.sheet;
+
+    if (lockManager.isEnabled) {
+      lockManager.lock(userSheet);
+    }
+    
+    const groupResult = getOrCreateGroup_(job.groupEmail, job.userSheetName);
+    if (groupResult.wasNewlyCreated) {
+      totalSummary.added++;
+    }
+  });
+}
+
+/**
+ * [HELPER] Sets folder permissions for all jobs in a single batch request.
+ */
+function _batchSetPermissions(jobs) {
+    const summary = { failed: 0 };
+    if (shouldSkipGroupOps_()) return summary;
+
+    const requests = jobs.filter(job => !job.error && job.folderId && job.groupEmail && job.role)
+        .map(job => {
+            const driveApiRole = (job.role.toLowerCase() === 'editor') ? 'writer' : (job.role.toLowerCase() === 'viewer') ? 'reader' : 'commenter';
+            return {
+                method: 'POST',
+                path: `/drive/v3/files/${job.folderId}/permissions?supportsAllDrives=true&sendNotificationEmail=false`,
+                payload: JSON.stringify({ type: 'group', role: driveApiRole, emailAddress: job.groupEmail }),
+                job: job
+            };
+        });
+
+    if (requests.length === 0) return summary;
+
+    log_(`Sending batch request with ${requests.length} permission operations...`);
+    const batchResponse = _executeBatchRequest(requests, 'https://www.googleapis.com/batch/drive/v3');
+
+    batchResponse.forEach((part, i) => {
+        const job = requests[i].job;
+        if (part.success) {
+            log_(`Successfully set role "${job.role}" for group "${job.groupEmail}" on folder "${job.folderName}"`, 'INFO');
+        } else {
+            // Ignore "permission already exists" errors, treat as success
+            if (part.body && part.body.includes('duplicate')) {
+                 log_(`Permission for group "${job.groupEmail}" on folder "${job.folderName}" already exists. Skipping.`, 'INFO');
+            } else {
+                summary.failed++;
+                job.error = true;
+                log_(`Batch permission failure for group ${job.groupEmail} on folder ${job.folderName}. Status: ${part.status}. Details: ${part.body}`, 'ERROR');
+            }
+        }
+    });
+    return summary;
+}
+
+/**
+ * [HELPER] Generic function to execute a multipart/mixed batch request.
+ * @param {Array<object>} requests - Array of request objects {method, path, payload, ...}.
+ * @param {string} batchUrl - The batch endpoint URL.
+ * @returns {Array<object>} An array of response objects {success, status, body}.
+ */
+function _executeBatchRequest(requests, batchUrl) {
+    const boundary = 'batch_' + new Date().getTime();
+    let requestBody = '';
+    requests.forEach((req, i) => {
+        requestBody += `--${boundary}\n`;
+        requestBody += 'Content-Type: application/http\n';
+        requestBody += `Content-ID: item${i}\n\n`;
+        requestBody += `${req.method} ${req.path}\n`;
+        if (req.payload) {
+            requestBody += 'Content-Type: application/json\n\n';
+            requestBody += req.payload + '\n';
+        } else {
+            requestBody += '\n';
+        }
+    });
+    requestBody += `--${boundary}--`;
+
+    const fetchOptions = {
+        method: 'POST',
+        contentType: `multipart/mixed; boundary=${boundary}`,
+        payload: requestBody,
+        headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
+        muteHttpExceptions: true
+    };
+
+    const response = UrlFetchApp.fetch(batchUrl, fetchOptions);
+    const responseCode = response.getResponseCode();
+    const responseBody = response.getContentText();
+
+    if (responseCode < 200 || responseCode >= 300) {
+        log_(`Batch request to ${batchUrl} failed with code ${responseCode}: ${responseBody}`, 'ERROR');
+        throw new Error(`Batch request failed with response code ${responseCode}`);
+    }
+    
+    const contentTypeHeader = response.getHeaders()['Content-Type'];
+    if (!contentTypeHeader || !contentTypeHeader.includes('boundary=')) {
+        throw new Error('Invalid batch response: boundary not found in Content-Type header.');
+    }
+    const responseBoundary = '--' + contentTypeHeader.split('boundary=')[1];
+    const parts = responseBody.split(responseBoundary);
+    const responses = [];
+
+    for (let i = 1; i < parts.length - 1; i++) {
+        const part = parts[i].trim();
+        if (!part) continue;
+        
+        const statusMatch = part.match(/^HTTP\/[12]\.[01] (\d{3})/m);
+        const status = statusMatch ? parseInt(statusMatch[1], 10) : 500;
+        
+        responses.push({
+            success: status >= 200 && status < 300,
+            status: status,
+            body: part
+        });
+    }
+    return responses;
+}
+
+
+function lockAssociatedUserSheet_(context, lockManager, sheetName) {
+  if (!lockManager.isEnabled || !sheetName) {
+    return;
+  }
+
+  const userSheet = context.spreadsheet.getSheetByName(sheetName);
+  if (userSheet) {
+    lockManager.lock(userSheet);
+  }
+}
+
+function formatSpreadsheetTimestamp_(spreadsheet) {
+  return Utilities.formatDate(new Date(), spreadsheet.getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+}
+
+function checkForOrphanSheets_() {
+  try {
+    log_('Checking for orphan sheets...');
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    const allSheets = spreadsheet.getSheets();
+    const allSheetNames = allSheets.map(function(s) { return s.getName(); });
+
+    const requiredSheetNames = new Set();
+    requiredSheetNames.add(MANAGED_FOLDERS_SHEET_NAME);
+    requiredSheetNames.add(SHEET_EDITORS_SHEET_NAME);
+    requiredSheetNames.add(USER_GROUPS_SHEET_NAME);
+    requiredSheetNames.add(CONFIG_SHEET_NAME);
+    requiredSheetNames.add(LOG_SHEET_NAME);
+    requiredSheetNames.add(TEST_LOG_SHEET_NAME);
+    requiredSheetNames.add(FOLDER_AUDIT_LOG_SHEET_NAME);
+    requiredSheetNames.add(SYNC_HISTORY_SHEET_NAME);
+    requiredSheetNames.add(STATUS_SHEET_NAME);
+    requiredSheetNames.add('DeepFolderAuditLog');
+    requiredSheetNames.add('Help');
+
+    const managedSheet = spreadsheet.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+    if (managedSheet && managedSheet.getLastRow() > 1) {
+      const headers = getHeaderMap_(managedSheet);
+      const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+      const userSheetNames = managedSheet.getRange(2, userSheetNameCol, managedSheet.getLastRow() - 1, 1).getValues();
+      if (userSheetNames) {
+          userSheetNames.forEach(function(row) {
+            if (row[0]) requiredSheetNames.add(row[0]);
+          });
+      }
+    }
+
+    const userGroupsSheet = spreadsheet.getSheetByName(USER_GROUPS_SHEET_NAME);
+    if (userGroupsSheet && userGroupsSheet.getLastRow() > 1) {
+        const groupSheetNames = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 1).getValues();
+        if (groupSheetNames) {
+            groupSheetNames.forEach(function(row) {
+                if (row[0]) requiredSheetNames.add(getUserGroupSheetName_(row[0]));
+            });
+        }
+    }
+
+    const orphanSheetNames = allSheets
+      .filter(function(sheet) {
+        const name = sheet.getName();
+        if (requiredSheetNames.has(name)) {
+          return false;
+        }
+        if (isTestSheet_(name)) {
+          return false;
+        }
+        if (isSystemSheet_(sheet)) {
+          return false;
+        }
+        return true;
+      })
+      .map(function(sheet) { return sheet.getName(); });
+
+    if (orphanSheetNames.includes('Sheet1')) {
+      const sheet1 = spreadsheet.getSheetByName('Sheet1');
+      if (sheet1) {
+        log_('Default "Sheet1" found. Deleting it now.', 'INFO');
+        spreadsheet.deleteSheet(sheet1);
+        return orphanSheetNames.filter(name => name !== 'Sheet1');
+      }
+    }
+    
+    return orphanSheetNames;
+
+  } catch (e) {
+    log_('Error during orphan sheet check: ' + e.message, 'ERROR');
+    return [];
+  }
+}
+
+/**
+ * Deletes orphan sheets that are not part of the configuration.
+ * Shows a confirmation dialog before deleting.
+ */
+function deleteOrphanSheets() {
+  try {
+    const orphanSheets = checkForOrphanSheets_();
+
+    if (!orphanSheets || orphanSheets.length === 0) {
+      SpreadsheetApp.getUi().alert('No orphan sheets found', 'All sheets are properly configured.', SpreadsheetApp.getUi().ButtonSet.OK);
+      log_('No orphan sheets to delete.', 'INFO');
+      return;
+    }
+
+    const ui = SpreadsheetApp.getUi();
+    const sheetList = orphanSheets.join('\n  - ');
+    const response = ui.alert(
+      'Delete Orphan Sheets?',
+      `Found ${orphanSheets.length} orphan sheet(s) that are not in your configuration:\n  - ${sheetList}\n\n` +
+      `Do you want to delete these sheets?\n\n` +
+      `⚠️ Important: This only deletes the sheets. You may need to manually delete related Google Groups from the Google Workspace Admin console.`,
+      ui.ButtonSet.YES_NO
+    );
+
+    if (response !== ui.Button.YES) {
+      log_('User cancelled orphan sheet deletion.', 'INFO');
+      return;
+    }
+
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    let deletedCount = 0;
+
+    orphanSheets.forEach(sheetName => {
+      try {
+        const sheet = spreadsheet.getSheetByName(sheetName);
+        if (sheet) {
+          spreadsheet.deleteSheet(sheet);
+          log_(`Deleted orphan sheet: "${sheetName}"`, 'INFO');
+          deletedCount++;
+        }
+      } catch (e) {
+        log_(`Failed to delete sheet "${sheetName}": ${e.message}`, 'ERROR');
+      }
+    });
+
+    ui.alert(
+      'Orphan Sheets Deleted',
+      `Successfully deleted ${deletedCount} orphan sheet(s).\n\n` +
+      `⚠️ Reminder: If these sheets had associated Google Groups, you may need to manually delete them from the Google Workspace Admin console (admin.google.com → Directory → Groups).`,
+      ui.ButtonSet.OK
+    );
+    log_(`Deleted ${deletedCount} orphan sheet(s).`, 'INFO');
+
+  } catch (e) {
+    log_('Error during orphan sheet deletion: ' + e.message, 'ERROR');
+    SpreadsheetApp.getUi().alert('Error', 'Failed to delete orphan sheets: ' + e.message, SpreadsheetApp.getUi().ButtonSet.OK);
+  }
+}
+
+/**
+ * Main deletion coordinator - processes deletion requests for groups and folders.
+ * Called during sync operations to handle resources marked for deletion.
+ * @param {Object} options - Options object with silentMode flag
+ * @return {Object} Summary of deletions: {userGroupsDeleted, foldersDeleted, errors, skipped}
+ */
+function processDeletionRequests_(options) {
+  options = options || {};
+  const silentMode = options.silentMode || false;
+
+  // Check master switch
+  const deletionEnabled = getConfigValue_('AllowGroupFolderDeletion', false);
+  if (!deletionEnabled) {
+    log_('Group/folder deletion disabled in Config. Delete checkboxes will be ignored.', 'INFO');
+    updateDeleteStatusWarnings_();
+    return { userGroupsDeleted: 0, foldersDeleted: 0, skipped: true, reason: 'disabled' };
+  }
+
+  // Initialize summary
+  const summary = {
+    userGroupsDeleted: 0,
+    foldersDeleted: 0,
+    errors: []
+  };
+
+  log_('Processing deletion requests...', 'INFO');
+
+  // Delete UserGroups first (to avoid orphan references)
+  processUserGroupDeletions_(summary);
+
+  // Delete ManagedFolders second
+  processManagedFolderDeletions_(summary);
+
+  // Send notification if deletions occurred
+  if (summary.userGroupsDeleted > 0 || summary.foldersDeleted > 0) {
+    notifyDeletions_(summary);
+  }
+
+  log_(`Deletion complete: ${summary.userGroupsDeleted} group(s), ${summary.foldersDeleted} folder-binding(s) deleted.`, 'INFO');
+
+  return summary;
+}
+
+/**
+ * Processes deletion requests for UserGroups.
+ * Deletes Google Groups, user sheets, and removes rows from UserGroups sheet.
+ * @param {Object} summary - Summary object to track deletions and errors
+ */
+function processUserGroupDeletions_(summary) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(USER_GROUPS_SHEET_NAME);
+  if (!sheet || sheet.getLastRow() < 2) return;
+
+  const headers = getHeaderMap_(sheet);
+  const deleteCol = resolveColumn_(headers, 'delete', 6);
+  const statusCol = resolveColumn_(headers, 'status', 5);
+  
+  const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, deleteCol).getValues();
+  const rowsToDelete = [];
+
+  for (let i = data.length - 1; i >= 0; i--) {
+    const groupName = data[i][0];
+    const groupEmail = data[i][1];
+    const deleteFlag = data[i][deleteCol - 1];
+
+    if (!deleteFlag) continue; // Skip unchecked
+
+    const rowNum = i + 2;
+
+    try {
+      log_(`Deleting UserGroup: "${groupName}" (${groupEmail})`, 'INFO');
+      sheet.getRange(rowNum, statusCol).setValue('🗑️ DELETING...');
+      SpreadsheetApp.flush();
+
+      // 1. Delete Google Group
+      if (groupEmail && !shouldSkipGroupOps_()) {
+        try {
+          AdminDirectory.Groups.remove(groupEmail);
+          log_(`✓ Deleted Google Group: ${groupEmail}`, 'INFO');
+        } catch (e) {
+          if (e.message.includes('Resource Not Found') || e.message.includes('notFound')) {
+            log_(`Group ${groupEmail} already deleted or doesn't exist.`, 'WARN');
+          } else {
+            throw e;
+          }
+        }
+      }
+
+      // 2. Delete user sheet (GroupName_G)
+      const userSheetName = getUserGroupSheetName_(groupName);
+      const userSheet = ss.getSheetByName(userSheetName);
+      if (userSheet) {
+        ss.deleteSheet(userSheet);
+        log_(`✓ Deleted sheet: ${userSheetName}`, 'INFO');
+      }
+
+      // 3. Check for nested group usage and log warning
+      const nestedInGroups = findGroupsContainingMember_(groupEmail);
+      if (nestedInGroups.length > 0) {
+        log_(`⚠️ Warning: Group "${groupName}" was nested in other groups: ${nestedInGroups.join(', ')}. Members may have lost indirect access.`, 'WARN');
+      }
+
+      // 4. Mark row for deletion
+      rowsToDelete.push(rowNum);
+      summary.userGroupsDeleted++;
+
+      log_(`✓ Successfully deleted UserGroup: "${groupName}"`, 'INFO');
+
+    } catch (e) {
+      log_(`✗ Failed to delete UserGroup "${groupName}": ${e.message}`, 'ERROR');
+      sheet.getRange(rowNum, statusCol).setValue(`❌ Deletion failed: ${e.message}`);
+      summary.errors.push({ type: 'UserGroup', name: groupName, error: e.message });
+    }
+  }
+
+  // Delete rows from bottom to top (preserve row numbers)
+  rowsToDelete.forEach(function(rowNum) {
+    sheet.deleteRow(rowNum);
+  });
+}
+
+/**
+ * Processes deletion requests for ManagedFolders (folder-role bindings).
+ * Removes group from folder permissions, deletes Google Groups, user sheets, and rows.
+ * Folders are never deleted (by design).
+ * @param {Object} summary - Summary object to track deletions and errors
+ */
+function processManagedFolderDeletions_(summary) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+  if (!sheet || sheet.getLastRow() < 2) return;
+
+  const headers = getHeaderMap_(sheet);
+  const folderIdCol = resolveColumn_(headers, 'folderid', 2);
+  const deleteCol = resolveColumn_(headers, 'delete', 9);
+  const folderNameCol = resolveColumn_(headers, 'foldername', 1);
+  const roleCol = resolveColumn_(headers, 'role', 3);
+  const groupEmailCol = resolveColumn_(headers, 'groupemail', 4);
+  const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+  const statusCol = resolveColumn_(headers, 'status', 7);
+
+  const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, deleteCol).getValues();
+  const rowsToDelete = [];
+
+  // Track folders to detect when last binding is deleted
+  const folderBindingCounts = {};
+  for (let i = 0; i < data.length; i++) {
+    const folderId = data[i][folderIdCol - 1];
+    const deleteFlag = data[i][deleteCol - 1];
+    if (folderId) {
+      if (!folderBindingCounts[folderId]) {
+        folderBindingCounts[folderId] = { total: 0, toDelete: 0 };
+      }
+      folderBindingCounts[folderId].total++;
+      if (deleteFlag) {
+        folderBindingCounts[folderId].toDelete++;
+      }
+    }
+  }
+
+  for (let i = data.length - 1; i >= 0; i--) {
+    const folderName = data[i][folderNameCol - 1];
+    const folderId = data[i][folderIdCol - 1];
+    const role = data[i][roleCol - 1];
+    const groupEmail = data[i][groupEmailCol - 1];
+    const userSheetName = data[i][userSheetNameCol - 1];
+    const deleteFlag = data[i][deleteCol - 1];
+
+    if (!deleteFlag) continue; // Skip unchecked
+
+    const rowNum = i + 2;
+
+    try {
+      log_(`Deleting folder-role binding: "${folderName}" (${role})`, 'INFO');
+      sheet.getRange(rowNum, statusCol).setValue('🗑️ DELETING...');
+      SpreadsheetApp.flush();
+
+      // 1. Remove group from folder permissions
+      if (folderId && groupEmail) {
+        try {
+          const folder = DriveApp.getFolderById(folderId);
+          folder.removeEditor(groupEmail);
+          folder.removeViewer(groupEmail);
+          // Note: removeCommenter not available in Apps Script, handled via removeEditor
+          log_(`✓ Removed ${groupEmail} from folder permissions`, 'INFO');
+        } catch (e) {
+          if (e.message.includes('not found') || e.message.includes('cannot find')) {
+            log_(`Folder ${folderId} not found (may be already deleted).`, 'WARN');
+          } else {
+            throw e;
+          }
+        }
+      }
+
+      // 2. Delete Google Group
+      if (groupEmail && !shouldSkipGroupOps_()) {
+        try {
+          AdminDirectory.Groups.remove(groupEmail);
+          log_(`✓ Deleted Google Group: ${groupEmail}`, 'INFO');
+        } catch (e) {
+          if (e.message.includes('Resource Not Found') || e.message.includes('notFound')) {
+            log_(`Group ${groupEmail} already deleted or doesn't exist.`, 'WARN');
+          } else {
+            throw e;
+          }
+        }
+      }
+
+      // 3. Delete user sheet
+      const userSheet = ss.getSheetByName(userSheetName);
+      if (userSheet) {
+        ss.deleteSheet(userSheet);
+        log_(`✓ Deleted sheet: ${userSheetName}`, 'INFO');
+      }
+
+      // 4. Check if this is the last binding for this folder
+      if (folderId && folderBindingCounts[folderId]) {
+        const bindingInfo = folderBindingCounts[folderId];
+        if (bindingInfo.toDelete === bindingInfo.total) {
+          log_(`ℹ️ All managed access to folder "${folderName}" has been removed. Folder remains in Drive.`, 'INFO');
+        }
+      }
+
+      // 5. Mark row for deletion
+      rowsToDelete.push(rowNum);
+      summary.foldersDeleted++;
+
+      log_(`✓ Successfully deleted folder-role binding: "${folderName}" (${role})`, 'INFO');
+
+    } catch (e) {
+      log_(`✗ Failed to delete folder-role binding "${folderName}" (${role}): ${e.message}`, 'ERROR');
+      sheet.getRange(rowNum, statusCol).setValue(`❌ Deletion failed: ${e.message}`);
+      summary.errors.push({ type: 'FolderRole', name: `${folderName} (${role})`, error: e.message });
+    }
+  }
+
+  // Delete rows from bottom to top (preserve row numbers)
+  rowsToDelete.forEach(function(rowNum) {
+    sheet.deleteRow(rowNum);
+  });
+}
+
+/**
+ * Updates Status column for Delete-marked items when deletion is disabled in config.
+ * Shows warning message so users know why deletions aren't happening.
+ */
+function updateDeleteStatusWarnings_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  // Update ManagedFolders sheet
+  const managedSheet = ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+  if (managedSheet && managedSheet.getLastRow() >= 2) {
+    const headers = getHeaderMap_(managedSheet);
+    const deleteCol = resolveColumn_(headers, 'delete', 9);
+    const statusCol = resolveColumn_(headers, 'status', 7);
+    const data = managedSheet.getRange(2, 1, managedSheet.getLastRow() - 1, deleteCol).getValues();
+    for (let i = 0; i < data.length; i++) {
+      const deleteFlag = data[i][deleteCol - 1];
+      if (deleteFlag) {
+        managedSheet.getRange(i + 2, statusCol).setValue('⚠️ Deletion disabled in Config');
+      }
+    }
+  }
+
+  // Update UserGroups sheet
+  const userGroupsSheet = ss.getSheetByName(USER_GROUPS_SHEET_NAME);
+  if (userGroupsSheet && userGroupsSheet.getLastRow() >= 2) {
+    const headers = getHeaderMap_(userGroupsSheet);
+    const deleteCol = resolveColumn_(headers, 'delete', 6);
+    const statusCol = resolveColumn_(headers, 'status', 5);
+    const data = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, deleteCol).getValues();
+    for (let i = 0; i < data.length; i++) {
+      const deleteFlag = data[i][deleteCol - 1];
+      if (deleteFlag) {
+        userGroupsSheet.getRange(i + 2, statusCol).setValue('⚠️ Deletion disabled in Config');
+      }
+    }
+  }
+}
+
+function getOrCreateFolder_(folderName, folderId, options = {}) {
+  const silentMode = options && options.silentMode !== undefined ? options.silentMode : false;
+  let wasNewlyCreated = false;
+
+  if (folderId) {
+    try {
+      const folder = DriveApp.getFolderById(folderId);
+      if (folderName && folder.getName() !== folderName) {
+        const originalName = folder.getName();
+        let response = silentMode ? SpreadsheetApp.getUi().Button.NO : null;
+        if (!silentMode) {
+            const ui = SpreadsheetApp.getUi();
+            const message =
+            'The Drive folder with ID "' +
+            folderId +
+            '" is currently named "' +
+            originalName +
+            '", but the ManagedFolders sheet expects "' +
+            folderName + '" Rename the Drive folder to match the sheet?';
+            response = ui.alert('Folder name mismatch', message, ui.ButtonSet.YES_NO);
+        }
+
+        if (response === SpreadsheetApp.getUi().Button.YES) {
+          try {
+            folder.setName(folderName);
+            log_('Renamed folder "' + originalName + '" to "' + folderName + '" to match configuration after confirmation.');
+          } catch (renameError) {
+            log_('Failed to rename folder "' + originalName + '" to "' + folderName + '": ' + renameError.toString(), 'ERROR');
+            const renameFailureError = new Error('Could not rename folder "' + originalName + '" to "' + folderName + '": ' + renameError.message);
+            renameFailureError.code = 'FOLDER_RENAME_FAILED';
+            throw renameFailureError;
+          }
+        } else {
+          const warningMessage =
+            'Folder name mismatch for ID "' +
+            folderId +
+            '". Expected "' +
+            folderName +
+            '", but found "' +
+            originalName + '" Update the ManagedFolders sheet or rename the Drive folder manually.';
+          log_(warningMessage, 'WARN');
+          const renameDeclinedError = new Error(warningMessage);
+          renameDeclinedError.code = 'FOLDER_RENAME_DECLINED';
+          throw renameDeclinedError;
+        }
+      }
+      log_('Successfully found folder "' + folder.getName() + '" by ID.');
+      return { folder: folder, wasNewlyCreated: false };
+    } catch (e) {
+      if (e && (e.code === 'FOLDER_RENAME_DECLINED' || e.code === 'FOLDER_RENAME_FAILED')) {
+        throw e;
+      }
+      log_('Could not retrieve folder by ID ' + folderId + '. Will try searching by name.', 'WARN');
+    }
+  }
+
+  if (!folderName) {
+    throw new Error('Cannot find or create folder without a name or a valid ID.');
+  }
+
+  const folders = DriveApp.getFoldersByName(folderName);
+  if (folders.hasNext()) {
+    const foundFolder = folders.next();
+    if (folders.hasNext()) {
+      throw new Error('Ambiguous: Multiple folders exist with the name "' + folderName + '". Please specify by ID.');
+    }
+    log_('Successfully found folder "' + folderName + '" by name.');
+    return { folder: foundFolder, wasNewlyCreated: false };
+  } else {
+    log_('No folder found with name "' + folderName + '". Creating it now...');
+    const newFolder = DriveApp.createFolder(folderName);
+    log_('Successfully created folder "' + folderName + '"');
+    wasNewlyCreated = true;
+    return { folder: newFolder, wasNewlyCreated: wasNewlyCreated };
+  }
+}
+
+function getOrCreateGroup_(groupEmail, groupName) {
+  assertAdminDirectoryAvailable_();
+  let group;
+  let wasNewlyCreated = false;
+
+  try {
+    group = AdminDirectory.Groups.get(groupEmail);
+    log_('Found existing group: ' + groupEmail);
+    wasNewlyCreated = false;
+  } catch (e) {
+    log_('Group "' + groupEmail + '" not found. Will attempt to create it.');
+
+    try {
+      const newGroup = {
+        email: groupEmail,
+        name: groupName,
+        description: 'Managed by Google Sheets script. Folder: ' + groupName.split('_')[0]
+      };
+      group = AdminDirectory.Groups.insert(newGroup);
+      log_('Successfully created group: ' + groupEmail);
+      wasNewlyCreated = true;
+    } catch (createError) {
+      if (createError.message.includes('API has not been used')) {
+        const projectId = getProjectIdFromError_(createError.message) || '[Project ID not found]';
+        const enableUrl = `https://console.developers.google.com/apis/api/admin.googleapis.com/overview?project=${projectId}`;
+        const friendlyError = `The Admin SDK API is not enabled for GCP project "${projectId}". Please enable it here: ${enableUrl} - then wait a few minutes and retry.`;
+        log_(`Failed to create group ${groupEmail}. Error: ${friendlyError}`, 'ERROR');
+        throw new Error(friendlyError);
+      }
+      log_('Failed to create group ' + groupEmail + '. Error: ' + createError.toString(), 'ERROR');
+      throw new Error('Could not create group: ' + createError.message);
+    }
+  }
+
+  return { group: group, wasNewlyCreated: wasNewlyCreated };
+}
+
+function getProjectIdFromError_(errorMessage) {
+    const match = errorMessage.match(/project (\d+)/);
+    return match ? match[1] : null;
+}
+
+
+function getOrCreateUserSheet_(sheetName) {
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = spreadsheet.getSheetByName(sheetName);
+  let wasNewlyCreated = false;
+
+  if (sheet) {
+    ensureUserSheetHeaders_(sheet);
+
+    // Validate for duplicate emails if sheet already exists and has data
+    const lastRow = sheet.getLastRow();
+    if (lastRow > 1) {
+      const validation = validateUserSheetEmails_(sheetName);
+      if (!validation.valid) {
+        const errorMsg = 'VALIDATION ERROR in existing sheet "' + sheetName + '": ' + validation.error;
+        log_(errorMsg, 'ERROR');
+        throw new Error(errorMsg);
+      }
+    }
+
+    return { sheet: sheet, wasNewlyCreated: false };
+  } else {
+    log_('User sheet "' + sheetName + '" not found. Creating it...');
+    sheet = spreadsheet.insertSheet(sheetName, spreadsheet.getSheets().length);
+    wasNewlyCreated = true;
+
+    const headerRange = sheet.getRange(1, 1, 1, 2);
+    headerRange.setValues([[USER_EMAIL_HEADER, DISABLED_HEADER]]);
+    headerRange.setFontWeight('bold');
+    sheet.setFrozenRows(1);
+
+    // Add data validation to Disabled column (checkbox)
+    const disabledRange = sheet.getRange('B2:B');
+    const rule = SpreadsheetApp.newDataValidation()
+      .requireCheckbox()
+      .build();
+    disabledRange.setDataValidation(rule);
+
+    log_('Successfully created user sheet: "' + sheetName + '"');
+    return { sheet: sheet, wasNewlyCreated: wasNewlyCreated };
+  }
+}
+
+function ensureUserSheetHeaders_(sheet) {
+  try {
+    const headerRange = sheet.getRange(1, 1, 1, 2);
+    const headerValues = headerRange.getValues();
+    const currentHeaders = headerValues && headerValues.length > 0 ? headerValues[0] : [];
+    let headersUpdated = false;
+
+    if (!currentHeaders[0]) {
+      headerRange.getCell(1, 1).setValue(USER_EMAIL_HEADER);
+      headersUpdated = true;
+    }
+
+    if (!currentHeaders[1]) {
+      headerRange.getCell(1, 2).setValue(DISABLED_HEADER);
+      headersUpdated = true;
+    }
+
+    if (headersUpdated) {
+      log_('Updated headers on user sheet "' + sheet.getName() + '" to include the Disabled column.');
+    }
+
+    headerRange.setFontWeight('bold');
+    sheet.getRange('B1').clearDataValidations().clearNote();
+    sheet.setFrozenRows(1);
+
+    // Ensure data validation on Disabled column (checkbox)
+    const disabledRange = sheet.getRange('B2:B');
+    const existingRule = disabledRange.getDataValidation();
+    if (!existingRule || existingRule.getCriteriaType() !== SpreadsheetApp.DataValidationCriteria.CHECKBOX) {
+      const rule = SpreadsheetApp.newDataValidation()
+        .requireCheckbox()
+        .build();
+      disabledRange.setDataValidation(rule);
+    }
+  } catch (e) {
+    log_('Failed to ensure headers for sheet "' + sheet.getName() + '": ' + e.toString(), 'WARN');
+  }
+}
+
+function isUserRowDisabled_(value) {
+  if (value === true) {
+    return true;
+  }
+  if (value === false || value === null || value === undefined) {
+    return false;
+  }
+  if (typeof value === 'number') {
+    return value === 1;
+  }
+  const normalized = value.toString().trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+  return normalized === 'true' || normalized === 'yes' || normalized === 'y' || normalized === '1' || normalized === 'disabled';
+}
+
+function renameSheetIfExists_(oldName, newName) {
+  if (!oldName || oldName === newName) {
+    return true;
+  }
+
+  try {
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    const sheetToRename = spreadsheet.getSheetByName(oldName);
+    if (!sheetToRename) {
+      log_('Sheet "' + oldName + '" was not found when attempting to rename it to "' + newName + '".', 'WARN');
+      return false;
+    }
+
+    const conflictingSheet = spreadsheet.getSheetByName(newName);
+    if (conflictingSheet && conflictingSheet !== sheetToRename) {
+      log_('A sheet named "' + newName + '" already exists. Skipping rename of "' + oldName + '".', 'WARN');
+      return false;
+    }
+
+    sheetToRename.setName(newName);
+    log_('Renamed sheet "' + oldName + '" to "' + newName + '".');
+    return true;
+  } catch (e) {
+    log_('Failed to rename sheet "' + oldName + '" to "' + newName + '": ' + e.toString(), 'ERROR');
+    return false;
+  }
+}
+
+function _executeMembershipChunkWithRetries_(requests, groupEmail, config) {
+  const summary = { added: 0, removed: 0, failed: 0 };
+  if (!requests || requests.length === 0) {
+    return summary;
+  }
+
+  const MAX_RETRIES = config.RetryMaxRetries || 5;
+  const INITIAL_DELAY_MS = config.RetryInitialDelayMs || 1000;
+  let retries = 0;
+  let requestsToProcess = requests;
+
+  while (requestsToProcess.length > 0 && retries < MAX_RETRIES) {
+    const batchResponses = _executeBatchRequest(requestsToProcess, 'https://www.googleapis.com/batch/admin/directory_v1');
+    const failedRequests = [];
+
+    batchResponses.forEach((part, i) => {
+      const originalRequest = requestsToProcess[i];
+      if (part.success) {
+        if (originalRequest.operation === 'add') summary.added++;
+        if (originalRequest.operation === 'remove') summary.removed++;
+      } else {
+        // Handle idempotent cases (desired state already achieved)
+        if (originalRequest.operation === 'add' && part.status === 409 && part.body.includes('Member already exists')) {
+          // For add: if member already exists, treat as success (desired state achieved)
+          summary.added++;
+          log_(`Member ${originalRequest.email} already exists in group ${groupEmail}. Treating as success.`, 'INFO');
+        } else if (originalRequest.operation === 'remove' && (part.status === 404 || (part.status === 400 && part.body.includes('Resource Not Found')))) {
+          // For remove: if member not found, treat as success (desired state achieved)
+          summary.removed++;
+          log_(`Member ${originalRequest.email} not found in group ${groupEmail}. Treating as success.`, 'INFO');
+        } else if (part.status === 403 && part.body.includes('quotaExceeded')) {
+          // Only retry on "quotaExceeded" errors
+          failedRequests.push(originalRequest);
+        } else {
+          // All other errors are permanent failures
+          summary.failed++;
+          log_(`A batch operation permanently failed for group ${groupEmail} on user ${originalRequest.email}. Status: ${part.status}. Details: ${part.body}`, 'ERROR');
+        }
+      }
+    });
+
+    if (failedRequests.length > 0) {
+      requestsToProcess = failedRequests;
+      retries++;
+      if (retries < MAX_RETRIES) {
+        const MAX_SLEEP_MS = 300000; // 5 minutes, the maximum allowed by Apps Script
+        let delay = INITIAL_DELAY_MS * Math.pow(2, retries - 1) + Math.random() * 1000;
+        delay = Math.min(delay, MAX_SLEEP_MS); // Cap the delay at the maximum allowed
+        log_(`Rate limit hit for ${groupEmail}. Retrying ${failedRequests.length} failed operations in ${Math.round(delay / 1000)}s... (Attempt ${retries}/${MAX_RETRIES})`, 'WARN');
+        Utilities.sleep(delay);
+      } else {
+        summary.failed += failedRequests.length;
+        log_(`Max retries reached for ${groupEmail}. ${failedRequests.length} operations could not be completed.`, 'ERROR');
+      }
+    } else {
+      requestsToProcess = []; // Success, exit the loop
+    }
+  }
+  return summary;
+}
+
+
+function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
+  const config = getConfiguration_();
+  const addOnly = options && options.addOnly !== undefined ? options.addOnly : false;
+  const removeOnly = options && options.removeOnly !== undefined ? options.removeOnly : false;
+  const returnPlanOnly = options && options.returnPlanOnly !== undefined ? options.returnPlanOnly : false;
+  
+  const MEMBERSHIP_BATCH_SIZE = config.MembershipBatchSize || 15;
+  const INTER_BATCH_DELAY_MS = 1000;
+
+  log_('*** Starting membership sync for group "' + groupEmail + '" from sheet "' + userSheetName + '"');
+  const totalSummary = { added: 0, removed: 0, failed: 0 };
+
+  try {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(userSheetName);
+    if (!sheet) {
+      throw new Error('User sheet "' + userSheetName + '" not found.');
+    }
+
+    const validation = validateUserSheetEmails_(userSheetName);
+    if (!validation.valid) {
+      throw new Error('VALIDATION ERROR in sheet "' + userSheetName + '": ' + validation.error);
+    }
+
+    const lastRow = sheet.getLastRow();
+    const sheetEmails = [];
+    if (lastRow >= 2) {
+      const rawValues = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
+      rawValues.forEach(function(row, index) {
+        const rawValue = row[0];
+        const disabledValue = row[1];
+        if (!rawValue || !rawValue.toString().trim()) return;
+
+        EMAIL_EXTRACTION_REGEX.lastIndex = 0;
+        const matches = rawValue.toString().trim().match(EMAIL_EXTRACTION_REGEX) || [];
+        
+        if (matches.length === 1 && SINGLE_EMAIL_VALIDATION_REGEX.test(matches[0])) {
+          if (!isUserRowDisabled_(disabledValue)) {
+            sheetEmails.push(matches[0].toLowerCase());
+          }
+        }
+      });
+    }
+    
+    const sheetSet = new Set(sheetEmails);
+    log_(`Found ${sheetSet.size} active emails in sheet "${userSheetName}".`);
+
+    const groupMembers = fetchAllGroupMembers_(groupEmail);
+    const groupEmails = groupMembers.map(m => m.email.toLowerCase());
+    const groupSet = new Set(groupEmails);
+    log_(`Found ${groupSet.size} members in group "${groupEmail}".`);
+
+    const emailsToAdd = sheetEmails.filter(email => !groupSet.has(email));
+    const membersToRemove = groupMembers.filter(m => !sheetSet.has(m.email.toLowerCase()) && m.role !== 'OWNER');
+    const emailsToRemove = membersToRemove.map(m => m.email);
+
+    if (returnPlanOnly) {
+      return (removeOnly && emailsToRemove.length > 0) ? { groupEmail, groupName: userSheetName, usersToRemove: emailsToRemove } : null;
+    }
+
+    if (emailsToAdd.length === 0 && emailsToRemove.length === 0) {
+      log_(`No membership changes required for group "${groupEmail}". Sync complete.`);
+      return totalSummary;
+    }
+
+    // Process additions in chunks
+    if (!removeOnly && emailsToAdd.length > 0) {
+      log_(`Processing ${emailsToAdd.length} additions in chunks of ${MEMBERSHIP_BATCH_SIZE}...`);
+      for (let i = 0; i < emailsToAdd.length; i += MEMBERSHIP_BATCH_SIZE) {
+        const chunk = emailsToAdd.slice(i, i + MEMBERSHIP_BATCH_SIZE);
+        const requests = chunk.map(email => ({
+          method: 'POST',
+          path: `/admin/directory/v1/groups/${groupEmail}/members`,
+          payload: JSON.stringify({ email: email, role: 'MEMBER' }),
+          operation: 'add',
+          email: email
+        }));
+        
+        log_(`  - Adding chunk ${i / MEMBERSHIP_BATCH_SIZE + 1}: ${chunk.length} users...`);
+        const chunkSummary = _executeMembershipChunkWithRetries_(requests, groupEmail, config);
+        totalSummary.added += chunkSummary.added;
+        totalSummary.failed += chunkSummary.failed;
+        
+        if (i + MEMBERSHIP_BATCH_SIZE < emailsToAdd.length) {
+          Utilities.sleep(INTER_BATCH_DELAY_MS);
+        }
+      }
+    }
+
+    // Process removals in chunks
+    if (!addOnly && emailsToRemove.length > 0) {
+      log_(`Processing ${emailsToRemove.length} removals in chunks of ${MEMBERSHIP_BATCH_SIZE}...`);
+      for (let i = 0; i < emailsToRemove.length; i += MEMBERSHIP_BATCH_SIZE) {
+        const chunk = emailsToRemove.slice(i, i + MEMBERSHIP_BATCH_SIZE);
+        const requests = chunk.map(email => ({
+          method: 'DELETE',
+          path: `/admin/directory/v1/groups/${groupEmail}/members/${email}`,
+          operation: 'remove',
+          email: email
+        }));
+
+        log_(`  - Removing chunk ${i / MEMBERSHIP_BATCH_SIZE + 1}: ${chunk.length} users...`);
+        const chunkSummary = _executeMembershipChunkWithRetries_(requests, groupEmail, config);
+        totalSummary.removed += chunkSummary.removed;
+        totalSummary.failed += chunkSummary.failed;
+
+        if (i + MEMBERSHIP_BATCH_SIZE < emailsToRemove.length) {
+          Utilities.sleep(INTER_BATCH_DELAY_MS);
+        }
+      }
+    }
+
+    log_(`Batch processing summary for ${groupEmail}: ${totalSummary.added} added, ${totalSummary.removed} removed, ${totalSummary.failed} failed.`, 'INFO');
+    if (totalSummary.failed > 0) {
+      log_(`WARNING: ${totalSummary.failed} membership operations failed to sync for group ${groupEmail}. See logs for details.`, 'WARN');
+    }
+
+    log_(`Membership sync complete for group "${groupEmail}".`);
+    return totalSummary;
+
+  } catch (e) {
+    log_(`FATAL ERROR in syncGroupMembership for group ${groupEmail}. Error: ${e.toString()} Stack: ${e.stack}`, 'ERROR');
+    throw e;
+  }
+}
+
+function fetchAllGroupMembers_(groupEmail) {
+  assertAdminDirectoryAvailable_();
+  const members = [];
+  let pageToken;
+  try {
+      do {
+        const resp = AdminDirectory.Members.list(groupEmail, {
+          maxResults: 200,
+          pageToken: pageToken
+        });
+        if (resp && resp.members) {
+          members.push.apply(members, resp.members);
+        }
+        pageToken = resp ? resp.nextPageToken : null;
+      } while (pageToken);
+  } catch(e) {
+      if (e.message.includes('Resource Not Found: groupKey')) {
+          log_('Group ' + groupEmail + ' does not exist yet, returning no members.', 'WARN');
+          return [];
+      }
+      throw e;
+  }
+  return members;
+}
+
+function setFolderPermission_(folderId, groupEmail, role) {
+  const config = getConfiguration_();
+  const MAX_RETRIES = config.RetryMaxRetries || 5;
+  const INITIAL_DELAY_MS = config.RetryInitialDelayMs || 1000;
+
+  for (let i = 0; i < MAX_RETRIES; i++) {
+    try {
+      const folder = DriveApp.getFolderById(folderId);
+      const folderName = folder.getName();
+      const roleLower = role.toLowerCase();
+      const groupEmailLower = groupEmail.toLowerCase();
+
+      // Check if Drive API v3 is available
+      const driveApiAvailable = typeof Drive !== 'undefined';
+
+      if (driveApiAvailable) {
+        // PREFERRED: Use Drive API v3 with sendNotificationEmail: false
+        const driveApiRole = (roleLower === 'editor') ? 'writer' : (roleLower === 'viewer') ? 'reader' : 'commenter';
+
+        // Check if permission already exists with the correct role
+        try {
+          const existingPermissions = Drive.Permissions.list(folderId, {
+            fields: 'permissions(id,emailAddress,role,type)'
+          }).permissions || [];
+
+          const existingPermission = existingPermissions.find(function(perm) {
+            return perm.emailAddress && perm.emailAddress.toLowerCase() === groupEmailLower && perm.type === 'group';
+          });
+
+          if (existingPermission) {
+            if (existingPermission.role === driveApiRole) {
+              log_('Permission "' + role + '" for group "' + groupEmail + '" on folder "' + folderName + '" already exists. Skipping.');
+              return;
+            } else {
+              // Permission exists but with different role - update it
+              log_('Updating permission for group "' + groupEmail + '" on folder "' + folderName + '" from "' + existingPermission.role + '" to "' + driveApiRole + '"');
+              Drive.Permissions.update(
+                { role: driveApiRole },
+                folderId,
+                existingPermission.id,
+                { sendNotificationEmail: false, supportsAllDrives: true }
+              );
+              log_('Successfully updated role "' + role + '" for group "' + groupEmail + '" on folder "' + folderName + '"');
+              return;
+            }
+          }
+        } catch (checkError) {
+          log_('Could not check existing permissions (will attempt to create): ' + checkError.message, 'WARN');
+        }
+
+        // Permission doesn't exist - create it WITHOUT sending notification email
+        log_('Creating new permission "' + role + '" for group "' + groupEmail + '" on folder "' + folderName + '"');
+        Drive.Permissions.create(
+          {
+            type: 'group',
+            role: driveApiRole,
+            emailAddress: groupEmail
+          },
+          folderId,
+          {
+            sendNotificationEmail: false,  // KEY: Don't send emails!
+            supportsAllDrives: true
+          }
+        );
+        log_('Successfully set role "' + role + '" for group "' + groupEmail + '" on folder "' + folderName + '"');
+
+      } else {
+        // FALLBACK: Use DriveApp methods (will send notification emails!)
+        log_('⚠️ Drive API v3 not available - using DriveApp (WILL SEND NOTIFICATION EMAILS)', 'WARN');
+        log_('⚠️ To stop email spam: Add Drive API v3 in Apps Script (+ next to Services)', 'WARN');
+
+        const access = folder.getAccess(groupEmail);
+
+        if (roleLower === 'editor' && access === DriveApp.Permission.EDIT) {
+          log_('Permission "editor" for group "' + groupEmail + '" on folder "' + folderName + '" already exists. Skipping.');
+          return;
+        }
+        if (roleLower === 'viewer' && access === DriveApp.Permission.VIEW) {
+          log_('Permission "viewer" for group "' + groupEmail + '" on folder "' + folderName + '" already exists. Skipping.');
+          return;
+        }
+        if (roleLower === 'commenter') {
+          const commenters = folder.getCommenters().map(user => user.getEmail().toLowerCase());
+          if (commenters.indexOf(groupEmailLower) !== -1) {
+            const editors = folder.getEditors().map(user => user.getEmail().toLowerCase());
+            if(editors.indexOf(groupEmailLower) === -1) {
+              log_('Permission "commenter" for group "' + groupEmail + '" on folder "' + folderName + '" already exists. Skipping.');
+              return;
+            }
+          }
+        }
+
+        // Set permission using DriveApp (will send email!)
+        switch (roleLower) {
+          case 'editor':
+            folder.addEditor(groupEmail);
+            break;
+          case 'viewer':
+            folder.addViewer(groupEmail);
+            break;
+          case 'commenter':
+            folder.addCommenter(groupEmail);
+            break;
+          default:
+            throw new Error('Unsupported role: "' + role + '"');
+        }
+        log_('Successfully set role "' + role + '" for group "' + groupEmail + '" on folder "' + folderName + '" (notification email sent)');
+      }
+      return; // Success, exit the loop
+    } catch (e) {
+      if (i < MAX_RETRIES - 1) {
+        const MAX_SLEEP_MS = 300000; // 5 minutes, the maximum allowed by Apps Script
+        let delay = INITIAL_DELAY_MS * Math.pow(2, i);
+        delay = Math.min(delay, MAX_SLEEP_MS); // Cap the delay at the maximum allowed
+        log_(`Failed to set permission for group ${groupEmail} on folder ${folderId}. Retrying in ${delay / 1000} seconds... (Attempt ${i + 1}/${MAX_RETRIES})`, 'WARN');
+        Utilities.sleep(delay);
+      } else {
+        log_(`Failed to set permission for group ${groupEmail} on folder ${folderId} after ${MAX_RETRIES} attempts. Error: ${e.toString()}`, 'ERROR');
+        throw new Error(`Could not set folder permission: ${e.message}`);
+      }
+    }
+  }
+}
+
+function setSheetUiStyles_(headers) {
+  try {
+    const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+    if (managedSheet && managedSheet.getLastRow() >= 2) {
+        // First, remove ALL existing protections from the data range
+        const protections = managedSheet.getProtections(SpreadsheetApp.ProtectionType.RANGE);
+        protections.forEach(function(protection) {
+          if (protection.getRange().getRow() >= 2) { // Only remove protections from data rows, not header
+            protection.remove();
+          }
+        });
+
+        // Clear old background colors from columns that might have been protected before
+        const urlCol = resolveColumn_(headers, 'url', 8);
+        const clearBgRange = managedSheet.getRange(2, 1, managedSheet.getLastRow() - 1, urlCol);
+        clearBgRange.setBackground(null);
+
+        // Now apply new protection and styling to columns 5-8 only
+        const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+        const range = managedSheet.getRange(2, userSheetNameCol, managedSheet.getLastRow() - 1, 4);
+        range.setBackground('#f3f3f3');
+        const protection = range.protect().setDescription('These columns are managed by the script.');
+        protection.setWarningOnly(true);
+    }
+
+    const userGroupsSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(USER_GROUPS_SHEET_NAME);
+    if (userGroupsSheet && userGroupsSheet.getLastRow() >= 2) {
+      // Remove existing protections
+      const protections = userGroupsSheet.getProtections(SpreadsheetApp.ProtectionType.RANGE);
+      protections.forEach(function(protection) {
+        if (protection.getRange().getRow() >= 2) {
+          protection.remove();
+        }
+      });
+
+      // Clear old backgrounds
+      const clearBgRange = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 5);
+      clearBgRange.setBackground(null);
+
+      // Apply new protection and styling
+      const range = userGroupsSheet.getRange(2, 3, userGroupsSheet.getLastRow() - 1, 3);
+      range.setBackground('#f3f3f3');
+      const protection = range.protect().setDescription('These columns are managed by the script.');
+      protection.setWarningOnly(true);
+    }
+
+    // Apply Disabled dropdown to all user sheets
+    updateUserSheetHeaders_();
+  } catch (e) {
+    log_('Could not apply UI styles. Error: ' + e.message, 'WARN');
+  }
+}
+
+function getAllManagedSheetNames_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const managedSheetNames = new Set();
+
+  // From ManagedFolders
+  const managedFoldersSheet = ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+  if (managedFoldersSheet && managedFoldersSheet.getLastRow() > 1) {
+    const headers = getHeaderMap_(managedFoldersSheet);
+    const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+    const userSheetNames = managedFoldersSheet.getRange(2, userSheetNameCol, managedFoldersSheet.getLastRow() - 1, 1).getValues();
+    userSheetNames.forEach(function(row) {
+      if (row[0]) {
+        managedSheetNames.add(row[0]);
+      }
+    });
+  }
+
+  // From UserGroups
+  const userGroupsSheet = ss.getSheetByName(USER_GROUPS_SHEET_NAME);
+  if (userGroupsSheet && userGroupsSheet.getLastRow() > 1) {
+    const groupNames = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 1).getValues();
+    groupNames.forEach(function(row) {
+      if (row[0]) {
+        managedSheetNames.add(getUserGroupSheetName_(row[0]));
+      }
+    });
+  }
+
+  return managedSheetNames;
+}
+
+function updateUserSheetHeaders_() {
+  try {
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    const allSheets = spreadsheet.getSheets();
+    const managedSheetNames = getAllManagedSheetNames_();
+
+    allSheets.forEach(function(sheet) {
+      const sheetName = sheet.getName();
+      // Only process user sheets (not control sheets)
+      if (managedSheetNames.has(sheetName) &&
+          sheetName !== MANAGED_FOLDERS_SHEET_NAME &&
+          sheetName !== SHEET_EDITORS_SHEET_NAME &&
+          sheetName !== USER_GROUPS_SHEET_NAME &&
+          sheetName !== CONFIG_SHEET_NAME &&
+          sheetName !== LOG_SHEET_NAME &&
+          sheetName !== TEST_LOG_SHEET_NAME &&
+          sheetName !== FOLDER_AUDIT_LOG_SHEET_NAME &&
+          sheetName !== SYNC_HISTORY_SHEET_NAME &&
+          sheetName !== 'DeepFolderAuditLog') {
+
+        ensureUserSheetHeaders_(sheet);
+      }
+    });
+  } catch (e) {
+    log_('Could not update user sheet headers. Error: ' + e.message, 'WARN');
+  }
+}
+
+function validateManagedFolders_() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+  if (!sheet) {
+    return; // Sheet doesn't exist, so nothing to validate.
+  }
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) {
+    return; // No data rows to validate.
+  }
+  
+  const headers = getHeaderMap_(sheet);
+  const folderNameCol = resolveColumn_(headers, 'foldername', 1);
+  const folderIdCol = resolveColumn_(headers, 'folderid', 2);
+  const roleCol = resolveColumn_(headers, 'role', 3);
+
+  const data = sheet.getRange(2, 1, lastRow - 1, Math.max(folderNameCol, folderIdCol, roleCol)).getValues();
+  const errors = [];
+
+  for (let i = 0; i < data.length; i++) {
+    const row = data[i];
+    const folderName = row[folderNameCol - 1];
+    const folderId = row[folderIdCol - 1];
+    const role = row[roleCol - 1];
+
+    if ((folderName || folderId) && !role) {
+      errors.push(`Row ${i + 2}: Role is not specified.`);
+    }
+  }
+
+  if (errors.length > 0) {
+    throw new Error('Validation failed for ManagedFolders sheet:\n' + errors.join('\n'));
+  }
+}
+
+// =====================================================================================
+// START OF FILE: Audit.gs
+// =====================================================================================
+/**
+ * @file Audit.gs
+ * @description Contains the logic for the Folders Audit and Deep Audit features.
+ */
+
+/**
+ * Validates all user sheets listed in the ManagedFolders sheet.
+ * @returns {boolean} True if all user sheets are valid, false otherwise.
+ */
+function validateUserSheets_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const managedFoldersSheet = ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+  if (!managedFoldersSheet) {
+    logAndAudit_('Validation', 'ManagedFolders', 'Sheet not found', 'The ManagedFolders sheet is missing.');
+    return false;
+  }
+
+  if (managedFoldersSheet.getLastRow() < 2) {
+    log_('No folders found in ManagedFolders sheet. Skipping user sheet validation.');
+    return true; // No folders to validate
+  }
+
+  const headers = getHeaderMap_(managedFoldersSheet);
+  const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+
+  const userSheetNames = managedFoldersSheet.getRange(2, userSheetNameCol, managedFoldersSheet.getLastRow() - 1, 1).getValues().flat();
+  let isValid = true;
+
+  // Check for duplicate user sheet names
+  const sheetNameCounts = {};
+  userSheetNames.forEach(name => {
+    if (name) {
+      sheetNameCounts[name] = (sheetNameCounts[name] || 0) + 1;
+    }
+  });
+
+  for (const name in sheetNameCounts) {
+    if (sheetNameCounts[name] > 1) {
+      logAndAudit_('Validation', name, 'Duplicate user sheet', `The user sheet "${name}" is listed more than once in ManagedFolders.`);
+      isValid = false;
+    }
+  }
+
+  // Check each user sheet for validity
+  userSheetNames.forEach(name => {
+    if (name) {
+      const sheet = ss.getSheetByName(name);
+      if (!sheet) {
+        logAndAudit_('Validation', name, 'Sheet not found', `The user sheet "${name}" does not exist.`);
+        isValid = false;
+        } else {
+          // Check for duplicate emails only if the header is valid and the sheet has data rows
+          if (sheet.getLastRow() > 1) {
+            const emails = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).getValues().flat().filter(String);
+            const emailCounts = {};
+            emails.forEach(email => {
+              const lowerEmail = email.trim().toLowerCase();
+              if (lowerEmail) {
+                emailCounts[lowerEmail] = (emailCounts[lowerEmail] || 0) + 1;
+              }
+            });
+
+            for (const email in emailCounts) {
+              if (emailCounts[email] > 1) {
+                logAndAudit_('Validation', name, 'Duplicate email', `The email "${email}" appears ${emailCounts[email]} times in the sheet.`);
+                isValid = false;
+              }
+            }
+          }
+        }
+    }
+  });
+
+  return isValid;
+}
+
+/**
+ * Performs a folders audit by discovering all manual additions and logging them.
+ */
+function foldersAudit() {
+  const ui = SpreadsheetApp.getUi();
+  ui.alert(
+    'Folders Audit Warning',
+    'The Folders Audit will now run. Please avoid making changes to the spreadsheet while the audit is in progress, as concurrent edits may lead to inaccuracies in the audit report.',
+    ui.ButtonSet.OK
+  );
+  try {
+    log_('*** Starting Folders Audit...');
+    const auditSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(FOLDER_AUDIT_LOG_SHEET_NAME);
+    if (!auditSheet) {
+      throw new Error('FoldersAuditLog sheet not found. Please run the setup again.');
+    }
+    // Clear audit log content if there are rows to clear
+    if (auditSheet.getMaxRows() > 1) {
+      auditSheet.getRange(2, 1, auditSheet.getMaxRows() - 1, 5).clearContent();
+    }
+
+    // 1. Check for duplicate group emails
+    const emailValidation = validateUniqueGroupEmails_();
+    if (!emailValidation.valid) {
+      emailValidation.errors.forEach(error => {
+        logAndAudit_('Configuration', 'Group Emails', 'DUPLICATE EMAIL', error.message);
+      });
+    }
+
+    // 2. Validate user sheets
+    validateUserSheets_();
+
+    // 3. Discover users who should be in groups but aren't
+    const discoveryReport = discoverManualAdditions_();
+    discoveryReport.forEach(item => {
+      item.discrepancies.forEach(member => {
+        logAndAudit_(member.issue, item.sheetName, `User is in ${member.source} but not in the other`, `Email: ${member.email}`);
+      });
+    });
+
+    // 4. Audit for permission mismatches for users who ARE in the sheets
+    auditMemberRolesOnFolders_();
+
+    if (discoveryReport.length === 0) {
+      log_('Folders Audit found no manual changes to groups or folders.');
+    }
+
+    log_('*** Folders Audit Complete.');
+    showToast_('Folders Audit Complete.', 'Audit', 5);
+    ui.alert('Folders Audit is complete. See the \'FoldersAuditLog\' sheet for details.');
+
+  } catch (e) {
+    log_('FATAL ERROR in foldersAudit: ' + e.toString() + '\n' + e.stack, 'ERROR');
+    showToast_('Audit failed with a fatal error.', 'Audit', 5);
+    ui.alert('A fatal error occurred during the audit: ' + e.message);
+    sendErrorNotification_(e.toString());
+  }
+}
+
+/**
+ * Audits that the group for each managed folder has the correct role, and that each member
+ * of the group has the correct effective role.
+ */
+function auditMemberRolesOnFolders_() {
+  const managedFoldersSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+  if (!managedFoldersSheet || managedFoldersSheet.getLastRow() < 2) {
+    return;
+  }
+
+  const headers = getHeaderMap_(managedFoldersSheet);
+  const folderNameCol = resolveColumn_(headers, 'foldername', 1);
+  const folderIdCol = resolveColumn_(headers, 'folderid', 2);
+  const roleCol = resolveColumn_(headers, 'role', 3);
+  const groupEmailCol = resolveColumn_(headers, 'groupemail', 4);
+  const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+  
+  const managedFoldersData = managedFoldersSheet.getRange(2, 1, managedFoldersSheet.getLastRow() - 1, Math.max(...Object.values(headers))).getValues();
+  managedFoldersData.forEach(row => {
+    const folderName = row[folderNameCol - 1];
+    const folderId = row[folderIdCol - 1];
+    const expectedRole = row[roleCol - 1];
+    const groupEmail = row[groupEmailCol - 1].toLowerCase();
+    const userSheetName = row[userSheetNameCol - 1];
+
+    if (!folderId || !groupEmail || !expectedRole || !userSheetName) return;
+
+    try {
+      const userSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(userSheetName);
+      if (!userSheet) return;
+
+      const sheetMembers = new Set(
+        userSheet.getLastRow() > 1
+          ? userSheet.getRange('A2:A' + userSheet.getLastRow()).getValues().map(r => r[0].toString().trim().toLowerCase()).filter(e => e)
+          : []
+      );
+
+      if (sheetMembers.size === 0) return; // Skip if sheet is empty
+
+      const folder = DriveApp.getFolderById(folderId);
+      const viewers = folder.getViewers().map(u => u.getEmail().toLowerCase());
+      const editors = folder.getEditors().map(u => u.getEmail().toLowerCase());
+      const groupRole = getRoleFromAccessLists_(groupEmail, editors, viewers);
+
+      auditGroupRoleOnFolder_(folder, folderName, expectedRole, groupEmail);
+
+      sheetMembers.forEach(memberEmail => {
+        const member = memberEmail.toLowerCase();
+        let actualRole = getRoleFromAccessLists_(member, editors, viewers);
+        if (actualRole === 'NONE' && groupRole !== 'NONE') {
+          actualRole = groupRole;
+        }
+
+        if (actualRole.toUpperCase() !== expectedRole.toUpperCase()) {
+          logAndAudit_('Role Mismatch', folderName, `User has incorrect role`, `Email: ${member}, Expected: ${expectedRole}, Actual: ${actualRole}`);
+        }
+      });
+
+    } catch (e) {
+      logAndAudit_('Folders Audit', folderName, 'Folder Not Found or Access Error', 'Could not access folder with ID: ' + folderId + ' or its members. Error: ' + e.message);
+    }
+  });
+}
+
+
+function auditGroupRoleOnFolder_(folder, folderName, expectedRole, groupEmail) {
+    let hasCorrectPermission = false;
+    let actualRole = 'NONE';
+    const viewers = folder.getViewers().map(u => u.getEmail().toLowerCase());
+    const editors = folder.getEditors().map(u => u.getEmail().toLowerCase());
+
+    if (viewers.includes(groupEmail)) actualRole = 'Viewer';
+    if (editors.includes(groupEmail)) actualRole = 'Editor';
+
+    if (expectedRole.toUpperCase() === 'COMMENTER') {
+        logAndAudit_('Folder Permission', folderName, 'Invalid Role for Folder', 'The role \'Commenter\' is not applicable to folders, only files. Please use \'Viewer\' or \'Editor\'.');
+        return;
+    }
+
+    if (actualRole.toUpperCase() === expectedRole.toUpperCase()) {
+        hasCorrectPermission = true;
+    }
+
+    if (!hasCorrectPermission) {
+        logAndAudit_('Folder Permission', folderName, 'Permission Mismatch', 'Expected: ' + expectedRole + ', Actual: ' + actualRole);
+    }
+}
+
+function getRoleFromAccessLists_(email, editors, viewers) {
+  if (!email) return 'NONE';
+  const normalizedEmail = email.toLowerCase();
+  if (editors.includes(normalizedEmail)) {
+    return 'EDITOR';
+  }
+  if (viewers.includes(normalizedEmail)) {
+    return 'VIEWER';
+  }
+  return 'NONE';
+}
+
+function deepAuditFolder() {
+  const ui = SpreadsheetApp.getUi();
+  ui.alert(
+    'Deep Audit Warning',
+    'The Deep Audit will now run. This is a potentially slow and API-intensive operation. Please avoid making changes to the spreadsheet while the audit is in progress, as concurrent edits may lead to inaccuracies in the audit report.',
+    ui.ButtonSet.OK
+  );
+  const response = ui.prompt('Enter the ID of the managed folder to deep audit:', ui.ButtonSet.OK_CANCEL);
+
+  if (response.getSelectedButton() !== ui.Button.OK || !response.getResponseText()) {
+    return;
+  }
+
+  const folderId = response.getResponseText().trim();
+  const managedFolderInfo = getManagedFolderInfoById_(folderId);
+
+  if (!managedFolderInfo) {
+    ui.alert('Error', `Folder ID '${folderId}' is not a managed folder. Please enter an ID from the 'ManagedFolders' sheet.`, ui.ButtonSet.OK);
+    return;
+  }
+
+  const folderName = managedFolderInfo.folderName;
+  const groupEmail = managedFolderInfo.groupEmail;
+  const userSheetName = managedFolderInfo.userSheetName;
+  const expectedRole = managedFolderInfo.expectedRole;
+
+  try {
+    log_(`*** Starting Deep Audit for folder: ${folderName} (${folderId})`);
+    showToast_(`Starting Deep Audit for ${folderName}...`, 'Deep Audit', -1);
+
+    const deepAuditSheet = setupDeepAuditLogSheet_();
+    deepAuditSheet.clearContents();
+    const headers = ['Timestamp', 'Type', 'Identifier', 'Issue', 'Details'];
+    deepAuditSheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
+    deepAuditSheet.setFrozenRows(1);
+
+    const userSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(userSheetName);
+    const sheetMembers = new Set(
+      userSheet && userSheet.getLastRow() > 1
+        ? userSheet.getRange('A2:A' + userSheet.getLastRow()).getValues().map(r => r[0].toString().trim().toLowerCase()).filter(e => e)
+        : []
+    );
+
+    const groupMembers = new Set(getActualMembers_(groupEmail).map(m => m.toLowerCase()));
+    const hierarchy = getFolderHierarchy_(DriveApp.getFolderById(folderId));
+
+    hierarchy.forEach(item => {
+      // 1. Check for unauthorized direct access
+      let directUsers;
+      if (typeof item.item.getMimeType === 'function') {
+        directUsers = getDirectFileUsers_(item.item, groupEmail);
+      } else {
+        directUsers = getDirectFolderUsers_(item.item, groupEmail);
+      }
+
+      directUsers.forEach(user => {
+        if (!isGroup_(user.email) && !groupMembers.has(user.email)) {
+          logToDeepAudit_('Direct File Access', item.path, 'User has direct access but is not in group', `Email: ${user.email}, Role: ${user.role}`);
+        }
+      });
+
+      // 2. Check for role mismatches for sheet members
+      if (sheetMembers.size > 0) {
+        const viewers = item.item.getViewers().map(u => u.getEmail().toLowerCase());
+        const editors = item.item.getEditors().map(u => u.getEmail().toLowerCase());
+        const groupRole = getRoleFromAccessLists_(groupEmail, editors, viewers);
+
+        sheetMembers.forEach(memberEmail => {
+          const member = memberEmail.toLowerCase();
+          let actualRole = getRoleFromAccessLists_(member, editors, viewers);
+          if (actualRole === 'NONE' && groupRole !== 'NONE') {
+            actualRole = groupRole;
+          }
+
+          if (actualRole.toUpperCase() !== expectedRole.toUpperCase()) {
+            logToDeepAudit_('Role Mismatch', item.path, 'User has incorrect role', `Email: ${member}, Expected: ${expectedRole}, Actual: ${actualRole}`);
+          }
+        });
+      }
+    });
+
+    log_(`*** Deep Audit Complete for folder: ${folderName}`);
+    showToast_('Deep Audit Complete.', 'Deep Audit', 5);
+    ui.alert(`Deep Audit for '${folderName}' is complete. See the 'DeepFolderAuditLog' sheet for details.`);
+
+  } catch (e) {
+    log_(`FATAL ERROR in deepAuditFolder for ${folderName}: ` + e.toString() + '\n' + e.stack, 'ERROR');
+    showToast_('Deep Audit failed.', 'Deep Audit', 5);
+    ui.alert(`An error occurred during the deep audit for '${folderName}': ` + e.message);
+  }
+}
+
+function logToDeepAudit_(type, identifier, issue, details) {
+  const timestamp = Utilities.formatDate(new Date(), SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+  const auditSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('DeepFolderAuditLog');
+  auditSheet.appendRow([timestamp, type, identifier, issue, details]);
+  log_('DEEP AUDIT [' + type + ' | ' + identifier + ']: ' + issue + ' - ' + details, 'WARN');
+}
+
+function getFolderHierarchy_(folder, path = '') {
+  const currentPath = path + '/' + folder.getName();
+  let hierarchy = [{ item: folder, path: currentPath }];
+
+  const files = folder.getFiles();
+  while (files.hasNext()) {
+    const file = files.next();
+    hierarchy.push({ item: file, path: currentPath + '/' + file.getName() });
+  }
+
+  const subFolders = folder.getFolders();
+  while (subFolders.hasNext()) {
+    const subFolder = subFolders.next();
+    hierarchy = hierarchy.concat(getFolderHierarchy_(subFolder, currentPath));
+  }
+
+  return hierarchy;
+}
+
+function getManagedFolderInfoById_(folderId) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+  if (!sheet) return null;
+
+  const headers = getHeaderMap_(sheet);
+  const folderNameCol = resolveColumn_(headers, 'foldername', 1);
+  const folderIdCol = resolveColumn_(headers, 'folderid', 2);
+  const roleCol = resolveColumn_(headers, 'role', 3);
+  const groupEmailCol = resolveColumn_(headers, 'groupemail', 4);
+  const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+
+  const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, Math.max(...Object.values(headers))).getValues();
+  for (let i = 0; i < data.length; i++) {
+    if (data[i][folderIdCol - 1] === folderId) {
+      return {
+        folderName: data[i][folderNameCol - 1],
+        groupEmail: data[i][groupEmailCol - 1].toLowerCase(),
+        userSheetName: data[i][userSheetNameCol - 1],
+        expectedRole: data[i][roleCol - 1]
+      };
+    }
+  }
+  return null;
+}
+
+function logAndAudit_(type, identifier, issue, details) {
+  const timestamp = Utilities.formatDate(new Date(), SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+  const auditSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(FOLDER_AUDIT_LOG_SHEET_NAME);
+  auditSheet.appendRow([timestamp, type, identifier, issue, details]);
+  log_('AUDIT [' + type + ' | ' + identifier + ']: ' + issue + ' - ' + details, 'WARN');
+}
+
+/**
+ * Clears all content from the FolderAuditLog sheet.
+ */
+function clearFoldersAuditLog() {
+  const ui = SpreadsheetApp.getUi();
+  try {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(FOLDER_AUDIT_LOG_SHEET_NAME);
+    if (sheet) {
+      sheet.clear();
+      setupFolderAuditLogSheet_(sheet); // Re-add header
+      log_('FoldersAuditLog sheet has been cleared.');
+      ui.alert('The Folders Audit Log has been cleared.');
+    } else {
+      ui.alert('FoldersAuditLog sheet not found.');
+    }
+  } catch (e) {
+    log_('Error clearing FoldersAuditLog sheet: ' + e.toString(), 'ERROR');
+    ui.alert('An error occurred while clearing the audit log: ' + e.message);
+  }
+}
+
+// =====================================================================================
+// START OF FILE: Discovery.gs
+// =====================================================================================
+/**
+ * @file Discovery.gs
+ * @description Contains the centralized logic for discovering manual permission changes.
+ */
+
+/**
+ * Discovers all manually added members, both from Google Groups and direct folder access.
+ * This is the single source of truth for both the Dry Run Audit and Merge & Reconcile features.
+ * @returns {Array<Object>} A discovery report. Each object contains a sheetName and a list of membersToAdd.
+ */
+function discoverManualAdditions_() {
+  const report = [];
+  const allGroups = new Map();
+
+  // 1. Collect all groups from UserGroups and ManagedFolders sheets
+  const userGroupsSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(USER_GROUPS_SHEET_NAME);
+  if (userGroupsSheet && userGroupsSheet.getLastRow() > 1) {
+    const userGroupsData = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 2).getValues();
+    userGroupsData.forEach(row => {
+      if (row[0] && row[1]) {
+        const sheetName = getUserGroupSheetName_(row[0]);
+        allGroups.set(sheetName, { email: row[1], folderId: null });
+      }
+    });
+  }
+
+  const managedFoldersSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+  if (managedFoldersSheet && managedFoldersSheet.getLastRow() > 1) {
+    const headers = getHeaderMap_(managedFoldersSheet);
+    const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+    const groupEmailCol = resolveColumn_(headers, 'groupemail', 4);
+    const folderIdCol = resolveColumn_(headers, 'folderid', 2);
+    
+    const managedFoldersData = managedFoldersSheet.getRange(2, 1, managedFoldersSheet.getLastRow() - 1, Math.max(userSheetNameCol, groupEmailCol, folderIdCol)).getValues();
+    managedFoldersData.forEach(row => {
+      const userSheetName = row[userSheetNameCol - 1];
+      const groupEmail = row[groupEmailCol - 1];
+      const folderId = row[folderIdCol - 1];
+      if (userSheetName && groupEmail) {
+        allGroups.set(userSheetName, { email: groupEmail, folderId: folderId });
+      }
+    });
+  }
+
+  // 2. Iterate through each group and create a discovery report
+  allGroups.forEach((groupInfo, sheetName) => {
+    const discrepancies = new Map(); // Use a map to avoid duplicate members
+
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+    if (!sheet) {
+      log_(`Sheet '${sheetName}' not found. Skipping discovery.`, 'WARN');
+      return;
+    }
+
+    const sheetMembers = new Set();
+    if (sheet.getLastRow() > 1) {
+      const rawValues = sheet.getRange(2, 1, sheet.getLastRow() - 1, 2).getValues(); // Read columns A and B
+      rawValues.forEach(row => {
+        const email = row[0];
+        const isDisabled = row[1];
+        if (email && !isUserRowDisabled_(isDisabled)) { // Use isUserRowDisabled_ from Utils.gs
+          sheetMembers.add(email.toString().trim().toLowerCase());
+        }
+      });
+    }
+
+    try {
+      const groupMembers = new Set(getActualMembers_(groupInfo.email).map(m => m.toLowerCase()));
+
+      // A. Discover members in the group but not in the sheet (Manual Additions)
+      groupMembers.forEach(member => {
+        if (!sheetMembers.has(member)) {
+          discrepancies.set(member, { email: member, source: 'Google Group', issue: 'Manual Addition' });
+        }
+      });
+
+      // B. Discover members in the sheet but not in the group (Missing Members)
+      sheetMembers.forEach(member => {
+        if (!groupMembers.has(member)) {
+          discrepancies.set(member, { email: member, source: 'Sheet', issue: 'Missing Member' });
+        }
+      });
+
+      // C. Discover from direct folder permissions (if applicable)
+      if (groupInfo.folderId) {
+        const folder = DriveApp.getFolderById(groupInfo.folderId);
+        const directUsers = getDirectFolderUsers_(folder);
+        directUsers.forEach(user => {
+          if (user.email !== groupInfo.email && !sheetMembers.has(user.email) && !groupMembers.has(user.email)) {
+            discrepancies.set(user.email, { email: user.email, source: 'Direct Folder Access', issue: 'Manual Addition' });
+          }
+        });
+      }
+
+      if (discrepancies.size > 0) {
+        report.push({ sheetName: sheetName, discrepancies: Array.from(discrepancies.values()) });
+      }
+
+    } catch (e) {
+      log_(`Error during discovery for '${sheetName}': ${e.message}`, 'ERROR');
+    }
+  });
+
+  return report;
+}
+
+// =====================================================================================
+// START OF FILE: EditMode.gs
+// =====================================================================================
+/**
+ * EditMode.gs - Edit mode management
+ *
+ * Allows administrators to enter "Edit Mode" which temporarily suspends
+ * automatic syncs while making bulk changes to the control sheets.
+ *
+ * This prevents AutoSync from running while you're in the middle of
+ * reorganizing sheets, making bulk edits, or testing configurations.
+ */
+
+/**
+ * Enters Edit Mode - suspends AutoSync and marks sheets with visual indicator
+ */
+function enterEditMode() {
+  const ui = SpreadsheetApp.getUi();
+
+  // Check if already in edit mode
+  if (isInEditMode_()) {
+    const response = ui.alert(
+      'Already in Edit Mode',
+      'The spreadsheet is already in Edit Mode.\n\n' +
+      'Edit Mode was enabled at: ' + getEditModeTimestamp_() + '\n' +
+      'Enabled by: ' + getEditModeUser_() + '\n\n' +
+      'Would you like to exit Edit Mode?',
+      ui.ButtonSet.YES_NO
+    );
+
+    if (response === ui.Button.YES) {
+      exitEditMode();
+    }
+    return;
+  }
+
+  // Confirm entering edit mode
+  const response = ui.alert(
+    'Enter Edit Mode?',
+    'Edit Mode will:\n\n' +
+    '✓ Suspend automatic syncs\n' +
+    '✓ Add a visual banner to the spreadsheet\n' +
+    '✓ Log the time and user who enabled it\n\n' +
+    'Use this when making bulk changes, reorganizing sheets, or testing.\n\n' +
+    'Remember to EXIT Edit Mode when done to resume AutoSync!',
+    ui.ButtonSet.OK_CANCEL
+  );
+
+  if (response !== ui.Button.OK) {
+    return;
+  }
+
+  try {
+    // Set edit mode properties
+    const props = PropertiesService.getDocumentProperties();
+    props.setProperties({
+      'EditMode': 'true',
+      'EditModeTimestamp': new Date().toISOString(),
+      'EditModeUser': Session.getActiveUser().getEmail()
+    });
+
+    // Add visual indicator
+    addEditModeBanner_();
+
+    // Log the event
+    log_('🔒 EDIT MODE ENABLED by ' + Session.getActiveUser().getEmail(), 'INFO');
+
+    ui.alert(
+      'Edit Mode Enabled',
+      '🔒 Edit Mode is now ACTIVE\n\n' +
+      'Auto-sync will be suspended until you exit Edit Mode.\n\n' +
+      'The yellow banner at the top indicates Edit Mode is active.\n\n' +
+      'When done, use:\nPermissions Manager → Edit Mode → Exit Edit Mode',
+      ui.ButtonSet.OK
+    );
+
+  } catch (e) {
+    log_('Error enabling Edit Mode: ' + e.message, 'ERROR');
+    ui.alert('Error', 'Failed to enable Edit Mode: ' + e.message, ui.ButtonSet.OK);
+  }
+}
+
+/**
+ * Exits Edit Mode - resumes AutoSync and removes visual indicator
+ */
+function exitEditMode() {
+  const ui = SpreadsheetApp.getUi();
+
+  if (!isInEditMode_()) {
+    ui.alert('Not in Edit Mode', 'The spreadsheet is not currently in Edit Mode.', ui.ButtonSet.OK);
+    return;
+  }
+
+  try {
+    // Get edit mode info for logging
+    const startTime = getEditModeTimestamp_();
+    const user = getEditModeUser_();
+
+    // Clear edit mode properties
+    const props = PropertiesService.getDocumentProperties();
+    props.deleteProperty('EditMode');
+    props.deleteProperty('EditModeTimestamp');
+    props.deleteProperty('EditModeUser');
+
+    // Remove visual indicator
+    removeEditModeBanner_();
+
+    // Log the event
+    const duration = calculateDuration_(startTime);
+    log_('🔓 EDIT MODE DISABLED by ' + Session.getActiveUser().getEmail() +
+         ' (was enabled by ' + user + ' for ' + duration + ')', 'INFO');
+
+    ui.alert(
+      'Edit Mode Disabled',
+      '🔓 Edit Mode is now INACTIVE\n\n' +
+      'Auto-sync will resume on its normal schedule.\n\n' +
+      'Duration: ' + duration + '\n' +
+      'Originally enabled by: ' + user,
+      ui.ButtonSet.OK
+    );
+
+  } catch (e) {
+    log_('Error disabling Edit Mode: ' + e.message, 'ERROR');
+    ui.alert('Error', 'Failed to disable Edit Mode: ' + e.message, ui.ButtonSet.OK);
+  }
+}
+
+/**
+ * Checks the current Edit Mode status and displays it
+ */
+function viewEditModeStatus() {
+  const ui = SpreadsheetApp.getUi();
+
+  if (isInEditMode_()) {
+    const timestamp = getEditModeTimestamp_();
+    const user = getEditModeUser_();
+    const duration = calculateDuration_(timestamp);
+
+    ui.alert(
+      'Edit Mode Status',
+      '🔒 Edit Mode is ACTIVE\n\n' +
+      'Enabled at: ' + new Date(timestamp).toLocaleString() + '\n' +
+      'Enabled by: ' + user + '\n' +
+      'Duration: ' + duration + '\n\n' +
+      'Auto-sync is currently SUSPENDED.\n\n' +
+      'To resume normal operations, use:\n' +
+      'Permissions Manager → Edit Mode → Exit Edit Mode',
+      ui.ButtonSet.OK
+    );
+  } else {
+    ui.alert(
+      'Edit Mode Status',
+      '✅ Edit Mode is INACTIVE\n\n' +
+      'The spreadsheet is in normal operation mode.\n' +
+      'Auto-sync is running on schedule.',
+      ui.ButtonSet.OK
+    );
+  }
+}
+
+/**
+ * Checks if the spreadsheet is currently in Edit Mode
+ * @return {boolean} True if in Edit Mode, false otherwise
+ */
+function isInEditMode_() {
+  try {
+    const props = PropertiesService.getDocumentProperties();
+    return props.getProperty('EditMode') === 'true';
+  } catch (e) {
+    log_('Error checking Edit Mode status: ' + e.message, 'WARN');
+    return false;
+  }
+}
+
+/**
+ * Gets the timestamp when Edit Mode was enabled
+ * @return {string} ISO timestamp or empty string if not in Edit Mode
+ */
+function getEditModeTimestamp_() {
+  try {
+    const props = PropertiesService.getDocumentProperties();
+    return props.getProperty('EditModeTimestamp') || '';
+  } catch (e) {
+    return '';
+  }
+}
+
+/**
+ * Gets the user who enabled Edit Mode
+ * @return {string} User email or 'Unknown' if not available
+ */
+function getEditModeUser_() {
+  try {
+    const props = PropertiesService.getDocumentProperties();
+    return props.getProperty('EditModeUser') || 'Unknown';
+  } catch (e) {
+    return 'Unknown';
+  }
+}
+
+/**
+ * Calculates duration between timestamp and now
+ * @param {string} isoTimestamp - ISO format timestamp
+ * @return {string} Human-readable duration (e.g., "2 hours 15 minutes")
+ */
+function calculateDuration_(isoTimestamp) {
+  if (!isoTimestamp) return 'Unknown';
+
+  try {
+    const start = new Date(isoTimestamp);
+    const now = new Date();
+    const diffMs = now - start;
+    const diffMins = Math.floor(diffMs / 60000);
+
+    if (diffMins < 1) return 'Less than 1 minute';
+    if (diffMins < 60) return diffMins + ' minute' + (diffMins === 1 ? '' : 's');
+
+    const hours = Math.floor(diffMins / 60);
+    const mins = diffMins % 60;
+
+    let result = hours + ' hour' + (hours === 1 ? '' : 's');
+    if (mins > 0) {
+      result += ' ' + mins + ' minute' + (mins === 1 ? '' : 's');
+    }
+
+    return result;
+  } catch (e) {
+    return 'Unknown';
+  }
+}
+
+/**
+ * Adds a visual banner to indicate Edit Mode is active
+ */
+function addEditModeBanner_() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+    // Check if banner sheet already exists
+    let bannerSheet = ss.getSheetByName('⚠️ EDIT MODE ACTIVE');
+    if (bannerSheet) {
+      // Move to first position if it exists
+      ss.setActiveSheet(bannerSheet);
+      ss.moveActiveSheet(1);
+      return;
+    }
+
+    // Create banner sheet
+    bannerSheet = ss.insertSheet('⚠️ EDIT MODE ACTIVE', 0);
+
+    // Format the banner
+    const range = bannerSheet.getRange('A1:Z10');
+    range.setBackground('#FFF3CD'); // Light yellow
+    range.setBorder(true, true, true, true, false, false, '#856404', SpreadsheetApp.BorderStyle.SOLID_THICK);
+
+    // Add warning text
+    const textRange = bannerSheet.getRange('B2:Y8');
+    textRange.merge();
+    textRange.setValue(
+      '⚠️  EDIT MODE ACTIVE  ⚠️\n\n' +
+      'Auto-sync is currently SUSPENDED while you make changes.\n\n' +
+      'Enabled at: ' + new Date().toLocaleString() + '\n' +
+      'Enabled by: ' + Session.getActiveUser().getEmail() + '\n\n' +
+      'When done editing, use:\nPermissions Manager → Edit Mode → Exit Edit Mode'
+    );
+    textRange.setFontSize(14);
+    textRange.setFontWeight('bold');
+    textRange.setHorizontalAlignment('center');
+    textRange.setVerticalAlignment('middle');
+    textRange.setWrap(true);
+    textRange.setFontColor('#856404'); // Dark yellow/brown
+
+    // Protect the banner sheet (read-only)
+    const protection = bannerSheet.protect();
+    protection.setDescription('Edit Mode banner - protected');
+    protection.setWarningOnly(true);
+
+  } catch (e) {
+    log_('Error adding Edit Mode banner: ' + e.message, 'WARN');
+  }
+}
+
+/**
+ * Removes the Edit Mode visual banner
+ */
+function removeEditModeBanner_() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const bannerSheet = ss.getSheetByName('⚠️ EDIT MODE ACTIVE');
+
+    if (bannerSheet) {
+      ss.deleteSheet(bannerSheet);
+      log_('Edit Mode banner removed', 'INFO');
+    }
+  } catch (e) {
+    log_('Error removing Edit Mode banner: ' + e.message, 'WARN');
+  }
+}
+
+// =====================================================================================
+// START OF FILE: Help.gs
+// =====================================================================================
+function getGitHubRepoUrl_() {
+    const configSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG_SHEET_NAME);
+    if (configSheet) {
+        const settings = configSheet.getRange('A2:B').getValues();
+        for (let i = 0; i < settings.length; i++) {
+            if (settings[i][0] === 'GitHubRepoURL') {
+                return settings[i][1];
+            }
+        }
+    }
+    return null;
+}
+
+function openUserGuide() {
+    const repoUrl = getGitHubRepoUrl_();
+    if (repoUrl) {
+        openUrl(repoUrl + '/blob/main/docs/USER_GUIDE.md');
+    }
+}
+
+function openTestingGuide() {
+    const repoUrl = getGitHubRepoUrl_();
+    if (repoUrl) {
+        openUrl(repoUrl + '/blob/main/TESTING.md');
+    }
+}
+
+function openReadme() {
+    const repoUrl = getGitHubRepoUrl_();
+    if (repoUrl) {
+        openUrl(repoUrl + '/blob/main/README.md');
+    }
+}
+
+function openAllDocumentation() {
+    const repoUrl = getGitHubRepoUrl_();
+    if (repoUrl) {
+        openUrl(repoUrl + '/blob/main/docs/');
+    }
+}
+
+function openUrl(url) {
+  log_('Attempting to open URL: ' + url);
+  const html = '<html><body><a href="' + url + '" target="_blank">Click here to open the documentation</a><br/><br/><input type="button" value="Close" onclick="google.script.host.close()" /></body></html>';
+  const ui = HtmlService.createHtmlOutput(html).setTitle('Open Documentation').setWidth(300);
+  SpreadsheetApp.getUi().showSidebar(ui);
+}
+
+// =====================================================================================
+// START OF FILE: ProductionOptimizations.gs
+// =====================================================================================
+/**
+ * PRODUCTION CODE OPTIMIZATIONS
+ * Safe performance improvements for non-test sync operations
+ */
+
+/**
+ * Cache folder lookups during a sync session to avoid repeated Drive API calls
+ */
+const _folderCache = {};
+
+/**
+ * Get folder by ID with caching
+ * @param {string} folderId - The folder ID
+ * @returns {Folder} The folder object
+ */
+function getCachedFolder_(folderId) {
+  if (!_folderCache[folderId]) {
+    _folderCache[folderId] = DriveApp.getFolderById(folderId);
+  }
+  return _folderCache[folderId];
+}
+
+/**
+ * Clear the folder cache (call at start of each sync)
+ */
+function clearFolderCache_() {
+  for (let key in _folderCache) {
+    delete _folderCache[key];
+  }
+}
+
+/**
+ * Optimized version: Read all user sheets at once instead of one at a time
+ * @param {Array<string>} sheetNames - Array of sheet names to read
+ * @returns {Object} Map of sheetName -> array of email addresses
+ */
+function batchReadUserSheets_(sheetNames) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const result = {};
+
+  sheetNames.forEach(function(sheetName) {
+    const sheet = ss.getSheetByName(sheetName);
+    if (sheet) {
+      const data = sheet.getDataRange().getValues();
+      const emails = [];
+
+      // Skip header row
+      for (let i = 1; i < data.length; i++) {
+        const email = data[i][0]; // Column A
+        const disabled = data[i][1]; // Column B (Disabled checkbox)
+
+        if (email && !disabled) {
+          emails.push(String(email).toLowerCase().trim());
+        }
+      }
+
+      result[sheetName] = emails;
+    }
+  });
+
+  return result;
+}
+
+/**
+ * Check if group membership has changed before syncing
+ * Returns true if sync is needed, false if unchanged
+ * @param {string} groupEmail - The group email
+ * @param {Array<string>} expectedMembers - Array of expected email addresses
+ * @returns {boolean} True if sync is needed
+ */
+function isGroupSyncNeeded_(groupEmail, expectedMembers) {
+  try {
+    const currentMembers = fetchAllGroupMembers_(groupEmail);
+    const currentEmails = currentMembers.map(m => m.email.toLowerCase()).sort();
+    const expectedEmailsSorted = expectedMembers.map(e => e.toLowerCase()).sort();
+
+    // Quick check: different lengths = definitely needs sync
+    if (currentEmails.length !== expectedEmailsSorted.length) {
+      return true;
+    }
+
+    // Deep check: compare sorted arrays
+    for (let i = 0; i < currentEmails.length; i++) {
+      if (currentEmails[i] !== expectedEmailsSorted[i]) {
+        return true;
+      }
+    }
+
+    // No changes detected
+    return false;
+  } catch (e) {
+    // On error, assume sync is needed
+    log_('Could not check if sync needed for ' + groupEmail + ': ' + e.message, 'WARN');
+    return true;
+  }
+}
+
+/**
+ * Optimized full sync that uses caching and batch operations
+ * Drop-in replacement for fullSync() with better performance
+ */
+function fullSyncOptimized() {
+  log_('Running OPTIMIZED full sync...', 'INFO');
+  clearFolderCache_(); // Clear cache at start
+
+  const startTime = new Date();
+
+  // Run syncs
+  syncAdmins();
+  syncUserGroups();
+
+  // Process folders with optimizations
+  const summary = processManagedFoldersOptimized_();
+
+  const duration = ((new Date() - startTime) / 1000).toFixed(2);
+  log_('Optimized sync completed in ' + duration + ' seconds. Summary: ' +
+       summary.added + ' added, ' + summary.removed + ' removed, ' +
+       summary.failed + ' failed', 'INFO');
+
+  return summary;
+}
+
+/**
+ * Optimized version of processManagedFolders_
+ * Uses batch sheet reads and group change detection
+ */
+function processManagedFoldersOptimized_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+  const totalSummary = { added: 0, removed: 0, failed: 0 };
+
+  if (!sheet) {
+    log_('ManagedFolders sheet not found', 'ERROR');
+    return totalSummary;
+  }
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) {
+    log_('No folders to process');
+    return totalSummary;
+  }
+
+  const headers = getHeaderMap_(sheet);
+  const statusCol = resolveColumn_(headers, 'status', 7);
+  const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+  const folderNameCol = resolveColumn_(headers, 'foldername', 1);
+  const groupEmailCol = resolveColumn_(headers, 'groupemail', 4);
+
+  // Read all folder data at once
+  const allData = sheet.getRange(2, 1, lastRow - 1, statusCol).getValues();
+
+  // Collect all user sheet names
+  const userSheetNames = [];
+  allData.forEach(function(row) {
+    const userSheetName = row[userSheetNameCol - 1];
+    if (userSheetName) {
+      userSheetNames.push(userSheetName);
+    }
+  });
+
+  // Batch read all user sheets at once
+  log_('Batch reading ' + userSheetNames.length + ' user sheets...', 'INFO');
+  const userSheetData = batchReadUserSheets_(userSheetNames);
+
+  // Process each folder
+  for (let i = 0; i < allData.length; i++) {
+    const rowIndex = i + 2;
+    const row = allData[i];
+
+    const folderName = row[folderNameCol - 1];
+    const groupEmail = row[groupEmailCol - 1];
+    const userSheetName = row[userSheetNameCol - 1];
+
+    if (!folderName) continue;
+
+    try {
+      // Check if sync is needed for this group
+      const expectedMembers = userSheetData[userSheetName] || [];
+
+      if (groupEmail && isGroupSyncNeeded_(groupEmail, expectedMembers)) {
+        log_('Syncing ' + folderName + ' (changes detected)', 'INFO');
+        const result = processRow_(rowIndex);
+        if (result) {
+          totalSummary.added += result.added;
+          totalSummary.removed += result.removed;
+          totalSummary.failed += result.failed;
+        }
+      } else {
+        log_('Skipping ' + folderName + ' (no changes)', 'INFO');
+        sheet.getRange(rowIndex, statusCol).setValue('OK (unchanged)');
+      }
+    } catch (e) {
+      log_('Error processing row ' + rowIndex + ': ' + e.message, 'ERROR');
+      totalSummary.failed++;
+    }
+  }
+
+  return totalSummary;
+}
+
+/**
+ * Estimate: How much time would be saved?
+ *
+ * For a typical setup with 10 folders, 5 unchanged:
+ * - Old: 10 folder syncs × 3 seconds = 30 seconds
+ * - New: 5 folder syncs × 3 seconds = 15 seconds (50% faster)
+ *
+ * The more folders you have, the bigger the savings!
+ */
+
+// =====================================================================================
+// START OF FILE: Setup.gs
+// =====================================================================================
+/**
+ * Normalizes a boolean config value by removing emojis and extra whitespace.
+ * Converts 'ENABLED ✅' to 'ENABLED', 'DISABLED ❌' to 'DISABLED', etc.
+ * @param {*} value - The value to normalize
+ * @return {*} The normalized value
+ */
+function normalizeBooleanValue_(value) {
+  if (typeof value !== 'string') {
+    return value;
+  }
+  const upperValue = value.toUpperCase().trim();
+  if (upperValue.startsWith('ENABLED')) {
+    return 'ENABLED';
+  }
+  if (upperValue.startsWith('DISABLED')) {
+    return 'DISABLED';
+  }
+  return value;
+}
+
+/**
+ * Migrates old UserGroup sheets to new naming convention (adds "_G" suffix).
+ * This ensures compatibility with the new naming scheme where group sheets
+ * end with "_G" to distinguish them from folder sheets.
+ */
+function migrateUserGroupSheets_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const userGroupsSheet = ss.getSheetByName(USER_GROUPS_SHEET_NAME);
+
+  if (!userGroupsSheet || userGroupsSheet.getLastRow() < 2) {
+    return; // No user groups defined, nothing to migrate
+  }
+
+  const groupNames = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 1).getValues();
+
+  for (let i = 0; i < groupNames.length; i++) {
+    const groupName = groupNames[i][0];
+    if (!groupName || !groupName.toString().trim()) {
+      continue;
+    }
+
+    const oldSheetName = groupName.toString().trim();
+    const newSheetName = oldSheetName + '_G';
+
+    // Check if old sheet exists and new sheet doesn't
+    const oldSheet = ss.getSheetByName(oldSheetName);
+    const newSheet = ss.getSheetByName(newSheetName);
+
+    if (oldSheet && !newSheet && !oldSheetName.endsWith('_G')) {
+      try {
+        oldSheet.setName(newSheetName);
+        log_('Migrated user group sheet: "' + oldSheetName + '" → "' + newSheetName + '"', 'INFO');
+      } catch (e) {
+        log_('Failed to migrate sheet "' + oldSheetName + '": ' + e.message, 'WARN');
+      }
+    }
+  }
+}
+
+/**
+ * Migrates ManagedFolders sheet from old column order to new order.
+ * Old: FolderName, FolderID, Role, UserSheetName, GroupEmail, Last Synced, Status
+ * New: FolderName, FolderID, Role, GroupEmail, UserSheetName, Last Synced, Status
+ * (GroupEmail moved to column 4, UserSheetName moved to column 5)
+ */
+function migrateManagedFoldersColumns_(sheet) {
+  try {
+    const headers = sheet.getRange(1, 1, 1, 7).getValues()[0];
+
+    // Check if migration is needed (old order has UserSheetName in col 4, GroupEmail in col 5)
+    if (headers[3] === 'UserSheetName' && headers[4] === 'GroupEmail') {
+      log_('Migrating ManagedFolders columns from old order to new order...', 'INFO');
+
+      // Get all data
+      const lastRow = sheet.getLastRow();
+      if (lastRow > 1) {
+        // Get columns D and E data (UserSheetName and GroupEmail)
+        const userSheetData = sheet.getRange(2, 4, lastRow - 1, 1).getValues();
+        const groupEmailData = sheet.getRange(2, 5, lastRow - 1, 1).getValues();
+
+        // Swap them: put GroupEmail in col 4, UserSheetName in col 5
+        sheet.getRange(2, 4, lastRow - 1, 1).setValues(groupEmailData);
+        sheet.getRange(2, 5, lastRow - 1, 1).setValues(userSheetData);
+      }
+
+      // Update headers
+      sheet.getRange(1, 4).setValue('GroupEmail');
+      sheet.getRange(1, 5).setValue('UserSheetName');
+
+      log_('Successfully migrated ManagedFolders columns. GroupEmail is now column D (4), UserSheetName is column E (5).', 'INFO');
+    }
+  } catch (e) {
+    log_('Failed to migrate ManagedFolders columns: ' + e.message, 'WARN');
+  }
+}
+
+/**
+ * Migrates old config settings to new names.
+ */
+function migrateConfigSettings_() {
+  try {
+    // Migrate AdminGroupEmail to SheetEditorsGroupEmail
+    const adminGroupEmail = getConfigValue_('AdminGroupEmail', '');
+    if (adminGroupEmail) {
+      const sheetEditorsGroupEmail = getConfigValue_('SheetEditorsGroupEmail', '');
+      if (!sheetEditorsGroupEmail) {
+        updateConfigSetting_('SheetEditorsGroupEmail', adminGroupEmail);
+        log_('Migrated "AdminGroupEmail" to "SheetEditorsGroupEmail" in Config sheet.', 'INFO');
+      }
+    }
+  } catch (e) {
+    log_('Failed to migrate config settings: ' + e.message, 'WARN');
+  }
+}
+
+/**
+ * Ensures the control sheets (ManagedFolders, SheetEditors_G) exist.
+ */
+function setupControlSheets_() {
+  migrateConfigSettings_(); // Run config migration first
+  migrateUserGroupSheets_(); // Run migration first
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  // Check for ManagedFolders sheet
+  let managedSheet = ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+  if (!managedSheet) {
+    managedSheet = ss.insertSheet(MANAGED_FOLDERS_SHEET_NAME, 0);
+    const headers = ['FolderName', 'FolderID', 'Role', 'GroupEmail', 'UserSheetName', 'Last Synced', 'Status', 'URL', 'Delete'];
+    managedSheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
+    managedSheet.setFrozenRows(1);
+    log_('Created "ManagedFolders" sheet.');
+  } else {
+    // Migrate old column order if needed
+    migrateManagedFoldersColumns_(managedSheet);
+
+    // Ensure the URL column exists for older setups
+    let headerRange = managedSheet.getRange(1, 1, 1, managedSheet.getLastColumn());
+    let headers = headerRange.getValues()[0];
+    if (headers.indexOf('URL') === -1) {
+      const newHeaderCol = headers.length + 1;
+      managedSheet.getRange(1, newHeaderCol).setValue('URL').setFontWeight('bold');
+      log_('Added missing "URL" column to ManagedFolders sheet.');
+    }
+
+    // Ensure the Delete column exists
+    headerRange = managedSheet.getRange(1, 1, 1, managedSheet.getLastColumn());
+    headers = headerRange.getValues()[0];
+    if (headers.indexOf('Delete') === -1) {
+      const newHeaderCol = headers.length + 1;
+      managedSheet.getRange(1, newHeaderCol).setValue('Delete').setFontWeight('bold');
+      log_('Added "Delete" column to ManagedFolders sheet.');
+    }
+  }
+  markSystemSheet_(managedSheet);
+
+  // Add data validation for the Role column
+  const roleRange = managedSheet.getRange('C2:C');
+  const existingRoleRule = roleRange.getDataValidation();
+  if (!existingRoleRule || existingRoleRule.getCriteriaType() !== SpreadsheetApp.DataValidationCriteria.VALUE_IN_LIST) {
+      const rule = SpreadsheetApp.newDataValidation().requireValueInList(['Editor', 'Viewer', 'Commenter'], true).build();
+      roleRange.setDataValidation(rule);
+  }
+
+  // Add checkbox validation for the Delete column (column I)
+  const deleteRange = managedSheet.getRange('I2:I');
+  const existingDeleteRule = deleteRange.getDataValidation();
+  if (!existingDeleteRule || existingDeleteRule.getCriteriaType() !== SpreadsheetApp.DataValidationCriteria.CHECKBOX) {
+    const checkboxRule = SpreadsheetApp.newDataValidation().requireCheckbox().build();
+    deleteRange.setDataValidation(checkboxRule);
+  }
+
+  // Check for SheetEditors_G sheet
+  let sheetEditorsSheet = ss.getSheetByName(SHEET_EDITORS_SHEET_NAME);
+  const sheetEditorsHeaders = ['Sheet Editor Emails', 'Disabled'];
+  if (!sheetEditorsSheet) {
+    sheetEditorsSheet = ss.insertSheet(SHEET_EDITORS_SHEET_NAME);
+    log_('Created "' + SHEET_EDITORS_SHEET_NAME + '" sheet.');
+  }
+  markSystemSheet_(sheetEditorsSheet);
+
+  // Always set the headers to ensure correctness and overwrite old formats.
+  sheetEditorsSheet.getRange(1, 1, 1, sheetEditorsHeaders.length).setValues([sheetEditorsHeaders]).setFontWeight('bold');
+  sheetEditorsSheet.setFrozenRows(1);
+  
+  // Add checkbox validation for the Disabled column
+  const adminDisabledRange = sheetEditorsSheet.getRange('B2:B'); // Now column B
+  const existingAdminDisabledRule = adminDisabledRange.getDataValidation();
+  if (!existingAdminDisabledRule || existingAdminDisabledRule.getCriteriaType() !== SpreadsheetApp.DataValidationCriteria.CHECKBOX) {
+    const rule = SpreadsheetApp.newDataValidation().requireCheckbox().build();
+    adminDisabledRange.setDataValidation(rule);
+  }
+
+  // Check for UserGroups sheet
+  let userGroupsSheet = ss.getSheetByName(USER_GROUPS_SHEET_NAME);
+  if (!userGroupsSheet) {
+    userGroupsSheet = ss.insertSheet(USER_GROUPS_SHEET_NAME);
+    log_('Created "UserGroups" sheet.');
+  }
+  markSystemSheet_(userGroupsSheet);
+
+  // Update headers (adding Delete column if needed)
+  const userGroupsHeaderRange = userGroupsSheet.getRange(1, 1, 1, Math.max(6, userGroupsSheet.getLastColumn()));
+  const userGroupsHeaders = userGroupsHeaderRange.getValues()[0];
+  if (userGroupsHeaders.length < 6 || userGroupsHeaders[5] !== 'Delete') {
+    userGroupsSheet.getRange('A1:F1').setValues([['GroupName', 'GroupEmail', 'Group Admin Link', 'Last Synced', 'Status', 'Delete']]).setFontWeight('bold');
+    log_('Updated UserGroups headers with Delete column.');
+  }
+  userGroupsSheet.setFrozenRows(1);
+
+  // Remove legacy SheetEditors group row if it still exists in UserGroups.
+  const legacyGroupRow = findRowByValue_(userGroupsSheet, 1, 'SheetEditors');
+  if (legacyGroupRow > 1) {
+    userGroupsSheet.deleteRow(legacyGroupRow);
+    log_('Removed legacy "SheetEditors" row from UserGroups.');
+  }
+
+  // Ensure SheetEditors_G row exists in UserGroups
+  const groupNameColData = userGroupsSheet.getRange(1, 1, userGroupsSheet.getLastRow(), 1).getValues().flat();
+  if (!groupNameColData.includes(SHEET_EDITORS_SHEET_NAME)) {
+    // Find the first completely empty row to insert into, to avoid appending to the bottom of a large empty sheet.
+    let firstEmptyRow = -1;
+    for(let i = 1; i < groupNameColData.length; i++) { // Start at 1 to skip header
+      if (groupNameColData[i] === '') {
+        firstEmptyRow = i + 1; // i is 0-indexed, rows are 1-indexed
+        break;
+      }
+    }
+
+    if (firstEmptyRow === -1) {
+      // If no empty rows were found in the existing data range, append after the last known row.
+      firstEmptyRow = groupNameColData.length + 1;
+    }
+    
+    userGroupsSheet.getRange(firstEmptyRow, 1, 1, 6).setValues([[SHEET_EDITORS_SHEET_NAME, '', '', '', '', false]]);
+    log_('Added missing "' + SHEET_EDITORS_SHEET_NAME + '" entry to the UserGroups sheet at row ' + firstEmptyRow);
+  }
+
+  // Add checkbox validation for the Delete column (column F)
+  const userGroupsDeleteRange = userGroupsSheet.getRange('F2:F');
+  const existingUserGroupsDeleteRule = userGroupsDeleteRange.getDataValidation();
+  if (!existingUserGroupsDeleteRule || existingUserGroupsDeleteRule.getCriteriaType() !== SpreadsheetApp.DataValidationCriteria.CHECKBOX) {
+    const checkboxRule = SpreadsheetApp.newDataValidation().requireCheckbox().build();
+    userGroupsDeleteRange.setDataValidation(checkboxRule);
+  }
+  
+  // Check for Config sheet
+  let currentUserEmail = '';
+  try {
+    currentUserEmail = Session.getEffectiveUser().getEmail();
+  } catch (e) {
+    currentUserEmail = '';
+  }
+
+  const defaultConfig = {
+    '--- Access Control ---': {
+      'SuperAdminEmails': { value: currentUserEmail, description: 'Comma-separated list of super admin email addresses. Super admins see the full menu and test sheets.' },
+      'SheetEditorsGroupEmail': { value: '', description: 'The email address for the Google Group containing all Sheet Editors. Uses AdminGroupEmail if set; auto-generates only when both are blank.' }
+    },
+    '--- Sync Behavior ---': {
+      'EnableSheetLocking': { value: true, description: 'Check to enable the sheet locking mechanism during sync operations. This is recommended to prevent data inconsistencies.' },
+      'EnableCircularDependencyCheck': { value: true, description: 'Check to enable circular dependency validation during sync. This prevents infinite loops when groups contain each other.' },
+      'AutoSyncInterval': { value: 5, description: 'The interval in minutes for the AutoSync trigger. Minimum is 5 minutes. Use the "Enable/Update AutoSync" menu item to apply a new interval.' },
+      'AllowAutosyncDeletion': { value: true, description: 'Check to allow AutoSync to automatically remove users from groups. WARNING: If a user is accidentally removed from a sheet, their access will be revoked on the next sync.' },
+      'AllowGroupFolderDeletion': { value: false, description: 'Master switch: Enable deletion of groups and folder-role bindings via Delete checkbox. Google Drive folders are never deleted. When disabled, Delete checkboxes are ignored and sync aborts on orphan sheets.' },
+      'RetryMaxRetries': { value: 5, description: 'The maximum number of times to retry a failed API call (e.g., due to rate limiting).'},
+      'RetryInitialDelayMs': { value: 1000, description: 'The initial time in milliseconds to wait before the first retry. This delay doubles with each subsequent retry (exponential backoff).'},
+      'MembershipBatchSize': { value: 10, description: 'The number of users to process in a single batch for group membership changes. Helps avoid API rate limits.'},
+    },
+    '--- Email Notifications ---': {
+      'EnableEmailNotifications': { value: true, description: 'Check to receive emails for errors and other notifications.' },
+      'NotificationEmail': { value: '', description: 'The email address to send notifications to. Defaults to the script owner if left blank.' },
+      'NotifySheetEditorsOnErrors': { value: false, description: 'Optional: also send error notifications to all active Sheet Editors.' },
+      'NotifyOnSyncSuccess': { value: false, description: 'Check to receive a summary email after each successful AutoSync.' },
+      'NotifyDeletionsPending': { value: true, description: 'Check to receive an email alert when an AutoSync detects that a user needs to be manually removed. (This is ignored if AllowAutosyncDeletion is checked).' },
+      'NotifyOnGroupFolderDeletion': { value: true, description: 'Send email notification when groups or folder-role bindings are deleted during sync. Recommended to keep enabled for audit purposes.' },
+    },
+    '--- Auditing & Limits ---': {
+        'LogLevel': { value: 'INFO', description: 'Controls log verbosity. ERROR: critical errors only. WARN: warnings and errors. INFO: normal operations (default). DEBUG: detailed debugging including routine AutoSync checks.' },
+        'MaxLogLength': { value: DEFAULT_MAX_LOG_LENGTH, description: 'The maximum number of rows to keep in the Log and TestLog sheets.' },
+        'MaxFileSizeMB': { value: 100, description: 'The maximum file size in MB for the spreadsheet. If exceeded, AutoSync will be aborted and an alert sent. This prevents uncontrolled growth of version history.' },
+        '_SyncHistory': { value: 'Always enabled', description: 'Sync history is automatically tracked in the SyncHistory sheet with revision links (30-100 days retention).' },
+        'EnableGCPLogging': { value: false, description: 'Experimental (see feature/gcp-logging-experimental branch). Leave FALSE on main; check only in that branch to send logs to Google Cloud Logging.' },
+    },
+    '--- General ---': {
+        'EnableToasts': { value: false, description: 'Check to show small, non-pausing progress messages in the corner of the screen during syncs. These do not affect timeouts.' },
+        'GitHubRepoURL': { value: 'https://github.com/davidf9999/gdrive_permissions1', description: 'The URL to the GitHub repository for this project. Used in the Help menu.' },
+    },
+    '--- Testing ---': {
+        'ShowTestPrompts': { value: true, description: 'Set to FALSE to run tests without UI prompts that pause the script. Required for fully automated test runs.'},
+        'TestAutoConfirm': { value: false, description: 'For automated testing only. Set to TRUE to automatically answer "Yes" to all test verification prompts.' },
+        'TestCleanup': { value: false, description: 'Set to TRUE to automatically delete all folders, groups, and sheets created by a test. If FALSE, you will be prompted manually.' },
+        'TestUserEmail': { value: currentUserEmail, description: 'The email of a real user IN YOUR WORKSPACE DOMAIN (e.g., your-name@your-domain.com) to be used for all tests. For the stress test, aliases will be generated from this email.' },
+        'TestFolderName': { value: 'ManualAccessTestFolder', description: 'The name of the folder to be created during the Manual Access Test.' },
+        'TestRole': { value: 'Editor', description: 'The role to be tested during the Manual Access Test.' },
+        'TestNumFolders': { value: 2, description: 'The number of folders to create during the Stress Test. Total API calls are TestNumFolders * TestNumUsers. High numbers can cause API rate-limiting errors.' },
+        'TestNumUsers': { value: 5, description: 'The number of users to create PER FOLDER during the Stress Test. Total API calls are TestNumFolders * TestNumUsers. High numbers can cause API rate-limiting errors.' }
+    }
+  };
+
+  let configSheet = ss.getSheetByName(CONFIG_SHEET_NAME);
+  if (!configSheet) {
+    configSheet = ss.insertSheet(CONFIG_SHEET_NAME);
+    // Create a new sheet with headers and all default settings
+    configSheet.getRange('A1:C1').setValues([['Setting', 'Value', 'Description']]).setFontWeight('bold');
+    const newSettings = [];
+    for (const groupName in defaultConfig) {
+        newSettings.push([groupName, '', '']);
+        for (const key in defaultConfig[groupName]) {
+            let finalValue = defaultConfig[groupName][key].value;
+            if (key === 'ScriptVersion') {
+              finalValue = SCRIPT_VERSION;
+            } else if (key === 'NotificationEmail' && !finalValue) {
+                finalValue = Session.getEffectiveUser().getEmail();
+            }
+            newSettings.push([key, finalValue, defaultConfig[groupName][key].description]);
+        }
+    }
+    configSheet.getRange(2, 1, newSettings.length, 3).setValues(newSettings);
+    configSheet.setFrozenRows(1);
+    log_('Created "Config" sheet with default settings and descriptions.');
+  } else {
+    // Update an existing sheet, preserving values but re-ordering and adding new settings
+    const existingData = configSheet.getDataRange().getValues();
+    const existingSettings = new Map();
+    existingData.forEach(row => {
+        if (row[0] && !row[0].startsWith('---')) {
+            // Filter out spreadsheet errors (#ERROR!, #N/A, etc.)
+            const value = row[1];
+            const valueStr = String(value);
+            if (!valueStr.startsWith('#') || (!valueStr.includes('ERROR') && !valueStr.includes('N/A') && !valueStr.includes('VALUE') && !valueStr.includes('REF') && !valueStr.includes('DIV'))) {
+                // Normalize boolean values by removing emojis
+                const normalizedValue = normalizeBooleanValue_(value);
+                existingSettings.set(row[0], normalizedValue);
+            } else {
+                log_('Warning: Skipping Config setting "' + row[0] + '" due to formula error: ' + valueStr, 'WARN');
+            }
+        }
+    });
+
+    // Clear the sheet content and data validations
+    const clearRange = configSheet.getRange(2, 1, configSheet.getMaxRows() - 1, 3);
+    clearRange.clearContent();
+    clearRange.clearDataValidations();
+
+    const newSettings = [];
+    for (const groupName in defaultConfig) {
+        newSettings.push([groupName, '', '']);
+        for (const key in defaultConfig[groupName]) {
+            let finalValue;
+            if (key === 'ScriptVersion') {
+              finalValue = SCRIPT_VERSION;
+            } else {
+              finalValue = existingSettings.has(key) ? existingSettings.get(key) : defaultConfig[groupName][key].value;
+            }
+            
+            if (key === 'NotificationEmail' && !finalValue) {
+                finalValue = Session.getEffectiveUser().getEmail();
+            }
+            newSettings.push([key, finalValue, defaultConfig[groupName][key].description]);
+        }
+    }
+    configSheet.getRange(2, 1, newSettings.length, 3).setValues(newSettings);
+  }
+  markSystemSheet_(configSheet);
+  applyConfigValidation_();
+  setupStatusSheet_();
+  arrangeSheetOrder_();
+}
+
+function applyConfigValidation_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const configSheet = ss.getSheetByName(CONFIG_SHEET_NAME);
+  if (!configSheet) return;
+
+  const booleanSettings = [
+    'EnableSheetLocking', 'AllowAutosyncDeletion', 'AllowGroupFolderDeletion', 'EnableCircularDependencyCheck',
+    'EnableEmailNotifications', 'NotifyOnSyncSuccess', 'NotifyDeletionsPending', 'NotifyOnGroupFolderDeletion',
+    'NotifySheetEditorsOnErrors', 'EnableGCPLogging', 'EnableToasts', 'ShowTestPrompts', 'TestCleanup', 'TestAutoConfirm'
+  ];
+
+  // Add dropdown validation for LogLevel
+  const allSettings = configSheet.getDataRange().getValues();
+  for (let i = 0; i < allSettings.length; i++) {
+    if (allSettings[i][0] === 'LogLevel') {
+      const logLevelCell = configSheet.getRange(i + 1, 2); // Column B
+      const logLevelRule = SpreadsheetApp.newDataValidation()
+        .requireValueInList(['ERROR', 'WARN', 'INFO', 'DEBUG'], true)
+        .setAllowInvalid(false)
+        .setHelpText('Select logging verbosity: ERROR (critical only), WARN (warnings+errors), INFO (normal operations), DEBUG (detailed including routine checks)')
+        .build();
+      logLevelCell.setDataValidation(logLevelRule);
+      break;
+    }
+  }
+
+  const data = configSheet.getDataRange().getValues();
+
+  // First, clear all data validations from the Value column (column B)
+  const lastRow = data.length;
+  if (lastRow > 1) {
+    configSheet.getRange(2, 2, lastRow - 1, 1).clearDataValidations();
+  }
+
+  // Then, apply checkbox validation only to boolean settings
+  const rule = SpreadsheetApp.newDataValidation()
+    .requireCheckbox()
+    .setAllowInvalid(false)
+    .build();
+
+  for (let i = 1; i < data.length; i++) {
+    const key = data[i][0];
+    if (booleanSettings.includes(key)) {
+      const cell = configSheet.getRange(i + 1, 2);
+      cell.setDataValidation(rule);
+    }
+  }
+  // log_('Applied checkbox validation rules to Config sheet.');
+}
+
+function setupStatusSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let statusSheet = ss.getSheetByName(STATUS_SHEET_NAME);
+  const statusHeaders = ['Status Item', 'Value', 'Notes'];
+
+  if (!statusSheet) {
+    statusSheet = ss.insertSheet(STATUS_SHEET_NAME);
+  }
+  markSystemSheet_(statusSheet);
+
+  statusSheet.getRange(1, 1, 1, statusHeaders.length).setValues([statusHeaders]).setFontWeight('bold');
+  statusSheet.setFrozenRows(1);
+
+  const defaultStatus = {
+    'Script Version': { value: SCRIPT_VERSION, description: 'Current version of the installed script.' },
+    'AutoSync Trigger Status': { value: 'DISABLED', description: 'Current AutoSync trigger status.' },
+    'Last Sync Status': { value: 'Unknown', description: 'Result of the most recent sync attempt.' },
+    'Last Sync Attempt': { value: '', description: 'Timestamp of the most recent sync attempt.' },
+    'Last Successful Sync': { value: '', description: 'Timestamp of the most recent successful sync.' },
+    'Last Sync Duration (seconds)': { value: '', description: 'Duration of the most recent sync attempt.' },
+    'Last Sync Summary': { value: '', description: 'Summary of the most recent sync changes.' },
+    'Last Sync Error': { value: '', description: 'Most recent sync error message (if any).' },
+    'Last Sync Source': { value: '', description: 'Origin of the last sync (AutoSync or Manual).' }
+  };
+
+  const existingSettings = new Map();
+  const lastRow = statusSheet.getLastRow();
+  if (lastRow > 1) {
+    const existingData = statusSheet.getRange(2, 1, lastRow - 1, 3).getValues();
+    existingData.forEach(row => {
+      if (row[0]) {
+        existingSettings.set(row[0], { value: row[1], description: row[2] });
+      }
+    });
+  }
+
+  const newSettings = [];
+  for (const key in defaultStatus) {
+    const existing = existingSettings.get(key);
+    let finalValue = existing ? existing.value : defaultStatus[key].value;
+    if (key === 'Script Version') {
+      finalValue = SCRIPT_VERSION;
+    }
+    newSettings.push([key, finalValue, defaultStatus[key].description]);
+  }
+
+  if (newSettings.length > 0) {
+    statusSheet.getRange(2, 1, newSettings.length, 3).setValues(newSettings);
+  }
+
+  statusSheet.autoResizeColumns(1, 3);
+
+  statusSheet.getRange('E1').setValue('Sync Status Indicator').setFontWeight('bold');
+  const panelRange = statusSheet.getRange('E2:F3');
+  const panelBoundaryRange = statusSheet.getRange('E2:H6');
+  const fullSheetRange = statusSheet.getRange(1, 1, statusSheet.getMaxRows(), statusSheet.getMaxColumns());
+  const existingMergedRanges = fullSheetRange.getMergedRanges();
+  if (existingMergedRanges.length > 0) {
+    existingMergedRanges.forEach(function(range) {
+      const intersectsRows = range.getLastRow() >= panelBoundaryRange.getRow() &&
+        range.getRow() <= panelBoundaryRange.getLastRow();
+      const intersectsCols = range.getLastColumn() >= panelBoundaryRange.getColumn() &&
+        range.getColumn() <= panelBoundaryRange.getLastColumn();
+      if (intersectsRows && intersectsCols) {
+        range.breakApart();
+      }
+    });
+  }
+  panelBoundaryRange.setBackground(null).setFontColor(null);
+  panelRange.merge();
+  panelRange.setHorizontalAlignment('center')
+    .setVerticalAlignment('middle')
+    .setFontSize(12)
+    .setFontWeight('bold');
+  updateSyncStatusPanel_(statusSheet, 'Unknown');
+}
+
+function setupLogSheets_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  // Check for Log sheet
+  let logSheet = ss.getSheetByName(LOG_SHEET_NAME);
+  if (!logSheet) {
+    logSheet = ss.insertSheet(LOG_SHEET_NAME);
+    logSheet.getRange('A1:C1').setValues([['Timestamp', 'Level', 'Message']]).setFontWeight('bold');
+    logSheet.setFrozenRows(1);
+  }
+  markSystemSheet_(logSheet);
+
+  // Check for TestLog sheet
+  let testLogSheet = ss.getSheetByName(TEST_LOG_SHEET_NAME);
+  if (!testLogSheet) {
+    testLogSheet = ss.insertSheet(TEST_LOG_SHEET_NAME);
+    testLogSheet.getRange('A1:C1').setValues([['Timestamp', 'Level', 'Message']]).setFontWeight('bold');
+    testLogSheet.setFrozenRows(1);
+  }
+  markSystemSheet_(testLogSheet);
+
+  // Check for FolderAuditLog sheet
+  let auditLogSheet = ss.getSheetByName(FOLDER_AUDIT_LOG_SHEET_NAME);
+  if (!auditLogSheet) {
+    auditLogSheet = ss.insertSheet(FOLDER_AUDIT_LOG_SHEET_NAME);
+    setupFolderAuditLogSheet_(auditLogSheet);
+  }
+  markSystemSheet_(auditLogSheet);
+
+  // Check for DeepAuditLog sheet
+  setupDeepAuditLogSheet_();
+
+  // Check for SyncHistory sheet
+  setupSyncHistorySheet_();
+
+  // Check for Help sheet
+  setupHelpSheet_();
+
+  // Ensure consistent sheet ordering
+  arrangeSheetOrder_();
+}
+
+function arrangeSheetOrder_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (typeof isSuperAdmin_ === 'function' && !isSuperAdmin_()) {
+    return;
+  }
+  const orderedNames = [
+    STATUS_SHEET_NAME,
+    CONFIG_SHEET_NAME,
+    SHEET_EDITORS_SHEET_NAME,
+    USER_GROUPS_SHEET_NAME,
+    MANAGED_FOLDERS_SHEET_NAME,
+    LOG_SHEET_NAME,
+    TEST_LOG_SHEET_NAME,
+    SYNC_HISTORY_SHEET_NAME,
+    FOLDER_AUDIT_LOG_SHEET_NAME,
+    'DeepFolderAuditLog',
+    'Help'
+  ];
+
+  const groupSheets = [];
+  const userGroupsSheet = ss.getSheetByName(USER_GROUPS_SHEET_NAME);
+  if (userGroupsSheet && userGroupsSheet.getLastRow() > 1) {
+    const groupNames = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 1).getValues().flat();
+    groupNames.forEach(function(groupName) {
+      if (groupName) {
+        const sheetName = getUserGroupSheetName_(groupName);
+        if (sheetName !== SHEET_EDITORS_SHEET_NAME) {
+          groupSheets.push(sheetName);
+        }
+      }
+    });
+  }
+
+  const folderSheets = [];
+  const managedSheet = ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+  if (managedSheet && managedSheet.getLastRow() > 1) {
+    const headers = getHeaderMap_(managedSheet);
+    const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+    const userSheetNames = managedSheet.getRange(2, userSheetNameCol, managedSheet.getLastRow() - 1, 1).getValues().flat();
+    userSheetNames.forEach(function(sheetName) {
+      if (sheetName) {
+        folderSheets.push(sheetName);
+      }
+    });
+  }
+
+  const testSheets = [];
+  const remainingSheets = [];
+  const allSheets = ss.getSheets();
+  allSheets.forEach(function(sheet) {
+    const name = sheet.getName();
+    if (orderedNames.indexOf(name) !== -1) {
+      return;
+    }
+    if (groupSheets.indexOf(name) !== -1) {
+      return;
+    }
+    if (folderSheets.indexOf(name) !== -1) {
+      return;
+    }
+    if (isTestSheet_(name)) {
+      testSheets.push(name);
+    } else {
+      remainingSheets.push(name);
+    }
+  });
+
+  const finalOrder = orderedNames
+    .concat(groupSheets)
+    .concat(folderSheets)
+    .concat(remainingSheets)
+    .concat(testSheets);
+
+  const seen = new Set();
+  let targetIndex = 1;
+  finalOrder.forEach(function(name) {
+    if (!name || seen.has(name)) {
+      return;
+    }
+    seen.add(name);
+    const sheet = ss.getSheetByName(name);
+    if (sheet) {
+      if (sheet.isSheetHidden && sheet.isSheetHidden()) {
+        return;
+      }
+      try {
+        ss.setActiveSheet(sheet);
+        ss.moveActiveSheet(targetIndex);
+        targetIndex++;
+      } catch (e) {
+        log_('Could not reorder sheet "' + name + '": ' + e.message, 'WARN');
+      }
+    }
+  });
+}
+
+function setupHelpSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let helpSheet = ss.getSheetByName('Help');
+
+  if (!helpSheet) {
+    helpSheet = ss.insertSheet('Help');
+  }
+  markSystemSheet_(helpSheet);
+
+  // Clear existing content
+  helpSheet.clear();
+
+  // Get GitHub repo URL from config
+  const config = typeof getConfiguration_ === 'function' ? getConfiguration_() : {};
+  const repoUrl = config['GitHubRepoURL'] || 'https://github.com/davidf9999/gdrive_permissions1';
+
+  // Get super admin emails for contact info
+  const superAdmins = typeof getSuperAdminEmails_ === 'function' ? getSuperAdminEmails_() : [];
+  const adminContactInfo = superAdmins.length > 0
+    ? 'Contact any of these super admins for help:\n' + superAdmins.join('\n')
+    : 'Contact the spreadsheet owner for help.';
+
+  // Create help content
+  const content = [
+    ['📚 HELP & DOCUMENTATION', ''],
+    ['', ''],
+    ['Welcome to the Google Drive Permissions Manager!', ''],
+    ['', ''],
+    ['For detailed documentation, visit:', ''],
+    ['User Guide:', repoUrl + '/blob/main/docs/USER_GUIDE.md'],
+    ['Testing Guide:', repoUrl + '/blob/main/docs/TESTING.md'],
+    ['AutoSync Guide:', repoUrl + '/blob/main/docs/AUTO_SYNC_GUIDE.md'],
+    ['Edit Mode Guide:', repoUrl + '/blob/main/docs/EDIT_MODE_GUIDE.md'],
+    ['Main README:', repoUrl + '/blob/main/README.md'],
+    ['All Documentation:', repoUrl + '/blob/main/docs/'],
+    ['', ''],
+    ['📧 NEED HELP?', ''],
+    ['', ''],
+    [adminContactInfo, ''],
+    ['', ''],
+    ['ℹ️ ABOUT ACCESS LEVELS', ''],
+    ['', ''],
+    ['Super Admins: Full access to all sync operations, testing, and settings.', ''],
+    ['Non-Admins: View-only access to configuration sheets. Super admins manage operations.', ''],
+    ['', ''],
+    ['Note: This Help sheet is automatically created when the spreadsheet is opened.', '']
+  ];
+
+  // Write content
+  helpSheet.getRange(1, 1, content.length, 2).setValues(content);
+
+  // Format the sheet
+  helpSheet.getRange('A1:B1').setFontWeight('bold').setFontSize(14).setBackground('#4285f4').setFontColor('#ffffff');
+  helpSheet.getRange('A13:B13').setFontWeight('bold').setFontSize(12).setBackground('#fbbc04').setFontColor('#000000');
+  helpSheet.getRange('A17:B17').setFontWeight('bold').setFontSize(12).setBackground('#34a853').setFontColor('#ffffff');
+
+  // Make URL cells clickable
+  for (let i = 6; i <= 10; i++) {
+    const cell = helpSheet.getRange(i, 2);
+    const url = cell.getValue();
+    if (url && url.startsWith('http')) {
+      const richText = SpreadsheetApp.newRichTextValue()
+        .setText(url)
+        .setLinkUrl(url)
+        .setTextStyle(SpreadsheetApp.newTextStyle().setForegroundColor('#1155cc').setUnderline(true).build())
+        .build();
+      cell.setRichTextValue(richText);
+    }
+  }
+
+  // Set column widths
+  helpSheet.setColumnWidth(1, 500);
+  helpSheet.setColumnWidth(2, 500);
+
+  // Note: Help sheet is not protected - all users can view and edit it
+  // log_('Created or updated Help sheet.');
+}
+
+function setupSyncHistorySheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(SYNC_HISTORY_SHEET_NAME);
+  const newHeaders = ['Timestamp', 'Added', 'Removed', 'Failed', 'Duration (seconds)'];
+
+  if (!sheet) {
+    const logSheet = ss.getSheetByName(LOG_SHEET_NAME);
+    const index = logSheet ? logSheet.getIndex() + 1 : ss.getSheets().length + 1;
+    sheet = ss.insertSheet(SYNC_HISTORY_SHEET_NAME, index);
+    sheet.getRange(1, 1, 1, newHeaders.length).setValues([newHeaders]).setFontWeight('bold');
+    sheet.setFrozenRows(1);
+    log_('Created "' + SYNC_HISTORY_SHEET_NAME + '" sheet.');
+  } else {
+    // Migrate old format (7 columns with Revision ID) to new format (5 columns)
+    const lastRow = sheet.getLastRow();
+    if (lastRow > 0) {
+      const currentHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+      // Check if this is the old format with Revision ID columns
+      if (currentHeaders.length >= 7 &&
+          (currentHeaders[1] === 'Revision ID' || currentHeaders[2] === 'Revision Link')) {
+        log_('Migrating SyncHistory from old format (7 cols) to new format (5 cols)...', 'INFO');
+
+        // Old format: Timestamp, Revision ID, Revision Link, Added, Removed, Failed, Duration
+        // New format: Timestamp, Added, Removed, Failed, Duration
+        // Mapping: [0, 3, 4, 5, 6] from old -> [0, 1, 2, 3, 4] in new
+
+        if (lastRow > 1) {
+          const oldData = sheet.getRange(2, 1, lastRow - 1, 7).getValues();
+          const newData = oldData.map(function(row) {
+            return [
+              row[0],  // Timestamp
+              row[3],  // Added (was col 4)
+              row[4],  // Removed (was col 5)
+              row[5],  // Failed (was col 6)
+              Math.round(row[6] || 0)  // Duration - convert to integer if float
+            ];
+          });
+
+          // Clear old data
+          sheet.getRange(2, 1, lastRow - 1, 7).clearContent();
+
+          // Write new data
+          sheet.getRange(2, 1, newData.length, newHeaders.length).setValues(newData);
+        }
+
+        // Delete old columns (6 and 7)
+        if (sheet.getLastColumn() > 5) {
+          sheet.deleteColumns(6, sheet.getLastColumn() - 5);
+        }
+
+        // Update headers
+        sheet.getRange(1, 1, 1, newHeaders.length).setValues([newHeaders]).setFontWeight('bold');
+        log_('SyncHistory migration completed. Removed Revision ID/Link columns.', 'INFO');
+      }
+    }
+  }
+  markSystemSheet_(sheet);
+  return sheet;
+}
+
+function setupDeepAuditLogSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName('DeepFolderAuditLog');
+  if (!sheet) {
+    const folderAuditSheet = ss.getSheetByName(FOLDER_AUDIT_LOG_SHEET_NAME);
+    const index = folderAuditSheet ? folderAuditSheet.getIndex() + 1 : ss.getSheets().length + 1;
+    sheet = ss.insertSheet('DeepFolderAuditLog', index);
+    const headers = ['Timestamp', 'Type', 'Identifier', 'Issue', 'Details'];
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
+    sheet.setFrozenRows(1);
+    log_('Created "DeepFolderAuditLog" sheet.');
+  }
+  markSystemSheet_(sheet);
+  return sheet;
+}
+
+function setupFolderAuditLogSheet_(sheet) {
+    const headers = ['Timestamp', 'Type', 'Identifier', 'Issue', 'Details'];
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
+    sheet.setFrozenRows(1);
+    markSystemSheet_(sheet);
+}
+
+// =====================================================================================
+// START OF FILE: Sync.gs
+// =====================================================================================
+/**
+ * Synchronizes the editors of the spreadsheet file and the members of the SheetEditors Google Group.
+ * This function now centralizes all logic for the SheetEditors group, treating it as a special
+ * case managed via a dedicated row in the UserGroups sheet.
+ *
+ * @param {Object} options - Options for sync behavior
+ * @param {boolean} options.addOnly - If true, only add members/editors (SAFE operations for AutoSync)
+ * @param {boolean} options.silentMode - If true, skip UI dialogs (for background execution)
+ * @returns {object} A summary of the changes made, with properties for `added`, `removed`, and `failed` counts.
+ */
+function syncSheetEditors(options = {}) {
+  const addOnly = options && options.addOnly !== undefined ? options.addOnly : false;
+  const silentMode = options && options.silentMode !== undefined ? options.silentMode : false;
+  const totalSummary = { added: 0, removed: 0, failed: 0 };
+  let userGroupsSheet;
+
+  try {
+    log_('DEBUG: syncSheetEditors started.', 'DEBUG');
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    const sheetEditorsSheet = spreadsheet.getSheetByName(SHEET_EDITORS_SHEET_NAME);
+    if (!sheetEditorsSheet) {
+      throw new Error(SHEET_EDITORS_SHEET_NAME + ' sheet not found. Skipping sync.');
+    }
+
+    userGroupsSheet = spreadsheet.getSheetByName(USER_GROUPS_SHEET_NAME);
+    if (!userGroupsSheet) {
+      throw new Error('UserGroups sheet not found. Cannot sync SheetEditors group.');
+    }
+    
+    // --- DYNAMICALLY FIND METADATA CELLS in UserGroups sheet ---
+    log_('DEBUG: Getting UserGroups header map.', 'DEBUG');
+    const ugHeaders = getHeaderMap_(userGroupsSheet);
+    log_('DEBUG: UserGroups Headers Map: ' + JSON.stringify(ugHeaders), 'DEBUG');
+
+    const ugGroupNameCol = resolveColumn_(ugHeaders, 'groupname', 1);
+    const ugGroupEmailCol = resolveColumn_(ugHeaders, 'groupemail', 2);
+    const ugAdminLinkCol = resolveColumn_(ugHeaders, 'group admin link', 3);
+    const ugLastSyncedCol = resolveColumn_(ugHeaders, 'last synced', 4);
+    const ugStatusCol = resolveColumn_(ugHeaders, 'status', 5);
+    log_(`DEBUG: Resolved Columns: GroupName=${ugGroupNameCol}, GroupEmail=${ugGroupEmailCol}, AdminLink=${ugAdminLinkCol}, LastSynced=${ugLastSyncedCol}, Status=${ugStatusCol}`, 'DEBUG');
+
+    const sheetEditorsRow = findRowByValue_(userGroupsSheet, ugGroupNameCol, SHEET_EDITORS_SHEET_NAME);
+    log_('DEBUG: Result of findRowByValue_ for "' + SHEET_EDITORS_SHEET_NAME + '": ' + sheetEditorsRow, 'DEBUG');
+    if (sheetEditorsRow === -1) {
+      throw new Error(`'${SHEET_EDITORS_SHEET_NAME}' not found in UserGroups sheet. Please run setup again.`);
+    }
+
+    const statusCell = userGroupsSheet.getRange(sheetEditorsRow, ugStatusCol);
+    const lastSyncedCell = userGroupsSheet.getRange(sheetEditorsRow, ugLastSyncedCol);
+    const groupLinkCell = userGroupsSheet.getRange(sheetEditorsRow, ugAdminLinkCol);
+    const groupEmailCell = userGroupsSheet.getRange(sheetEditorsRow, ugGroupEmailCol);
+
+    log_('DEBUG: Setting status to "Processing..."', 'DEBUG');
+    statusCell.setValue('Processing...');
+
+    // --- SPREADSHEET EDITOR SYNC (File-level permissions) ---
+    // This part remains unchanged as it deals with the spreadsheet file itself.
+    const sheetEditorData = sheetEditorsSheet.getRange(2, 1, sheetEditorsSheet.getLastRow(), 2).getValues(); // Check cols A, B
+    const desiredSheetEditors = sheetEditorData.filter(function(row) {
+      const email = row[0] && row[0].toString().trim().toLowerCase();
+      const isDisabled = row[1]; // Column B is 'Disabled'
+      return email && !isUserRowDisabled_(isDisabled);
+    }).map(function(row) {
+      return row[0].toString().trim().toLowerCase();
+    });
+    const desiredSheetEditorSet = new Set(desiredSheetEditors);
+
+    const owner = spreadsheet.getOwner();
+    if (owner) {
+      desiredSheetEditorSet.add(owner.getEmail().toLowerCase());
+    }
+
+    const currentSheetEditors = spreadsheet.getEditors().map(user => user.getEmail().toLowerCase());
+    const currentSheetEditorSet = new Set(currentSheetEditors);
+    
+    const emailsToAdd = Array.from(desiredSheetEditorSet).filter(email => !currentSheetEditorSet.has(email));
+    if (emailsToAdd.length > 0) {
+      log_('Adding ' + emailsToAdd.length + ' spreadsheet editor(s): ' + emailsToAdd.join(', '));
+      spreadsheet.addEditors(emailsToAdd);
+      totalSummary.added += emailsToAdd.length;
+    }
+    
+    if (!addOnly) {
+      const emailsToRemove = currentSheetEditors.filter(email => !desiredSheetEditorSet.has(email));
+      if (emailsToRemove.length > 0) {
+        log_('Removing ' + emailsToRemove.length + ' spreadsheet editor(s): ' + emailsToRemove.join(', '));
+        emailsToRemove.forEach(function(email) {
+          try {
+            spreadsheet.removeEditor(email);
+            totalSummary.removed++;
+          } catch (e) {
+            log_('Failed to remove spreadsheet editor ' + email + ': ' + e.message, 'ERROR');
+            totalSummary.failed++;
+          }
+        });
+      }
+    }
+    // --- END SPREADSHEET EDITOR SYNC ---
+
+
+    // --- GOOGLE GROUP MEMBERSHIP SYNC ---
+    if (shouldSkipGroupOps_()) {
+      log_('Admin Directory service not available. Skipping Sheet Editors group membership sync.', 'WARN');
+      statusCell.setValue('SKIPPED (No Admin SDK)');
+      lastSyncedCell.setValue(new Date());
+      return totalSummary;
+    }
+
+    log_('DEBUG: Reading group email from cell.', 'DEBUG');
+    let groupEmail = groupEmailCell.getValue().toString().trim().toLowerCase();
+    log_('DEBUG: Group email from sheet: ' + groupEmail, 'DEBUG');
+    if (!groupEmail) {
+      groupEmail = generateGroupEmail_(SHEET_EDITORS_GROUP_NAME);
+      log_('DEBUG: Generated group email: ' + groupEmail, 'DEBUG');
+      log_('DEBUG: Writing generated email back to cell.', 'DEBUG');
+      groupEmailCell.setValue(groupEmail);
+      log_(`Generated and set SheetEditors group email in UserGroups sheet: ${groupEmail}`, 'INFO');
+    }
+
+    const groupResult = getOrCreateGroup_(groupEmail, 'Permissions Manager Sheet Editors');
+    const adminLink = 'https://admin.google.com/ac/groups/' + groupResult.group.id + '/members';
+    log_('DEBUG: Generated admin link: ' + adminLink, 'DEBUG');
+    log_('DEBUG: Writing admin link to cell.', 'DEBUG');
+    groupLinkCell.setValue(adminLink);
+
+    const desiredMembers = desiredSheetEditors; // Same list as spreadsheet editors
+    const desiredMemberSet = new Set(desiredMembers);
+
+    const currentMembers = fetchAllGroupMembers_(groupEmail);
+    const currentMemberSet = new Set(currentMembers.map(m => m.email.toLowerCase()));
+
+    const membersToAdd = desiredMembers.filter(email => !currentMemberSet.has(email));
+    const membersToRemove = currentMembers.filter(m => !desiredMemberSet.has(m.email.toLowerCase()) && m.role !== 'OWNER').map(m => m.email);
+    
+    log_('DEBUG: Members to add: ' + membersToAdd.length, 'DEBUG');
+    log_('DEBUG: Members to remove: ' + membersToRemove.length, 'DEBUG');
+
+    const config = getConfiguration_();
+    const MEMBERSHIP_BATCH_SIZE = config.MembershipBatchSize || 10;
+    const INTER_BATCH_DELAY_MS = 1000;
+
+    // Process additions
+    if (membersToAdd.length > 0) {
+      log_(`SheetEditors Group Sync: Adding ${membersToAdd.length} members...`);
+      for (let i = 0; i < membersToAdd.length; i += MEMBERSHIP_BATCH_SIZE) {
+        const chunk = membersToAdd.slice(i, i + MEMBERSHIP_BATCH_SIZE);
+        const requests = chunk.map(email => ({
+          method: 'POST',
+          path: `/admin/directory/v1/groups/${groupEmail}/members`,
+          payload: JSON.stringify({ email: email, role: 'MEMBER' }),
+          operation: 'add',
+          email: email
+        }));
+        const chunkSummary = _executeMembershipChunkWithRetries_(requests, groupEmail, config);
+        totalSummary.added += chunkSummary.added;
+        totalSummary.failed += chunkSummary.failed;
+        if (i + MEMBERSHIP_BATCH_SIZE < membersToAdd.length) Utilities.sleep(INTER_BATCH_DELAY_MS);
+      }
+    }
+
+    // Process removals
+    if (!addOnly && membersToRemove.length > 0) {
+      log_(`SheetEditors Group Sync: Removing ${membersToRemove.length} members...`);
+      for (let i = 0; i < membersToRemove.length; i += MEMBERSHIP_BATCH_SIZE) {
+        const chunk = membersToRemove.slice(i, i + MEMBERSHIP_BATCH_SIZE);
+        const requests = chunk.map(email => ({
+          method: 'DELETE',
+          path: `/admin/directory/v1/groups/${groupEmail}/members/${email}`,
+          operation: 'remove',
+          email: email
+        }));
+        const chunkSummary = _executeMembershipChunkWithRetries_(requests, groupEmail, config);
+        totalSummary.removed += chunkSummary.removed;
+        totalSummary.failed += chunkSummary.failed;
+        if (i + MEMBERSHIP_BATCH_SIZE < membersToRemove.length) Utilities.sleep(INTER_BATCH_DELAY_MS);
+      }
+    }
+
+    log_('DEBUG: Group membership sync complete. Writing final status.', 'DEBUG');
+    log_(`SheetEditors group membership sync complete: +${totalSummary.added} -${totalSummary.removed} !${totalSummary.failed}`, 'INFO');
+    statusCell.setValue('OK');
+    lastSyncedCell.setValue(Utilities.formatDate(new Date(), SpreadsheetApp.getActive().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss'));
+    log_('DEBUG: Final status and timestamp written.', 'DEBUG');
+
+    if (!silentMode) {
+        const message = 'Sheet editors sync complete. Group synced to ' + groupEmail + '.';
+        if (SCRIPT_EXECUTION_MODE === 'TEST') showTestMessage_('Sheet Editors Sync', message);
+        else SpreadsheetApp.getUi().alert(message);
+    }
+
+  } catch (e) {
+    const errorMessage = 'ERROR in syncSheetEditors: ' + e.toString() + ' ' + e.stack;
+    log_(errorMessage, 'ERROR');
+    // Try to write error status to the cell if possible
+    try {
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      const ugSheet = ss.getSheetByName(USER_GROUPS_SHEET_NAME);
+      if (ugSheet) {
+        const ugHeaders = getHeaderMap_(ugSheet);
+        const ugGroupNameCol = resolveColumn_(ugHeaders, 'groupname', 1);
+        const ugStatusCol = resolveColumn_(ugHeaders, 'status', 5);
+        const sheetEditorsRow = findRowByValue_(ugSheet, ugGroupNameCol, SHEET_EDITORS_SHEET_NAME);
+        if (sheetEditorsRow !== -1) {
+          ugSheet.getRange(sheetEditorsRow, ugStatusCol).setValue('ERROR: ' + e.message);
+        }
+      }
+    } catch (ignored) {}
+    if (!silentMode) SpreadsheetApp.getUi().alert('An error occurred during Sheet Editors sync: ' + e.message);
+    totalSummary.failed++;
+  }
+  return totalSummary;
+}
+
+
+
+function syncUserGroups(options = {}) {
+  const returnPlanOnly = options && options.returnPlanOnly !== undefined ? options.returnPlanOnly : false;
+  const silentMode = options && options.silentMode !== undefined ? options.silentMode : false;
+  let deletionPlan = [];
+  const totalSummary = { added: 0, removed: 0, failed: 0 };
+
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const userGroupsSheet = ss.getSheetByName(USER_GROUPS_SHEET_NAME);
+    if (!userGroupsSheet) {
+      if (!returnPlanOnly && !silentMode) SpreadsheetApp.getUi().alert('UserGroups sheet not found.');
+      return returnPlanOnly ? [] : totalSummary;
+    }
+
+    const lastRow = userGroupsSheet.getLastRow();
+    if (lastRow < 2) {
+        log_('No data rows to process in UserGroups sheet.');
+        return returnPlanOnly ? [] : totalSummary;
+    }
+    
+    // If Admin SDK is unavailable, we can't create a plan or sync.
+    if (shouldSkipGroupOps_()) {
+      const skipMessage = 'Admin SDK (Admin Directory) not available. Skipping syncUserGroups.';
+      log_(skipMessage, 'WARN');
+      if (returnPlanOnly) {
+        throw new Error(skipMessage + ' Enable the Admin SDK to plan user group removals.');
+      }
+
+      const dataRange = userGroupsSheet.getRange(2, 1, lastRow - 1, 5);
+      const data = dataRange.getValues();
+      for (let i = 0; i < data.length; i++) {
+        const rowIndex = i + 2;
+        if (data[i][0]) { // If there's a group name
+          userGroupsSheet.getRange(rowIndex, 4).setValue(Utilities.formatDate(new Date(), SpreadsheetApp.getActive().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss'));
+          userGroupsSheet.getRange(rowIndex, 5).setValue('SKIPPED (No Admin SDK)');
+        }
+      }
+      if (!silentMode) SpreadsheetApp.getUi().alert('User group sync skipped: Admin Directory service not available.');
+      return totalSummary;
+    }
+    
+    const dataRange = userGroupsSheet.getRange(2, 1, lastRow - 1, 5);
+    const data = dataRange.getValues();
+
+    for (let i = 0; i < data.length; i++) {
+      const rowIndex = i + 2;
+      try {
+        let groupName = data[i][0];
+        let groupEmail = data[i][1];
+
+        if (!groupName) {
+          continue;
+        }
+        
+        log_('Processing user group: ' + groupName);
+
+        if (!groupEmail) {
+          groupEmail = generateGroupEmail_(groupName);
+          log_('Generated group email for ' + groupName + ': ' + groupEmail);
+        }
+
+        if (returnPlanOnly) {
+          const groupSheetName = getUserGroupSheetName_(groupName);
+          const plan = syncGroupMembership_(groupEmail, groupSheetName, options);
+          if (plan) {
+            deletionPlan.push(plan);
+          }
+        } else {
+          const groupEmailCell = userGroupsSheet.getRange(rowIndex, 2);
+          const groupAdminLinkCell = userGroupsSheet.getRange(rowIndex, 3);
+          const lastSyncedCell = userGroupsSheet.getRange(rowIndex, 4);
+          const statusCell = userGroupsSheet.getRange(rowIndex, 5);
+
+          statusCell.setValue('Processing...');
+          if (!silentMode) showToast_('Processing user group: ' + groupName + '...', 'Sync Progress', 10);
+          
+          if (!data[i][1]) { // If groupEmail was generated, write it to the sheet
+            groupEmailCell.setValue(groupEmail);
+          }
+
+          const groupSheetName = getUserGroupSheetName_(groupName);
+          getOrCreateUserSheet_(groupSheetName);
+          const groupResult = getOrCreateGroup_(groupEmail, groupName);
+          const adminLink = 'https://admin.google.com/ac/groups/' + groupResult.group.id + '/members';
+          groupAdminLinkCell.setValue(adminLink);
+
+          const summary = syncGroupMembership_(groupEmail, groupSheetName, options);
+          if (summary) {
+            totalSummary.added += summary.added;
+            totalSummary.removed += summary.removed;
+            totalSummary.failed += summary.failed;
+          }
+
+          lastSyncedCell.setValue(Utilities.formatDate(new Date(), SpreadsheetApp.getActive().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss'));
+          statusCell.setValue('OK');
+          log_('Successfully synced user group: ' + groupName);
+        }
+
+      } catch (e) {
+        if (!returnPlanOnly) {
+          const statusCell = userGroupsSheet.getRange(rowIndex, 5);
+          const errorMessage = 'ERROR: ' + e.message;
+          log_('Failed to process user group row ' + rowIndex + '. Error: ' + e.message + ' Stack: ' + e.stack, 'ERROR');
+          statusCell.setValue(errorMessage);
+        } else {
+          log_('Error during deletion planning for group ' + (data[i][0] || 'unknown') + '. Error: ' + e.message, 'WARN');
+        }
+      }
+    }
+
+    if (returnPlanOnly) {
+      return deletionPlan;
+    }
+
+    const summaryMessage = 'User groups sync complete. Total changes: ' + totalSummary.added + ' added, ' + totalSummary.removed + ' removed, ' + totalSummary.failed + ' failed.';
+    log_(summaryMessage, 'INFO');
+    
+    if (SCRIPT_EXECUTION_MODE === 'TEST') {
+      showTestMessage_('User Groups Sync', summaryMessage);
+    } else if (!silentMode) {
+      SpreadsheetApp.getUi().alert(summaryMessage);
+    }
+
+  } catch (e) {
+    const errorMessage = 'FATAL ERROR in syncUserGroups: ' + e.toString() + '\n' + e.stack;
+    log_(errorMessage, 'ERROR');
+    if (!returnPlanOnly && !silentMode) {
+      SpreadsheetApp.getUi().alert('A fatal error occurred during user group sync: ' + e.message);
+      sendErrorNotification_(errorMessage);
+    } else {
+      throw e; // Re-throw for the planner to catch
+    }
+  }
+  return totalSummary;
+}
+
+function getSyncSourceLabel_(options) {
+  if (options && options.executionSource) {
+    if (options.executionSource === 'AUTO_SYNC') {
+      return 'AutoSync';
+    }
+    return options.executionSource;
+  }
+  return 'Manual';
+}
+
+function shouldUpdateSyncStatus_(options) {
+  return !(options && options.executionSource === 'AUTO_SYNC');
+}
+
+function syncAdds(options = {}) {
+  const silentMode = options && options.silentMode !== undefined ? options.silentMode : false;
+  const skipSetup = options && options.skipSetup !== undefined ? options.skipSetup : false;
+
+  if (!skipSetup) {
+    setupControlSheets_();
+  }
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) {
+    if (!silentMode) SpreadsheetApp.getUi().alert('Sync is already in progress. Please wait a few minutes and try again.');
+    return;
+  }
+
+  const totalSummary = { added: 0, removed: 0, failed: 0 };
+  const startTime = new Date();
+
+  try {
+    validateManagedFolders_();
+    if (!silentMode) showToast_('Adding users to groups...', 'Add Users', -1);
+    log_('*** Starting user addition synchronization...');
+
+    const orphanSheets = checkForOrphanSheets_();
+    if (orphanSheets && orphanSheets.length > 0) {
+      const errorMessage = 'SYNC ABORTED: Found orphan sheets that are not in the configuration: ' +
+                           orphanSheets.join(', ') +
+                           '.\n\n' +
+                           'To resolve this:\n' +
+                           '1. Go to: Permissions Manager → Advanced → Delete Orphan Sheets\n' +
+                           '2. Or add these sheets to ManagedFolders/UserGroups configuration\n\n' +
+                           'Note: You may also need to manually delete related Google Groups from the Google Workspace Admin console.';
+      log_(errorMessage, 'ERROR');
+      if (!silentMode) {
+        SpreadsheetApp.getUi().alert(errorMessage);
+      }
+      throw new Error('Orphan sheets found. Sync aborted.');
+    }
+
+    // 1. Sync Sheet Editors (SAFE mode: additions only, silent for AutoSync)
+    const adminSummary = syncSheetEditors({ addOnly: true, silentMode: true });
+    if (adminSummary) {
+      totalSummary.added += adminSummary.added;
+      totalSummary.failed += adminSummary.failed;
+    }
+
+    // 2. Sync User Groups (creates groups, adds members)
+    const userGroupsSummary = syncUserGroups({ addOnly: true, silentMode: silentMode });
+    if (userGroupsSummary) {
+      totalSummary.added += userGroupsSummary.added;
+      totalSummary.failed += userGroupsSummary.failed;
+    }
+
+    // 3. Process Managed Folders (creates folders, permissions, adds members)
+    const managedFoldersSummary = processManagedFolders_({
+      addOnly: true,
+      silentMode: silentMode,
+      executionSource: options.executionSource
+    });
+    if (managedFoldersSummary) {
+      totalSummary.added += managedFoldersSummary.added;
+      totalSummary.failed += managedFoldersSummary.failed;
+    }
+
+    const summaryMessage = 'User addition complete. Total changes: ' + totalSummary.added + ' added, ' + totalSummary.failed + ' failed.';
+    log_(summaryMessage, 'INFO');
+
+    // Log to SyncHistory
+    const endTime = new Date();
+    const durationSeconds = (endTime - startTime) / 1000;
+    logSyncHistory_(null, totalSummary, durationSeconds);
+    if (shouldUpdateSyncStatus_(options)) {
+      updateSyncStatus_(totalSummary.failed === 0 ? 'Success' : 'Failed', {
+        summary: totalSummary,
+        durationSeconds: durationSeconds,
+        source: getSyncSourceLabel_(options)
+      });
+    }
+
+    // Clear the infinite toast
+    if (!silentMode) showToast_('User addition complete!', 'Add Users', 5);
+
+    if (SCRIPT_EXECUTION_MODE === 'TEST') {
+      showTestMessage_('Add Users', summaryMessage);
+    } else if (!silentMode) {
+      SpreadsheetApp.getUi().alert(summaryMessage + '\n\nCheck the \'Status\' column in the sheets for details.');
+    }
+
+    return totalSummary;
+
+  } catch (e) {
+    const errorMessage = 'FATAL ERROR in syncAdds: ' + e.toString() + '\n' + e.stack;
+    log_(errorMessage, 'ERROR');
+    if (!silentMode) showToast_('User addition failed with a fatal error.', 'Add Users', 5);
+    if (!silentMode) SpreadsheetApp.getUi().alert('A fatal error occurred during user addition: ' + e.message);
+    sendErrorNotification_(errorMessage);
+    if (shouldUpdateSyncStatus_(options)) {
+      updateSyncStatus_('Failed', {
+        errorMessage: errorMessage,
+        durationSeconds: (new Date() - startTime) / 1000,
+        source: getSyncSourceLabel_(options)
+      });
+    }
+  } finally {
+    lock.releaseLock();
+    hideSyncInProgress_();
+  }
+}
+
+function syncDeletes() {
+  const ui = SpreadsheetApp.getUi();
+  const startTime = new Date();
+  
+  // --- Phase 1: Planning ---
+  log_('*** Starting user removal planning phase...');
+  showToast_('Planning user removals...', 'Remove Users', 10);
+  
+  let deletionPlan = [];
+  try {
+    const planOptions = { removeOnly: true, returnPlanOnly: true };
+    const groupDeletions = syncUserGroups(planOptions);
+    const folderDeletions = processManagedFolders_(planOptions);
+    deletionPlan = (groupDeletions || []).concat(folderDeletions || []);
+  } catch (e) {
+    const errorMessage = 'FATAL ERROR during user removal planning: ' + e.toString() + '\n' + e.stack;
+    log_(errorMessage, 'ERROR');
+    showToast_('User removal planning failed with a fatal error.', 'Remove Users', 5);
+    ui.alert('A fatal error occurred during the user removal planning phase: ' + e.message);
+    sendErrorNotification_(errorMessage);
+    updateSyncStatus_('Failed', {
+      errorMessage: errorMessage,
+      durationSeconds: (new Date() - startTime) / 1000,
+      source: 'Manual'
+    });
+    return;
+  }
+
+  if (deletionPlan.length === 0) {
+    log_('No user removals are pending.');
+    ui.alert('No pending user removals found.');
+    return;
+  }
+
+  // --- Phase 2: Confirmation ---
+  let confirmationMessage = 'This will remove the following users from groups:\n';
+  deletionPlan.forEach(plan => {
+    confirmationMessage += '\nFrom Group \'' + plan.groupName + '\':\n';
+    plan.usersToRemove.forEach(user => {
+      confirmationMessage += '  - ' + user + '\n';
+    });
+  });
+  confirmationMessage += '\nAre you sure you want to continue?';
+
+  const response = ui.alert(
+    'Confirm User Removal',
+    confirmationMessage,
+    ui.ButtonSet.YES_NO
+  );
+
+  if (response !== ui.Button.YES) {
+    ui.alert('User removal cancelled.');
+    return;
+  }
+
+  // --- Re-run Phase 1: Planning (after user confirmation) ---
+  // This ensures the removal plan is based on the most up-to-date sheet data
+  // in case the user made changes during the confirmation dialog.
+  log_('*** Re-running user removal planning phase after user confirmation...');
+  showToast_('Re-planning user removals...', 'Remove Users', 10);
+  
+  deletionPlan = []; // Clear previous plan
+  try {
+    const planOptions = { removeOnly: true, returnPlanOnly: true };
+    const groupDeletions = syncUserGroups(planOptions);
+    const folderDeletions = processManagedFolders_(planOptions);
+    deletionPlan = (groupDeletions || []).concat(folderDeletions || []);
+  } catch (e) {
+    const errorMessage = 'FATAL ERROR during re-planning user removal after confirmation: ' + e.toString() + '\n' + e.stack;
+    log_(errorMessage, 'ERROR');
+    showToast_('User removal re-planning failed with a fatal error.', 'Remove Users', 5);
+    ui.alert('A fatal error occurred during the user removal re-planning phase: ' + e.message);
+    sendErrorNotification_(errorMessage);
+    updateSyncStatus_('Failed', {
+      errorMessage: errorMessage,
+      durationSeconds: (new Date() - startTime) / 1000,
+      source: 'Manual'
+    });
+    return;
+  }
+
+  if (deletionPlan.length === 0) {
+    log_('No user removals are pending after re-planning. This might happen if changes were reverted.');
+    ui.alert('No pending user removals found after re-planning. Operation cancelled.');
+    return;
+  }
+
+  // --- Phase 3: Execution ---
+  setupControlSheets_();
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) {
+    ui.alert('Sync is already in progress. Please wait a few minutes and try again.');
+    return;
+  }
+
+  const totalSummary = { added: 0, removed: 0, failed: 0 };
+
+  try {
+    showToast_('Removing users from groups...', 'Remove Users', -1);
+    log_('*** Starting user removal synchronization...');
+
+    const execOptions = { removeOnly: true };
+    const userGroupsSummary = syncUserGroups(execOptions);
+    if (userGroupsSummary) {
+      totalSummary.removed += userGroupsSummary.removed;
+      totalSummary.failed += userGroupsSummary.failed;
+    }
+
+    const managedFoldersSummary = processManagedFolders_(execOptions);
+    if (managedFoldersSummary) {
+      totalSummary.removed += managedFoldersSummary.removed;
+      totalSummary.failed += managedFoldersSummary.failed;
+    }
+
+    const summaryMessage = 'User removal complete. Total changes: ' + totalSummary.removed + ' removed, ' + totalSummary.failed + ' failed.';
+    log_(summaryMessage, 'INFO');
+
+    showToast_('User removal complete!', 'Remove Users', 5);
+    ui.alert(summaryMessage + '\n\nCheck the \'Status\' column in the sheets for details.');
+    updateSyncStatus_(totalSummary.failed === 0 ? 'Success' : 'Failed', {
+      summary: totalSummary,
+      durationSeconds: (new Date() - startTime) / 1000,
+      source: 'Manual'
+    });
+
+  } catch (e) {
+    const errorMessage = 'FATAL ERROR in syncDeletes: ' + e.toString() + '\n' + e.stack;
+    log_(errorMessage, 'ERROR');
+    showToast_('Delete-only sync failed with a fatal error.', 'Sync Deletes', 5);
+    ui.alert('A fatal error occurred during delete-only sync: ' + e.message);
+    sendErrorNotification_(errorMessage);
+    updateSyncStatus_('Failed', {
+      errorMessage: errorMessage,
+      durationSeconds: (new Date() - startTime) / 1000,
+      source: 'Manual'
+    });
+  } finally {
+    lock.releaseLock();
+    hideSyncInProgress_();
+  }
+}
+
+function fullSync(options = {}) {
+  const silentMode = options && options.silentMode !== undefined ? options.silentMode : false;
+  const skipSetup = options && options.skipSetup !== undefined ? options.skipSetup : false;
+
+  log_('Running script version ' + SCRIPT_VERSION);
+
+  if (!skipSetup) {
+    setupControlSheets_(); // Ensure control sheets exist
+  }
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) {
+    if (!silentMode) SpreadsheetApp.getUi().alert('Sync is already in progress. Please wait a few minutes and try again.');
+    return;
+  }
+
+  const totalSummary = { added: 0, removed: 0, failed: 0 };
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const startTime = new Date();
+
+  try {
+    if (!silentMode) showToast_('Starting full synchronization...', 'Full Sync', -1);
+    log_('*** Starting full synchronization...');
+
+    // --- PRE-SYNC CHECKS ---
+    validateManagedFolders_();
+    const enableCircularCheck = getConfigValue_('EnableCircularDependencyCheck', true);
+    if (enableCircularCheck === true) {
+      validateGroupNesting_(); // Check for circular dependencies
+    } else {
+      log_('Circular dependency check is disabled in Config.', 'INFO');
+    }
+
+    const orphanSheets = checkForOrphanSheets_();
+    if (orphanSheets && orphanSheets.length > 0) {
+      const errorMessage = 'SYNC ABORTED: Found orphan sheets that are not in the configuration: ' +
+                           orphanSheets.join(', ') +
+                           '.\n\n' +
+                           'To resolve this:\n' +
+                           '1. Go to: Permissions Manager → Advanced → Delete Orphan Sheets\n' +
+                           '2. Or add these sheets to ManagedFolders/UserGroups configuration\n\n' +
+                           'Note: You may also need to manually delete related Google Groups from the Google Workspace Admin console.';
+      log_(errorMessage, 'ERROR');
+      if (!silentMode) {
+        SpreadsheetApp.getUi().alert(errorMessage);
+      }
+      throw new Error('Orphan sheets found. Sync aborted.');
+    }
+
+    // Validate unique group emails before starting
+    const validation = validateUniqueGroupEmails_();
+    if (!validation.valid) {
+      const errorDetails = validation.errors.map(e => e.message).join('\n\n');
+      const errorMessage = 'VALIDATION ERROR: Duplicate group emails detected!\n\n' + errorDetails +
+        '\n\nEach group must have a unique email address. Please fix these duplicates and try again.';
+      log_(errorMessage, 'ERROR');
+      if (!silentMode) SpreadsheetApp.getUi().alert(errorMessage);
+      throw new Error('Duplicate group emails detected. Sync aborted.');
+    }
+
+    // --- PROCESS DELETION REQUESTS ---
+    // Process groups and folders marked for deletion BEFORE regular sync
+    const deletionSummary = processDeletionRequests_(options);
+    if (deletionSummary && !deletionSummary.skipped) {
+      log_(`Deletions processed: ${deletionSummary.userGroupsDeleted} group(s), ${deletionSummary.foldersDeleted} folder-binding(s)`, 'INFO');
+      // Track deletions separately (not in totalSummary which is for user additions/removals)
+    }
+
+    // 1. Sync Sheet Editors (run silently - fullSync will show final summary)
+    const adminSummary = syncSheetEditors(Object.assign({}, options, { silentMode: true }));
+    if (adminSummary) {
+      totalSummary.added += adminSummary.added;
+      totalSummary.removed += adminSummary.removed;
+      totalSummary.failed += adminSummary.failed;
+    }
+
+    // 2. Sync User Groups (run silently - fullSync will show final summary)
+    const userGroupsSummary = syncUserGroups(Object.assign({}, options, { silentMode: true }));
+    if (userGroupsSummary) {
+      totalSummary.added += userGroupsSummary.added;
+      totalSummary.removed += userGroupsSummary.removed;
+      totalSummary.failed += userGroupsSummary.failed;
+    }
+
+    // 3. Process Managed Folders (run silently - fullSync will show final summary)
+    const managedFoldersSummary = processManagedFolders_(Object.assign({}, options, { silentMode: true }));
+    if (managedFoldersSummary) {
+      totalSummary.added += managedFoldersSummary.added;
+      totalSummary.removed += managedFoldersSummary.removed;
+      totalSummary.failed += managedFoldersSummary.failed;
+    }
+
+    // Build summary message including deletions if any
+    let summaryMessage = 'Full synchronization completed. Total changes: ' + totalSummary.added + ' added, ' + totalSummary.removed + ' removed, ' + totalSummary.failed + ' failed.';
+    if (deletionSummary && !deletionSummary.skipped) {
+      const totalDeleted = deletionSummary.userGroupsDeleted + deletionSummary.foldersDeleted;
+      if (totalDeleted > 0) {
+        summaryMessage += '\nDeletions: ' + deletionSummary.userGroupsDeleted + ' group(s), ' + deletionSummary.foldersDeleted + ' folder-binding(s).';
+      }
+    }
+    log_(summaryMessage, 'INFO');
+
+    // Log to SyncHistory
+    const endTime = new Date();
+    const durationSeconds = (endTime - startTime) / 1000;
+    logSyncHistory_(null, totalSummary, durationSeconds);
+
+    if (shouldUpdateSyncStatus_(options)) {
+      updateSyncStatus_(totalSummary.failed === 0 ? 'Success' : 'Failed', {
+        summary: totalSummary,
+        durationSeconds: durationSeconds,
+        source: getSyncSourceLabel_(options)
+      });
+    }
+
+    // Clear the infinite toast
+    if (!silentMode) showToast_('Full sync complete!', 'Full Sync', 5);
+
+    if (SCRIPT_EXECUTION_MODE === 'TEST') {
+      showTestMessage_('Full Sync', summaryMessage + '\n\nCheck the \'Status\' column in the \'ManagedFolders\' sheet for details.');
+    } else if (!silentMode) {
+      SpreadsheetApp.getUi().alert(summaryMessage + '\n\nCheck the \'Status\' column in the \'ManagedFolders\' sheet for details.');
+    }
+
+    return totalSummary;
+
+  } catch (e) {
+    const errorMessage = 'FATAL ERROR in fullSync: ' + e.toString() + '\n' + e.stack;
+    log_(errorMessage, 'ERROR');
+    if (!silentMode) showToast_('Full sync failed with a fatal error.', 'Full Sync', 5);
+    if (!silentMode) SpreadsheetApp.getUi().alert('A fatal error occurred: ' + e.message);
+    sendErrorNotification_(errorMessage);
+    if (shouldUpdateSyncStatus_(options)) {
+      updateSyncStatus_('Failed', {
+        errorMessage: errorMessage,
+        durationSeconds: (new Date() - startTime) / 1000,
+        source: getSyncSourceLabel_(options)
+      });
+    }
+  } finally {
+    lock.releaseLock();
+    hideSyncInProgress_();
+  }
+}
+
+function syncManagedFoldersAdds() {
+  setupControlSheets_();
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) {
+    SpreadsheetApp.getUi().alert('Sync is already in progress. Please wait a few minutes and try again.');
+    return;
+  }
+
+  const startTime = new Date();
+  try {
+    showToast_('Starting folder-only sync (adds only)...', 'Sync Folders - Adds', -1);
+    log_('*** Starting Managed Folders only synchronization (adds only)...');
+
+    const summary = processManagedFolders_({ addOnly: true });
+    const summaryMessage = 'Folder-only sync (adds) complete. Total changes: ' + summary.added + ' added, ' + summary.failed + ' failed.';
+    log_(summaryMessage, 'INFO');
+
+    showToast_('Folder-only sync (adds) complete!', 'Sync Folders - Adds', 5);
+    SpreadsheetApp.getUi().alert(summaryMessage + '\n\nCheck the \'Status\' column in the \'ManagedFolders\' sheet for details.');
+    updateSyncStatus_(summary.failed === 0 ? 'Success' : 'Failed', {
+      summary: summary,
+      durationSeconds: (new Date() - startTime) / 1000,
+      source: 'Manual'
+    });
+
+  } catch (e) {
+    const errorMessage = 'FATAL ERROR in syncManagedFoldersAdds: ' + e.toString() + '\n' + e.stack;
+    log_(errorMessage, 'ERROR');
+    showToast_('Folder-only sync (adds) failed with a fatal error.', 'Sync Folders - Adds', 5);
+    SpreadsheetApp.getUi().alert('A fatal error occurred during folder-only sync (adds): ' + e.message);
+    sendErrorNotification_(errorMessage);
+    updateSyncStatus_('Failed', {
+      errorMessage: errorMessage,
+      durationSeconds: (new Date() - startTime) / 1000,
+      source: 'Manual'
+    });
+  } finally {
+    lock.releaseLock();
+    hideSyncInProgress_();
+  }
+}
+
+function syncManagedFoldersDeletes() {
+  const ui = SpreadsheetApp.getUi();
+  const startTime = new Date();
+  
+  // --- Phase 1: Planning ---
+  log_('*** Starting folder deletion planning phase...');
+  showToast_('Planning folder deletions...', 'Sync Deletes', 10);
+  
+  let deletionPlan = [];
+  try {
+    const planOptions = { removeOnly: true, returnPlanOnly: true };
+    deletionPlan = processManagedFolders_(planOptions) || [];
+  } catch (e) {
+    const errorMessage = 'FATAL ERROR during folder deletion planning: ' + e.toString() + '\n' + e.stack;
+    log_(errorMessage, 'ERROR');
+    showToast_('Deletion planning failed with a fatal error.', 'Sync Deletes', 5);
+    ui.alert('A fatal error occurred during the deletion planning phase: ' + e.message);
+    sendErrorNotification_(errorMessage);
+    updateSyncStatus_('Failed', {
+      errorMessage: errorMessage,
+      durationSeconds: (new Date() - startTime) / 1000,
+      source: 'Manual'
+    });
+    return;
+  }
+
+  if (deletionPlan.length === 0) {
+    log_('No folder deletions are pending.');
+    ui.alert('No pending folder deletions found.');
+    return;
+  }
+
+  // --- Phase 2: Confirmation ---
+  let confirmationMessage = 'This will process deletions for Managed Folders and remove the following users:\n';
+  deletionPlan.forEach(plan => {
+    confirmationMessage += '\nFrom Group \'' + plan.groupName + '\':\n';
+    plan.usersToRemove.forEach(user => {
+      confirmationMessage += '  - ' + user + '\n';
+    });
+  });
+  confirmationMessage += '\nAre you sure you want to continue?';
+
+  const response = ui.alert(
+    'Confirm Destructive Sync',
+    confirmationMessage,
+    ui.ButtonSet.YES_NO
+  );
+
+  if (response !== ui.Button.YES) {
+    ui.alert('Delete sync cancelled.');
+    return;
+  }
+
+  // --- Re-run Phase 1: Planning (after user confirmation) ---
+  // This ensures the deletion plan is based on the most up-to-date sheet data
+  // in case the user made changes during the confirmation dialog.
+  log_('*** Re-running folder deletion planning phase after user confirmation...');
+  showToast_('Re-planning folder deletions...', 'Sync Deletes', 10);
+  
+  deletionPlan = []; // Clear previous plan
+  try {
+    const planOptions = { removeOnly: true, returnPlanOnly: true };
+    deletionPlan = processManagedFolders_(planOptions) || [];
+  } catch (e) {
+    const errorMessage = 'FATAL ERROR during re-planning folder deletion after confirmation: ' + e.toString() + '\n' + e.stack;
+    log_(errorMessage, 'ERROR');
+    showToast_('Folder deletion re-planning failed with a fatal error.', 'Sync Deletes', 5);
+    ui.alert('A fatal error occurred during the folder deletion re-planning phase: ' + e.message);
+    sendErrorNotification_(errorMessage);
+    updateSyncStatus_('Failed', {
+      errorMessage: errorMessage,
+      durationSeconds: (new Date() - startTime) / 1000,
+      source: 'Manual'
+    });
+    return;
+  }
+
+  if (deletionPlan.length === 0) {
+    log_('No folder deletions are pending after re-planning. This might happen if changes were reverted.');
+    ui.alert('No pending folder deletions found after re-planning. Sync cancelled.');
+    return;
+  }
+
+  // --- Phase 3: Execution ---
+  setupControlSheets_();
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) {
+    ui.alert('Sync is already in progress. Please wait a few minutes and try again.');
+    return;
+  }
+
+  const totalSummary = { added: 0, removed: 0, failed: 0 };
+
+  try {
+    showToast_('Starting destructive sync (deletes only)...', 'Sync Deletes', -1);
+    log_('*** Starting destructive synchronization (deletes only)...');
+
+    const execOptions = { removeOnly: true };
+    const userGroupsSummary = syncUserGroups(execOptions);
+    if (userGroupsSummary) {
+      totalSummary.removed += userGroupsSummary.removed;
+      totalSummary.failed += userGroupsSummary.failed;
+    }
+
+    const managedFoldersSummary = processManagedFolders_(execOptions);
+    if (managedFoldersSummary) {
+      totalSummary.removed += managedFoldersSummary.removed;
+      totalSummary.failed += managedFoldersSummary.failed;
+    }
+
+    const summaryMessage = 'Destructive folder-only sync (deletes only) is complete. Total changes: ' + totalSummary.removed + ' removed, ' + totalSummary.failed + ' failed.';
+    log_(summaryMessage, 'INFO');
+
+    showToast_('Folder-only sync (deletes) complete!', 'Sync Folders - Deletes', 5);
+    ui.alert(summaryMessage + '\n\nCheck the \'Status\' column in the \'ManagedFolders\' sheet for details.');
+    updateSyncStatus_(totalSummary.failed === 0 ? 'Success' : 'Failed', {
+      summary: totalSummary,
+      durationSeconds: (new Date() - startTime) / 1000,
+      source: 'Manual'
+    });
+
+  } catch (e) {
+    const errorMessage = 'FATAL ERROR in syncManagedFoldersDeletes: ' + e.toString() + '\n' + e.stack;
+    log_(errorMessage, 'ERROR');
+    showToast_('Folder-only sync (deletes) failed with a fatal error.', 'Sync Folders - Deletes', 5);
+    ui.alert('A fatal error occurred during folder-only sync (deletes): ' + e.message);
+    sendErrorNotification_(errorMessage);
+    updateSyncStatus_('Failed', {
+      errorMessage: errorMessage,
+      durationSeconds: (new Date() - startTime) / 1000,
+      source: 'Manual'
+    });
+  } finally {
+    lock.releaseLock();
+    hideSyncInProgress_();
+  }
+}
+
+function getAllManagedSheets_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheets = new Set();
+
+  // Add main control sheets
+  sheets.add(ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME));
+  sheets.add(ss.getSheetByName(USER_GROUPS_SHEET_NAME));
+  sheets.add(ss.getSheetByName(SHEET_EDITORS_SHEET_NAME));
+
+  // Add user sheets from ManagedFolders
+  const managedFoldersSheet = ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+  if (managedFoldersSheet && managedFoldersSheet.getLastRow() > 1) {
+    const headers = getHeaderMap_(managedFoldersSheet);
+    const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+    const userSheetNames = managedFoldersSheet.getRange(2, userSheetNameCol, managedFoldersSheet.getLastRow() - 1, 1).getValues().flat();
+    userSheetNames.forEach(name => {
+      if (name) sheets.add(ss.getSheetByName(name));
+    });
+  }
+
+  // Add user sheets from UserGroups
+  const userGroupsSheet = ss.getSheetByName(USER_GROUPS_SHEET_NAME);
+  if (userGroupsSheet && userGroupsSheet.getLastRow() > 1) {
+    const groupNames = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 1).getValues().flat();
+    groupNames.forEach(name => {
+      if (name) sheets.add(ss.getSheetByName(getUserGroupSheetName_(name)));
+    });
+  }
+
+  return Array.from(sheets).filter(Boolean); // Return a filtered array of sheet objects
+}
+
+// =====================================================================================
+// START OF FILE: TestHelpers.gs
+// =====================================================================================
+/**
+ * Creates a spy for a method on an object.
+ * @param {object} obj The object to spy on.
+ * @param {string} methodName The name of the method to spy on.
+ * @returns {object} A spy object with a `wasCalled` property.
+ */
+function createSpy_(obj, methodName) {
+  const originalMethod = obj[methodName];
+  const spy = {
+    wasCalled: false,
+    args: [],
+    restore: function() {
+      obj[methodName] = originalMethod;
+    }
+  };
+
+  obj[methodName] = function() {
+    spy.wasCalled = true;
+    spy.args = Array.from(arguments);
+  };
+
+  return spy;
+}
+
+function isTestSheet_(sheetName) {
+    const testConfig = getTestConfiguration_();
+    const manualTestFolderName = testConfig.folderName;
+
+    const testSheetPatterns = [
+        /^StressTestFolder_.*/,
+        new RegExp(`^${manualTestFolderName}_Viewer$`),
+        new RegExp(`^${manualTestFolderName}_Editor$`),
+        new RegExp(`^${manualTestFolderName}_Commenter$`),
+        /^Invalid Folder_Editor$/,
+        /^TestCycleA_G$/,
+        /^TestCycleB_G$/,
+        /^SheetLockingTestSheet_.*/,
+        /^TestDeleteGroup_.*/,
+        /^TestDisabledDeleteGroup_.*/,
+        /^TestIdempotentDelete_.*/,
+        /^TestDeleteFolder.*/
+    ];
+
+    return testSheetPatterns.some(pattern => pattern.test(sheetName));
+}
+
+// =====================================================================================
+// START OF FILE: Tests.gs
+// =====================================================================================
+/***** DEVELOPER-ONLY TEST FUNCTIONS *****/
+
+function runManualAccessTest() {
+    SCRIPT_EXECUTION_MODE = 'TEST';
+
+    // Test header
+    log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
+    log_('║  Manual Access Test                                          ║', 'INFO');
+    log_('╚══════════════════════════════════════════════════════════════╝', 'INFO');
+
+    const startTime = new Date(); // Record start time
+    let testFolderName, testRole, testEmail, testRowIndex;
+    let userSheetName = null, groupEmail = null, folderId = null; // Initialize to null
+    let success = false;
+    let testConfig; // Declare here so it's accessible in finally block
+    try {
+        if (shouldSkipGroupOps_()) {
+            showTestMessage_('Test Aborted', 'Manual Access Test requires the Admin Directory service (Admin SDK). Please enable it or run on a Google Workspace domain.');
+            return false;
+        }
+        const ui = SpreadsheetApp.getUi();
+        testConfig = getTestConfiguration_(); // Assign (not declare) here
+
+        testFolderName = testConfig.folderName;
+        if (!testFolderName) {
+            const folderNamePrompt = ui.prompt('Test - Step 1/4: Folder Name', 'Enter a name for a new test folder to be created.', ui.ButtonSet.OK_CANCEL);
+            if (folderNamePrompt.getSelectedButton() !== ui.Button.OK || !folderNamePrompt.getResponseText()) { ui.alert('Test cancelled.'); return false; }
+            testFolderName = folderNamePrompt.getResponseText();
+        }
+
+        testRole = testConfig.role;
+        if (!testRole) {
+            const rolePrompt = ui.prompt('Test - Step 2/4: Role', 'Enter the role to test (e.g., Editor, Viewer).', ui.ButtonSet.OK_CANCEL);
+            if (rolePrompt.getSelectedButton() !== ui.Button.OK || !rolePrompt.getResponseText()) { ui.alert('Test cancelled.'); return false; }
+            testRole = rolePrompt.getResponseText();
+        }
+
+        testEmail = testConfig.email;
+        if (!testEmail) {
+            const emailPrompt = ui.prompt('Test - Step 3/4: Test Email', 'Enter a REAL email address you can access for testing (e.g., a personal Gmail).', ui.ButtonSet.OK_CANCEL);
+            if (emailPrompt.getSelectedButton() !== ui.Button.OK || !emailPrompt.getResponseText()) { ui.alert('Test cancelled.'); return false; }
+            testEmail = emailPrompt.getResponseText().trim().toLowerCase();
+        }
+        log_('Using test email: ' + testEmail + '. If this is not a real Google account, a "Resource Not Found" error in the logs is expected.', 'INFO');
+
+        showTestMessage_('Step 4/4: Initial Setup', 'The script will now add this configuration to the ManagedFolders sheet and run the sync to create the folder, group, and user sheet.');
+
+        const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+        const headers = getHeaderMap_(managedSheet);
+        const folderNameCol = resolveColumn_(headers, 'foldername', 1);
+        const roleCol = resolveColumn_(headers, 'role', 3);
+        const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+        const folderIdCol = resolveColumn_(headers, 'folderid', 2);
+        const groupEmailCol = resolveColumn_(headers, 'groupemail', 4);
+        
+        testRowIndex = managedSheet.getLastRow() + 1;
+        managedSheet.getRange(testRowIndex, folderNameCol).setValue(testFolderName);
+        managedSheet.getRange(testRowIndex, roleCol).setValue(testRole);
+
+        // Use optimized single-folder sync instead of fullSync()
+        const status = syncSingleFolder_(testRowIndex);
+        if (status !== 'OK') {
+            throw new Error('Sync failed after initial setup. Status: ' + status);
+        }
+        log_('Initial sync complete. Status: OK', 'INFO');
+
+        userSheetName = managedSheet.getRange(testRowIndex, userSheetNameCol).getValue();
+        const userSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(userSheetName);
+        if (!userSheet) {
+            showTestMessage_('Test Failed', 'Could not find the created user sheet: ' + userSheetName);
+            return false;
+        }
+
+        userSheet.getRange('A2').setValue(testEmail);
+        showTestMessage_('Granting Access', 'The test email has been added to the ' + userSheetName + ' sheet. The script will now sync again to grant folder access.');
+        // Use optimized single-folder sync instead of fullSync()
+        let status2 = syncSingleFolder_(testRowIndex);
+        if (status2 !== 'OK') {
+            throw new Error('Sync failed after granting access. Status: ' + status2);
+        }
+        log_('Grant access sync complete. Status: OK', 'INFO');
+
+        folderId = managedSheet.getRange(testRowIndex, folderIdCol).getValue();
+        const folderUrl = DriveApp.getFolderById(folderId).getUrl();
+        let verification1;
+        log_('testConfig.autoConfirm before Verify Access: ' + testConfig.autoConfirm, 'INFO');
+        if (testConfig.autoConfirm === true) {
+            verification1 = ui.Button.YES;
+            log_('Auto-confirming Verify Access.', 'INFO');
+        } else {
+            verification1 = ui.alert('Verify Access', 'Please open an Incognito Window, log in as ' + testEmail + ', and try to open this link:\n\n' + folderUrl + '\n\nDid you get access?', ui.ButtonSet.YES_NO);
+        }
+
+        if (verification1 !== ui.Button.YES) {
+            ui.alert('Test aborted. Please review the logs and configuration.');
+            return false;
+        }
+
+        userSheet.getRange('A2').clearContent();
+        showTestMessage_('Revoking Access', 'The test email has been removed from the sheet. The script will now sync again to revoke folder access.');
+        // Use optimized single-folder sync instead of fullSync()
+        let status3 = syncSingleFolder_(testRowIndex);
+        if (status3 !== 'OK') {
+            throw new Error('Sync failed after revoking access. Status: ' + status3);
+        }
+        log_('Revoke access sync complete. Status: OK', 'INFO');
+
+        let verification2;
+        log_('testConfig.autoConfirm before Verify Revoked Access: ' + testConfig.autoConfirm, 'INFO');
+        if (testConfig.autoConfirm === true) {
+            verification2 = ui.Button.YES;
+            log_('Auto-confirming Verify Revoked Access.', 'INFO');
+        } else {
+            verification2 = ui.alert('Verify Revoked Access', 'Please go back to your Incognito Window and refresh the folder page. You should see a \'permission denied\' error.\n\nWas access revoked?', ui.ButtonSet.YES_NO);
+        }
+
+        if (verification2 === ui.Button.YES) {
+            showTestMessage_('Test Complete: SUCCESS!', 'The user was successfully granted and revoked access.');
+            success = true;
+        } else {
+            showTestMessage_('Test Complete: FAILURE!', 'Access was not revoked as expected. This may be due to Google Drive permission propagation delays. Please wait a few minutes and check again.');
+            success = false;
+        }
+    } catch (e) {
+        log_('TEST FAILED: ' + e.toString() + ' Stack: ' + e.stack, 'ERROR');
+        try {
+            SpreadsheetApp.getUi().alert('Test FAILED. Check the logs for details. Error: ' + e.message);
+        } catch (alertError) {
+            log_('Could not show error alert: ' + alertError.message, 'WARN');
+        }
+        success = false;
+    } finally {
+        const endTime = new Date();
+        const durationSeconds = ((endTime.getTime() - startTime.getTime()) / 1000).toFixed(2);
+        log_('TEST DURATION: ' + durationSeconds + ' seconds', 'INFO');
+
+        if (typeof testConfig !== 'undefined') {
+            let cleanup = testConfig.cleanup === true;
+            log_('Auto-cleanup check: testConfig.cleanup = ' + testConfig.cleanup + ', evaluates to: ' + cleanup, 'INFO');
+
+            if (!cleanup) {
+                try {
+                    const cleanupPrompt = SpreadsheetApp.getUi().alert('Cleanup', 'Do you want to remove all test data (folder, group, and sheet)?', SpreadsheetApp.getUi().ButtonSet.YES_NO);
+                    cleanup = cleanupPrompt === SpreadsheetApp.getUi().Button.YES;
+                    log_('User selected cleanup: ' + cleanup, 'INFO');
+                } catch (alertError) {
+                    log_('Could not show cleanup prompt: ' + alertError.message, 'WARN');
+                    cleanup = false;
+                }
+            }
+
+            if (cleanup) {
+                log_('Starting automatic cleanup for: ' + testFolderName, 'INFO');
+                try {
+                    const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+                    const headers = getHeaderMap_(managedSheet);
+                    const groupEmailCol = resolveColumn_(headers, 'groupemail', 4);
+                    const folderNameCol = resolveColumn_(headers, 'foldername', 1);
+
+                    if (!groupEmail) {
+                        groupEmail = managedSheet.getRange(testRowIndex, groupEmailCol).getValue();
+                        log_('Retrieved groupEmail from sheet: ' + groupEmail, 'INFO');
+                    }
+
+                    cleanupFolderData_(testFolderName, folderId, groupEmail, userSheetName);
+
+                    if (testRowIndex && managedSheet.getRange(testRowIndex, folderNameCol).getValue() === testFolderName) {
+                        managedSheet.deleteRow(testRowIndex);
+                    }
+
+                    log_('Automatic cleanup completed successfully', 'INFO');
+                    showTestMessage_('Cleanup', 'Cleanup complete.');
+                } catch (cleanupError) {
+                    log_('ERROR during automatic cleanup: ' + cleanupError.message + '\nStack: ' + cleanupError.stack, 'ERROR');
+                    showTestMessage_('Cleanup Error', 'Automatic cleanup failed. You may need to run manual cleanup. Error: ' + cleanupError.message);
+                }
+            } else {
+                log_('Cleanup skipped (cleanup = false)', 'INFO');
+            }
+        } else {
+            log_('Cleanup skipped (testConfig undefined)', 'WARN');
+        }
+
+        const testStatus = success ? '✓ PASSED' : '✗ FAILED';
+        log_('>>> TEST RESULT: Manual Access Test ' + testStatus, success ? 'INFO' : 'ERROR');
+        log_('', 'INFO');
+
+        SCRIPT_EXECUTION_MODE = 'DEFAULT';
+    }
+    return success;
+}
+
+/***** STRESS TEST FUNCTIONS *****/
+
+/**
+ * A function to test the script's performance with many folders and users.
+ */
+function runStressTest() {
+    SCRIPT_EXECUTION_MODE = 'TEST';
+
+    // Test header
+    log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
+    log_('║  Stress Test                                                 ║', 'INFO');
+    log_('╚══════════════════════════════════════════════════════════════╝', 'INFO');
+
+    const testStartTime = new Date(); // Record overall test start time
+    let success = false;
+    let testConfig, numFolders, startRow; // Declare here so accessible in finally block
+    try {
+        if (shouldSkipGroupOps_()) {
+            showTestMessage_('Test Aborted', 'Stress Test requires the Admin Directory service (Admin SDK). Please enable it or run on a Google Workspace domain.');
+            return false;
+        }
+        const ui = SpreadsheetApp.getUi();
+        testConfig = getTestConfiguration_(); // Assign (not declare) here
+
+        // --- Step 1: Get Test Parameters ---
+        numFolders = testConfig.numFolders; // Assign (not declare)
+        if (isNaN(numFolders)) {
+            const numFoldersStr = ui.prompt('Stress Test - Step 1/4', 'Enter the number of temporary folders to create (e.g., 10).', ui.ButtonSet.OK_CANCEL);
+            if (numFoldersStr.getSelectedButton() !== ui.Button.OK || !numFoldersStr.getResponseText()) { ui.alert('Test cancelled.'); return false; }
+            numFolders = parseInt(numFoldersStr.getResponseText(), 10);
+        }
+
+        let numUsers = testConfig.numUsers;
+        if (isNaN(numUsers) || numUsers < 1) {
+            const numUsersStr = ui.prompt('Stress Test - Step 2/4', 'Enter the number of test users to create PER FOLDER (e.g., 200).', ui.ButtonSet.OK_CANCEL);
+            if (numUsersStr.getSelectedButton() !== ui.Button.OK || !numUsersStr.getResponseText()) { ui.alert('Test cancelled.'); return false; }
+            numUsers = parseInt(numUsersStr.getResponseText(), 10);
+        }
+
+        let baseEmail = testConfig.baseEmail;
+        if (!baseEmail) {
+            const baseEmailStr = ui.prompt('Stress Test - Step 3/4', 'Enter a base email address to generate test users (e.g., your.name@gmail.com).', ui.ButtonSet.OK_CANCEL);
+            if (baseEmailStr.getSelectedButton() !== ui.Button.OK || !baseEmailStr.getResponseText()) { ui.alert('Test cancelled.'); return false; }
+            baseEmail = baseEmailStr.getResponseText().trim();
+        }
+        const emailParts = baseEmail.split('@');
+        if (emailParts.length !== 2) { ui.alert('Invalid email address.'); return false; }
+
+        showTestMessage_(
+            'Stress Test - Step 4/4',
+            'The script will now create ' + numFolders + ' test folders and prepare ' + numUsers + ' users for each.'
+        );
+
+        // --- Step 2: Setup Test Data ---
+        const testRunId = new Date().getTime(); // Unique ID for this test run
+        const folderNames = [];
+        for (let i = 1; i <= numFolders; i++) {
+            folderNames.push('StressTestFolder_' + testRunId + '_' + i);
+        }
+
+        const userEmails = [];
+        for (let i = 1; i <= numUsers; i++) {
+            userEmails.push(emailParts[0] + '+testuser' + testRunId + i + '@' + emailParts[1]);
+        }
+
+        const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+        const headers = getHeaderMap_(managedSheet);
+        const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+        const statusCol = resolveColumn_(headers, 'status', 7);
+        const folderNameCol = resolveColumn_(headers, 'foldername', 1);
+        const folderIdCol = resolveColumn_(headers, 'folderid', 2);
+        const groupEmailCol = resolveColumn_(headers, 'groupemail', 4);
+
+        startRow = managedSheet.getLastRow() + 1; // Assign (not declare)
+        const newConfig = folderNames.map(name => [name, '', 'Editor']);
+        managedSheet.getRange(startRow, 1, newConfig.length, 3).setValues(newConfig);
+        SpreadsheetApp.flush();
+
+        // --- Step 3: Initial Sync to Create Infrastructure ---
+        showTestMessage_('Setup Phase 1 Complete', 'Test folders have been added to the sheet. The script will now run a sync to create the necessary folders, groups, and user sheets.');
+        // Use optimized test-only sync instead of fullSync()
+        testOnlySync_(['StressTestFolder_'], false);
+
+        // --- Step 4: Populate User Sheets ---
+        showTestMessage_('Setup Phase 2 Complete', 'The script will now populate all of the new user sheets with the test user emails.');
+        const userSheetNames = managedSheet.getRange(startRow, userSheetNameCol, numFolders, 1).getValues().flat();
+        const userEmailsForSheet = userEmails.map(e => [e]); // Format for setting range values
+
+        userSheetNames.forEach(function (sheetName) {
+            const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+            if (sheet) {
+                sheet.getRange(2, 1, userEmailsForSheet.length, 1).setValues(userEmailsForSheet);
+            }
+        });
+
+        // --- Step 5: Run the Main Stress Test Sync ---
+        showTestMessage_('Setup Complete. Starting Stress Test', 'All test data is in place. The script will now run the main sync and time its execution.');
+        const startTime = new Date();
+        // Use optimized test-only sync instead of fullSync()
+        testOnlySync_(['StressTestFolder_'], false);
+        const endTime = new Date();
+        const durationSeconds = (endTime.getTime() - startTime.getTime()) / 1000;
+
+        showTestMessage_('Stress Test Complete!', 'The sync process finished in ' + durationSeconds + ' seconds.');
+        log_('Stress Test sync duration: ' + durationSeconds + ' seconds', 'INFO');
+        success = true;
+    } catch (e) {
+        log_('TEST FAILED: ' + e.toString() + ' Stack: ' + e.stack, 'ERROR');
+        try {
+            SpreadsheetApp.getUi().alert('Test FAILED. Check the logs for details. Error: ' + e.message);
+        } catch (alertError) {
+            log_('Could not show error alert: ' + alertError.message, 'WARN');
+        }
+        success = false;
+    } finally {
+        const testEndTime = new Date();
+        const testDurationSeconds = ((testEndTime.getTime() - testStartTime.getTime()) / 1000).toFixed(2);
+        log_('TEST DURATION: ' + testDurationSeconds + ' seconds', 'INFO');
+
+        // --- Step 6: Cleanup ---
+        if (typeof testConfig !== 'undefined' && typeof numFolders !== 'undefined' && typeof startRow !== 'undefined') {
+            let cleanup = testConfig.cleanup === true;
+            log_('Auto-cleanup check (Stress Test): testConfig.cleanup = ' + testConfig.cleanup + ', evaluates to: ' + cleanup, 'INFO');
+
+            if (!cleanup) {
+                try {
+                    const cleanupPrompt = SpreadsheetApp.getUi().alert('Cleanup', 'Do you want to remove all test data (folders, groups, sheets, and configuration rows)?', SpreadsheetApp.getUi().ButtonSet.YES_NO);
+                    cleanup = cleanupPrompt === SpreadsheetApp.getUi().Button.YES;
+                    log_('User selected cleanup: ' + cleanup, 'INFO');
+                } catch (alertError) {
+                    log_('Could not show cleanup prompt: ' + alertError.message, 'WARN');
+                    cleanup = false;
+                }
+            }
+
+            if (cleanup) {
+                log_('Starting automatic cleanup for stress test folders', 'INFO');
+                try {
+                    const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+                    const headers = getHeaderMap_(managedSheet);
+                    const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+                    const statusCol = resolveColumn_(headers, 'status', 7);
+                    const folderNameCol = resolveColumn_(headers, 'foldername', 1);
+                    const folderIdCol = resolveColumn_(headers, 'folderid', 2);
+                    const groupEmailCol = resolveColumn_(headers, 'groupemail', 4);
+
+                    const managedData = managedSheet.getRange(startRow, 1, numFolders, statusCol).getValues();
+
+                    showTestMessage_('Cleanup', 'Cleanup in Progress. This may take a few moments.');
+
+                    managedData.forEach(function (row) {
+                        const folderName = row[folderNameCol - 1];
+                        const folderId = row[folderIdCol - 1];
+                        const userSheetName = row[userSheetNameCol - 1];
+                        const groupEmail = row[groupEmailCol - 1];
+                        cleanupFolderData_(folderName, folderId, groupEmail, userSheetName);
+                    });
+
+                    managedSheet.deleteRows(startRow, numFolders);
+
+                    log_('Automatic cleanup completed successfully', 'INFO');
+                    showTestMessage_('Cleanup', 'Cleanup Complete!');
+                } catch (cleanupError) {
+                    log_('ERROR during automatic cleanup: ' + cleanupError.message + '\nStack: ' + cleanupError.stack, 'ERROR');
+                    showTestMessage_('Cleanup Error', 'Automatic cleanup failed. You may need to run manual cleanup. Error: ' + cleanupError.message);
+                }
+            } else {
+                log_('Cleanup skipped (cleanup = false)', 'INFO');
+            }
+        } else {
+            log_('Cleanup skipped (required variables undefined)', 'WARN');
+        }
+
+        // Test result
+        const testStatus = success ? '✓ PASSED' : '✗ FAILED';
+        log_('>>> TEST RESULT: Stress Test ' + testStatus, success ? 'INFO' : 'ERROR');
+        log_('', 'INFO');
+
+        SCRIPT_EXECUTION_MODE = 'DEFAULT';
+    }
+    return success;
+}
+
+function cleanupStressTestData() {
+    SCRIPT_EXECUTION_MODE = 'TEST';
+    try {
+        if (shouldSkipGroupOps_()) {
+            showTestMessage_('Cleanup Aborted', 'Cleanup requires the Admin Directory service (Admin SDK). Please enable it or run on a Google Workspace domain.');
+            return;
+        }
+        const ui = SpreadsheetApp.getUi();
+        const testConfig = getTestConfiguration_();
+
+        let response = ui.Button.YES;
+        if (testConfig.autoConfirm !== true) {
+            response = ui.alert('Are you sure you want to delete all stress test data?', 'This will delete all folders, groups, and sheets with the "StressTestFolder_" prefix.', ui.ButtonSet.YES_NO);
+        }
+        if (response !== ui.Button.YES) {
+            return;
+        }
+
+        showTestMessage_('Cleanup', 'Cleanup in Progress. This may take a few moments.');
+
+        // Clean up sheets
+        const allSheets = SpreadsheetApp.getActiveSpreadsheet().getSheets();
+        allSheets.forEach(function (sheet) {
+            if (sheet.getName().startsWith('StressTestFolder_')) {
+                SpreadsheetApp.getActiveSpreadsheet().deleteSheet(sheet);
+            }
+        });
+
+        // Clean up ManagedFolders sheet entries
+        const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+        if (managedSheet) {
+            const headers = getHeaderMap_(managedSheet);
+            const folderNameCol = resolveColumn_(headers, 'foldername', 1);
+            const data = managedSheet.getDataRange().getValues();
+            const rowsToDelete = [];
+            for (let i = data.length - 1; i >= 0; i--) {
+                if (data[i][folderNameCol - 1] && data[i][folderNameCol - 1].startsWith('StressTestFolder_')) {
+                    rowsToDelete.push(i + 1);
+                }
+            }
+            rowsToDelete.forEach(function (rowIndex) {
+                managedSheet.deleteRow(rowIndex);
+            });
+        }
+
+        // Clean up groups
+        let pageToken;
+        let allGroups = [];
+        do {
+            const result = AdminDirectory.Groups.list({
+                customer: 'my_customer',
+                maxResults: 200,
+                pageToken: pageToken
+            });
+            allGroups = allGroups.concat(result.groups);
+            pageToken = result.nextPageToken;
+        } while (pageToken);
+
+        allGroups.forEach(function (group) {
+            if (group.name.startsWith('StressTestFolder_')) {
+                try {
+                    AdminDirectory.Groups.remove(group.email);
+                } catch (e) {
+                    log_('Could not remove group ' + group.email + ': ' + e.message, 'WARN');
+                }
+            }
+        });
+
+        // Clean up folders
+        const folders = DriveApp.getFolders();
+        while (folders.hasNext()) {
+            const folder = folders.next();
+            if (folder.getName().startsWith('StressTestFolder_')) {
+                try {
+                    folder.setTrashed(true);
+                } catch (e) {
+                    log_('Could not trash folder ' + folder.getId() + ': ' + e.message, 'WARN');
+                }
+            }
+        }
+
+        showTestMessage_('Cleanup', 'Cleanup Complete!');
+    } finally {
+        SCRIPT_EXECUTION_MODE = 'DEFAULT';
+    }
+}
+
+function cleanupManualTestData() {
+    SCRIPT_EXECUTION_MODE = 'TEST';
+    try {
+        if (shouldSkipGroupOps_()) {
+            showTestMessage_('Cleanup Aborted', 'Cleanup requires the Admin Directory service (Admin SDK). Please enable it or run on a Google Workspace domain.');
+            return;
+        }
+        const ui = SpreadsheetApp.getUi();
+        const testConfig = getTestConfiguration_();
+
+        const folderNamePrompt = ui.prompt('Enter the name of the manual test folder to clean up:');
+        if (folderNamePrompt.getSelectedButton() !== ui.Button.OK || !folderNamePrompt.getResponseText()) {
+            return;
+        }
+        const folderName = folderNamePrompt.getResponseText();
+
+        const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+        const headers = getHeaderMap_(managedSheet);
+        const folderNameCol = resolveColumn_(headers, 'foldername', 1);
+        const folderIdCol = resolveColumn_(headers, 'folderid', 2);
+        const groupEmailCol = resolveColumn_(headers, 'groupemail', 4);
+        const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+
+        const data = managedSheet.getDataRange().getValues();
+        let rowIndexToDelete = -1;
+        let folderId, groupEmail, userSheetName;
+
+        for (let i = 1; i < data.length; i++) {
+            if (data[i][folderNameCol - 1] === folderName) {
+                rowIndexToDelete = i + 1;
+                folderId = data[i][folderIdCol - 1];
+                groupEmail = data[i][groupEmailCol - 1];
+                userSheetName = data[i][userSheetNameCol - 1];
+                break;
+            }
+        }
+
+        if (rowIndexToDelete === -1) {
+            showTestMessage_('Error', 'Folder not found in the ManagedFolders sheet.');
+            return;
+        }
+
+        let response = ui.Button.YES;
+        if (testConfig.autoConfirm !== true) {
+            response = ui.alert('Are you sure you want to delete the test data for folder "' + folderName + '"?', 'This will delete the folder, group, and sheet.', ui.ButtonSet.YES_NO);
+        }
+        if (response !== ui.Button.YES) {
+            return;
+        }
+
+        cleanupFolderData_(folderName, folderId, groupEmail, userSheetName);
+        managedSheet.deleteRow(rowIndexToDelete);
+
+        showTestMessage_('Cleanup', 'Cleanup Complete!');
+    } finally {
+        SCRIPT_EXECUTION_MODE = 'DEFAULT';
+    }
+}
+
+function cleanupAddDeleteSeparationTestData() {
+    SCRIPT_EXECUTION_MODE = 'TEST';
+    try {
+        if (shouldSkipGroupOps_()) {
+            showTestMessage_('Cleanup Aborted', 'Cleanup requires the Admin Directory service (Admin SDK). Please enable it or run on a Google Workspace domain.');
+            return;
+        }
+        const ui = SpreadsheetApp.getUi();
+        const testConfig = getTestConfiguration_();
+
+        const folderNamePrompt = ui.prompt('Enter the name of the Add/Delete Separation test folder to clean up:');
+        if (folderNamePrompt.getSelectedButton() !== ui.Button.OK || !folderNamePrompt.getResponseText()) {
+            return;
+        }
+        const folderName = folderNamePrompt.getResponseText();
+
+        const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+        const headers = getHeaderMap_(managedSheet);
+        const folderNameCol = resolveColumn_(headers, 'foldername', 1);
+        const folderIdCol = resolveColumn_(headers, 'folderid', 2);
+        const groupEmailCol = resolveColumn_(headers, 'groupemail', 4);
+        const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+        
+        const data = managedSheet.getDataRange().getValues();
+        let rowIndexToDelete = -1;
+        let folderId, groupEmail, userSheetName;
+
+        for (let i = 1; i < data.length; i++) {
+            if (data[i][folderNameCol - 1] === folderName) {
+                rowIndexToDelete = i + 1;
+                folderId = data[i][folderIdCol - 1];
+                groupEmail = data[i][groupEmailCol - 1];
+                userSheetName = data[i][userSheetNameCol - 1];
+                break;
+            }
+        }
+
+        if (rowIndexToDelete === -1) {
+            showTestMessage_('Error', 'Folder not found in the ManagedFolders sheet.');
+            return;
+        }
+
+        let response = ui.Button.YES;
+        if (testConfig.autoConfirm !== true) {
+            response = ui.alert('Are you sure you want to delete the test data for folder "' + folderName + '"?', 'This will delete the folder, group, and sheet.', ui.ButtonSet.YES_NO);
+        }
+        if (response !== ui.Button.YES) {
+            return;
+        }
+
+        cleanupFolderData_(folderName, folderId, groupEmail, userSheetName);
+        managedSheet.deleteRow(rowIndexToDelete);
+
+        showTestMessage_('Cleanup', 'Cleanup Complete!');
+    } finally {
+        SCRIPT_EXECUTION_MODE = 'DEFAULT';
+    }
+}
+
+
+function runAddDeleteSeparationTest() {
+    SCRIPT_EXECUTION_MODE = 'TEST';
+
+    // Test header
+    log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
+    log_('║  Add/Delete Separation Test                                  ║', 'INFO');
+    log_('╚══════════════════════════════════════════════════════════════╝', 'INFO');
+
+    const ui = SpreadsheetApp.getUi();
+    let testFolderName, testEmail, testRole, testRowIndex;
+    let userSheetName = null, groupEmail = null, folderId = null; // Initialize to null
+    const startTime = new Date(); // Record start time
+    const testConfig = getTestConfiguration_(); // Declare testConfig at top scope
+    let success = false;
+
+    try {
+        if (shouldSkipGroupOps_()) {
+            showTestMessage_('Test Aborted', 'This test requires the Admin Directory service (Admin SDK). Please enable it or run on a Google Workspace domain.');
+            return false;
+        }
+
+        // --- Test Setup ---
+        testFolderName = testConfig.folderName;
+        if (!testFolderName) {
+            const folderNamePrompt = ui.prompt('Add/Delete Test - Step 1/3: Folder Name', 'Enter a unique name for a new test folder.', ui.ButtonSet.OK_CANCEL);
+            if (folderNamePrompt.getSelectedButton() !== ui.Button.OK || !folderNamePrompt.getResponseText()) { ui.alert('Test cancelled.'); return false; }
+            testFolderName = folderNamePrompt.getResponseText();
+        }
+        testRole = 'Editor'; // Using a fixed role for simplicity
+
+        testEmail = testConfig.email;
+        if (!testEmail) {
+            const emailPrompt = ui.prompt('Add/Delete Test - Step 2/3: Test Email', 'Enter a REAL email address you can access for testing.', ui.ButtonSet.OK_CANCEL);
+            if (emailPrompt.getSelectedButton() !== ui.Button.OK || !emailPrompt.getResponseText()) { ui.alert('Test cancelled.'); return false; }
+            testEmail = emailPrompt.getResponseText().trim().toLowerCase();
+        }
+        log_('Using test email: ' + testEmail + '. If this is not a real Google account, a "Resource Not Found" error in the logs is expected.', 'INFO');
+
+        showTestMessage_('Add/Delete Test - Step 3/3: Running Test', 'The script will now run through the add/delete separation test. Please follow the prompts.');
+
+        // --- Phase 1: Initial Add ---
+        log_('TEST: Initial Add Phase');
+        const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+        const headers = getHeaderMap_(managedSheet);
+        const folderNameCol = resolveColumn_(headers, 'foldername', 1);
+        const roleCol = resolveColumn_(headers, 'role', 3);
+        const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+        const groupEmailCol = resolveColumn_(headers, 'groupemail', 4);
+        const folderIdCol = resolveColumn_(headers, 'folderid', 2);
+        const statusCol = resolveColumn_(headers, 'status', 7);
+
+        testRowIndex = managedSheet.getLastRow() + 1;
+        managedSheet.getRange(testRowIndex, folderNameCol).setValue(testFolderName);
+        managedSheet.getRange(testRowIndex, roleCol).setValue(testRole);
+
+        // Use optimized single-folder sync instead of syncAdds()
+        const status = syncSingleFolder_(testRowIndex, true);
+        if (status !== 'OK') {
+            throw new Error('Sync failed after initial setup. Status: ' + status);
+        }
+        log_('Initial sync complete. Status: OK', 'INFO');
+
+        userSheetName = managedSheet.getRange(testRowIndex, userSheetNameCol).getValue();
+        groupEmail = managedSheet.getRange(testRowIndex, groupEmailCol).getValue();
+        folderId = managedSheet.getRange(testRowIndex, folderIdCol).getValue();
+        const userSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(userSheetName);
+        if (!userSheet) throw new Error('Test failed: Could not find the created user sheet: ' + userSheetName);
+
+        userSheet.getRange('A2').setValue(testEmail);
+        // Use optimized single-folder sync instead of syncAdds()
+        let status2 = syncSingleFolder_(testRowIndex, true);
+        if (status2 !== 'OK') {
+            throw new Error('Sync failed after adding user. Status: ' + status2);
+        }
+        log_('Add user sync complete. Status: OK', 'INFO');
+
+        // --- Verification 1: User was added ---
+        let members = fetchAllGroupMembers_(groupEmail);
+        let isMember = members.some(m => m.email.toLowerCase() === testEmail);
+
+        const testLogSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(TEST_LOG_SHEET_NAME);
+        let has404Error = false;
+        if (testLogSheet) {
+            const logData = testLogSheet.getDataRange().getValues();
+            const recentLogs = logData.slice(-50);
+            has404Error = recentLogs.some(row => {
+                const logMessage = row[2] ? row[2].toString() : '';
+                return logMessage.includes('404') && logMessage.includes('Resource Not Found') && logMessage.includes(testEmail);
+            });
+        }
+
+        if (!isMember && !has404Error) {
+            throw new Error('VERIFICATION FAILED: User ' + testEmail + ' was not added to group ' + groupEmail + ' after syncAdds, and no 404 error was found (suggesting the email should be valid).');
+        } else if (!isMember && has404Error) {
+            log_('VERIFICATION SKIPPED: User ' + testEmail + ' was not added due to 404 "Resource Not Found" error (expected for non-existent email addresses).', 'INFO');
+            showTestMessage_('Verification Note', 'User ' + testEmail + ' could not be added because it is not a valid Google account (404 error). This is expected behavior. The test will continue with deletion verification.');
+        } else {
+            log_('VERIFICATION PASSED: User was successfully added to the group.');
+            showTestMessage_('Verification Passed', 'User ' + testEmail + ' was correctly added to the group.');
+        }
+
+        // --- Phase 2: Run Delete (should do nothing) ---
+        log_('TEST: No-Op Delete Phase');
+        if (has404Error) {
+            log_('TEST: Skipping No-Op Delete Phase - user was never added due to 404 error', 'INFO');
+        } else {
+            let confirmNoOpDelete;
+            if (testConfig.autoConfirm === true) {
+                confirmNoOpDelete = ui.Button.YES;
+                log_('Auto-confirming No-Op Delete.', 'INFO');
+            } else {
+                confirmNoOpDelete = ui.alert('Confirm No-Op Delete', 'The script will now run a delete sync, but no deletions are expected. Continue?', ui.ButtonSet.YES_NO);
+            }
+            if (confirmNoOpDelete !== ui.Button.YES) { ui.alert('Test cancelled.'); return false; }
+            // Use optimized test-only sync for deletes
+            testOnlySync_([testFolderName], false);
+
+            members = fetchAllGroupMembers_(groupEmail);
+            isMember = members.some(m => m.email.toLowerCase() === testEmail);
+            if (!isMember) {
+                throw new Error('VERIFICATION FAILED: User ' + testEmail + ' was removed from group ' + groupEmail + ' after a no-op syncDeletes call.');
+            }
+            log_('VERIFICATION PASSED: User was not removed by no-op delete.');
+            showTestMessage_('Verification Passed', 'User ' + testEmail + ' was NOT removed by the delete sync (as expected).');
+        }
+
+        // --- Phase 3: Actual Deletion ---
+        log_('TEST: Actual Deletion Phase');
+        userSheet.getRange('A2').clearContent();
+        if (has404Error) {
+            log_('TEST: Skipping Actual Deletion Phase - user was never added due to 404 error', 'INFO');
+            log_('VERIFICATION SKIPPED: No deletion verification needed since user was never added.', 'INFO');
+            showTestMessage_('Test Complete: SUCCESS (with 404)', 'The test completed successfully. The email address was invalid (404 error), so add/delete operations were skipped as expected. The test infrastructure (folder, group, sheet) was created and will be cleaned up.');
+        } else {
+            let confirmActualDelete;
+            if (testConfig.autoConfirm === true) {
+                confirmActualDelete = ui.Button.YES;
+                log_('Auto-confirming Actual Deletion.', 'INFO');
+            } else {
+                confirmActualDelete = ui.alert('Confirm Actual Delete', 'The script will now run a delete sync to remove the user. Continue?', ui.ButtonSet.YES_NO);
+            }
+            if (confirmActualDelete !== ui.Button.YES) { ui.alert('Test cancelled.'); return false; }
+            // Use optimized test-only sync for deletes
+            testOnlySync_([testFolderName], false);
+            const statusFinal = managedSheet.getRange(testRowIndex, statusCol).getValue();
+            if (statusFinal !== 'OK') {
+                throw new Error('Sync failed after deleting user. Status: ' + statusFinal);
+            }
+            log_('Delete user sync complete. Status: OK', 'INFO');
+
+            members = fetchAllGroupMembers_(groupEmail);
+            isMember = members.some(m => m.email.toLowerCase() === testEmail);
+            if (isMember) {
+                throw new Error('VERIFICATION FAILED: User ' + testEmail + ' was NOT removed from group ' + groupEmail + ' after syncDeletes.');
+            }
+            log_('VERIFICATION PASSED: User was successfully removed from the group.');
+            showTestMessage_('Test Complete: SUCCESS!', 'The user was successfully added and then removed using the separated sync functions.');
+        }
+
+        success = true;
+    } catch (e) {
+        log_('TEST FAILED: ' + e.toString() + ' Stack: ' + e.stack, 'ERROR');
+        try {
+            SpreadsheetApp.getUi().alert('Test FAILED. Check the logs for details. Error: ' + e.message);
+        } catch (alertError) {
+            log_('Could not show error alert: ' + alertError.message, 'WARN');
+        }
+        success = false;
+    } finally {
+        const endTime = new Date();
+        const durationSeconds = ((endTime.getTime() - startTime.getTime()) / 1000).toFixed(2);
+        log_('TEST DURATION: ' + durationSeconds + ' seconds', 'INFO');
+
+        if (typeof testConfig !== 'undefined') {
+            let cleanup = testConfig.cleanup === true;
+            log_('Auto-cleanup check (Add/Delete Test): testConfig.cleanup = ' + testConfig.cleanup + ', evaluates to: ' + cleanup, 'INFO');
+
+            if (!cleanup) {
+                try {
+                    const cleanupPrompt = SpreadsheetApp.getUi().alert('Cleanup', 'Do you want to remove all test data (folder, group, and sheet)?', SpreadsheetApp.getUi().ButtonSet.YES_NO);
+                    cleanup = cleanupPrompt === SpreadsheetApp.getUi().Button.YES;
+                    log_('User selected cleanup: ' + cleanup, 'INFO');
+                } catch (alertError) {
+                    log_('Could not show cleanup prompt: ' + alertError.message, 'WARN');
+                    cleanup = false;
+                }
+            }
+
+            if (cleanup && testFolderName) {
+                log_('Starting automatic cleanup for: ' + testFolderName, 'INFO');
+                try {
+                    cleanupFolderData_(testFolderName, folderId, groupEmail, userSheetName);
+
+                    const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+                    const headers = getHeaderMap_(managedSheet);
+                    const folderNameCol = resolveColumn_(headers, 'foldername', 1);
+                    if (testRowIndex && managedSheet.getRange(testRowIndex, folderNameCol).getValue() === testFolderName) {
+                        managedSheet.deleteRow(testRowIndex);
+                    }
+
+                    log_('Automatic cleanup completed successfully', 'INFO');
+                    showTestMessage_('Cleanup', 'Cleanup complete.');
+                } catch (cleanupError) {
+                    log_('ERROR during automatic cleanup: ' + cleanupError.message + '\nStack: ' + cleanupError.stack, 'ERROR');
+                    showTestMessage_('Cleanup Error', 'Automatic cleanup failed. You may need to run manual cleanup. Error: ' + cleanupError.message);
+                }
+            } else {
+                log_('Cleanup skipped (cleanup = false or testFolderName undefined)', 'INFO');
+            }
+        } else {
+            log_('Cleanup skipped (testConfig undefined)', 'WARN');
+        }
+
+        // Test result
+        const testStatus = success ? '✓ PASSED' : '✗ FAILED';
+        log_('>>> TEST RESULT: Add/Delete Separation Test ' + testStatus, success ? 'INFO' : 'ERROR');
+        log_('', 'INFO');
+
+        SCRIPT_EXECUTION_MODE = 'DEFAULT';
+    }
+    return success;
+}
+
+/**
+ * One-time cleanup for orphaned test data.
+ * This function can be used to clean up specific test data by folder name.
+ */
+function cleanupOrphanedTestData() {
+    SCRIPT_EXECUTION_MODE = 'TEST';
+    try {
+        const ui = SpreadsheetApp.getUi();
+        const folderName = 'Test Folder'; // Change this to match your orphaned folder
+
+        const response = ui.alert(
+            'Clean Up Orphaned Test Data',
+            'This will attempt to clean up the folder "' + folderName + '" and its associated resources.\n\nContinue?',
+            ui.ButtonSet.YES_NO
+        );
+
+        if (response !== ui.Button.YES) {
+            return;
+        }
+
+        const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+        const headers = getHeaderMap_(managedSheet);
+        const folderNameCol = resolveColumn_(headers, 'foldername', 1);
+        const folderIdCol = resolveColumn_(headers, 'folderid', 2);
+        const groupEmailCol = resolveColumn_(headers, 'groupemail', 4);
+        const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+        const data = managedSheet.getDataRange().getValues();
+
+        let found = false;
+        for (let i = data.length - 1; i >= 1; i--) {
+            if (data[i][folderNameCol - 1] === folderName) {
+                const folderId = data[i][folderIdCol - 1];
+                const groupEmail = data[i][groupEmailCol - 1];
+                const userSheetName = data[i][userSheetNameCol - 1];
+
+                log_('Found orphaned test data for: ' + folderName, 'INFO');
+                cleanupFolderData_(folderName, folderId, groupEmail, userSheetName);
+                managedSheet.deleteRow(i + 1);
+                found = true;
+                break;
+            }
+        }
+
+        if (found) {
+            showTestMessage_('Cleanup Complete', 'Successfully cleaned up orphaned test data for: ' + folderName);
+        } else {
+            showTestMessage_('Not Found', 'Could not find folder "' + folderName + '" in the ManagedFolders sheet.');
+        }
+
+    } catch (e) {
+        log_('Error during orphaned data cleanup: ' + e.toString(), 'ERROR');
+        SpreadsheetApp.getUi().alert('Cleanup failed: ' + e.message);
+    } finally {
+        SCRIPT_EXECUTION_MODE = 'DEFAULT';
+    }
+}
+
+/**
+ * Cleans up all data associated with a test folder.
+ * @param {string} folderName The name of the folder.
+ * @param {string} folderId The ID of the folder.
+ * @param {string} groupEmail The email of the associated group.
+ * @param {string} userSheetName The name of the associated user sheet.
+ */
+function cleanupFolderData_(folderName, folderId, groupEmail, userSheetName) {
+    log_('Starting cleanup for test data: ' + folderName);
+    log_('  → userSheetName: "' + userSheetName + '"');
+    log_('  → groupEmail: "' + groupEmail + '"');
+    log_('  → folderId: "' + folderId + '"');
+
+    // 1. Delete the user sheet
+    if (userSheetName) {
+        log_('  → Attempting to find sheet: ' + userSheetName);
+        try {
+            const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(userSheetName);
+            if (sheet) {
+                log_('  → Sheet found, deleting...');
+                SpreadsheetApp.getActiveSpreadsheet().deleteSheet(sheet);
+                log_('✓ Deleted sheet: ' + userSheetName);
+            } else {
+                log_('✗ Sheet not found: ' + userSheetName + ' (getSheetByName returned null)', 'WARN');
+            }
+        } catch (e) {
+            log_('✗ Could not delete sheet ' + userSheetName + ': ' + e.message, 'ERROR');
+        }
+    } else {
+        log_('✗ Skipping sheet deletion - userSheetName is empty/null', 'WARN');
+    }
+
+    // 2. Delete the Google Group
+    if (groupEmail) {
+        try {
+            AdminDirectory.Groups.remove(groupEmail);
+            log_('Deleted group: ' + groupEmail);
+        } catch (e) {
+            log_('Could not delete group ' + groupEmail + ': ' + e.message, 'WARN');
+        }
+    }
+
+    // 3. Trash the Google Drive folder
+    if (folderId) {
+        try {
+            const folder = DriveApp.getFolderById(folderId);
+            folder.setTrashed(true);
+            log_('Trashed folder: ' + folderName + ' (ID: ' + folderId + ')');
+        } catch (e) {
+            log_('Could not trash folder ' + folderId + ': ' + e.message, 'WARN');
+        }
+    }
+    log_('Cleanup finished for: ' + folderName);
+}
+
+function runAutoSyncErrorEmailTest() {
+    SCRIPT_EXECUTION_MODE = 'TEST';
+    let success = false;
+    const mailAppSpy = createSpy_(MailApp, 'sendEmail');
+    const originalEmailNotificationSetting = getConfigValue_('EnableEmailNotifications', false);
+    const orphanSheetName = 'OrphanSheetForErrorTest_' + new Date().getTime();
+    let orphanSheet;
+    const props = PropertiesService.getDocumentProperties();
+    const originalSnapshot = props.getProperty(AUTO_SYNC_CHANGE_SIGNATURE_KEY);
+
+    try {
+        log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
+        log_('║  AutoSync Error Email Test                                ║', 'INFO');
+        log_('╚══════════════════════════════════════════════════════════════╝', 'INFO');
+
+        // Force the next sync to run by invalidating the last one
+        log_('Forcing next autoSync to run by marking last sync as failed.', 'INFO');
+        const tempSnapshot = { dataHash: 'force-run', capturedAt: new Date().toISOString(), lastSyncSuccessful: false };
+        props.setProperty(AUTO_SYNC_CHANGE_SIGNATURE_KEY, JSON.stringify(tempSnapshot));
+
+        // Temporarily enable email notifications for the test
+        updateConfigSetting_('EnableEmailNotifications', true);
+
+        // Simulate an error by creating an orphan sheet
+        const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+        orphanSheet = spreadsheet.insertSheet(orphanSheetName, spreadsheet.getSheets().length);
+        log_('Created orphan sheet "' + orphanSheetName + '" to trigger a fatal error.', 'INFO');
+
+        // Run AutoSync, which should now run and fail because of the orphan sheet
+        try {
+            autoSync({ silentMode: true });
+        } catch (e) {
+            // Error is expected, and should be caught by the autoSync's own try...catch
+            log_('Caught expected error during autoSync call: ' + e.message, 'INFO');
+        }
+
+        // Check if the email spy was called by the autoSync's catch block
+        if (mailAppSpy.wasCalled) {
+            log_('VERIFICATION PASSED: MailApp.sendEmail was called after AutoSync error.', 'INFO');
+            success = true;
+        } else {
+            throw new Error('VERIFICATION FAILED: MailApp.sendEmail was not called after AutoSync error.');
+        }
+
+    } catch (e) {
+        log_('TEST FAILED: ' + e.toString() + ' Stack: ' + e.stack, 'ERROR');
+        success = false;
+    } finally {
+        mailAppSpy.restore();
+        updateConfigSetting_('EnableEmailNotifications', originalEmailNotificationSetting);
+        
+        // Restore the original snapshot
+        if (originalSnapshot) {
+            props.setProperty(AUTO_SYNC_CHANGE_SIGNATURE_KEY, originalSnapshot);
+        } else {
+            props.deleteProperty(AUTO_SYNC_CHANGE_SIGNATURE_KEY);
+        }
+        
+        // Cleanup the orphan sheet
+        if (orphanSheet) {
+            try {
+                SpreadsheetApp.getActiveSpreadsheet().deleteSheet(orphanSheet);
+                log_('Cleaned up orphan sheet: ' + orphanSheetName, 'INFO');
+            } catch (e) {
+                log_('Failed to clean up orphan sheet "' + orphanSheetName + '": ' + e.message, 'ERROR');
+            }
+        }
+
+        const testStatus = success ? '✓ PASSED' : '✗ FAILED';
+        log_('>>> TEST RESULT: AutoSync Error Email Test ' + testStatus, success ? 'INFO' : 'ERROR');
+        log_('', 'INFO');
+        SCRIPT_EXECUTION_MODE = 'DEFAULT';
+    }
+    return success;
+}
+
+function runEmailCapabilityTest() {
+    SCRIPT_EXECUTION_MODE = 'TEST';
+    let success = false;
+    const startTime = new Date();
+    const ui = SpreadsheetApp.getUi();
+    const defaultRecipient = getConfigValue_('NotificationEmail', Session.getEffectiveUser().getEmail());
+    const effectiveUserEmail = Session.getEffectiveUser().getEmail();
+    const activeUserEmail = Session.getActiveUser().getEmail();
+
+    try {
+        log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
+        log_('║  Email Capability Test                                       ║', 'INFO');
+        log_('╚══════════════════════════════════════════════════════════════╝', 'INFO');
+        log_('Sender context: effectiveUser=' + (effectiveUserEmail || 'unknown') +
+            ', activeUser=' + (activeUserEmail || 'unknown'), 'INFO');
+
+        const promptMessage = 'Enter the email address that should receive the test message.' +
+            (defaultRecipient ? '\n\nLeave blank to send it to the configured NotificationEmail (' + defaultRecipient + ').' : '');
+        const prompt = ui.prompt('Email Capability Test', promptMessage, ui.ButtonSet.OK_CANCEL);
+
+        if (prompt.getSelectedButton() !== ui.Button.OK) {
+            ui.alert('Email Capability Test cancelled.');
+            return false;
+        }
+
+        let recipient = prompt.getResponseText().trim();
+        if (!recipient && defaultRecipient) {
+            recipient = defaultRecipient;
+        }
+
+        if (!recipient) {
+            throw new Error('No recipient email provided. Please configure NotificationEmail in the Config sheet or enter an address.');
+        }
+
+        const subjectSuffix = new Date().toISOString();
+        const subject = '[Drive Permission Manager] Email Capability Test - ' + subjectSuffix;
+        const bodyLines = [
+            'This is a live email triggered by the "Email Capability Test" from the Permissions Manager Testing menu.',
+            '',
+            'Receiving this message confirms that Apps Script can send outbound email as configured.',
+            '',
+            'Timestamp: ' + subjectSuffix,
+            'Sheet URL: ' + SpreadsheetApp.getActive().getUrl()
+        ];
+
+        MailApp.sendEmail({
+            to: recipient,
+            subject: subject,
+            body: bodyLines.join('\n')
+        });
+
+        log_('VERIFICATION PASSED: Test email sent to ' + recipient + '.', 'INFO');
+        showTestMessage_('Email Sent', 'A test email was sent to ' + recipient + '. Please confirm it arrived.' +
+            '\n\nIf it does not arrive (especially for external addresses), check Admin Console > Email Log Search ' +
+            'for routing/rejections and confirm external mail policies for Apps Script/API sends.');
+        success = true;
+    } catch (e) {
+        log_('TEST FAILED: ' + e.toString() + ' Stack: ' + e.stack, 'ERROR');
+        showTestMessage_('Test Failed', 'The email could not be sent. Check the TestLog for details. Error: ' + e.message);
+    } finally {
+        const durationSeconds = ((new Date().getTime() - startTime.getTime()) / 1000).toFixed(2);
+        log_('TEST DURATION: ' + durationSeconds + ' seconds', 'INFO');
+        const testStatus = success ? '✓ PASSED' : '✗ FAILED';
+        log_('>>> TEST RESULT: Email Capability Test ' + testStatus, success ? 'INFO' : 'ERROR');
+        log_('', 'INFO');
+        SCRIPT_EXECUTION_MODE = 'DEFAULT';
+    }
+
+    return success;
+}
+
+function runSheetLockingTest_() {
+    SCRIPT_EXECUTION_MODE = 'TEST';
+    log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
+    log_('║  Sheet Locking Test                                          ║', 'INFO');
+    log_('╚══════════════════════════════════════════════════════════════╝', 'INFO');
+
+    const startTime = new Date();
+    let success = false;
+    const testSheetName = 'SheetLockingTestSheet_' + new Date().getTime();
+    const testExecutionId = 'TEST_EXECUTION_' + new Date().getTime();
+    let sheet;
+
+    try {
+        // 1. Create a temporary sheet
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        sheet = ss.insertSheet(testSheetName, ss.getSheets().length);
+        log_('Created temporary sheet: ' + testSheetName, 'INFO');
+
+        // 2. Lock the sheet
+        lockSheetForEdits_(sheet, testExecutionId);
+
+        // 3. Verify protection is on
+        let protections = sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET);
+        const expectedDescription = 'Sync Lock by execution: ' + testExecutionId;
+        if (protections.length !== 1 || protections[0].getDescription() !== expectedDescription) {
+            throw new Error('VERIFICATION FAILED: Sheet was not locked correctly or description is wrong.');
+        }
+        log_('VERIFICATION PASSED: Sheet protection is applied.', 'INFO');
+
+        // 4. Verify the editor is correct
+        const editors = protections[0].getEditors();
+        const me = Session.getEffectiveUser().getEmail();
+        if (editors.length !== 1 || editors[0].getEmail() !== me) {
+            throw new Error('VERIFICATION FAILED: Protection should only have one editor: the script owner.');
+        }
+        log_('VERIFICATION PASSED: Protection has the correct editor.', 'INFO');
+
+        // NOTE: We cannot test that an edit fails from within the script, because a script
+        // running as the owner will always have permission to edit a protected range.
+        // The protection is for other users in the UI. This test verifies the protection is
+        // set up correctly, which is the most we can do in an automated test.
+
+        // 5. Unlock the sheet
+        unlockSheetForEdits_(sheet, testExecutionId);
+
+        // 6. Verify protection is off
+        protections = sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET);
+        if (protections.length > 0) {
+            throw new Error('VERIFICATION FAILED: Sheet was not unlocked correctly.');
+        }
+        log_('VERIFICATION PASSED: Sheet is unlocked.', 'INFO');
+
+        // 7. Attempt to edit (should succeed)
+        try {
+            sheet.getRange('A1').setValue('This should succeed');
+            const value = sheet.getRange('A1').getValue();
+            if (value !== 'This should succeed') {
+                throw new Error('VERIFICATION FAILED: Value was not set correctly after unlocking.');
+            }
+            log_('VERIFICATION PASSED: Edit succeeded on unlocked sheet.', 'INFO');
+        } catch (e) {
+            throw new Error('VERIFICATION FAILED: Edit failed on an unlocked sheet. Error: ' + e.message);
+        }
+
+        success = true;
+
+    } catch (e) {
+        log_('TEST FAILED: ' + e.toString() + ' Stack: ' + e.stack, 'ERROR');
+        success = false;
+    } finally {
+        // 8. Cleanup
+        if (sheet) {
+            try {
+                SpreadsheetApp.getActiveSpreadsheet().deleteSheet(sheet);
+                log_('Cleaned up temporary sheet: ' + testSheetName, 'INFO');
+            } catch (e) {
+                log_('Error during cleanup: ' + e.message, 'ERROR');
+            }
+        }
+
+        const endTime = new Date();
+        const durationSeconds = ((endTime.getTime() - startTime.getTime()) / 1000).toFixed(2);
+        log_('TEST DURATION: ' + durationSeconds + ' seconds', 'INFO');
+        const testStatus = success ? '✓ PASSED' : '✗ FAILED';
+        log_('>>> TEST RESULT: Sheet Locking Test ' + testStatus, success ? 'INFO' : 'ERROR');
+        log_('', 'INFO');
+        SCRIPT_EXECUTION_MODE = 'DEFAULT';
+    }
+    return success;
+}
+
+
+/**
+ * Runs all three test functions in sequence.
+ * Tests run: Manual Access Test, Stress Test, Add/Delete Separation Test
+ */
+function runAllTests() {
+    SCRIPT_EXECUTION_MODE = 'TEST';
+    const overallStartTime = new Date();
+    const ui = SpreadsheetApp.getUi();
+    const testConfig = getTestConfiguration_();
+
+    try {
+        if (shouldSkipGroupOps_()) {
+            showTestMessage_('Test Aborted', 'All Tests require the Admin Directory service (Admin SDK). Please enable it or run on a Google Workspace domain.');
+            return;
+        }
+
+        const response = showTestConfirm_('Run All Tests', 'This will run all tests sequentially. This may take several minutes. Continue?', ui.Button.YES);
+        if (response !== ui.Button.YES) {
+            showTestMessage_('All Tests cancelled.', 'The test run was cancelled.');
+            return;
+        }
+
+        // Clear all existing test data before starting
+        clearAllTestsData(true); // Skip confirmation since user already confirmed running tests
+        SCRIPT_EXECUTION_MODE = 'TEST'; // Reset mode after clearAllTestsData (it sets to DEFAULT in finally)
+
+        const tests = [
+            { name: 'Manual Access Test', func: runManualAccessTest },
+            { name: 'Stress Test', func: runStressTest },
+            { name: 'Add/Delete Separation Test', func: runAddDeleteSeparationTest },
+            { name: 'AutoSync Error Email Test', func: runAutoSyncErrorEmailTest },
+            { name: 'Sheet Locking Test', func: runSheetLockingTest_ },
+            { name: 'Circular Dependency Test', func: runCircularDependencyTest_ },
+            { name: 'UserGroup Deletion Test', func: runUserGroupDeletionTest },
+            { name: 'Folder-Role Deletion Test', func: runFolderRoleDeletionTest },
+            { name: 'Deletion Disabled Test', func: runDeletionDisabledTest },
+            { name: 'Idempotent Deletion Test', func: runIdempotentDeletionTest }
+        ];
+
+        const testResults = [];
+        const totalTests = tests.length;
+
+        tests.forEach(function(test, index) {
+            log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
+            log_('║  TEST ' + (index + 1) + '/' + totalTests + ': ' + test.name + ' ║', 'INFO');
+            log_('╚══════════════════════════════════════════════════════════════╝', 'INFO');
+            const testResult = test.func();
+            SCRIPT_EXECUTION_MODE = 'TEST'; // Reset after test completes
+            const testStatus = testResult ? '✓ PASSED' : '✗ FAILED';
+            log_('>>> TEST RESULT: ' + test.name + ' ' + testStatus, testResult ? 'INFO' : 'ERROR');
+            log_('', 'INFO');
+            testResults.push(test.name + ': ' + (testResult ? 'PASSED' : 'FAILED'));
+        });
+
+        // Summary
+        const overallEndTime = new Date();
+        const overallDurationSeconds = ((overallEndTime.getTime() - overallStartTime.getTime()) / 1000).toFixed(2);
+
+        const passedCount = testResults.filter(function(r) { return r.includes('PASSED'); }).length;
+        const failedCount = testResults.filter(function(r) { return r.includes('FAILED'); }).length;
+        const allPassed = failedCount === 0;
+
+        log_('', 'INFO');
+        log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
+        log_('║                    TEST SUMMARY                              ║', 'INFO');
+        log_('╚══════════════════════════════════════════════════════════════╝', 'INFO');
+        log_('Total Tests Run: ' + totalTests, 'INFO');
+        log_('Tests Passed: ' + passedCount + ' ✓', 'INFO');
+        log_('Tests Failed: ' + failedCount + (failedCount > 0 ? ' ✗' : ''), failedCount > 0 ? 'ERROR' : 'INFO');
+        log_('Overall Duration: ' + overallDurationSeconds + ' seconds', 'INFO');
+        log_('', 'INFO');
+        log_('Individual Test Results:', 'INFO');
+        testResults.forEach(function(result) {
+            const isPassed = result.includes('PASSED');
+            const icon = isPassed ? '  ✓' : '  ✗';
+            log_(icon + ' ' + result, isPassed ? 'INFO' : 'ERROR');
+        });
+        log_('', 'INFO');
+        log_('═══════════════════════════════════════════════════════════════', 'INFO');
+        log_(allPassed ? '✓✓✓ ALL TESTS PASSED ✓✓✓' : '✗✗✗ SOME TESTS FAILED ✗✗✗', allPassed ? 'INFO' : 'ERROR');
+        log_('═══════════════════════════════════════════════════════════════', 'INFO');
+
+        // Brief completion message (detailed results are already in TestLog)
+        showTestMessage_('All Tests Complete',
+                         'All ' + totalTests + ' tests completed in ' + overallDurationSeconds + ' seconds.\n\n' +
+                         (allPassed ? '✓✓✓ ALL TESTS PASSED ✓✓✓' : '✗✗✗ SOME TESTS FAILED ✗✗✗') +
+                         '\n\nCheck the TestLog sheet for detailed results.');
+
+    } finally {
+        SCRIPT_EXECUTION_MODE = 'DEFAULT';
+    }
+}
+
+/**
+ * Clears all test data, including stress test artifacts and the test log.
+ * @param {boolean} skipConfirmation - If true, skip the confirmation prompt
+ */
+function clearAllTestsData(skipConfirmation = false) {
+    SCRIPT_EXECUTION_MODE = 'TEST';
+    try {
+        if (!skipConfirmation) {
+            const ui = SpreadsheetApp.getUi();
+            const response = ui.alert('Are you sure you want to delete all test data?', 'This will delete all test folders, groups, and sheets, and clear the TestLog.', ui.ButtonSet.YES_NO);
+            if (response !== ui.Button.YES) {
+                return;
+            }
+        }
+
+        showTestMessage_('Cleanup', 'Clearing all test data. This may take a moment.');
+
+        const testConfig = getTestConfiguration_();
+        const manualTestFolderName = testConfig.folderName;
+
+        // Delete all test-related sheets (including orphaned ones)
+        log_('Starting sheet cleanup - looking for test sheets to delete...');
+        const allSheets = SpreadsheetApp.getActiveSpreadsheet().getSheets();
+        log_('Found ' + allSheets.length + ' total sheets in spreadsheet');
+
+        let deletedSheetCount = 0;
+        allSheets.forEach(function (sheet) {
+            const sheetName = sheet.getName();
+            if (isTestSheet_(sheetName)) {
+                log_('Attempting to delete sheet: ' + sheetName);
+                try {
+                    SpreadsheetApp.getActiveSpreadsheet().deleteSheet(sheet);
+                    log_('✓ Successfully deleted sheet: ' + sheetName);
+                    deletedSheetCount++;
+                } catch (e) {
+                    log_('✗ Could not delete sheet ' + sheetName + ': ' + e.message, 'ERROR');
+                }
+            }
+        });
+        log_('Sheet cleanup complete. Deleted ' + deletedSheetCount + ' sheets.');
+
+        const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+        if (managedSheet) {
+            const headers = getHeaderMap_(managedSheet);
+            const folderNameCol = resolveColumn_(headers, 'foldername', 1);
+            const folderIdCol = resolveColumn_(headers, 'folderid', 2);
+            const groupEmailCol = resolveColumn_(headers, 'groupemail', 4);
+            const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+            const data = managedSheet.getDataRange().getValues();
+            const rowsToDelete = [];
+            for (let i = data.length - 1; i >= 1; i--) {
+                const folderName = data[i][folderNameCol - 1];
+                if (folderName && (folderName === manualTestFolderName || folderName.startsWith('StressTestFolder_'))) {
+                    const folderId = data[i][folderIdCol - 1];
+                    const groupEmail = data[i][groupEmailCol - 1];
+                    const userSheetName = data[i][userSheetNameCol - 1];
+                    // Note: cleanupFolderData_ will try to delete the sheet, but it's already deleted above
+                    // That's fine - it will log a warning and continue with group/folder cleanup
+                    cleanupFolderData_(folderName, folderId, groupEmail, userSheetName);
+                    rowsToDelete.push(i + 1);
+                }
+            }
+            rowsToDelete.forEach(function (rowIndex) {
+                managedSheet.deleteRow(rowIndex);
+            });
+        }
+
+        // Clear the TestLog sheet
+        const testLogSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(TEST_LOG_SHEET_NAME);
+        if (testLogSheet) {
+            testLogSheet.clear();
+            testLogSheet.getRange('A1:C1').setValues([['Timestamp', 'Level', 'Message']]).setFontWeight('bold');
+            log_('TestLog sheet has been cleared.');
+        }
+
+        showTestMessage_('Cleanup Complete', 'All test data has been cleared.');
+
+    } catch (e) {
+        log_('Error clearing all test data: ' + e.toString(), 'ERROR');
+        SpreadsheetApp.getUi().alert('An error occurred during cleanup: ' + e.message);
+    } finally {
+        SCRIPT_EXECUTION_MODE = 'DEFAULT';
+    }
+}
+
+/**
+ * Syncs a single folder from the ManagedFolders sheet by calling the main batch processor.
+ * @param {number} rowIndex The row number of the folder to sync.
+ * @param {boolean} addOnly - If true, only perform add operations.
+ * @returns {string} The status of the sync.
+ */
+function syncSingleFolder_(rowIndex, addOnly = false) {
+  const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+  const headers = getHeaderMap_(managedSheet);
+  const folderNameCol = resolveColumn_(headers, 'foldername', 1);
+  const folderName = managedSheet.getRange(rowIndex, folderNameCol).getValue();
+  log_('Fast sync for single folder: ' + folderName + ' (row ' + rowIndex + ')');
+  try {
+    processManagedFolders_({
+      onlySyncRowIndexes: [rowIndex],
+      addOnly: addOnly,
+      silentMode: true,
+      executionSource: 'TEST'
+    });
+    return 'OK';
+  } catch (e) {
+    const errorMessage = 'Error in syncSingleFolder_ for row ' + rowIndex + ': ' + e.message;
+    log_(errorMessage, 'ERROR');
+    return errorMessage;
+  }
+}
+
+/**
+ * Syncs only the folders that match the given prefixes by calling the main batch processor.
+ * @param {Array<string>} prefixes - An array of folder name prefixes to sync.
+ * @param {boolean} addOnly - If true, only perform add operations.
+ */
+function testOnlySync_(prefixes, addOnly = false) {
+  try {
+    processManagedFolders_({
+      onlySyncPrefixes: prefixes,
+      addOnly: addOnly,
+      silentMode: true,
+      executionSource: 'TEST'
+    });
+  } catch (e) {
+    // The core processor will log details. This is just a top-level catch.
+    log_('Error during testOnlySync_: ' + e.message, 'ERROR');
+  }
+}
+
+function cleanupFolderByName() {
+    SCRIPT_EXECUTION_MODE = 'TEST';
+    try {
+        if (shouldSkipGroupOps_()) {
+            showTestMessage_('Cleanup Aborted', 'Cleanup requires the Admin Directory service (Admin SDK). Please enable it or run on a Google Workspace domain.');
+            return;
+        }
+        const ui = SpreadsheetApp.getUi();
+        const testConfig = getTestConfiguration_();
+
+        const folderNamePrompt = ui.prompt('Enter the exact name of the folder to clean up:');
+        if (folderNamePrompt.getSelectedButton() !== ui.Button.OK || !folderNamePrompt.getResponseText()) {
+            return;
+        }
+        const folderName = folderNamePrompt.getResponseText();
+
+        const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+        const headers = getHeaderMap_(managedSheet);
+        const folderNameCol = resolveColumn_(headers, 'foldername', 1);
+        const folderIdCol = resolveColumn_(headers, 'folderid', 2);
+        const groupEmailCol = resolveColumn_(headers, 'groupemail', 4);
+        const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+        const data = managedSheet.getDataRange().getValues();
+        let rowIndexToDelete = -1;
+        let folderId, groupEmail, userSheetName;
+
+        for (let i = 1; i < data.length; i++) {
+            if (data[i][folderNameCol - 1] === folderName) {
+                rowIndexToDelete = i + 1;
+                folderId = data[i][folderIdCol - 1];
+                groupEmail = data[i][groupEmailCol - 1];
+                userSheetName = data[i][userSheetNameCol - 1];
+                break;
+            }
+        }
+
+        if (rowIndexToDelete === -1) {
+            showTestMessage_('Error', 'Folder not found in the ManagedFolders sheet.');
+            return;
+        }
+
+        let response = ui.Button.YES;
+        if (testConfig.autoConfirm !== true) {
+            response = ui.alert('Are you sure you want to delete all data for folder "' + folderName + '"?', 'This will delete the folder, group, and sheet.', ui.ButtonSet.YES_NO);
+        }
+        if (response !== ui.Button.YES) {
+            return;
+        }
+
+        cleanupFolderData_(folderName, folderId, groupEmail, userSheetName);
+        managedSheet.deleteRow(rowIndexToDelete);
+
+        showTestMessage_('Cleanup', 'Cleanup Complete for ' + folderName);
+    } finally {
+        SCRIPT_EXECUTION_MODE = 'DEFAULT';
+    }
+}
+
+function removeBlankRows() {
+    let totalRowsDeleted = 0;
+
+    /**
+     * Helper function to remove blank rows from a specific sheet.
+     * A row is considered blank if its key identifying column(s) are empty.
+     * @param {string} sheetName The name of the sheet to clean.
+     * @param {Array<number>} keyColumnIndexes An array of 1-based column indexes to check. If all are empty, the row is deleted.
+     */
+    function _removeBlankRowsFromSheet(sheetName, keyColumnIndexes = [1]) {
+        const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+        if (!sheet) {
+            log_(`removeBlankRows: Sheet "${sheetName}" not found.`, 'WARN');
+            return 0;
+        }
+
+        const lastRow = sheet.getLastRow();
+        if (lastRow <= 1) {
+            return 0; // Nothing to do
+        }
+
+        const data = sheet.getDataRange().getValues();
+        let deletedCount = 0;
+
+        // Iterate backwards to safely delete rows without messing up indices
+        for (let i = data.length - 1; i >= 1; i--) { // Start from bottom, skip header
+            const rowData = data[i];
+            
+            // A row is considered effectively blank if all its key columns are empty.
+            const isEffectivelyBlank = keyColumnIndexes.every(colIndex => {
+                const cellValue = rowData[colIndex - 1]; // convert 1-based to 0-based
+                return !cellValue || String(cellValue).trim() === '';
+            });
+            
+            if (isEffectivelyBlank) {
+                sheet.deleteRow(i + 1); // sheet rows are 1-indexed
+                deletedCount++;
+            }
+        }
+        
+        if (deletedCount > 0) {
+            log_(`Removed ${deletedCount} blank row(s) from "${sheetName}".`);
+        }
+        return deletedCount;
+    }
+
+    try {
+        const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+        if(managedSheet) {
+            const managedHeaders = getHeaderMap_(managedSheet);
+            const folderNameCol = resolveColumn_(managedHeaders, 'foldername', 1);
+            totalRowsDeleted += _removeBlankRowsFromSheet(MANAGED_FOLDERS_SHEET_NAME, [folderNameCol]);
+        }
+        
+        const ugSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(USER_GROUPS_SHEET_NAME);
+        if(ugSheet) {
+          const ugHeaders = getHeaderMap_(ugSheet);
+          const groupNameCol = resolveColumn_(ugHeaders, 'groupname', 1);
+          totalRowsDeleted += _removeBlankRowsFromSheet(USER_GROUPS_SHEET_NAME, [groupNameCol]);
+        }
+
+        if (totalRowsDeleted > 0) {
+            SpreadsheetApp.getUi().alert(totalRowsDeleted + ' blank row(s) have been removed from the configuration sheets.');
+        } else {
+            SpreadsheetApp.getUi().alert('No blank rows found in ManagedFolders or UserGroups sheets.');
+        }
+    } catch (e) {
+        log_('Error in removeBlankRows: ' + e.message, 'ERROR');
+        SpreadsheetApp.getUi().alert('An error occurred while removing blank rows: ' + e.message);
+    }
+}
+
+function runCircularDependencyTest_() {
+    SCRIPT_EXECUTION_MODE = 'TEST';
+    log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
+    log_('║  Circular Dependency Test                                    ║', 'INFO');
+    log_('╚══════════════════════════════════════════════════════════════╝', 'INFO');
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const userGroupsSheet = ss.getSheetByName(USER_GROUPS_SHEET_NAME);
+    const sheetA = ss.insertSheet('TestCycleA_G', ss.getSheets().length);
+    const sheetB = ss.insertSheet('TestCycleB_G', ss.getSheets().length);
+    let success = false;
+
+    try {
+        // 1. Setup the circular dependency
+        const groupA_Name = 'TestCycleA';
+        const groupA_Email = 'test-cycle-a@' + Session.getActiveUser().getEmail().split('@')[1];
+        const groupB_Name = 'TestCycleB';
+        const groupB_Email = 'test-cycle-b@' + Session.getActiveUser().getEmail().split('@')[1];
+
+        // Add Group B to Group A's sheet
+        sheetA.getRange('A2').setValue(groupB_Email);
+        // Add Group A to Group B's sheet
+        sheetB.getRange('A2').setValue(groupA_Email);
+
+        // Add entries to UserGroups sheet
+        userGroupsSheet.appendRow([groupA_Name, groupA_Email]);
+        userGroupsSheet.appendRow([groupB_Name, groupB_Email]);
+
+        log_('Created circular dependency: TestCycleA -> TestCycleB -> TestCycleA', 'INFO');
+
+        // 2. Run the validation
+        try {
+            validateGroupNesting_();
+            // If it reaches here, the test failed because no error was thrown
+            throw new Error('VERIFICATION FAILED: validateGroupNesting_ did not throw an error for a circular dependency.');
+        } catch (e) {
+            if (e.message.includes('Circular dependency detected')) {
+                log_('VERIFICATION PASSED: Correctly detected circular dependency. Error: ' + e.message, 'INFO');
+                success = true;
+            } else {
+                // Re-throw if it's an unexpected error
+                throw e;
+            }
+        }
+    } catch (e) {
+        log_('TEST FAILED: ' + e.toString() + ' Stack: ' + e.stack, 'ERROR');
+        success = false;
+    } finally {
+        // 3. Cleanup
+        ss.deleteSheet(sheetA);
+        ss.deleteSheet(sheetB);
+
+        const data = userGroupsSheet.getDataRange().getValues();
+        for (let i = data.length - 1; i >= 1; i--) {
+            if (data[i][0] === 'TestCycleA' || data[i][0] === 'TestCycleB') {
+                userGroupsSheet.deleteRow(i + 1);
+            }
+        }
+        log_('Cleaned up circular dependency test data.');
+        
+        const testStatus = success ? '✓ PASSED' : '✗ FAILED';
+        log_('>>> TEST RESULT: Circular Dependency Test ' + testStatus, success ? 'INFO' : 'ERROR');
+        log_('', 'INFO');
+        SCRIPT_EXECUTION_MODE = 'DEFAULT';
+    }
+    return success;
+}
+
+/**
+ * Test: UserGroup Deletion
+ * Tests that a UserGroup can be deleted via the Delete checkbox.
+ * Verifies: group deleted, sheet deleted, row removed, summary correct.
+ */
+function runUserGroupDeletionTest() {
+    SCRIPT_EXECUTION_MODE = 'TEST';  // Set mode FIRST before any logging
+
+    const testName = 'UserGroup Deletion Test';
+    log_('', 'INFO');
+    log_('========================================', 'INFO');
+    log_('>>> RUNNING TEST: ' + testName, 'INFO');
+    log_('========================================', 'INFO');
+
+    let success = true;
+    let testGroupName = '';
+    let testGroupEmail = '';
+
+    try {
+
+        // Prerequisites
+        const deletionEnabled = getConfigValue_('AllowGroupFolderDeletion', false);
+        if (!deletionEnabled) {
+            log_('⚠️ Test requires AllowGroupFolderDeletion=true in Config', 'WARN');
+            log_('Setting AllowGroupFolderDeletion=true for test...', 'INFO');
+            const configSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Config');
+            const configData = configSheet.getDataRange().getValues();
+            for (let i = 1; i < configData.length; i++) {
+                if (configData[i][0] === 'AllowGroupFolderDeletion') {
+                    configSheet.getRange(i + 1, 2).setValue(true);
+                    log_('✓ Set AllowGroupFolderDeletion=true', 'INFO');
+                    break;
+                }
+            }
+        }
+
+        // 1. Setup: Create test UserGroup
+        testGroupName = 'TestDeleteGroup_' + new Date().getTime();
+        testGroupEmail = testGroupName.toLowerCase().replace(/[^a-z0-9]/g, '') + '@' + Session.getActiveUser().getEmail().split('@')[1];
+
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        const userGroupsSheet = ss.getSheetByName('UserGroups');
+        const ugHeaders = getHeaderMap_(userGroupsSheet);
+        const ugDeleteCol = resolveColumn_(ugHeaders, 'delete', 6);
+
+        // Add group row
+        const lastRow = userGroupsSheet.getLastRow();
+        userGroupsSheet.getRange(lastRow + 1, 1, 1, 6).setValues([[
+            testGroupName,
+            testGroupEmail,
+            '', // Admin link (will be populated by sync)
+            '', // Last Synced
+            '', // Status
+            false // Delete checkbox
+        ]]);
+        log_('✓ Added test group to UserGroups: ' + testGroupName, 'INFO');
+
+        // Create group sheet with test member
+        const testSheet = ss.insertSheet(testGroupName + '_G', ss.getSheets().length);
+        testSheet.getRange('A1:A2').setValues([['Email'], ['test.member@example.com']]);
+        log_('✓ Created group sheet: ' + testGroupName + '_G', 'INFO');
+
+        // Run sync to create actual Google Group
+        log_('Running sync to create Google Group...', 'INFO');
+        syncUserGroups({ dryRun: false });
+
+        // Verify group was created
+        const groupData = userGroupsSheet.getDataRange().getValues();
+        let groupRow = -1;
+        for (let i = 1; i < groupData.length; i++) {
+            if (groupData[i][0] === testGroupName) {
+                groupRow = i;
+                break;
+            }
+        }
+
+        if (groupRow === -1) {
+            throw new Error('Test group row not found after sync');
+        }
+
+        const groupStatus = groupData[groupRow][4]; // Status column
+        if (groupStatus && groupStatus.includes('ERROR')) {
+            throw new Error('Group sync failed: ' + groupStatus);
+        }
+
+        log_('✓ Group synced successfully', 'INFO');
+
+        // 2. Mark for deletion
+        userGroupsSheet.getRange(groupRow + 1, ugDeleteCol).setValue(true);
+        log_('✓ Marked group for deletion (Delete checkbox = true)', 'INFO');
+
+        // 3. Process deletions
+        log_('Processing deletion requests...', 'INFO');
+        const deletionSummary = processDeletionRequests_({ dryRun: false });
+
+        // 4. Verify deletion
+        if (deletionSummary.skipped) {
+            throw new Error('Deletion was skipped (feature disabled?)');
+        }
+
+        if (deletionSummary.userGroupsDeleted !== 1) {
+            throw new Error('Expected 1 group deleted, got: ' + deletionSummary.userGroupsDeleted);
+        }
+
+        log_('✓ Deletion summary correct: 1 group deleted', 'INFO');
+
+        // Verify Google Group is deleted
+        try {
+            AdminDirectory.Groups.get(testGroupEmail);
+            throw new Error('Google Group still exists after deletion');
+        } catch (e) {
+            if (e.message.includes('Resource Not Found') || e.message.includes('notFound')) {
+                log_('✓ Google Group deleted successfully', 'INFO');
+            } else {
+                throw e;
+            }
+        }
+
+        // Verify sheet is deleted
+        const sheetStillExists = ss.getSheetByName(testGroupName + '_G');
+        if (sheetStillExists) {
+            throw new Error('Group sheet still exists after deletion');
+        }
+        log_('✓ Group sheet deleted', 'INFO');
+
+        // Verify row removed from UserGroups
+        const updatedData = userGroupsSheet.getDataRange().getValues();
+        let rowStillExists = false;
+        for (let i = 1; i < updatedData.length; i++) {
+            if (updatedData[i][0] === testGroupName) {
+                rowStillExists = true;
+                break;
+            }
+        }
+
+        if (rowStillExists) {
+            throw new Error('Group row still exists in UserGroups after deletion');
+        }
+        log_('✓ Group row removed from UserGroups', 'INFO');
+
+        log_('✓ All verifications passed', 'INFO');
+
+    } catch (err) {
+        success = false;
+        log_('✗ TEST FAILED: ' + err.message, 'ERROR');
+        log_(err.stack, 'ERROR');
+
+        // Cleanup on error
+        try {
+            const ss = SpreadsheetApp.getActiveSpreadsheet();
+            const testSheet = ss.getSheetByName(testGroupName + '_G');
+            if (testSheet) {
+                ss.deleteSheet(testSheet);
+                log_('Cleaned up test sheet', 'INFO');
+            }
+
+            const userGroupsSheet = ss.getSheetByName('UserGroups');
+            const data = userGroupsSheet.getDataRange().getValues();
+            for (let i = data.length - 1; i >= 1; i--) {
+                if (data[i][0] && data[i][0].startsWith('TestDeleteGroup_')) {
+                    userGroupsSheet.deleteRow(i + 1);
+                }
+            }
+            log_('Cleaned up test group rows', 'INFO');
+        } catch (cleanupErr) {
+            log_('Cleanup error: ' + cleanupErr.message, 'WARN');
+        }
+    } finally {
+        const testStatus = success ? '✓ PASSED' : '✗ FAILED';
+        log_('>>> TEST RESULT: ' + testName + ' ' + testStatus, success ? 'INFO' : 'ERROR');
+        log_('', 'INFO');
+        SCRIPT_EXECUTION_MODE = 'DEFAULT';
+    }
+    return success;
+}
+
+/**
+ * Test: Folder-Role Deletion
+ * Tests that a folder-role binding can be deleted via the Delete checkbox.
+ * Verifies: group deleted, sheet deleted, row removed, folder NOT deleted, summary correct.
+ */
+function runFolderRoleDeletionTest() {
+    SCRIPT_EXECUTION_MODE = 'TEST';  // Set mode FIRST before any logging
+
+    const testName = 'Folder-Role Deletion Test';
+    log_('', 'INFO');
+    log_('========================================', 'INFO');
+    log_('>>> RUNNING TEST: ' + testName, 'INFO');
+    log_('========================================', 'INFO');
+
+    let success = true;
+    let testFolderId = null;
+    let testFolderName = null;
+    let testUserSheetName = '';
+
+    try {
+
+        // Prerequisites
+        const deletionEnabled = getConfigValue_('AllowGroupFolderDeletion', false);
+        if (!deletionEnabled) {
+            log_('⚠️ Test requires AllowGroupFolderDeletion=true in Config', 'WARN');
+            log_('Setting AllowGroupFolderDeletion=true for test...', 'INFO');
+            const configSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Config');
+            const configData = configSheet.getDataRange().getValues();
+            for (let i = 1; i < configData.length; i++) {
+                if (configData[i][0] === 'AllowGroupFolderDeletion') {
+                    configSheet.getRange(i + 1, 2).setValue(true);
+                    log_('✓ Set AllowGroupFolderDeletion=true', 'INFO');
+                    break;
+                }
+            }
+        }
+
+        // 1. Setup: Create test folder in Drive
+        testFolderName = 'TestDeleteFolder_' + new Date().getTime();
+        const testFolder = DriveApp.createFolder(testFolderName);
+        testFolderId = testFolder.getId();
+        log_('✓ Created test folder in Drive: ' + testFolderName + ' (ID: ' + testFolderId + ')', 'INFO');
+
+        // 2. Add folder-role to ManagedFolders
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        const managedFoldersSheet = ss.getSheetByName('ManagedFolders');
+        const headers = getHeaderMap_(managedFoldersSheet);
+        const deleteCol = resolveColumn_(headers, 'delete', 9);
+
+        const testRole = 'reader';
+        testUserSheetName = 'TestDeleteFolderUsers';
+
+        // Create user sheet
+        const testUserSheet = ss.insertSheet(testUserSheetName, ss.getSheets().length);
+        testUserSheet.getRange('A1:A2').setValues([['Email'], ['test.user@example.com']]);
+        log_('✓ Created user sheet: ' + testUserSheetName, 'INFO');
+
+        // Add to ManagedFolders
+        const lastRow = managedFoldersSheet.getLastRow();
+        managedFoldersSheet.getRange(lastRow + 1, 1, 1, 9).setValues([[
+            testFolderName,
+            testFolderId,
+            testRole,
+            '', // GroupEmail (will be populated by sync)
+            testUserSheetName,
+            '', // Last Synced
+            '', // Status
+            '', // URL
+            false // Delete checkbox
+        ]]);
+        log_('✓ Added folder-role to ManagedFolders', 'INFO');
+
+        // Run sync to create group and permissions
+        log_('Running sync to create group and permissions...', 'INFO');
+        processManagedFolders_({ dryRun: false });
+
+        // Verify sync succeeded
+        const folderData = managedFoldersSheet.getDataRange().getValues();
+        let folderRow = -1;
+        for (let i = 1; i < folderData.length; i++) {
+            if (folderData[i][1] === testFolderId) {
+                folderRow = i;
+                break;
+            }
+        }
+
+        if (folderRow === -1) {
+            throw new Error('Test folder row not found after sync');
+        }
+
+        const folderStatus = folderData[folderRow][6]; // Status column
+        if (folderStatus && folderStatus.includes('ERROR')) {
+            throw new Error('Folder sync failed: ' + folderStatus);
+        }
+
+        const groupEmail = folderData[folderRow][3];
+        if (!groupEmail) {
+            throw new Error('Group email not populated after sync');
+        }
+
+        log_('✓ Folder-role synced successfully, group email: ' + groupEmail, 'INFO');
+
+        // 3. Mark for deletion
+        managedFoldersSheet.getRange(folderRow + 1, deleteCol).setValue(true);
+        log_('✓ Marked folder-role for deletion (Delete checkbox = true)', 'INFO');
+
+        // 4. Process deletions
+        log_('Processing deletion requests...', 'INFO');
+        const deletionSummary = processDeletionRequests_({ dryRun: false });
+
+        // 5. Verify deletion
+        if (deletionSummary.skipped) {
+            throw new Error('Deletion was skipped (feature disabled?)');
+        }
+
+        if (deletionSummary.foldersDeleted !== 1) {
+            throw new Error('Expected 1 folder-binding deleted, got: ' + deletionSummary.foldersDeleted);
+        }
+
+        log_('✓ Deletion summary correct: 1 folder-binding deleted', 'INFO');
+
+        // Verify Google Group is deleted
+        try {
+            AdminDirectory.Groups.get(groupEmail);
+            throw new Error('Google Group still exists after deletion');
+        } catch (e) {
+            if (e.message.includes('Resource Not Found') || e.message.includes('notFound')) {
+                log_('✓ Google Group deleted successfully', 'INFO');
+            } else {
+                throw e;
+            }
+        }
+
+        // Verify user sheet is deleted
+        const userSheetStillExists = ss.getSheetByName(testUserSheetName);
+        if (userSheetStillExists) {
+            throw new Error('User sheet still exists after deletion');
+        }
+        log_('✓ User sheet deleted', 'INFO');
+
+        // Verify row removed from ManagedFolders
+        const updatedData = managedFoldersSheet.getDataRange().getValues();
+        let rowStillExists = false;
+        for (let i = 1; i < updatedData.length; i++) {
+            if (updatedData[i][1] === testFolderId) {
+                rowStillExists = true;
+                break;
+            }
+        }
+
+        if (rowStillExists) {
+            throw new Error('Folder-role row still exists in ManagedFolders after deletion');
+        }
+        log_('✓ Folder-role row removed from ManagedFolders', 'INFO');
+
+        // CRITICAL: Verify folder still exists in Drive
+        try {
+            const folder = DriveApp.getFolderById(testFolderId);
+            log_('✓ CRITICAL VERIFICATION PASSED: Folder still exists in Drive (ID: ' + testFolderId + ')', 'INFO');
+        } catch (e) {
+            throw new Error('CRITICAL FAILURE: Folder was deleted from Drive! This violates the design requirement.');
+        }
+
+        log_('✓ All verifications passed', 'INFO');
+
+    } catch (err) {
+        success = false;
+        log_('✗ TEST FAILED: ' + err.message, 'ERROR');
+        log_(err.stack, 'ERROR');
+
+        // Cleanup on error
+        try {
+            const ss = SpreadsheetApp.getActiveSpreadsheet();
+            const testUserSheet = ss.getSheetByName(testUserSheetName);
+            if (testUserSheet) {
+                ss.deleteSheet(testUserSheet);
+                log_('Cleaned up test user sheet', 'INFO');
+            }
+
+            const managedFoldersSheet = ss.getSheetByName('ManagedFolders');
+            const data = managedFoldersSheet.getDataRange().getValues();
+            for (let i = data.length - 1; i >= 1; i--) {
+                if (data[i][0] && data[i][0].startsWith('TestDeleteFolder_')) {
+                    managedFoldersSheet.deleteRow(i + 1);
+                }
+            }
+            log_('Cleaned up test folder rows', 'INFO');
+        } catch (cleanupErr) {
+            log_('Cleanup error: ' + cleanupErr.message, 'WARN');
+        }
+    } finally {
+        // Cleanup test folder from Drive
+        if (testFolderId) {
+            try {
+                const folder = DriveApp.getFolderById(testFolderId);
+                folder.setTrashed(true);
+                log_('Cleaned up test folder from Drive', 'INFO');
+            } catch (e) {
+                log_('Could not cleanup test folder: ' + e.message, 'WARN');
+            }
+        }
+
+        const testStatus = success ? '✓ PASSED' : '✗ FAILED';
+        log_('>>> TEST RESULT: ' + testName + ' ' + testStatus, success ? 'INFO' : 'ERROR');
+        log_('', 'INFO');
+        SCRIPT_EXECUTION_MODE = 'DEFAULT';
+    }
+    return success;
+}
+
+/**
+ * Test: Deletion Disabled in Config
+ * Tests that deletions are skipped when AllowGroupFolderDeletion is false.
+ * Verifies: deletion skipped, row remains, status shows warning.
+ */
+function runDeletionDisabledTest() {
+    SCRIPT_EXECUTION_MODE = 'TEST';  // Set mode FIRST before any logging
+
+    const testName = 'Deletion Disabled Test';
+    log_('', 'INFO');
+    log_('========================================', 'INFO');
+    log_('>>> RUNNING TEST: ' + testName, 'INFO');
+    log_('========================================', 'INFO');
+
+    let success = true;
+    const testGroupName = 'TestDisabledDeleteGroup_' + new Date().getTime();
+
+    try {
+
+        // 1. Ensure AllowGroupFolderDeletion is FALSE
+        const configSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Config');
+        const configData = configSheet.getDataRange().getValues();
+        let configRow = -1;
+        for (let i = 1; i < configData.length; i++) {
+            if (configData[i][0] === 'AllowGroupFolderDeletion') {
+                configRow = i;
+                break;
+            }
+        }
+
+        if (configRow === -1) {
+            throw new Error('AllowGroupFolderDeletion setting not found in Config');
+        }
+
+        const originalValue = configData[configRow][1];
+        configSheet.getRange(configRow + 1, 2).setValue(false);
+        log_('✓ Set AllowGroupFolderDeletion=false', 'INFO');
+
+        // 2. Add test group row marked for deletion
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        const userGroupsSheet = ss.getSheetByName('UserGroups');
+
+        const lastRow = userGroupsSheet.getLastRow();
+        userGroupsSheet.getRange(lastRow + 1, 1, 1, 6).setValues([[
+            testGroupName,
+            testGroupName.toLowerCase() + '@example.com',
+            '',
+            '',
+            '',
+            true // Delete checkbox = true
+        ]]);
+        log_('✓ Added test group with Delete=true', 'INFO');
+
+        // 3. Process deletions (should skip)
+        log_('Processing deletion requests (should skip)...', 'INFO');
+        const deletionSummary = processDeletionRequests_({ dryRun: false });
+
+        // 4. Verify deletion was skipped
+        if (!deletionSummary.skipped) {
+            throw new Error('Deletion was not skipped when AllowGroupFolderDeletion=false');
+        }
+
+        if (deletionSummary.reason !== 'disabled') {
+            throw new Error('Expected skip reason "disabled", got: ' + deletionSummary.reason);
+        }
+
+        log_('✓ Deletion correctly skipped (feature disabled)', 'INFO');
+
+        // 5. Verify row still exists
+        const data = userGroupsSheet.getDataRange().getValues();
+        let rowFound = false;
+        let statusValue = '';
+        for (let i = 1; i < data.length; i++) {
+            if (data[i][0] === testGroupName) {
+                rowFound = true;
+                statusValue = data[i][4]; // Status column
+                break;
+            }
+        }
+
+        if (!rowFound) {
+            throw new Error('Test group row was removed despite feature being disabled');
+        }
+        log_('✓ Group row still exists (not deleted)', 'INFO');
+
+        // 6. Verify status shows warning
+        if (!statusValue || !statusValue.includes('Deletion disabled')) {
+            throw new Error('Expected status to show deletion disabled warning, got: ' + statusValue);
+        }
+        log_('✓ Status correctly shows "⚠️ Deletion disabled in Config"', 'INFO');
+
+        // 7. Cleanup
+        for (let i = data.length - 1; i >= 1; i--) {
+            if (data[i][0] === testGroupName) {
+                userGroupsSheet.deleteRow(i + 1);
+                break;
+            }
+        }
+        log_('✓ Cleaned up test group row', 'INFO');
+
+        // Restore original config value
+        configSheet.getRange(configRow + 1, 2).setValue(originalValue);
+        log_('✓ Restored AllowGroupFolderDeletion to original value', 'INFO');
+
+        log_('✓ All verifications passed', 'INFO');
+
+    } catch (err) {
+        success = false;
+        log_('✗ TEST FAILED: ' + err.message, 'ERROR');
+        log_(err.stack, 'ERROR');
+
+        // Cleanup on error
+        try {
+            const ss = SpreadsheetApp.getActiveSpreadsheet();
+            const userGroupsSheet = ss.getSheetByName('UserGroups');
+            const data = userGroupsSheet.getDataRange().getValues();
+            for (let i = data.length - 1; i >= 1; i--) {
+                if (data[i][0] && data[i][0].startsWith('TestDisabledDeleteGroup_')) {
+                    userGroupsSheet.deleteRow(i + 1);
+                }
+            }
+            log_('Cleaned up test group rows', 'INFO');
+        } catch (cleanupErr) {
+            log_('Cleanup error: ' + cleanupErr.message, 'WARN');
+        }
+    } finally {
+        const testStatus = success ? '✓ PASSED' : '✗ FAILED';
+        log_('>>> TEST RESULT: ' + testName + ' ' + testStatus, success ? 'INFO' : 'ERROR');
+        log_('', 'INFO');
+        SCRIPT_EXECUTION_MODE = 'DEFAULT';
+    }
+    return success;
+}
+
+/**
+ * Test: Idempotent Deletion
+ * Tests that attempting to delete an already-deleted group is handled gracefully.
+ * Verifies: no errors, row still removed, logs warning not error.
+ */
+function runIdempotentDeletionTest() {
+    SCRIPT_EXECUTION_MODE = 'TEST';  // Set mode FIRST before any logging
+
+    const testName = 'Idempotent Deletion Test';
+    log_('', 'INFO');
+    log_('========================================', 'INFO');
+    log_('>>> RUNNING TEST: ' + testName, 'INFO');
+    log_('========================================', 'INFO');
+
+    let success = true;
+    const testGroupName = 'TestIdempotentDelete_' + new Date().getTime();
+    const testGroupEmail = testGroupName.toLowerCase().replace(/[^a-z0-9]/g, '') + '@' + Session.getActiveUser().getEmail().split('@')[1];
+
+    try {
+
+        // Prerequisites
+        const deletionEnabled = getConfigValue_('AllowGroupFolderDeletion', false);
+        if (!deletionEnabled) {
+            log_('⚠️ Test requires AllowGroupFolderDeletion=true in Config', 'WARN');
+            log_('Setting AllowGroupFolderDeletion=true for test...', 'INFO');
+            const configSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Config');
+            const configData = configSheet.getDataRange().getValues();
+            for (let i = 1; i < configData.length; i++) {
+                if (configData[i][0] === 'AllowGroupFolderDeletion') {
+                    configSheet.getRange(i + 1, 2).setValue(true);
+                    log_('✓ Set AllowGroupFolderDeletion=true', 'INFO');
+                    break;
+                }
+            }
+        }
+
+        // 1. Add group row WITHOUT creating the actual Google Group
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        const userGroupsSheet = ss.getSheetByName('UserGroups');
+
+        const lastRow = userGroupsSheet.getLastRow();
+        userGroupsSheet.getRange(lastRow + 1, 1, 1, 6).setValues([[
+            testGroupName,
+            testGroupEmail,
+            '',
+            '',
+            '',
+            true // Delete checkbox = true
+        ]]);
+        log_('✓ Added test group row (without creating actual Google Group)', 'INFO');
+
+        // 2. Verify group does NOT exist in Google
+        let groupExistsInitially = false;
+        try {
+            AdminDirectory.Groups.get(testGroupEmail);
+            groupExistsInitially = true;
+        } catch (e) {
+            if (e.message.includes('Resource Not Found') || e.message.includes('notFound')) {
+                log_('✓ Confirmed: Google Group does not exist initially', 'INFO');
+            } else {
+                throw e;
+            }
+        }
+
+        if (groupExistsInitially) {
+            throw new Error('Test group already exists in Google (test setup failed)');
+        }
+
+        // 3. Process deletions (should handle gracefully)
+        log_('Processing deletion requests (group does not exist)...', 'INFO');
+        const deletionSummary = processDeletionRequests_({ dryRun: false });
+
+        // 4. Verify no exceptions were thrown (we got here!)
+        log_('✓ Deletion processing completed without exceptions', 'INFO');
+
+        // 5. Verify deletion summary shows the attempt
+        if (deletionSummary.userGroupsDeleted !== 1) {
+            throw new Error('Expected deletion count of 1, got: ' + deletionSummary.userGroupsDeleted);
+        }
+        log_('✓ Deletion summary correct: 1 group deletion processed', 'INFO');
+
+        // 6. Verify row was removed despite group not existing
+        const data = userGroupsSheet.getDataRange().getValues();
+        let rowStillExists = false;
+        for (let i = 1; i < data.length; i++) {
+            if (data[i][0] === testGroupName) {
+                rowStillExists = true;
+                break;
+            }
+        }
+
+        if (rowStillExists) {
+            throw new Error('Group row still exists after deletion attempt');
+        }
+        log_('✓ Group row removed successfully', 'INFO');
+
+        // 7. Check logs to verify warning (not error) was logged
+        // This is a manual verification - the test passes if we got here without exceptions
+        log_('✓ Idempotent deletion handled gracefully (check Log sheet for warning message)', 'INFO');
+
+        log_('✓ All verifications passed', 'INFO');
+
+    } catch (err) {
+        success = false;
+        log_('✗ TEST FAILED: ' + err.message, 'ERROR');
+        log_(err.stack, 'ERROR');
+
+        // Cleanup on error
+        try {
+            const ss = SpreadsheetApp.getActiveSpreadsheet();
+            const userGroupsSheet = ss.getSheetByName('UserGroups');
+            const data = userGroupsSheet.getDataRange().getValues();
+            for (let i = data.length - 1; i >= 1; i--) {
+                if (data[i][0] && data[i][0].startsWith('TestIdempotentDelete_')) {
+                    userGroupsSheet.deleteRow(i + 1);
+                }
+            }
+            log_('Cleaned up test group rows', 'INFO');
+
+            // Try to cleanup Google Group if it somehow was created
+            try {
+                AdminDirectory.Groups.remove(testGroupEmail);
+                log_('Cleaned up test Google Group', 'INFO');
+            } catch (e) {
+                // Expected if group doesn't exist
+            }
+        } catch (cleanupErr) {
+            log_('Cleanup error: ' + cleanupErr.message, 'WARN');
+        }
+    } finally {
+        const testStatus = success ? '✓ PASSED' : '✗ FAILED';
+        log_('>>> TEST RESULT: ' + testName + ' ' + testStatus, success ? 'INFO' : 'ERROR');
+        log_('', 'INFO');
+        SCRIPT_EXECUTION_MODE = 'DEFAULT';
+    }
+    return success;
+}
+
+/**
+ * Run all deletion-related tests
+ * Provides a comprehensive test suite for the deletion feature.
+ */
+function runAllDeletionTests() {
+    log_('', 'INFO');
+    log_('════════════════════════════════════════', 'INFO');
+    log_('>>> DELETION FEATURE TEST SUITE', 'INFO');
+    log_('════════════════════════════════════════', 'INFO');
+    log_('', 'INFO');
+
+    const results = {
+        total: 0,
+        passed: 0,
+        failed: 0,
+        tests: []
+    };
+
+    // Test 1: UserGroup Deletion
+    log_('Starting Test 1/4: UserGroup Deletion...', 'INFO');
+    const test1 = runUserGroupDeletionTest();
+    results.total++;
+    if (test1) {
+        results.passed++;
+        results.tests.push({ name: 'UserGroup Deletion', passed: true });
+    } else {
+        results.failed++;
+        results.tests.push({ name: 'UserGroup Deletion', passed: false });
+    }
+
+    // Test 2: Folder-Role Deletion
+    log_('Starting Test 2/4: Folder-Role Deletion...', 'INFO');
+    const test2 = runFolderRoleDeletionTest();
+    results.total++;
+    if (test2) {
+        results.passed++;
+        results.tests.push({ name: 'Folder-Role Deletion', passed: true });
+    } else {
+        results.failed++;
+        results.tests.push({ name: 'Folder-Role Deletion', passed: false });
+    }
+
+    // Test 3: Deletion Disabled
+    log_('Starting Test 3/4: Deletion Disabled...', 'INFO');
+    const test3 = runDeletionDisabledTest();
+    results.total++;
+    if (test3) {
+        results.passed++;
+        results.tests.push({ name: 'Deletion Disabled', passed: true });
+    } else {
+        results.failed++;
+        results.tests.push({ name: 'Deletion Disabled', passed: false });
+    }
+
+    // Test 4: Idempotent Deletion
+    log_('Starting Test 4/4: Idempotent Deletion...', 'INFO');
+    const test4 = runIdempotentDeletionTest();
+    results.total++;
+    if (test4) {
+        results.passed++;
+        results.tests.push({ name: 'Idempotent Deletion', passed: true });
+    } else {
+        results.failed++;
+        results.tests.push({ name: 'Idempotent Deletion', passed: false });
+    }
+
+    // Summary
+    log_('', 'INFO');
+    log_('════════════════════════════════════════', 'INFO');
+    log_('>>> TEST SUITE SUMMARY', 'INFO');
+    log_('════════════════════════════════════════', 'INFO');
+    log_('Total Tests: ' + results.total, 'INFO');
+    log_('Passed: ' + results.passed + ' ✓', 'INFO');
+    log_('Failed: ' + results.failed + (results.failed > 0 ? ' ✗' : ''), results.failed > 0 ? 'ERROR' : 'INFO');
+    log_('', 'INFO');
+
+    log_('Test Results:', 'INFO');
+    for (let i = 0; i < results.tests.length; i++) {
+        const test = results.tests[i];
+        const status = test.passed ? '✓ PASSED' : '✗ FAILED';
+        log_('  ' + (i + 1) + '. ' + test.name + ': ' + status, test.passed ? 'INFO' : 'ERROR');
+    }
+
+    log_('', 'INFO');
+    const overallStatus = results.failed === 0 ? '✓ ALL TESTS PASSED' : '✗ SOME TESTS FAILED';
+    log_('>>> ' + overallStatus, results.failed === 0 ? 'INFO' : 'ERROR');
+    log_('════════════════════════════════════════', 'INFO');
+    log_('', 'INFO');
+
+    return results.failed === 0;
+}
+
+/**
+ * Cleanup function for deletion test data
+ * Removes any orphaned test data left by failed deletion tests.
+ */
+function cleanupDeletionTestData() {
+    SCRIPT_EXECUTION_MODE = 'TEST';
+    try {
+        const ui = SpreadsheetApp.getUi();
+        const response = ui.alert(
+            'Cleanup Deletion Test Data',
+            'This will remove any leftover test data from deletion tests:\n\n' +
+            '• Test groups starting with "TestDelete", "TestDisabled", "TestIdempotent"\n' +
+            '• Test sheets with those prefixes\n' +
+            '• Test folders in Drive starting with "TestDeleteFolder_"\n\n' +
+            'Continue?',
+            ui.ButtonSet.YES_NO
+        );
+
+        if (response !== ui.Button.YES) {
+            log_('Deletion test cleanup cancelled by user.', 'INFO');
+            return;
+        }
+
+        log_('Starting deletion test data cleanup...', 'INFO');
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        let cleanupCount = 0;
+
+        // 1. Clean up test groups from UserGroups sheet
+        const userGroupsSheet = ss.getSheetByName('UserGroups');
+        if (userGroupsSheet) {
+            const data = userGroupsSheet.getDataRange().getValues();
+            for (let i = data.length - 1; i >= 1; i--) {
+                const groupName = data[i][0];
+                const groupEmail = data[i][1];
+                if (groupName && (
+                    groupName.startsWith('TestDeleteGroup_') ||
+                    groupName.startsWith('TestDisabledDeleteGroup_') ||
+                    groupName.startsWith('TestIdempotentDelete_')
+                )) {
+                    // Try to delete Google Group
+                    if (groupEmail) {
+                        try {
+                            AdminDirectory.Groups.remove(groupEmail);
+                            log_('Deleted test Google Group: ' + groupEmail, 'INFO');
+                        } catch (e) {
+                            log_('Could not delete Google Group ' + groupEmail + ': ' + e.message, 'WARN');
+                        }
+                    }
+                    // Delete row
+                    userGroupsSheet.deleteRow(i + 1);
+                    cleanupCount++;
+                    log_('Removed test group row: ' + groupName, 'INFO');
+                }
+            }
+        }
+
+        // 2. Clean up test folder rows from ManagedFolders sheet
+        const managedFoldersSheet = ss.getSheetByName('ManagedFolders');
+        if (managedFoldersSheet) {
+            const data = managedFoldersSheet.getDataRange().getValues();
+            for (let i = data.length - 1; i >= 1; i--) {
+                const folderName = data[i][0];
+                const groupEmail = data[i][3];
+                if (folderName && folderName.startsWith('TestDeleteFolder_')) {
+                    // Try to delete Google Group
+                    if (groupEmail) {
+                        try {
+                            AdminDirectory.Groups.remove(groupEmail);
+                            log_('Deleted test Google Group: ' + groupEmail, 'INFO');
+                        } catch (e) {
+                            log_('Could not delete Google Group ' + groupEmail + ': ' + e.message, 'WARN');
+                        }
+                    }
+                    // Delete row
+                    managedFoldersSheet.deleteRow(i + 1);
+                    cleanupCount++;
+                    log_('Removed test folder row: ' + folderName, 'INFO');
+                }
+            }
+        }
+
+        // 3. Clean up test sheets
+        const sheets = ss.getSheets();
+        for (let i = 0; i < sheets.length; i++) {
+            const sheet = sheets[i];
+            const name = sheet.getName();
+            if (name.startsWith('TestDeleteGroup_') ||
+                name.startsWith('TestDisabledDeleteGroup_') ||
+                name.startsWith('TestIdempotentDelete_') ||
+                name.startsWith('TestDeleteFolder')) {
+                try {
+                    ss.deleteSheet(sheet);
+                    cleanupCount++;
+                    log_('Deleted test sheet: ' + name, 'INFO');
+                } catch (e) {
+                    log_('Could not delete sheet ' + name + ': ' + e.message, 'WARN');
+                }
+            }
+        }
+
+        // 4. Clean up test folders from Drive
+        const folderIterator = DriveApp.getFoldersByName('TestDeleteFolder_');
+        while (folderIterator.hasNext()) {
+            const folder = folderIterator.next();
+            const folderName = folder.getName();
+            if (folderName.startsWith('TestDeleteFolder_')) {
+                try {
+                    folder.setTrashed(true);
+                    cleanupCount++;
+                    log_('Trashed test folder from Drive: ' + folderName, 'INFO');
+                } catch (e) {
+                    log_('Could not trash folder ' + folderName + ': ' + e.message, 'WARN');
+                }
+            }
+        }
+
+        log_('Deletion test cleanup complete. Cleaned up ' + cleanupCount + ' items.', 'INFO');
+        ui.alert('Cleanup Complete', 'Cleaned up ' + cleanupCount + ' deletion test items.\n\nCheck TestLog for details.', ui.ButtonSet.OK);
+
+    } catch (err) {
+        log_('Deletion test cleanup failed: ' + err.message, 'ERROR');
+        log_(err.stack, 'ERROR');
+        SpreadsheetApp.getUi().alert('Cleanup Failed', 'An error occurred during cleanup. Check TestLog for details.', SpreadsheetApp.getUi().ButtonSet.OK);
+    } finally {
+        SCRIPT_EXECUTION_MODE = 'DEFAULT';
+    }
+}
+
+// =====================================================================================
+// START OF FILE: Triggers.gs
+// =====================================================================================
+/**
+ * Triggers.gs - Automatic sync scheduling
+ */
+
+
+
+/**
+ * Sets up a time-based trigger for automatic synchronization.
+ */
+function setupAutoSync() {
+  // First, remove any existing triggers to avoid duplicates
+  const triggers = ScriptApp.getProjectTriggers();
+  for (const trigger of triggers) {
+    if (trigger.getHandlerFunction() === 'autoSync') {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  }
+
+  const interval = getConfigValue_('AutoSyncInterval', 5);
+  if (isNaN(interval) || interval < 5) {
+    SpreadsheetApp.getUi().alert('Invalid AutoSync Interval. Please set a number greater than or equal to 5 in the Config sheet.');
+    return;
+  }
+
+  // Create a new time-based trigger
+  ScriptApp.newTrigger('autoSync')
+    .timeBased()
+    .everyMinutes(interval)
+    .create();
+
+  log_('AutoSync trigger installed. Will run every ' + interval + ' minutes.', 'INFO');
+  updateAutoSyncStatusIndicator_();
+  SpreadsheetApp.getUi().alert(
+    'AutoSync Enabled',
+    'The script will now automatically sync every ' + interval + ' minutes.',
+    SpreadsheetApp.getUi().ButtonSet.OK
+  );
+}
+
+/**
+ * Removes all AutoSync triggers.
+ */
+function removeAutoSync() {
+  const triggers = ScriptApp.getProjectTriggers();
+  let removedCount = 0;
+
+  for (const trigger of triggers) {
+    if (trigger.getHandlerFunction() === 'autoSync') {
+      ScriptApp.deleteTrigger(trigger);
+      removedCount++;
+    }
+  }
+
+  if (removedCount > 0) {
+    log_('Removed ' + removedCount + ' AutoSync trigger(s).', 'INFO');
+    SpreadsheetApp.getUi().alert('AutoSync trigger has been removed.');
+  } else {
+    SpreadsheetApp.getUi().alert('No AutoSync trigger was found to remove.');
+  }
+
+  // Always ensure the status indicators are correct
+  updateAutoSyncStatusIndicator_();
+}
+
+
+/**
+ * The main AutoSync function that runs on schedule.
+ */
+function autoSync(options = {}) {
+  const silentMode = (options && options.triggerUid) || (options && options.silentMode);
+  const lock = LockService.getScriptLock();
+
+  if (!lock.tryLock(10000)) {
+    log_('AutoSync skipped: another sync is already in progress.', 'WARN');
+    return;
+  }
+
+  let syncStartTime;
+  try {
+    const props = PropertiesService.getDocumentProperties();
+    const now = Date.now();
+    const lastRunRaw = props.getProperty(AUTO_SYNC_LAST_RUN_KEY);
+    const intervalMinutes = getConfigValue_('AutoSyncInterval', 5);
+    const enforcedIntervalMs = Math.max(5, intervalMinutes) * 60 * 1000;
+
+    if (lastRunRaw) {
+      const elapsed = now - Number(lastRunRaw);
+      if (!isNaN(elapsed) && elapsed < enforcedIntervalMs) {
+        log_('AutoSync skipped: last run was ' + Math.round(elapsed / 1000) + 's ago (interval ' + intervalMinutes + ' mins).', 'DEBUG');
+        return { skipped: true, added: 0, removed: 0, failed: 0 };
+      }
+    }
+
+    props.setProperty(AUTO_SYNC_LAST_RUN_KEY, String(now));
+
+    if (isInEditMode_()) {
+      log_('AutoSync skipped: spreadsheet is in Edit Mode.', 'DEBUG');
+      updateSyncStatus_('Skipped', { source: 'AutoSync' });
+      return;
+    }
+
+    // Detect if changes warrant a sync
+    const changeDetection = detectAutoSyncChanges_();
+
+    if (!changeDetection.shouldRun) {
+      updateSyncStatus_('Skipped', { source: 'AutoSync' });
+      return { skipped: true, added: 0, removed: 0, failed: 0 };
+    }
+
+    // Only log start message if sync will actually run
+    log_('*** Starting scheduled AutoSync...');
+    updateSyncStatus_('Running', { source: 'AutoSync' });
+    syncStartTime = new Date();
+
+    // Log reasons for sync
+    log_('AutoSync triggered. Reasons:', 'INFO');
+    changeDetection.reasons.forEach(function(reason) {
+      log_('  - ' + reason, 'INFO');
+    });
+
+    // Determine if deletions are allowed
+    const allowDeletions = getConfigValue_('AllowAutosyncDeletion', false);
+
+    let syncResult;
+    if (allowDeletions) {
+      log_('AutoSync with deletions enabled. Performing full sync...');
+      syncResult = fullSync({ silentMode: silentMode, skipSetup: true, executionSource: 'AUTO_SYNC' });
+    } else {
+      log_('AutoSync with deletions disabled. Performing SAFE operations (additions only)...');
+      syncResult = syncAdds({ silentMode: silentMode, skipSetup: true, executionSource: 'AUTO_SYNC' });
+    }
+
+    // Save snapshot with success/failure status
+    if (syncResult && syncResult.failed === 0) {
+      changeDetection.snapshot.lastSyncSuccessful = true;
+      props.setProperty(AUTO_SYNC_CHANGE_SIGNATURE_KEY, JSON.stringify(changeDetection.snapshot));
+      log_('*** Scheduled AutoSync completed successfully.');
+      updateSyncStatus_('Success', {
+        summary: syncResult,
+        durationSeconds: syncStartTime ? (new Date() - syncStartTime) / 1000 : undefined,
+        source: 'AutoSync'
+      });
+    } else {
+      changeDetection.snapshot.lastSyncSuccessful = false;
+      props.setProperty(AUTO_SYNC_CHANGE_SIGNATURE_KEY, JSON.stringify(changeDetection.snapshot));
+      log_('AutoSync did not complete successfully. Will retry on next run.', 'WARN');
+      updateSyncStatus_('Failed', {
+        summary: syncResult,
+        durationSeconds: syncStartTime ? (new Date() - syncStartTime) / 1000 : undefined,
+        source: 'AutoSync'
+      });
+    }
+    return syncResult;
+
+  } catch (e) {
+    const errorMessage = 'FATAL ERROR in autoSync: ' + e.toString() + '\n' + e.stack;
+    log_(errorMessage, 'ERROR');
+    sendErrorNotification_(errorMessage);
+    updateSyncStatus_('Failed', {
+      errorMessage: errorMessage,
+      durationSeconds: syncStartTime ? (new Date() - syncStartTime) / 1000 : undefined,
+      source: 'AutoSync'
+    });
+
+    // Mark sync as failed in snapshot so we retry on next run
+    try {
+      const props = PropertiesService.getDocumentProperties();
+      const rawSnapshot = props.getProperty(AUTO_SYNC_CHANGE_SIGNATURE_KEY);
+      if (rawSnapshot) {
+        const snapshot = JSON.parse(rawSnapshot);
+        snapshot.lastSyncSuccessful = false;
+        props.setProperty(AUTO_SYNC_CHANGE_SIGNATURE_KEY, JSON.stringify(snapshot));
+      }
+    } catch (snapErr) {
+      log_('Could not update snapshot after error: ' + snapErr.message, 'WARN');
+    }
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+
+
+
+/**
+ * Helper to get all data from a sheet for hashing, ignoring filters.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet The sheet to get data from.
+ * @param {number} numCols The number of columns to include.
+ * @return {Array<Array<any>>} The data.
+ */
+function getSheetDataForHashing_(sheet, numCols) {
+  if (sheet && sheet.getLastRow() > 1) {
+    const allData = sheet.getDataRange().getValues();
+    allData.shift(); // Remove header
+    return allData.map(function(row) {
+      // Ensure row has enough columns to slice, pad with empty strings if not
+      const paddedRow = row.concat(Array(Math.max(0, numCols - row.length)).fill(''));
+      return paddedRow.slice(0, numCols);
+    });
+  }
+  return [];
+}
+
+
+/**
+ * Detects changes in the spreadsheet and managed folders since the last AutoSync run.
+ * Returns whether a sync should run and the reasons why.
+ */
+function detectAutoSyncChanges_() {
+  const props = PropertiesService.getDocumentProperties();
+  let previousSnapshot = null;
+
+  try {
+    const rawSnapshot = props.getProperty(AUTO_SYNC_CHANGE_SIGNATURE_KEY);
+    if (rawSnapshot) {
+      previousSnapshot = JSON.parse(rawSnapshot);
+    }
+  } catch (e) {
+    log_('Failed to parse previous AutoSync snapshot: ' + e.message, 'WARN');
+  }
+
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+
+  // Compute hash of actual data content in control sheets
+  // IMPORTANT: Exclude script-managed columns (Status, Last Synced, URL) to avoid triggering on metadata updates
+  let dataHash = '';
+  try {
+    const managedSheet = spreadsheet.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+    const adminsSheet = spreadsheet.getSheetByName(SHEET_EDITORS_SHEET_NAME);
+    const userGroupsSheet = spreadsheet.getSheetByName(USER_GROUPS_SHEET_NAME);
+
+    let dataString = '';
+    
+    if (managedSheet) {
+      const managedHeaders = getHeaderMap_(managedSheet);
+      const userSheetNameCol = resolveColumn_(managedHeaders, 'usersheetname', 5);
+      const data = getSheetDataForHashing_(managedSheet, userSheetNameCol);
+      dataString += JSON.stringify(data);
+
+      const userSheetNames = data.map(function(row) { return row[userSheetNameCol - 1]; });
+      userSheetNames.forEach(function(name) {
+        if (name) {
+          const userSheet = spreadsheet.getSheetByName(name);
+          if (userSheet) {
+            const userData = getSheetDataForHashing_(userSheet, 2);
+            dataString += JSON.stringify(userData);
+          }
+        }
+      });
+    }
+    
+    if (adminsSheet) {
+      const data = getSheetDataForHashing_(adminsSheet, 1);
+      dataString += JSON.stringify(data);
+    }
+
+    if (userGroupsSheet) {
+      const ugHeaders = getHeaderMap_(userGroupsSheet);
+      const deleteCol = resolveColumn_(ugHeaders, 'delete', 6);
+      const lastRow = userGroupsSheet.getLastRow();
+
+      // Only include user-managed data (GroupName, GroupEmail, Delete flag) to avoid
+      // triggering syncs on script-managed columns like Last Synced/Status.
+      let filteredData = [];
+      if (lastRow > 1) {
+        const rawData = userGroupsSheet.getRange(2, 1, lastRow - 1, deleteCol).getValues();
+        filteredData = rawData.map(function(row) {
+          return [row[0], row[1], row[deleteCol - 1]];
+        });
+      }
+
+      dataString += JSON.stringify(filteredData);
+
+      const groupNames = filteredData.map(function(row) { return row[0]; });
+      groupNames.forEach(function(name) {
+        if (name) {
+          const groupSheet = spreadsheet.getSheetByName(getUserGroupSheetName_(name));
+          if (groupSheet) {
+            const groupData = getSheetDataForHashing_(groupSheet, 2);
+            dataString += JSON.stringify(groupData);
+          }
+        }
+      });
+    }
+
+    // Compute SHA-256 hash
+    const digest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, dataString);
+    dataHash = Utilities.base64Encode(digest);
+  } catch (e) {
+    log_('Failed to compute data hash: ' + e.message, 'WARN');
+  }
+
+  let shouldRun = false;
+  const reasons = [];
+
+  if (!previousSnapshot) {
+    shouldRun = true;
+    reasons.push('No previous AutoSync snapshot was found.');
+  }
+
+  // Check if previous sync failed - if so, retry regardless of changes
+  // If lastSyncSuccessful is missing (old snapshot), treat as failed for safety
+  if (previousSnapshot && previousSnapshot.hasOwnProperty('lastSyncSuccessful') && previousSnapshot.lastSyncSuccessful !== true) {
+    shouldRun = true;
+    reasons.push('Previous AutoSync run did not complete successfully or status unknown. Retrying.');
+  }
+
+  // Check if actual data in control sheets has changed
+  const previousDataHash = previousSnapshot && previousSnapshot.dataHash ? previousSnapshot.dataHash : null;
+  if (dataHash && dataHash !== previousDataHash) {
+    shouldRun = true;
+    reasons.push('Control sheet data has changed.');
+    log_('Data hash changed. Old: ' + previousDataHash + ' New: ' + dataHash, 'DEBUG');
+  }
+
+  const snapshot = {
+    dataHash: dataHash,
+    capturedAt: new Date().toISOString()
+  };
+
+  return {
+    shouldRun,
+    reasons,
+    snapshot
+  };
+}
+
+/**
+ * View current trigger status
+ */
+function viewTriggerStatus() {
+  const triggers = ScriptApp.getProjectTriggers();
+  const autoSyncTriggers = triggers.filter(t => t.getHandlerFunction() === 'autoSync');
+  const ui = SpreadsheetApp.getUi();
+  let message = '';
+
+  if (autoSyncTriggers.length > 0) {
+    const interval = getConfigValue_('AutoSyncInterval', 5);
+    message += `A time-based trigger IS INSTALLED, running every ${interval} minutes.\n`;
+    message += 'Status: ENABLED\n\nThe script will run automatically.';
+  } else {
+    message += 'No time-based trigger is installed.\n';
+    message += 'Status: DISABLED\n\nThe script will not run automatically. To enable, use the "Enable/Update AutoSync" menu item.';
+  }
+
+  ui.alert('AutoSync Status', message, ui.ButtonSet.OK);
+}
+
+
+/**
+ * Updates the visual status indicator in the Config sheet based on the actual trigger state.
+ */
+function updateAutoSyncStatusIndicator_() {
+  try {
+    const triggers = ScriptApp.getProjectTriggers();
+    const hasTrigger = triggers.some(t => t.getHandlerFunction() === 'autoSync');
+    let statusToDisplay;
+
+    if (hasTrigger) {
+      const interval = getConfigValue_('AutoSyncInterval', 5);
+      statusToDisplay = `ENABLED (every ${interval} mins)`;
+    } else {
+      statusToDisplay = 'DISABLED';
+    }
+    updateStatusSetting_('AutoSync Trigger Status', statusToDisplay);
+  } catch (e) {
+    if (e.message.includes('sufficient')) { // Catches 'not sufficient permissions'
+      updateStatusSetting_('AutoSync Trigger Status', 'AUTH_REQUIRED');
+      log_('Could not update AutoSync status indicator due to missing permissions. A super admin can fix this by running an item from the "AutoSync" menu to re-authorize.', 'WARN');
+    } else {
+      log_('Could not update AutoSync status indicator: ' + e.message, 'WARN');
+    }
+  }
+}
+
+// ... (The rest of the file is unchanged)

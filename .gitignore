@@ -40,7 +40,9 @@ __pycache__/
 
 # Distribution / packaging
 build/
-dist/
+dist/*
+!dist/
+!dist/apps_scripts_bundle.gs
 *.egg-info/
 
 # Unit test / coverage reports
@@ -58,5 +60,4 @@ setup.conf
 
 # AI Assistant State
 .gemini/assistant_state.json
-
 
