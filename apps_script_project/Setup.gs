@@ -242,6 +242,8 @@ function setupControlSheets_() {
     const checkboxRule = SpreadsheetApp.newDataValidation().requireCheckbox().build();
     userGroupsDeleteRange.setDataValidation(checkboxRule);
   }
+
+  ensureChangeRequestsSheet_();
   
   // Check for Config sheet
   let currentUserEmail = '';
@@ -265,6 +267,11 @@ function setupControlSheets_() {
       'RetryMaxRetries': { value: 5, description: 'The maximum number of times to retry a failed API call (e.g., due to rate limiting).'},
       'RetryInitialDelayMs': { value: 1000, description: 'The initial time in milliseconds to wait before the first retry. This delay doubles with each subsequent retry (exponential backoff).'},
       'MembershipBatchSize': { value: 10, description: 'The number of users to process in a single batch for group membership changes. Helps avoid API rate limits.'},
+    },
+    '--- Change Approvals ---': {
+      'ApprovalsEnabled': { value: false, description: 'Check to require multi-approver gating for control sheet edits captured in the ChangeRequests sheet.' },
+      'RequiredApprovals': { value: 1, description: 'Number of unique sheet editors needed to approve a change request before it is applied. Default preserves current behavior.' },
+      'ApprovalExpiryHours': { value: 0, description: 'Optional: expire pending change requests after this many hours. Leave 0 to disable expiry.' }
     },
     '--- Email Notifications ---': {
       'EnableEmailNotifications': { value: true, description: 'Check to receive emails for errors and other notifications.' },
@@ -791,5 +798,35 @@ function setupFolderAuditLogSheet_(sheet) {
     const headers = ['Timestamp', 'Type', 'Identifier', 'Issue', 'Details'];
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
     sheet.setFrozenRows(1);
-    markSystemSheet_(sheet);
+}
+
+function ensureChangeRequestsSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let changeSheet = ss.getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
+  const headers = ['RequestId', 'RequestedBy', 'RequestedAt', 'TargetSheet', 'TargetRowKey', 'Action', 'ProposedRowSnapshot', 'Status', 'ApprovalsNeeded', 'Approver_1', 'Approver_2', 'Approver_3', 'DenyReason', 'AppliedAt'];
+
+  if (!changeSheet) {
+    changeSheet = ss.insertSheet(CHANGE_REQUESTS_SHEET_NAME);
+    changeSheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
+    changeSheet.setFrozenRows(1);
+    log_('Created "ChangeRequests" sheet.');
+  } else {
+    changeSheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
+    changeSheet.setFrozenRows(1);
+  }
+
+  const statusRange = changeSheet.getRange(2, CHANGE_REQUEST_STATUS_COL, changeSheet.getMaxRows() - 1, 1);
+  const statusRule = SpreadsheetApp.newDataValidation().requireValueInList([
+    CHANGE_REQUEST_STATUS_PENDING,
+    CHANGE_REQUEST_STATUS_APPROVED,
+    CHANGE_REQUEST_STATUS_DENIED,
+    CHANGE_REQUEST_STATUS_CANCELLED,
+    CHANGE_REQUEST_STATUS_APPLIED,
+    CHANGE_REQUEST_STATUS_EXPIRED
+  ], true).build();
+  statusRange.setDataValidation(statusRule);
+
+  const actionRange = changeSheet.getRange(2, CHANGE_REQUEST_ACTION_COL, changeSheet.getMaxRows() - 1, 1);
+  const actionRule = SpreadsheetApp.newDataValidation().requireValueInList(['ADD', 'UPDATE', 'DELETE'], true).build();
+  actionRange.setDataValidation(actionRule);
 }
