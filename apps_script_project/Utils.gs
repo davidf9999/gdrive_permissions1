@@ -39,12 +39,41 @@ function getHeaderMap_(sheet) {
   return map;
 }
 
+function requireColumn_(headerMap, headerName, sheetName) {
+  const column = resolveColumn_(headerMap, headerName, null);
+  if (column) {
+    return column;
+  }
+
+  const errorMessage = 'Missing required column "' + headerName + '" in sheet "' + sheetName + '".';
+  log_(errorMessage, 'ERROR');
+  throw new Error(errorMessage);
+}
+
 function resolveColumn_(headerMap, headerName, fallback) {
   if (!headerName) return fallback;
   const key = String(headerName)
     .trim()
     .toLowerCase();
   return headerMap[key] || fallback;
+}
+
+/**
+ * Finds the row number for a given value in a specific column of a sheet.
+ * @param {Sheet} sheet The sheet to search.
+ * @param {number} col The 1-based column index to search in.
+ * @param {string} value The value to find.
+ * @return {number} The 1-based row index, or -1 if not found.
+ */
+function findRowByValue_(sheet, col, value) {
+  if (!sheet) return -1;
+  const data = sheet.getRange(1, col, sheet.getLastRow(), 1).getValues();
+  for (let i = 0; i < data.length; i++) {
+    if (data[i][0] === value) {
+      return i + 1; // 1-based row index
+    }
+  }
+  return -1;
 }
 
 function generateGroupEmail_(baseName) {
@@ -79,8 +108,8 @@ function validateUniqueGroupEmails_() {
   const userGroupsSheet = spreadsheet.getSheetByName(USER_GROUPS_SHEET_NAME);
   if (userGroupsSheet && userGroupsSheet.getLastRow() > 1) {
     const userGroupHeaders = getHeaderMap_(userGroupsSheet);
-    const groupNameCol = resolveColumn_(userGroupHeaders, 'GroupName', 1);
-    const groupEmailCol = resolveColumn_(userGroupHeaders, 'GroupEmail', 2);
+    const groupNameCol = requireColumn_(userGroupHeaders, 'GroupName', USER_GROUPS_SHEET_NAME);
+    const groupEmailCol = requireColumn_(userGroupHeaders, 'GroupEmail', USER_GROUPS_SHEET_NAME);
 
     const data = userGroupsSheet
       .getRange(2, 1, userGroupsSheet.getLastRow() - 1, Math.max(groupNameCol, groupEmailCol))
@@ -113,9 +142,9 @@ function validateUniqueGroupEmails_() {
   const managedSheet = spreadsheet.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
   if (managedSheet && managedSheet.getLastRow() > 1) {
     const managedHeaders = getHeaderMap_(managedSheet);
-    const folderNameCol = resolveColumn_(managedHeaders, 'FolderName', FOLDER_NAME_COL);
-    const roleCol = resolveColumn_(managedHeaders, 'Role', ROLE_COL);
-    const groupEmailCol = resolveColumn_(managedHeaders, 'GroupEmail', GROUP_EMAIL_COL);
+    const folderNameCol = requireColumn_(managedHeaders, 'FolderName', MANAGED_FOLDERS_SHEET_NAME);
+    const roleCol = requireColumn_(managedHeaders, 'Role', MANAGED_FOLDERS_SHEET_NAME);
+    const groupEmailCol = requireColumn_(managedHeaders, 'GroupEmail', MANAGED_FOLDERS_SHEET_NAME);
 
     const data = managedSheet
       .getRange(
@@ -534,14 +563,49 @@ function clearAuxiliaryLogs() {
   ui.alert('Auxiliary logs have been cleared.\n\nThe main "Log" sheet has been preserved.');
 }
 
+function getSheetEditorNotificationEmails_() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_EDITORS_SHEET_NAME);
+  if (!sheet) {
+    return [];
+  }
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) {
+    return [];
+  }
+  const data = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
+  return data.reduce((emails, row) => {
+    const email = String(row[0] || '').trim().toLowerCase();
+    const disabled = row[1] === true || String(row[1]).toUpperCase() === 'TRUE';
+    if (email && !disabled) {
+      emails.push(email);
+    }
+    return emails;
+  }, []);
+}
+
 function sendErrorNotification_(errorMessage) {
   try {
-    const config = getConfiguration_();
-    const enableEmailNotifications = config['EnableEmailNotifications'];
-    const adminEmail = config['NotificationEmail'];
+    const enableEmailNotifications = getConfigValue_('EnableEmailNotifications', true);
+    if (enableEmailNotifications !== true) {
+      return;
+    }
 
-    if (enableEmailNotifications === true && adminEmail) {
-      MailApp.sendEmail(adminEmail, 'Permissions Manager Script - Fatal Error', errorMessage);
+    const adminEmail = getConfigValue_('NotificationEmail', '') || getSpreadsheetOwnerEmail_();
+    const recipients = [];
+    if (adminEmail) {
+      recipients.push(adminEmail);
+    }
+
+    const notifySheetEditors = getConfigValue_('NotifySheetEditorsOnErrors', false);
+    if (notifySheetEditors === true) {
+      recipients.push.apply(recipients, getSheetEditorNotificationEmails_());
+    }
+
+    const uniqueRecipients = Array.from(new Set(recipients.filter(Boolean)));
+    if (uniqueRecipients.length > 0) {
+      MailApp.sendEmail(uniqueRecipients.join(','), 'Permissions Manager Script - Fatal Error', errorMessage);
+    } else {
+      log_('No recipients configured for error notifications.', 'WARN');
     }
   } catch (e) {
     log_('Failed to send error notification email: ' + e.toString(), 'ERROR');
@@ -605,6 +669,140 @@ function updateConfigSetting_(settingName, value) {
 
   // Clear the cache so the new value is picked up
   CacheService.getScriptCache().remove('config');
+}
+
+function markSystemSheet_(sheet) {
+  if (!sheet) {
+    return;
+  }
+  try {
+    const existing = sheet.getDeveloperMetadata().some(function(metadata) {
+      return metadata.getKey() === 'SystemSheet';
+    });
+    if (!existing) {
+      sheet.addDeveloperMetadata('SystemSheet', 'true', SpreadsheetApp.DeveloperMetadataVisibility.DOCUMENT);
+    }
+  } catch (e) {
+    log_('Failed to mark system sheet "' + sheet.getName() + '": ' + e.message, 'WARN');
+  }
+}
+
+function isSystemSheet_(sheet) {
+  if (!sheet) {
+    return false;
+  }
+  try {
+    return sheet.getDeveloperMetadata().some(function(metadata) {
+      return metadata.getKey() === 'SystemSheet' && metadata.getValue() === 'true';
+    });
+  } catch (e) {
+    return false;
+  }
+}
+
+function updateStatusSetting_(settingName, value) {
+  const statusSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(STATUS_SHEET_NAME);
+  if (!statusSheet) {
+    log_('Status sheet not found. Cannot update setting: ' + settingName, 'WARN');
+    return;
+  }
+
+  const settings = statusSheet.getRange('A:A').getValues().flat();
+  const rowIndex = settings.indexOf(settingName);
+
+  if (rowIndex !== -1) {
+    statusSheet.getRange(rowIndex + 1, 2).setValue(value);
+  } else {
+    const lastRow = statusSheet.getLastRow();
+    statusSheet.getRange(lastRow + 1, 1, 1, 2).setValues([[settingName, value]]);
+  }
+}
+
+function formatSyncSummary_(summary) {
+  if (!summary) {
+    return '';
+  }
+  const added = summary.added || 0;
+  const removed = summary.removed || 0;
+  const failed = summary.failed || 0;
+  return 'Added: ' + added + ', Removed: ' + removed + ', Failed: ' + failed;
+}
+
+function updateSyncStatusPanel_(statusSheet, status) {
+  if (!statusSheet) {
+    return;
+  }
+
+  const normalizedStatus = status || 'Unknown';
+  let label = 'SYNC STATUS UNKNOWN';
+  let background = '#DADCE0';
+  let fontColor = '#000000';
+
+  if (normalizedStatus === 'Success') {
+    label = 'SYNC OK';
+    background = '#00B050';
+    fontColor = '#FFFFFF';
+  } else if (normalizedStatus === 'Failed') {
+    label = 'SYNC ERROR';
+    background = '#D93025';
+    fontColor = '#FFFFFF';
+  } else if (normalizedStatus === 'Running') {
+    label = 'SYNC RUNNING';
+    background = '#F9AB00';
+    fontColor = '#000000';
+  } else if (normalizedStatus === 'Skipped') {
+    label = 'SYNC SKIPPED';
+    background = '#9AA0A6';
+    fontColor = '#FFFFFF';
+  }
+
+  const panelRange = statusSheet.getRange('E2:F3');
+  statusSheet.getRange('E2:H6').setBackground(null).setFontColor(null);
+  panelRange.setValue(label)
+    .setBackground(background)
+    .setFontColor(fontColor)
+    .setFontWeight('bold')
+    .setFontSize(12);
+}
+
+function updateSyncStatus_(status, options = {}) {
+  if (SCRIPT_EXECUTION_MODE === 'TEST' && options.source === 'AutoSync') {
+    return;
+  }
+
+  const statusSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(STATUS_SHEET_NAME);
+  if (!statusSheet) {
+    return;
+  }
+
+  const timestamp = Utilities.formatDate(new Date(), SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+  const normalizedStatus = status || 'Unknown';
+
+  updateStatusSetting_('Last Sync Status', normalizedStatus);
+  updateStatusSetting_('Last Sync Attempt', timestamp);
+  if (normalizedStatus === 'Success') {
+    updateStatusSetting_('Last Successful Sync', timestamp);
+  }
+
+  if (options.durationSeconds !== undefined) {
+    updateStatusSetting_('Last Sync Duration (seconds)', Math.round(options.durationSeconds));
+  }
+
+  if (options.summary) {
+    updateStatusSetting_('Last Sync Summary', formatSyncSummary_(options.summary));
+  }
+
+  if (options.source) {
+    updateStatusSetting_('Last Sync Source', options.source);
+  }
+
+  if (options.errorMessage) {
+    updateStatusSetting_('Last Sync Error', options.errorMessage);
+  } else if (normalizedStatus === 'Success' || normalizedStatus === 'Skipped') {
+    updateStatusSetting_('Last Sync Error', '');
+  }
+
+  updateSyncStatusPanel_(statusSheet, normalizedStatus);
 }
 
 /**
@@ -757,7 +955,7 @@ function clearCache() {
   }
 }
 function getAdminEmails_() {
-  const adminSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(ADMINS_SHEET_NAME);
+  const adminSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_EDITORS_SHEET_NAME);
   if (!adminSheet) {
     return [];
   }
@@ -871,15 +1069,28 @@ function hideSyncInProgress_() {
   // tends to nudge the Sheets client to repaint.
   try {
     const ui = SpreadsheetApp.getUi();
-    const html = HtmlService.createHtmlOutput(
+    const sidebarHtml = HtmlService.createHtmlOutput(
       '<script>setTimeout(function(){google.script.host.close();}, 50);</script>'
     )
       .setWidth(10)
       .setHeight(10);
-    ui.showSidebar(html);
+    ui.showSidebar(sidebarHtml);
     SpreadsheetApp.flush();
     Utilities.sleep(150);
-    ui.showSidebar(HtmlService.createHtmlOutput('<script>google.script.host.close();</script>').setWidth(10));
+
+    // On some clients the transient sidebar is not enough. Briefly showing a
+    // tiny modal (that immediately closes) plus a short-lived blank toast gives
+    // Sheets an extra repaint signal and clears the stuck "Working" label.
+    const modalHtml = HtmlService.createHtmlOutput(
+      '<script>setTimeout(function(){google.script.host.close();}, 50);</script>'
+    )
+      .setWidth(10)
+      .setHeight(10);
+    ui.showModalDialog(modalHtml, ' ');
+    SpreadsheetApp.flush();
+    Utilities.sleep(75);
+
+    SpreadsheetApp.getActiveSpreadsheet().toast(' ', ' ', 1);
   } catch (e) {
     log_('Unable to refresh UI after sync: ' + e.message, 'WARN');
   }
@@ -889,7 +1100,7 @@ function validateGroupNesting_() {
   log_('Validating group nesting for circular dependencies...');
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   const groupSheets = spreadsheet.getSheets().filter(s => s.getName().endsWith('_G'));
-  const adminSheet = spreadsheet.getSheetByName(ADMINS_SHEET_NAME);
+  const adminSheet = spreadsheet.getSheetByName(SHEET_EDITORS_SHEET_NAME);
   if (adminSheet) {
     groupSheets.push(adminSheet);
   }
@@ -903,8 +1114,16 @@ function validateGroupNesting_() {
     let parentGroupEmail;
 
     // Determine the parent group's email
-    if (sheetName === ADMINS_SHEET_NAME) {
-      parentGroupEmail = getConfiguration_()['AdminGroupEmail'];
+    if (sheetName === SHEET_EDITORS_SHEET_NAME) {
+      parentGroupEmail = getConfigValue_('SheetEditorsGroupEmail', '') || getConfigValue_('AdminGroupEmail', '');
+      if (!parentGroupEmail) {
+        try {
+          parentGroupEmail = generateGroupEmail_(SHEET_EDITORS_GROUP_NAME);
+          log_('Generated Sheet Editors group email for nesting validation: ' + parentGroupEmail, 'INFO');
+        } catch (e) {
+          log_('Unable to generate Sheet Editors group email for nesting validation: ' + e.message, 'WARN');
+        }
+      }
     } else {
       const groupName = sheetName.slice(0, -2); // Remove '_G'
       // Find this group's email in UserGroups or ManagedFolders
@@ -992,16 +1211,42 @@ function findGroupEmailByName_(groupName) {
     // Check ManagedFolders sheet (only read actual data rows)
     const managedFoldersSheet = spreadsheet.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
     if (managedFoldersSheet && managedFoldersSheet.getLastRow() > 1) {
-        const data = managedFoldersSheet.getRange(2, 1, managedFoldersSheet.getLastRow() - 1, Math.max(USER_SHEET_NAME_COL, GROUP_EMAIL_COL)).getValues();
+      const managedHeaders = getHeaderMap_(managedFoldersSheet);
+      const userSheetNameCol = resolveColumn_(managedHeaders, 'UserSheetName', null);
+      const managedGroupEmailCol = resolveColumn_(managedHeaders, 'GroupEmail', null);
+
+      if (userSheetNameCol && managedGroupEmailCol) {
+        const data = managedFoldersSheet
+          .getRange(
+            2,
+            1,
+            managedFoldersSheet.getLastRow() - 1,
+            Math.max(userSheetNameCol, managedGroupEmailCol)
+          )
+          .getValues();
         for (let i = 0; i < data.length; i++) {
-            const currentSheetName = data[i][USER_SHEET_NAME_COL - 1];
-            if (currentSheetName && currentSheetName.slice(0, -2) === groupName && data[i][GROUP_EMAIL_COL - 1]) {
-                 return data[i][GROUP_EMAIL_COL - 1];
-            }
+          const currentSheetName = data[i][userSheetNameCol - 1];
+          if (currentSheetName && currentSheetName.slice(0, -2) === groupName && data[i][managedGroupEmailCol - 1]) {
+            return data[i][managedGroupEmailCol - 1];
+          }
         }
+      }
     }
 
     return null;
+}
+
+function getUserGroupSheetName_(groupName) {
+  if (!groupName) {
+    return '';
+  }
+
+  const trimmedName = groupName.toString().trim();
+  if (!trimmedName) {
+    return '';
+  }
+
+  return trimmedName.endsWith('_G') ? trimmedName : trimmedName + '_G';
 }
 
 /**

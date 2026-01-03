@@ -1,12 +1,12 @@
-# AI Assistant Guide
+# Gemini CLI Assistant Guide
 
-This document provides guidance for using and developing the AI-powered assistant for the `gdrive-permissions` project.
+This document provides guidance for using and developing the Gemini CLI Assistant for the `gdrive-permissions` project.
 
 ## Who Is This Guide For?
 
-*   **Installer:** You are setting up the `gdrive-permissions` system for your organization. Your goal is to use the AI Assistant to get the project running. You will interact with a **Google Workspace Super Admin** account to perform privileged actions. You do not intend to modify the assistant's code. For a full breakdown of roles, see the [Roles and Responsibilities](ROLES_AND_RESPONSIBILITIES.md) guide.
+*   **Installer:** You are setting up the `gdrive-permissions` system for your organization. Your goal is to use the Gemini CLI Assistant to get the project running. You will interact with a **Google Workspace Super Admin** account to perform privileged actions. You do not intend to modify the assistant's code. For a full breakdown of roles, see the [Roles and Responsibilities](ROLES_AND_RESPONSIBILITIES.md) guide.
 
-*   **Developer:** You want to modify, extend, or contribute to the AI Assistant itself. Your goal is to work on the codebase of the assistant.
+*   **Developer:** You want to modify, extend, or contribute to the Gemini CLI Assistant itself. Your goal is to work on the codebase of the assistant.
 
 > **Prerequisite:** A GitHub account is required. The recommended setup process uses GitHub Codespaces, which is tied to your GitHub identity.
 
@@ -14,11 +14,11 @@ This document provides guidance for using and developing the AI-powered assistan
 
 ## For Installers: Setting Up the Project
 
-This section is for you if your goal is to get the `gdrive-permissions` project up and running. The AI Assistant will guide you through the process outlined in the main [Setup Guide](SETUP_GUIDE.md).
+This section is for you if your goal is to get the `gdrive-permissions` project up and running. The Gemini CLI Assistant will guide you through the process outlined in the main [Setup Guide](SETUP_GUIDE.md).
 
 ### Recommended Environment: GitHub Codespaces
 
-We **strongly recommend** using the provided GitHub Codespaces environment. This gives you a pre-configured, zero-installation environment where the AI Assistant can guide you seamlessly. **Do not clone the repository manually;** launch the Codespace directly from the project's `README.md`.
+We **strongly recommend** using the provided GitHub Codespaces environment. This gives you a pre-configured, zero-installation environment where the Gemini CLI Assistant can guide you seamlessly. **Do not clone the repository manually;** launch the Codespace directly from the project's `README.md`.
 
 ### Testing the Project for Free
 
@@ -31,9 +31,9 @@ The `gdrive-permissions` project requires a Google Workspace account and a regis
 
 ---
 
-## For Developers: Contributing to the AI Assistant
+## For Developers: Contributing to the Gemini CLI Assistant
 
-This section is for you if you want to modify or improve the AI assistant.
+This section is for you if you want to modify or improve the Gemini CLI Assistant.
 
 ### Development Environment
 
@@ -42,7 +42,7 @@ The Codespace environment contains all necessary dependencies (`node`, `gcloud`,
 ### Testing Local Changes
 
 1.  **Make Changes:** Edit the relevant files (e.g., `AI_ASSISTANT_PROMPT.md`) directly within the Codespace.
-2.  **Restart the Assistant:** To test your changes, you must restart the assistant by running the startup script in the terminal:
+2.  **Restart the Gemini CLI Assistant:** To test your changes, you must restart the assistant by running the startup script in the terminal:
     ```bash
     /bin/bash .devcontainer/start-assistant.sh
     ```

@@ -2,9 +2,13 @@
 
 Welcome! This guide helps you find the correct instructions for using the Google Drive Permissions Manager based on your role.
 
+## Assistant Scope
+
+The OpenAI GPT Assistant supports setup and day-to-day usage. It is role-aware, so expect it to ask whether you are a **Super Admin** or **Sheet Editor** before giving instructions. Testing guidance is out of scope; refer to `docs/TESTING.md`.
+
 This system has two primary types of users:
 
-1.  **Super Admins:** Google Workspace administrators who are responsible for the initial setup, running the synchronization scripts, and performing advanced maintenance.
+1.  **Super Admins:** Google Workspace Super Admins who are responsible for the initial setup, running the synchronization scripts, and performing advanced maintenance.
 
 2.  **Sheet Editors:** Team members who are responsible for the day-to-day management of permissions. They control who gets access to what by adding and removing users from the various control sheets within this spreadsheet.
 

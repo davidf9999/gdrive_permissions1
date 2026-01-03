@@ -114,7 +114,7 @@ function migrateConfigSettings_() {
 }
 
 /**
- * Ensures the control sheets (ManagedFolders, SheetEditors) exist.
+ * Ensures the control sheets (ManagedFolders, SheetEditors_G) exist.
  */
 function setupControlSheets_() {
   migrateConfigSettings_(); // Run config migration first
@@ -151,6 +151,7 @@ function setupControlSheets_() {
       log_('Added "Delete" column to ManagedFolders sheet.');
     }
   }
+  markSystemSheet_(managedSheet);
 
   // Add data validation for the Role column
   const roleRange = managedSheet.getRange('C2:C');
@@ -168,33 +169,21 @@ function setupControlSheets_() {
     deleteRange.setDataValidation(checkboxRule);
   }
 
-  // Check for SheetEditors sheet
+  // Check for SheetEditors_G sheet
   let sheetEditorsSheet = ss.getSheetByName(SHEET_EDITORS_SHEET_NAME);
-  const sheetEditorsHeaders = ['Sheet Editor Emails', 'Group Admin Link', 'Last Synced', 'Status', 'Disabled'];
+  const sheetEditorsHeaders = ['Sheet Editor Emails', 'Disabled'];
   if (!sheetEditorsSheet) {
     sheetEditorsSheet = ss.insertSheet(SHEET_EDITORS_SHEET_NAME);
-    sheetEditorsSheet.getRange(1, 1, 1, sheetEditorsHeaders.length).setValues([sheetEditorsHeaders]).setFontWeight('bold');
-    sheetEditorsSheet.setFrozenRows(1);
-    log_('Created "SheetEditors" sheet.');
-  } else {
-    // Update headers, migrating old formats if necessary
-    const existingHeaders = sheetEditorsSheet.getRange(1, 1, 1, sheetEditorsSheet.getMaxColumns()).getValues()[0];
-
-    // Migration from 3-column format (Email, Last Synced, Status)
-    if (existingHeaders[1] === 'Last Synced' && existingHeaders[2] === 'Status') {
-        sheetEditorsSheet.insertColumnBefore(2); // Insert new column for Group Admin Link
-        sheetEditorsSheet.getRange(1, 1, 1, sheetEditorsHeaders.length).setValues([sheetEditorsHeaders]).setFontWeight('bold');
-        log_('Migrated SheetEditors sheet to new 5-column format.');
-    } else {
-        // Just set the headers to be safe
-        sheetEditorsSheet.getRange(1, 1, 1, sheetEditorsHeaders.length).setValues([sheetEditorsHeaders]).setFontWeight('bold');
-    }
-    sheetEditorsSheet.getRange('E1').clearDataValidations().clearNote();
-    sheetEditorsSheet.setFrozenRows(1);
+    log_('Created "' + SHEET_EDITORS_SHEET_NAME + '" sheet.');
   }
+  markSystemSheet_(sheetEditorsSheet);
+
+  // Always set the headers to ensure correctness and overwrite old formats.
+  sheetEditorsSheet.getRange(1, 1, 1, sheetEditorsHeaders.length).setValues([sheetEditorsHeaders]).setFontWeight('bold');
+  sheetEditorsSheet.setFrozenRows(1);
   
   // Add checkbox validation for the Disabled column
-  const adminDisabledRange = sheetEditorsSheet.getRange('E2:E');
+  const adminDisabledRange = sheetEditorsSheet.getRange('B2:B'); // Now column B
   const existingAdminDisabledRule = adminDisabledRange.getDataValidation();
   if (!existingAdminDisabledRule || existingAdminDisabledRule.getCriteriaType() !== SpreadsheetApp.DataValidationCriteria.CHECKBOX) {
     const rule = SpreadsheetApp.newDataValidation().requireCheckbox().build();
@@ -207,6 +196,7 @@ function setupControlSheets_() {
     userGroupsSheet = ss.insertSheet(USER_GROUPS_SHEET_NAME);
     log_('Created "UserGroups" sheet.');
   }
+  markSystemSheet_(userGroupsSheet);
 
   // Update headers (adding Delete column if needed)
   const userGroupsHeaderRange = userGroupsSheet.getRange(1, 1, 1, Math.max(6, userGroupsSheet.getLastColumn()));
@@ -216,6 +206,34 @@ function setupControlSheets_() {
     log_('Updated UserGroups headers with Delete column.');
   }
   userGroupsSheet.setFrozenRows(1);
+
+  // Remove legacy SheetEditors group row if it still exists in UserGroups.
+  const legacyGroupRow = findRowByValue_(userGroupsSheet, 1, 'SheetEditors');
+  if (legacyGroupRow > 1) {
+    userGroupsSheet.deleteRow(legacyGroupRow);
+    log_('Removed legacy "SheetEditors" row from UserGroups.');
+  }
+
+  // Ensure SheetEditors_G row exists in UserGroups
+  const groupNameColData = userGroupsSheet.getRange(1, 1, userGroupsSheet.getLastRow(), 1).getValues().flat();
+  if (!groupNameColData.includes(SHEET_EDITORS_SHEET_NAME)) {
+    // Find the first completely empty row to insert into, to avoid appending to the bottom of a large empty sheet.
+    let firstEmptyRow = -1;
+    for(let i = 1; i < groupNameColData.length; i++) { // Start at 1 to skip header
+      if (groupNameColData[i] === '') {
+        firstEmptyRow = i + 1; // i is 0-indexed, rows are 1-indexed
+        break;
+      }
+    }
+
+    if (firstEmptyRow === -1) {
+      // If no empty rows were found in the existing data range, append after the last known row.
+      firstEmptyRow = groupNameColData.length + 1;
+    }
+    
+    userGroupsSheet.getRange(firstEmptyRow, 1, 1, 6).setValues([[SHEET_EDITORS_SHEET_NAME, '', '', '', '', false]]);
+    log_('Added missing "' + SHEET_EDITORS_SHEET_NAME + '" entry to the UserGroups sheet at row ' + firstEmptyRow);
+  }
 
   // Add checkbox validation for the Delete column (column F)
   const userGroupsDeleteRange = userGroupsSheet.getRange('F2:F');
@@ -236,10 +254,6 @@ function setupControlSheets_() {
   }
 
   const defaultConfig = {
-    '--- Status ---': {
-      'ScriptVersion': { value: '', description: 'The current version of the installed script. (Read-only)' },
-      'AutoSync Trigger Status': { value: 'DISABLED', description: 'A visual indicator of the AutoSync trigger status. (Read-only)' }
-    },
     '--- Access Control ---': {
       'SuperAdminEmails': { value: currentUserEmail, description: 'Comma-separated list of super admin email addresses. Super admins see the full menu and test sheets.' },
       'SheetEditorsGroupEmail': { value: '', description: 'The email address for the Google Group containing all Sheet Editors. Uses AdminGroupEmail if set; auto-generates only when both are blank.' }
@@ -260,8 +274,9 @@ function setupControlSheets_() {
       'ApprovalExpiryHours': { value: 0, description: 'Optional: expire pending change requests after this many hours. Leave 0 to disable expiry.' }
     },
     '--- Email Notifications ---': {
-      'EnableEmailNotifications': { value: false, description: 'Check to receive emails for errors and other notifications.' },
+      'EnableEmailNotifications': { value: true, description: 'Check to receive emails for errors and other notifications.' },
       'NotificationEmail': { value: '', description: 'The email address to send notifications to. Defaults to the script owner if left blank.' },
+      'NotifySheetEditorsOnErrors': { value: false, description: 'Optional: also send error notifications to all active Sheet Editors.' },
       'NotifyOnSyncSuccess': { value: false, description: 'Check to receive a summary email after each successful AutoSync.' },
       'NotifyDeletionsPending': { value: true, description: 'Check to receive an email alert when an AutoSync detects that a user needs to be manually removed. (This is ignored if AllowAutosyncDeletion is checked).' },
       'NotifyOnGroupFolderDeletion': { value: true, description: 'Send email notification when groups or folder-role bindings are deleted during sync. Recommended to keep enabled for audit purposes.' },
@@ -353,7 +368,10 @@ function setupControlSheets_() {
     }
     configSheet.getRange(2, 1, newSettings.length, 3).setValues(newSettings);
   }
+  markSystemSheet_(configSheet);
   applyConfigValidation_();
+  setupStatusSheet_();
+  arrangeSheetOrder_();
 }
 
 function applyConfigValidation_() {
@@ -364,7 +382,7 @@ function applyConfigValidation_() {
   const booleanSettings = [
     'EnableSheetLocking', 'AllowAutosyncDeletion', 'AllowGroupFolderDeletion', 'EnableCircularDependencyCheck',
     'EnableEmailNotifications', 'NotifyOnSyncSuccess', 'NotifyDeletionsPending', 'NotifyOnGroupFolderDeletion',
-    'EnableGCPLogging', 'EnableToasts', 'ShowTestPrompts', 'TestCleanup', 'TestAutoConfirm'
+    'NotifySheetEditorsOnErrors', 'EnableGCPLogging', 'EnableToasts', 'ShowTestPrompts', 'TestCleanup', 'TestAutoConfirm'
   ];
 
   // Add dropdown validation for LogLevel
@@ -406,6 +424,83 @@ function applyConfigValidation_() {
   // log_('Applied checkbox validation rules to Config sheet.');
 }
 
+function setupStatusSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let statusSheet = ss.getSheetByName(STATUS_SHEET_NAME);
+  const statusHeaders = ['Status Item', 'Value', 'Notes'];
+
+  if (!statusSheet) {
+    statusSheet = ss.insertSheet(STATUS_SHEET_NAME);
+  }
+  markSystemSheet_(statusSheet);
+
+  statusSheet.getRange(1, 1, 1, statusHeaders.length).setValues([statusHeaders]).setFontWeight('bold');
+  statusSheet.setFrozenRows(1);
+
+  const defaultStatus = {
+    'Script Version': { value: SCRIPT_VERSION, description: 'Current version of the installed script.' },
+    'AutoSync Trigger Status': { value: 'DISABLED', description: 'Current AutoSync trigger status.' },
+    'Last Sync Status': { value: 'Unknown', description: 'Result of the most recent sync attempt.' },
+    'Last Sync Attempt': { value: '', description: 'Timestamp of the most recent sync attempt.' },
+    'Last Successful Sync': { value: '', description: 'Timestamp of the most recent successful sync.' },
+    'Last Sync Duration (seconds)': { value: '', description: 'Duration of the most recent sync attempt.' },
+    'Last Sync Summary': { value: '', description: 'Summary of the most recent sync changes.' },
+    'Last Sync Error': { value: '', description: 'Most recent sync error message (if any).' },
+    'Last Sync Source': { value: '', description: 'Origin of the last sync (AutoSync or Manual).' }
+  };
+
+  const existingSettings = new Map();
+  const lastRow = statusSheet.getLastRow();
+  if (lastRow > 1) {
+    const existingData = statusSheet.getRange(2, 1, lastRow - 1, 3).getValues();
+    existingData.forEach(row => {
+      if (row[0]) {
+        existingSettings.set(row[0], { value: row[1], description: row[2] });
+      }
+    });
+  }
+
+  const newSettings = [];
+  for (const key in defaultStatus) {
+    const existing = existingSettings.get(key);
+    let finalValue = existing ? existing.value : defaultStatus[key].value;
+    if (key === 'Script Version') {
+      finalValue = SCRIPT_VERSION;
+    }
+    newSettings.push([key, finalValue, defaultStatus[key].description]);
+  }
+
+  if (newSettings.length > 0) {
+    statusSheet.getRange(2, 1, newSettings.length, 3).setValues(newSettings);
+  }
+
+  statusSheet.autoResizeColumns(1, 3);
+
+  statusSheet.getRange('E1').setValue('Sync Status Indicator').setFontWeight('bold');
+  const panelRange = statusSheet.getRange('E2:F3');
+  const panelBoundaryRange = statusSheet.getRange('E2:H6');
+  const fullSheetRange = statusSheet.getRange(1, 1, statusSheet.getMaxRows(), statusSheet.getMaxColumns());
+  const existingMergedRanges = fullSheetRange.getMergedRanges();
+  if (existingMergedRanges.length > 0) {
+    existingMergedRanges.forEach(function(range) {
+      const intersectsRows = range.getLastRow() >= panelBoundaryRange.getRow() &&
+        range.getRow() <= panelBoundaryRange.getLastRow();
+      const intersectsCols = range.getLastColumn() >= panelBoundaryRange.getColumn() &&
+        range.getColumn() <= panelBoundaryRange.getLastColumn();
+      if (intersectsRows && intersectsCols) {
+        range.breakApart();
+      }
+    });
+  }
+  panelBoundaryRange.setBackground(null).setFontColor(null);
+  panelRange.merge();
+  panelRange.setHorizontalAlignment('center')
+    .setVerticalAlignment('middle')
+    .setFontSize(12)
+    .setFontWeight('bold');
+  updateSyncStatusPanel_(statusSheet, 'Unknown');
+}
+
 function setupLogSheets_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   
@@ -416,6 +511,7 @@ function setupLogSheets_() {
     logSheet.getRange('A1:C1').setValues([['Timestamp', 'Level', 'Message']]).setFontWeight('bold');
     logSheet.setFrozenRows(1);
   }
+  markSystemSheet_(logSheet);
 
   // Check for TestLog sheet
   let testLogSheet = ss.getSheetByName(TEST_LOG_SHEET_NAME);
@@ -424,6 +520,7 @@ function setupLogSheets_() {
     testLogSheet.getRange('A1:C1').setValues([['Timestamp', 'Level', 'Message']]).setFontWeight('bold');
     testLogSheet.setFrozenRows(1);
   }
+  markSystemSheet_(testLogSheet);
 
   // Check for FolderAuditLog sheet
   let auditLogSheet = ss.getSheetByName(FOLDER_AUDIT_LOG_SHEET_NAME);
@@ -431,6 +528,7 @@ function setupLogSheets_() {
     auditLogSheet = ss.insertSheet(FOLDER_AUDIT_LOG_SHEET_NAME);
     setupFolderAuditLogSheet_(auditLogSheet);
   }
+  markSystemSheet_(auditLogSheet);
 
   // Check for DeepAuditLog sheet
   setupDeepAuditLogSheet_();
@@ -440,6 +538,105 @@ function setupLogSheets_() {
 
   // Check for Help sheet
   setupHelpSheet_();
+
+  // Ensure consistent sheet ordering
+  arrangeSheetOrder_();
+}
+
+function arrangeSheetOrder_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (typeof isSuperAdmin_ === 'function' && !isSuperAdmin_()) {
+    return;
+  }
+  const orderedNames = [
+    STATUS_SHEET_NAME,
+    CONFIG_SHEET_NAME,
+    SHEET_EDITORS_SHEET_NAME,
+    USER_GROUPS_SHEET_NAME,
+    MANAGED_FOLDERS_SHEET_NAME,
+    LOG_SHEET_NAME,
+    TEST_LOG_SHEET_NAME,
+    SYNC_HISTORY_SHEET_NAME,
+    FOLDER_AUDIT_LOG_SHEET_NAME,
+    'DeepFolderAuditLog',
+    'Help'
+  ];
+
+  const groupSheets = [];
+  const userGroupsSheet = ss.getSheetByName(USER_GROUPS_SHEET_NAME);
+  if (userGroupsSheet && userGroupsSheet.getLastRow() > 1) {
+    const groupNames = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 1).getValues().flat();
+    groupNames.forEach(function(groupName) {
+      if (groupName) {
+        const sheetName = getUserGroupSheetName_(groupName);
+        if (sheetName !== SHEET_EDITORS_SHEET_NAME) {
+          groupSheets.push(sheetName);
+        }
+      }
+    });
+  }
+
+  const folderSheets = [];
+  const managedSheet = ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+  if (managedSheet && managedSheet.getLastRow() > 1) {
+    const headers = getHeaderMap_(managedSheet);
+    const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+    const userSheetNames = managedSheet.getRange(2, userSheetNameCol, managedSheet.getLastRow() - 1, 1).getValues().flat();
+    userSheetNames.forEach(function(sheetName) {
+      if (sheetName) {
+        folderSheets.push(sheetName);
+      }
+    });
+  }
+
+  const testSheets = [];
+  const remainingSheets = [];
+  const allSheets = ss.getSheets();
+  allSheets.forEach(function(sheet) {
+    const name = sheet.getName();
+    if (orderedNames.indexOf(name) !== -1) {
+      return;
+    }
+    if (groupSheets.indexOf(name) !== -1) {
+      return;
+    }
+    if (folderSheets.indexOf(name) !== -1) {
+      return;
+    }
+    if (isTestSheet_(name)) {
+      testSheets.push(name);
+    } else {
+      remainingSheets.push(name);
+    }
+  });
+
+  const finalOrder = orderedNames
+    .concat(groupSheets)
+    .concat(folderSheets)
+    .concat(remainingSheets)
+    .concat(testSheets);
+
+  const seen = new Set();
+  let targetIndex = 1;
+  finalOrder.forEach(function(name) {
+    if (!name || seen.has(name)) {
+      return;
+    }
+    seen.add(name);
+    const sheet = ss.getSheetByName(name);
+    if (sheet) {
+      if (sheet.isSheetHidden && sheet.isSheetHidden()) {
+        return;
+      }
+      try {
+        ss.setActiveSheet(sheet);
+        ss.moveActiveSheet(targetIndex);
+        targetIndex++;
+      } catch (e) {
+        log_('Could not reorder sheet "' + name + '": ' + e.message, 'WARN');
+      }
+    }
+  });
 }
 
 function setupHelpSheet_() {
@@ -449,6 +646,7 @@ function setupHelpSheet_() {
   if (!helpSheet) {
     helpSheet = ss.insertSheet('Help');
   }
+  markSystemSheet_(helpSheet);
 
   // Clear existing content
   helpSheet.clear();
@@ -576,6 +774,7 @@ function setupSyncHistorySheet_() {
       }
     }
   }
+  markSystemSheet_(sheet);
   return sheet;
 }
 
@@ -591,6 +790,7 @@ function setupDeepAuditLogSheet_() {
     sheet.setFrozenRows(1);
     log_('Created "DeepFolderAuditLog" sheet.');
   }
+  markSystemSheet_(sheet);
   return sheet;
 }
 

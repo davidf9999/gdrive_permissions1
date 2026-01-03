@@ -55,12 +55,14 @@ Think of Edit Mode like "putting the system on pause" while you work.
 ### Entering Edit Mode
 
 1. Open your Permission Manager spreadsheet
-2. Go to **Permissions Manager → Edit Mode → 🔒 Enter Edit Mode**
+2. Go to **Permissions Manager → AutoSync → Edit Mode → 🔒 Enter Edit Mode**
 3. Click OK to confirm
 4. You'll see:
    - A yellow banner sheet appears (⚠️ EDIT MODE ACTIVE)
    - Auto-sync is now suspended
    - Confirmation dialog
+
+**Note:** Only Google Workspace Super Admins can use the Permissions Manager menu items.
 
 ### While in Edit Mode
 
@@ -82,7 +84,7 @@ Think of Edit Mode like "putting the system on pause" while you work.
 
 **When you're done editing:**
 
-1. Go to **Permissions Manager → Edit Mode → 🔓 Exit Edit Mode**
+1. Go to **Permissions Manager → AutoSync → Edit Mode → 🔓 Exit Edit Mode**
 2. Confirm when prompted
 3. You'll see:
    - Yellow banner disappears
@@ -92,7 +94,7 @@ Think of Edit Mode like "putting the system on pause" while you work.
 **Important:** Remember to exit Edit Mode! If you forget:
 - Auto-sync will stay suspended indefinitely
 - The yellow banner will remind you
-- Check status: **Edit Mode → 📊 View Edit Mode Status**
+- Check status: **Permissions Manager → AutoSync → Edit Mode → 📊 View Edit Mode Status**
 
 ---
 
@@ -115,7 +117,7 @@ Sheet: ⚠️ EDIT MODE ACTIVE
 │  Enabled by: admin@example.com          │
 │                                          │
 │  When done editing, use:                │
-│  Permissions Manager → Edit Mode →      │
+│  Permissions Manager → AutoSync → Edit Mode →      │
 │  Exit Edit Mode                         │
 └─────────────────────────────────────────┘
 ```
@@ -134,7 +136,7 @@ Sheet: ⚠️ EDIT MODE ACTIVE
 At any time, check if Edit Mode is active:
 
 **Via Menu:**
-**Permissions Manager → Edit Mode → 📊 View Edit Mode Status**
+**Permissions Manager → AutoSync → Edit Mode → 📊 View Edit Mode Status**
 
 **Via Banner:**
 Look for the yellow banner sheet at the beginning
@@ -188,7 +190,7 @@ Edit Mode uses **Document Properties** to store state:
 
 ```
 1. Enter Edit Mode
-   └─> Permissions Manager → Edit Mode → Enter Edit Mode
+   └─> Permissions Manager → AutoSync → Edit Mode → Enter Edit Mode
 
 2. Make changes:
    └─> Rename folders in ManagedFolders sheet
@@ -202,7 +204,7 @@ Edit Mode uses **Document Properties** to store state:
    └─> Maybe test with manual sync on one folder
 
 4. Exit Edit Mode
-   └─> Permissions Manager → Edit Mode → Exit Edit Mode
+   └─> Permissions Manager → AutoSync → Edit Mode → Exit Edit Mode
    └─> Auto-sync resumes and applies changes at next schedule
 ```
 
@@ -274,7 +276,7 @@ Don't worry! There are multiple safeguards:
    - Shows how long it's been enabled
 
 4. **Multiple Admins**
-   - Any admin can exit Edit Mode
+- Any super admin can exit Edit Mode
    - Doesn't have to be the person who enabled it
 
 5. **No Permanent Damage**
@@ -310,31 +312,28 @@ You have two ways to pause AutoSync. What's the difference?
 
 ## Frequently Asked Questions
 
-### Can non-admin users use Edit Mode?
+### Can sheet editors use Edit Mode?
 
-Edit Mode is a menu item, so technically anyone with menu access can use it. However:
-- **Best practice:** Only admins should use Edit Mode
-- **Why:** Non-admin users don't run syncs anyway (AutoSync does it)
-- **Protection:** You could restrict menu access if needed
+Edit Mode is a menu item, so only Google Workspace Super Admins can use it. Sheet Editors should focus on updating sheets while Super Admins run menu actions.
 
 ### Does Edit Mode affect manual syncs?
 
 **No!** You can still run manual syncs while in Edit Mode via:
 - Permissions Manager → ManualSync → Full Sync
-- Permissions Manager → ManualSync → Add/Enable Users in Groups
+- Permissions Manager → ManualSync → Sync Groups - Add/Enable Users
 - etc.
 
 Edit Mode only suspends **automatic** syncs, not manual ones.
 
-### What if two admins both try to edit?
+### What if two super admins both try to edit?
 
 Edit Mode is **per-spreadsheet**, not per-user:
 - Only one Edit Mode state exists
 - If already in Edit Mode, entering again shows current status
-- Any admin can exit it (doesn't have to be who enabled it)
+- Any super admin can exit it (doesn't have to be who enabled it)
 - The system tracks the original enabler for logging
 
-**Best practice:** Coordinate with other admins before entering Edit Mode.
+**Best practice:** Coordinate with other super admins before entering Edit Mode.
 
 ### Does Edit Mode persist if I close the spreadsheet?
 
@@ -387,7 +386,7 @@ This happens silently - you won't see any dialogs or interruptions.
    - Verify it works before exiting
 
 5. **Coordinate with team**
-   - Tell other admins when you're using Edit Mode
+   - Tell other super admins when you're using Edit Mode
    - Prevents confusion
 
 ### ❌ Don't:

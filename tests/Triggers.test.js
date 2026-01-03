@@ -40,7 +40,7 @@ describe('detectAutoSyncChanges_', () => {
       getSheetByName: jest.fn(name => {
         if (name === global.MANAGED_FOLDERS_SHEET_NAME) return managedSheet;
         if (name === global.USER_GROUPS_SHEET_NAME) return { getLastRow: () => 0, getRange: () => ({ getValues: () => [] }) }; // Mock empty sheet
-        if (name === global.ADMINS_SHEET_NAME) return { getLastRow: () => 0, getRange: () => ({ getValues: () => [] }) }; // Mock empty sheet
+        if (name === global.SHEET_EDITORS_SHEET_NAME) return { getLastRow: () => 0, getRange: () => ({ getValues: () => [] }) }; // Mock empty sheet
         return null;
       }),
       getId: jest.fn(() => 'spreadsheet-id')

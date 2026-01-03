@@ -1,0 +1,350 @@
+openapi: 3.1.0
+info:
+  title: gdrive_permissions1 GPT Backend API
+  version: "v1"
+  description: |
+    Read-only API used by a Custom GPT to retrieve a curated knowledge pack,
+    step-by-step setup guidance, and exact build artifacts for the public
+    gdrive_permissions1 project. This API is designed for deterministic behavior
+    (content baked into the deployed container image) with an optional best-effort
+    drift check against GitHub.
+    Authentication uses the X-API-Key header (BACKEND_API_KEY). Local development
+    can bypass auth by setting ALLOW_ANON=true or NODE_ENV=development.
+servers:
+  - url: https://gpt-backend-4nutlbijta-ew.a.run.app
+    description: Cloud Run service base URL
+paths:
+  /meta:
+    get:
+      tags: [meta]
+      operationId: getMeta
+      summary: Get build provenance and artifact hashes
+      description: Returns the deployed service version/tag, git SHA, build time, and artifact hashes.
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Build provenance and artifact hashes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetaResponse"
+  /knowledge:
+    get:
+      tags: [knowledge]
+      operationId: getKnowledge
+      summary: Get the curated knowledge pack (markdown)
+      description: Returns the full content of GPT_KNOWLEDGE.md as text/markdown.
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Knowledge pack markdown
+          content:
+            text/markdown:
+              schema:
+                type: string
+            text/plain:
+              schema:
+                type: string
+  /usage/overview:
+    get:
+      tags: [usage]
+      operationId: getUsageOverview
+      summary: Get the usage overview guide
+      description: Returns the content of docs/USER_GUIDE.md as text/markdown.
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Usage overview markdown
+          content:
+            text/markdown:
+              schema:
+                type: string
+            text/plain:
+              schema:
+                type: string
+  /usage/super-admin:
+    get:
+      tags: [usage]
+      operationId: getUsageSuperAdmin
+      summary: Get the Super Admin usage guide
+      description: Returns the content of docs/SUPER_ADMIN_USER_GUIDE.md as text/markdown.
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Super Admin guide markdown
+          content:
+            text/markdown:
+              schema:
+                type: string
+            text/plain:
+              schema:
+                type: string
+  /usage/sheet-editor:
+    get:
+      tags: [usage]
+      operationId: getUsageSheetEditor
+      summary: Get the Sheet Editor usage guide
+      description: Returns the content of docs/SHEET_EDITOR_USER_GUIDE.md as text/markdown.
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Sheet Editor guide markdown
+          content:
+            text/markdown:
+              schema:
+                type: string
+            text/plain:
+              schema:
+                type: string
+  /steps:
+    get:
+      tags: [steps]
+      operationId: listSteps
+      summary: List setup steps (compact)
+      description: Returns a compact list of setup steps derived from docs/common/steps.yaml.
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Array of steps (compact)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StepListItem"
+  /steps/{id}:
+    get:
+      tags: [steps]
+      operationId: getStep
+      summary: Get a single setup step by id
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Step identifier as defined in docs/common/steps.yaml
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: A single step including setup guide markdown
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StepDetail"
+        "404":
+          description: Step not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /bundle:
+    get:
+      tags: [artifacts]
+      operationId: getBundle
+      summary: Get the Apps Script bundle
+      description: Returns the content of dist/apps_scripts_bundle.gs as text/plain.
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Apps Script bundle
+          content:
+            text/plain:
+              schema:
+                type: string
+  /latest:
+    get:
+      tags: [meta]
+      operationId: getLatestStatus
+      summary: Best-effort check for drift vs GitHub
+      description: |
+        Best-effort drift check comparing the deployed git SHA against GitHub.
+        Implementations should fail gracefully and may return status=unknown
+        in case of timeouts, rate limits, or network errors.
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Drift status result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LatestResponse"
+  /status:
+    get:
+      tags: [ops]
+      operationId: healthz
+      summary: Health check
+      description: Simple health endpoint for uptime checks.
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: ["ok"]
+                required: [status]
+  /debug:
+    get:
+      tags: [ops]
+      operationId: debugRequest
+      summary: Debug request metadata
+      description: Returns request metadata with sensitive headers redacted.
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Debug response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                properties:
+                  method:
+                    type: string
+                  path:
+                    type: string
+                  request_id:
+                    type: string
+                  timestamp_utc:
+                    type: string
+                  headers:
+                    type: object
+security:
+  - ApiKeyAuth: []
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+  schemas:
+    MetaResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        service:
+          type: string
+          description: Service name identifier
+        version_tag:
+          type: string
+          description: Git tag used for deployment (e.g., v1.2.3)
+        git_sha:
+          type: string
+          description: Git commit SHA baked into the image
+        build_time_utc:
+          type: string
+          format: date-time
+          description: Build timestamp (UTC)
+        artifacts:
+          type: object
+          additionalProperties: false
+          properties:
+            knowledge_sha256:
+              type: string
+              description: SHA-256 hash of GPT_KNOWLEDGE.md
+            steps_sha256:
+              type: string
+              description: SHA-256 hash of docs/common/steps.yaml or derived steps JSON
+            bundle_sha256:
+              type: string
+              description: SHA-256 hash of dist/apps_scripts_bundle.gs
+            user_guide_sha256:
+              type: string
+              description: SHA-256 hash of docs/USER_GUIDE.md
+            super_admin_guide_sha256:
+              type: string
+              description: SHA-256 hash of docs/SUPER_ADMIN_USER_GUIDE.md
+            sheet_editor_guide_sha256:
+              type: string
+              description: SHA-256 hash of docs/SHEET_EDITOR_USER_GUIDE.md
+          required:
+            [
+              knowledge_sha256,
+              steps_sha256,
+              bundle_sha256,
+              user_guide_sha256,
+              super_admin_guide_sha256,
+              sheet_editor_guide_sha256,
+            ]
+      required: [service, version_tag, git_sha, build_time_utc, artifacts]
+    StepListItem:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          description: Step identifier
+        title:
+          type: string
+          description: Step title
+        state:
+          type: string
+          description: Optional state label from steps.yaml (if present)
+        manual:
+          type: boolean
+          description: Whether the step is manual
+      required: [id, title, manual]
+    StepDetail:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        state:
+          type: string
+        manual:
+          type: boolean
+        setup_guide_markdown:
+          type: string
+          description: The setup_guide content for this step in markdown
+      required: [id, title, manual, setup_guide_markdown]
+    LatestResponse:
+      type: object
+      description: Drift status between deployed content and GitHub
+      additionalProperties: false
+      properties:
+        deployed_git_sha:
+          type: string
+          description: Git SHA baked into the currently deployed service
+        github_head_sha:
+          type: string
+          description: GitHub HEAD SHA for the configured comparison ref (e.g., main)
+        is_outdated:
+          type: boolean
+          description: True if deployed SHA differs from GitHub HEAD SHA
+        status:
+          type: string
+          enum: ["ok", "unknown"]
+          description: ok if comparison succeeded; unknown if best-effort check failed
+        reason:
+          type: string
+          description: Optional explanation when status=unknown
+      required: [status, deployed_git_sha]
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+      required: [error, message]

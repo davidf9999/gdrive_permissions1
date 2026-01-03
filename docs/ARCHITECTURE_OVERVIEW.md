@@ -19,7 +19,7 @@ tabs:
   several folder roles reuse.
 - **Folder / role tabs** — each tab corresponds to a single folder+role pairing,
   referencing one or more managed groups as well as any direct invitees.
-- **SheetEditors + Status** — who may edit the control spreadsheet and the timestamps/outcomes of
+- **SheetEditors_G + Status** — who may edit the control spreadsheet and the timestamps/outcomes of
   recent syncs.
 - **Logs / Config** — troubleshooting helpers (these can stay collapsed unless
   something goes wrong).
@@ -154,7 +154,7 @@ the source of truth for permissions. Important tabs include:
 - **ManagedFolders** — defines each folder to manage. Columns specify folder
   names, Drive IDs, target roles (Editor/Viewer/Commenter), default email
   prefixes for Google Groups, and optional settings such as disabled rows.
-- **SheetEditors** — list of spreadsheet editors. The script keeps this sheet in sync
+- **SheetEditors_G** — list of spreadsheet editors. The script keeps this sheet in sync
   with the document's sharing settings so only approved editors can edit
   the control spreadsheet.
 - **User group sheets** — automatically generated tabs for each

@@ -1,0 +1,62 @@
+name: Deploy Backend
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  SERVICE_NAME: ${{ secrets.GCP_SERVICE_NAME }}
+  REGION: ${{ secrets.GCP_REGION }}
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REPOSITORY: ${{ secrets.GCP_ARTIFACT_REGISTRY_REPO }}
+  VERSION_TAG: ${{ github.ref_name }}
+  GIT_SHA: ${{ github.sha }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Authenticate to Google Cloud (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Configure Docker authentication
+        run: gcloud auth configure-docker ${REGION}-docker.pkg.dev
+
+      - name: Build backend image
+        run: |
+          IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/${SERVICE_NAME}:${GITHUB_REF_NAME}"
+          echo "IMAGE=${IMAGE}" >> "$GITHUB_ENV"
+          docker build -t "${IMAGE}" -f backend/Dockerfile \
+            --build-arg VERSION_TAG="${VERSION_TAG}" \
+            --build-arg GIT_SHA="${GIT_SHA}" \
+            --build-arg SERVICE_NAME="${SERVICE_NAME}" \
+            .
+
+      - name: Push backend image
+        run: docker push "${IMAGE}"
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy "${SERVICE_NAME}" \
+            --image "${IMAGE}" \
+            --region "${REGION}" \
+            --platform managed \
+            --set-env-vars "BACKEND_API_KEY=${{ secrets.BACKEND_API_KEY }}" \
+            --allow-unauthenticated \
+            --quiet
