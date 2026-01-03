@@ -4,7 +4,7 @@ This document outlines the step-by-step process to test the "Hybrid DNS Delegati
 
 ## Objective
 
-To verify that the AI Assistant can successfully automate the creation/update of DNS records for a specific, delegated subdomain within Cloudflare, utilizing a sandboxed API token provided by the administrator, and that the administrative setup process is clear and secure.
+To verify that the Gemini CLI Assistant can successfully automate the creation/update of DNS records for a specific, delegated subdomain within Cloudflare, utilizing a sandboxed API token provided by the administrator, and that the administrative setup process is clear and secure.
 
 ## Test Plan
 
@@ -23,7 +23,7 @@ This is the most critical step, ensuring the tester receives a token with limite
 *   **Create a placeholder record:** Manually create an `A` record for the subdomain you plan to delegate.
     *   **Type:** `A`
     *   **Name:** `tester-u` (or any unique name for your test subdomain, e.g., `ai-test`)
-    *   **IPv4 address:** `192.0.2.1` (this is a reserved IP for documentation, perfect for a placeholder that will be updated by the AI Assistant).
+    *   **IPv4 address:** `192.0.2.1` (this is a reserved IP for documentation, perfect for a placeholder that will be updated by the Gemini CLI Assistant).
     *   **Proxy status:** Ensure it's orange-clouded (proxied) if you want Cloudflare's CDN/security features.
 *   **Create the API Token:**
     *   Go to **My Profile** (from the top right icon) -> **API Tokens**.
@@ -69,10 +69,10 @@ Now, put on your tester hat. You are User `U`, who has just been given access an
 *   To ensure you get a clean environment with the new secrets, you *must* launch a new Codespace. Go to your repository's main page on GitHub, click the **"< > Code"** button, switch to the **Codespaces** tab, and create a **new Codespace** for the repository. This will ensure your newly added Codespaces secrets are injected into the environment.
     > **Note on Secrets for Testers:** When the Administrator configures repository secrets, these are automatically and securely injected into any Codespace launched from that repository. As a Tester, you do not need to manually configure these secrets; GitHub handles the secure injection into your environment. This is a core part of testing the seamless onboarding experience.
 
-**2. Start the AI Assistant:**
+**2. Start the Gemini CLI Assistant:**
 
 *   The Codespace will build and run the startup scripts automatically.
-*   The terminal will clear, and the AI assistant will greet you and start its process.
+*   The terminal will clear, and the Gemini CLI Assistant will greet you and start its process.
 
 **3. Follow the Assistant's Guidance:**
 

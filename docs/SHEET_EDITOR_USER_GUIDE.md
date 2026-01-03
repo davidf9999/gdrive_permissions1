@@ -6,6 +6,10 @@ Welcome! This guide explains how to use the Google Spreadsheet to manage folder 
 
 ---
 
+## Assistant Scope
+
+The OpenAI GPT Assistant can answer setup and usage questions for Sheet Editors, but it will first confirm your role. Testing guidance is out of scope; refer to `docs/TESTING.md`.
+
 ## The Core Concept
 
 This system works by linking Google Drive folders to Google Groups. Instead of sharing a folder with multiple (even hundreds) of individual email addresses, you share it with a single group (e.g., `my-project-editors@your-domain.com`). You then control who has access by simply adding or removing people from that group.
@@ -48,7 +52,7 @@ This sheet allows you to create your own reusable groups of people (e.g., "Marke
 *   For each `GroupName` you define, a sheet named `GroupName_G` is created. You list the members of that group in that sheet.
 *   You can then use the `GroupEmail` (from Column B) in any of your other user sheets to grant access to everyone in that group at once.
 
-### 4. `SheetEditors`
+### 4. `SheetEditors_G`
 
 This sheet controls who is a **Sheet Editor** for this spreadsheet. Add the email addresses of anyone who should have permission to edit this control panel.
 
@@ -89,6 +93,16 @@ The `Log`, `TestLog`, and `FoldersAuditLog` sheets contain detailed, timestamped
 
 ---
 
+## Config Settings & Common Pitfalls
+
+Some behavior depends on settings in the `Config` sheet. Sheet Editors should be aware of these because they directly affect when changes take effect.
+
+*   **AutoSync deletions (`AllowAutosyncDeletion`):** If enabled, removing a user from a sheet will revoke their access on the next AutoSync. If you need a “review before revoke” flow, ask a Super Admin to disable this setting.
+*   **Delete checkboxes (`AllowGroupFolderDeletion`):** The Delete columns in `ManagedFolders` and `UserGroups` only work when this setting is enabled by a Super Admin. When disabled, delete checkboxes are ignored.
+*   **Manual sync required:** Your edits do not take effect until a Super Admin runs a sync (or AutoSync is enabled).
+
+---
+
 ## Working with Non-ASCII Characters
 
 The system fully supports non-ASCII characters (e.g., Hebrew, Chinese) in folder and group names. However, **Google Group email addresses must use only ASCII characters** (a-z, 0-9, hyphens).
@@ -114,4 +128,3 @@ Each managed folder is shared through a Google Group (the `GroupEmail` shown on 
 
 - **Recommended (copy/move):** Create the file in the managed folder or move a copy there. The folder’s group permission applies automatically.
 - **Only when you know the group email:** If the file must stay elsewhere, share the file with that group's email address. You can find the group's email in the `GroupEmail` column of the `ManagedFolders` sheet.
-

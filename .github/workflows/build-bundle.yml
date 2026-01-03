@@ -1,0 +1,45 @@
+name: Build and Commit Bundle
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  build-bundle:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Apps Script bundle
+        run: npm run build:bundle
+
+      - name: Commit bundle if changed
+        run: |
+          if git diff --quiet; then
+            echo "No bundle changes to commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add dist/apps_scripts_bundle.gs
+          git commit -m "chore: update apps script bundle"
+          git push

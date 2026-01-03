@@ -6,4 +6,5 @@
 6. Enable APIs and grant consent
 7. Deploy the Apps Script project
 8. Run the first sync
+9. Post-Setup Verification
 s. I'm not sure, please scan my system for me.

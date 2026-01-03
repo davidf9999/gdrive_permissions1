@@ -1,15 +1,21 @@
 steps:
-  - id: "create_workspace"
+  - id: "create_or_reuse_a_google_workspace_tenant"
     title: "Create or reuse a Google Workspace tenant"
     state: "WORKSPACE_TENANT_CREATED"
     manual: true
     setup_guide: |
       ## 1. Create or reuse a Google Workspace tenant
 
-      1. Go to [workspace.google.com](https://workspace.google.com/) to start a free trial or sign in.
+      1. Go to [workspace.google.com/business](https://workspace.google.com/business/) and select a plan, then click the related **Get started** button to begin signup.
       2. When prompted, provide a domain you own or purchase one through Google Domains (the default option during setup).
       3. Complete the sign-up form to create the administrator account.
       4. Verify domain ownership via a DNS record. Follow the official [domain verification steps](https://support.google.com/a/answer/183895).
+      5. (Optional) Run DNS sanity checks to confirm delegation and verification records:
+         ```bash
+         ./scripts/dns_sanity_check.sh your-domain.com [subdomain]
+         ```
+         * After setup, expect TXT/MX records to appear.
+         * After teardown, SOA/NS should still exist; empty A/AAAA/MX/TXT answers (NOERROR with SOA) are expected.
 
       <details>
       <summary>Visual aid: Domain verification TXT record</summary>
@@ -19,21 +25,43 @@ steps:
       </details>
 
       > **Tip:** If your organisation already has Workspace, sign into the [Admin console](https://admin.google.com/) with an existing Super Admin account.
-  - id: "prepare_admin"
+    ai_assistant_guide: |
+      ### Step 1: Create or reuse a Google Workspace tenant
+      *** Current state: 1 "Create or reuse a Google Workspace tenant" out of 8 steps. ***
+      This is the foundational step for your Google Drive Permissions Manager. You'll need an active Google Workspace tenant. If you don't have one, you can start a free trial.
+
+      **Manual Action Required:**
+      Follow the instructions in the [Setup Guide](docs/SETUP_GUIDE.md#1-create-or-reuse-a-google-workspace-tenant) to either create a new Google Workspace tenant or sign into an existing one.
+
+      **Once you have successfully set up or signed into your Google Workspace tenant, type 'done' to continue.**
+  - id: "prepare_the_super_admin_account"
     title: "Prepare the Super Admin account"
     state: "SUPER_ADMIN_PREPARED"
     manual: true
     setup_guide: |
       ## 2. Prepare the Super Admin account
 
-      1. Sign in to [admin.google.com](https://admin.google.com/) using the admin account.
+      1. Sign in to [admin.google.com](https://admin.google.com/) using the Super Admin account.
       2. Confirm the account has the **Super Admin** role by visiting **Directory → Users → [your user] → Admin roles and privileges**.
       3. Enable the Google Groups service if it is not already active: go to **Apps → Google Workspace → Groups for Business** and set it to **On for everyone**.
-      4. **Note on 2-Step Verification (2SV):** Google Cloud requires 2SV for admin accounts. If it's not enabled, you will be prompted to set it up during the Google Cloud login process.
+      4. **Note on 2-Step Verification (2SV):** Google Cloud requires 2SV for Super Admin accounts. If it's not enabled, you will be prompted to set it up during the Google Cloud login process.
       5. Open a new tab to [console.cloud.google.com](https://console.cloud.google.com) and accept the Terms of Service.
 
       > **Why Super Admin?** The script needs Super Admin privileges to create and manage Google Groups via the Admin SDK.
-  - id: "create_gcp_project"
+    ai_assistant_guide: |
+      ### Step 2: Prepare the Super Admin account
+      *** Current state: 2 "Prepare the Super Admin account" out of 8 steps. ***
+      Now, you'll prepare the Super Admin account that will be used for the setup. This involves ensuring the correct roles and enabling necessary services.
+
+      **Manual Action Required:**
+      Follow the instructions in the [Setup Guide](docs/SETUP_GUIDE.md#2-prepare-the-super-admin-account) to:
+      1. Confirm your account has the Super Admin role.
+      2. Enable the Google Groups service.
+      3. Accept the Google Cloud Terms of Service.
+      4. Ensure 2-Step Verification (2SV) is enabled or be prepared to enable it.
+
+      **Once your Super Admin account is prepared, type 'done' to continue.**
+  - id: "create_or_select_a_google_cloud_project"
     title: "Create or select a Google Cloud Project"
     state: "GCP_PROJECT_CREATED"
     manual: true
@@ -45,8 +73,24 @@ steps:
       1.  Go to the [Google Cloud Console](https://console.cloud.google.com).
       2.  In the top menu bar, click the project selection dropdown.
       3.  Either select an existing, unused project or click **NEW PROJECT**.
+          - If reusing a project, make sure you have **Owner** access.
+          - If creating a new project, give it a clear name and choose your Google Workspace organization as the parent if prompted.
       4.  Once your project is created and selected, find the **Project ID** on the project dashboard. **Copy this ID and save it for later.**
-  - id: "create_spreadsheet"
+      5.  Find the **Project Number** in the Cloud Console,in **Cloud overview** menu under **Project info** and save it for later (you will need it to link Apps Script to GCP).
+          - You can also run `gcloud projects describe YOUR_PROJECT_ID --format='value(projectNumber)'`.
+    ai_assistant_guide: |
+      ### Step 3: Create or select a Google Cloud Project
+      *** Current state: 3 "Create or select a Google Cloud Project" out of 8 steps. ***
+      The Google Drive Permissions Manager requires a Google Cloud Platform (GCP) project to manage APIs.
+
+      **Manual Action Required:**
+      Follow the instructions in the [Setup Guide](docs/SETUP_GUIDE.md#3-create-or-select-a-google-cloud-project) to:
+      1. Navigate to the Google Cloud Console.
+      2. Create a **NEW PROJECT** or select an existing, unused project.
+      3. **Copy the Project ID and Project Number.** You will need both in subsequent steps.
+
+      **Once you have your Google Cloud Project ID and Project Number, type 'done' to continue.**
+  - id: "create_the_control_spreadsheet"
     title: "Create the control spreadsheet"
     state: "CONTROL_SPREADSHEET_CREATED"
     manual: true
@@ -62,23 +106,51 @@ steps:
 
       <details>
       <summary>Visual aid: Finding the Apps Script ID</summary>
+
       ![Screenshot of the Apps Script editor showing Project Settings and the location of the Script ID.](./images/workspace_setup/03-script-id.png)
+
       </details>
-  - id: "configure_gcloud"
+    ai_assistant_guide: |
+      ### Step 4: Create the control spreadsheet
+      *** Current state: 4 "Create the control spreadsheet" out of 8 steps. ***
+      This spreadsheet will be the central hub for managing all your Drive permissions.
+
+      **Manual Action Required:**
+      Follow the instructions in the [Setup Guide](docs/SETUP_GUIDE.md#4-create-the-control-spreadsheet) to:
+      1. Create a new Google Spreadsheet in Google Drive.
+      2. Open **Extensions → Apps Script** to create a new Apps Script project bound to the spreadsheet.
+      3. In the Apps Script editor, open **Project Settings** (the gear icon ⚙️) and copy the **Script ID**. You will need this later.
+
+      **Once your control spreadsheet is created and you have noted its Script ID, type 'done' to continue.**
+  - id: "configure_the_google_cloud_cli_gcloud"
     title: "Configure the Google Cloud CLI (gcloud)"
     state: "GCLOUD_CLI_CONFIGURED"
     manual: false
     setup_guide: |
       ## 5. Configure the Google Cloud CLI (gcloud)
 
-      > **Note for AI Assistant Users:** The assistant will handle these command-line steps. You can either approve the commands or copy-paste them into a separate terminal.
+      > **GPT note:** This step is not required if you are following the setup with the OpenAI GPT Assistant and do not plan to use a terminal.
+      >
+      > **Gemini note:** The assistant should ask you to run these commands in your own terminal. It should not try to authenticate `gcloud` for you.
 
       This step gives `gcloud` permission to manage resources in your Google Cloud project.
 
       1.  **Verify `gcloud` installation.** In your terminal, run `gcloud --version`. If the command is not found, try opening a new terminal first. If it still fails, please create an issue on our [GitHub repository](https://github.com/davidf9999/gdrive_permissions1/issues).
       2.  **Authenticate `gcloud`.** Run `gcloud auth login` and follow the link to sign in with your **Google Workspace Super Admin** account.
       3.  **Set your GCP Project.** Run `gcloud config set project YOUR_PROJECT_ID`, replacing `YOUR_PROJECT_ID` with the ID you saved from Step 3.
-  - id: "enable_apis"
+    ai_assistant_guide: |
+      ### Step 5: Configure the Google Cloud CLI (gcloud)
+      *** Current state: 5 "Configure the Google Cloud CLI (gcloud)" out of 8 steps. ***
+      You need to authenticate the `gcloud` CLI tool so it can manage resources in your GCP project. For authentication, you should run the commands in your own terminal.
+
+      **Manual Action Required:**
+      Please run these commands in your terminal, then let me know once each one completes:
+      1. `gcloud --version`
+      2. `gcloud auth login`
+      3. `gcloud config set project YOUR_PROJECT_ID`
+
+      **When you're done, type 'done' and we'll continue.**
+  - id: "enable_apis_and_grant_consent"
     title: "Enable APIs and grant consent"
     state: "APIS_ENABLED_AND_CONSENT_GRANTED"
     manual: false
@@ -90,44 +162,69 @@ steps:
           # Enable Admin SDK, Drive, and Apps Script APIs
           gcloud services enable admin.googleapis.com drive.googleapis.com script.googleapis.com --project=YOUR_PROJECT_ID
           ```
+          **GPT note (no terminal):** In the Cloud Console, go to **APIs & Services → Library**, then search for and enable:
+          - **Admin SDK API** (`admin.googleapis.com`)
+          - **Google Drive API** (`drive.googleapis.com`)
+          - **Google Apps Script API** (`script.googleapis.com`)
       2.  **Enable User-Level API.** Visit **[script.google.com/home/usersettings](https://script.google.com/home/usersettings)** and toggle the "Google Apps Script API" setting **ON**.
       3.  **Configure the OAuth Consent Screen.** In the [Cloud Console](https://console.cloud.google.com), go to **APIs & Services → OAuth consent screen**.
-          *   User type: **Internal**.
           *   App name: A descriptive name like `Drive Permission Manager`.
-          *   Save and continue. You do not need to add test users for an Internal app.
-  - id: "deploy_script"
+          *   User type: **Internal**.
+          *   Save and continue.
+  - id: "deploy_the_apps_script_project"
     title: "Deploy the Apps Script project"
     state: "SCRIPT_DEPLOYED"
     manual: true
     setup_guide: |
       ## 7. Deploy the Apps Script project
 
-      1.  **Install dependencies.** In your terminal, run `npm install`.
-      2.  **Build the script bundle.** This command combines all source files into a single file for deployment.
-          ```bash
-          npm run build
-          ```
-      3.  **Copy the bundled code.** Open `dist/apps_scripts_bundle.gs`, select all text, and copy it.
-      4.  **Paste into the Apps Script Editor.** Return to the Apps Script editor, delete any code in `Code.gs`, paste the bundled code, and save.
-      5.  **Configure Project Settings.**
-          *   In the Apps Script editor, open **Project Settings** (⚙️).
-          *   Check the box for **Show "appsscript.json" manifest file in editor**.
-          *   Return to the editor and open the new `appsscript.json` file.
-          *   Copy the content from `apps_script_project/appsscript.json` in this repository and paste it into the editor's `appsscript.json`.
-          *   In the editor, set the `timeZone` to your organization's timezone (e.g., `America/New_York`). Save the file.
-      6.  **Link the GCP Project.** In **Project Settings** (⚙️), scroll to **Google Cloud Platform (GCP) Project**, click **Change project**, and enter your GCP **Project Number**.
-      7.  Return to your spreadsheet and **refresh the page**. The **Permissions Manager** menu should appear.
+      1.  **Copy the bundled code.** Open [apps_scripts_bundle.gs](https://raw.githubusercontent.com/davidf9999/gdrive_permissions1/refs/heads/main/dist/apps_scripts_bundle.gs), select all text, and copy it.
+          *Optional (local build):* run `npm install` then `npm run build` to regenerate the bundle from source.
+      2.  **Paste into the Apps Script Editor.** Return to the Apps Script editor, delete any code in `Code.gs`, paste the bundled code, and save.
+      3.  **Configure Project Settings.**
+      *   In the Apps Script editor, open **Project Settings** (⚙️).
+      *   Check the box for **Show "appsscript.json" manifest file in editor**.
+      *   Return to the editor and open the new `appsscript.json` file.
+      *   Copy the content from `apps_script_project/appsscript.json` in this repository and paste it into the editor's `appsscript.json`.
+      *   In the editor, set the `timeZone` to your organization's timezone (e.g., `America/New_York`). Save the file.
+      4.  **Link the GCP Project.** In **Project Settings** (⚙️), scroll to **Google Cloud Platform (GCP) Project**, click **Change project**, and enter your GCP **Project Number**.
+      *   Find the Project Number in the Cloud Console under **Project info**.
+      *   Or run `gcloud projects describe YOUR_PROJECT_ID --format='value(projectNumber)'` in your terminal.
+      *   **Do not** try to infer the Project Number from the Project ID.
+      5.  Return to your spreadsheet and **refresh the page**. The **Permissions Manager** menu should appear.
 
-      > **Note on Configuration:** The script's configuration (like Sheet ID) is stored in a sheet named `Config`, which will be created automatically on the first run.
-  - id: "first_sync"
+      > **Notes on Configuration:** 
+      > The script's configuration (like Sheet ID) is stored in a sheet named `Config`, which will be created automatically on the first run.
+      > The original sheet called "Sheet1" may be deleted.
+
+    ai_assistant_guide: |
+      ### Step 7: Deploy the Apps Script project
+      *** Current state: 7 "Deploy the Apps Script project" out of 8 steps. ***
+      Now it's time to deploy the actual script code into the Apps Script project you created earlier. This involves building the project locally and then copying the code manually.
+
+      **Automated Action (with your approval):**
+      I can run `npm install` and `npm run build` to prepare the script bundle for deployment.
+
+      **Manual Action Required:**
+      You will then need to manually copy the bundled code into your Apps Script editor, configure the `appsscript.json` manifest, and link your GCP project in the Apps Script project settings.
+
+      **To find your Project Number:**
+      * In the Cloud Console, open **Project info** and copy the **Project number**.
+      * Or run `gcloud projects describe YOUR_PROJECT_ID --format='value(projectNumber)'` in your terminal.
+      * **Do not** try to infer the Project Number from the Project ID.
+
+      **Do you want me to proceed with building the Apps Script project? (yes/no)**
+  - id: "run_the_first_sync"
     title: "Run the first sync"
     state: "FIRST_SYNC_COMPLETE"
     manual: true
     setup_guide: |
-      ## 8. Run the first sync
+      ## 8. Run the first sync (only Google Workspace Super Admins can use the menu items)
 
-      1. In the spreadsheet, open **Permissions Manager → Setup → Setup All Sheets & Sync Admins**.
-      2. Grant the script the requested permissions.
+      1. Refresh the spreadsheet so the **Permissions Manager** menu appears.
+      2. In the spreadsheet, open **Permissions Manager → ManualSync → Full Sync**.
+      3. Grant the script the requested permissions.
+      4. Check the execution log in sheet **Logs** for progress and errors.
 
       <details>
       <summary>Visual aid: Authorization prompt</summary>
@@ -137,3 +234,29 @@ steps:
       </details>
 
       After the script finishes, the management sheets will be created. See the [User Guide](USER_GUIDE.md) for next steps.
+  - id: "post_setup_verification"
+    title: "Post-Setup Verification"
+    state: "VERIFICATION_COMPLETE"
+    manual: false
+    setup_guide: |
+      ## 9. Post-Setup Verification
+
+      After the initial setup and first sync, it's a good practice to verify a few key configurations to ensure the long-term health of the system.
+
+      ### Verify Email Authentication (SPF & DKIM)
+
+      **Why is this important?** The script sends email notifications for audits, errors, and other events. Without proper email authentication, these important emails are likely to be marked as spam or bounce.
+
+      1.  **Check SPF Record:** Run the built-in sanity check script to ensure you have a correct SPF record, which tells mail servers that Google is an authorized sender for your domain.
+          ```bash
+          ./scripts/dns_sanity_check.sh your-domain.com
+          ```
+          The output should show `OK: SPF includes _spf.google.com`.
+
+      2.  **Check DKIM Record:** DKIM provides a digital signature to your emails, which is critical for deliverability. Check if it's set up correctly:
+          ```bash
+          dig TXT google._domainkey.your-domain.com
+          ```
+          You should see a `v=DKIM1...` record in the output.
+
+      3.  **If Records are Missing:** If your SPF record is missing or the `dig` command returns `NXDOMAIN` for DKIM, it means your setup is incomplete. For a detailed guide on how to fix this, see the **[Emails Sent from the Script are Bouncing](TROUBLESHOOTING.md#emails-sent-from-the-script-are-bouncing)** section in our troubleshooting guide.

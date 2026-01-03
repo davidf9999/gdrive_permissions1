@@ -46,9 +46,16 @@ function runManualAccessTest() {
         showTestMessage_('Step 4/4: Initial Setup', 'The script will now add this configuration to the ManagedFolders sheet and run the sync to create the folder, group, and user sheet.');
 
         const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+        const headers = getHeaderMap_(managedSheet);
+        const folderNameCol = resolveColumn_(headers, 'foldername', 1);
+        const roleCol = resolveColumn_(headers, 'role', 3);
+        const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+        const folderIdCol = resolveColumn_(headers, 'folderid', 2);
+        const groupEmailCol = resolveColumn_(headers, 'groupemail', 4);
+        
         testRowIndex = managedSheet.getLastRow() + 1;
-        managedSheet.getRange(testRowIndex, FOLDER_NAME_COL).setValue(testFolderName);
-        managedSheet.getRange(testRowIndex, ROLE_COL).setValue(testRole);
+        managedSheet.getRange(testRowIndex, folderNameCol).setValue(testFolderName);
+        managedSheet.getRange(testRowIndex, roleCol).setValue(testRole);
 
         // Use optimized single-folder sync instead of fullSync()
         const status = syncSingleFolder_(testRowIndex);
@@ -57,7 +64,7 @@ function runManualAccessTest() {
         }
         log_('Initial sync complete. Status: OK', 'INFO');
 
-        userSheetName = managedSheet.getRange(testRowIndex, USER_SHEET_NAME_COL).getValue();
+        userSheetName = managedSheet.getRange(testRowIndex, userSheetNameCol).getValue();
         const userSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(userSheetName);
         if (!userSheet) {
             showTestMessage_('Test Failed', 'Could not find the created user sheet: ' + userSheetName);
@@ -73,7 +80,7 @@ function runManualAccessTest() {
         }
         log_('Grant access sync complete. Status: OK', 'INFO');
 
-        folderId = managedSheet.getRange(testRowIndex, FOLDER_ID_COL).getValue();
+        folderId = managedSheet.getRange(testRowIndex, folderIdCol).getValue();
         const folderUrl = DriveApp.getFolderById(folderId).getUrl();
         let verification1;
         log_('testConfig.autoConfirm before Verify Access: ' + testConfig.autoConfirm, 'INFO');
@@ -127,7 +134,6 @@ function runManualAccessTest() {
         const durationSeconds = ((endTime.getTime() - startTime.getTime()) / 1000).toFixed(2);
         log_('TEST DURATION: ' + durationSeconds + ' seconds', 'INFO');
 
-        // Check if testConfig exists before using it (may be undefined if error occurred early)
         if (typeof testConfig !== 'undefined') {
             let cleanup = testConfig.cleanup === true;
             log_('Auto-cleanup check: testConfig.cleanup = ' + testConfig.cleanup + ', evaluates to: ' + cleanup, 'INFO');
@@ -146,16 +152,21 @@ function runManualAccessTest() {
             if (cleanup) {
                 log_('Starting automatic cleanup for: ' + testFolderName, 'INFO');
                 try {
-                    // Get groupEmail if not already set
+                    const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+                    const headers = getHeaderMap_(managedSheet);
+                    const groupEmailCol = resolveColumn_(headers, 'groupemail', 4);
+                    const folderNameCol = resolveColumn_(headers, 'foldername', 1);
+
                     if (!groupEmail) {
-                        groupEmail = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME).getRange(testRowIndex, GROUP_EMAIL_COL).getValue();
+                        groupEmail = managedSheet.getRange(testRowIndex, groupEmailCol).getValue();
                         log_('Retrieved groupEmail from sheet: ' + groupEmail, 'INFO');
                     }
 
                     cleanupFolderData_(testFolderName, folderId, groupEmail, userSheetName);
 
-                    // Delete the row from ManagedFolders sheet
-                    SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME).deleteRow(testRowIndex);
+                    if (testRowIndex && managedSheet.getRange(testRowIndex, folderNameCol).getValue() === testFolderName) {
+                        managedSheet.deleteRow(testRowIndex);
+                    }
 
                     log_('Automatic cleanup completed successfully', 'INFO');
                     showTestMessage_('Cleanup', 'Cleanup complete.');
@@ -170,7 +181,6 @@ function runManualAccessTest() {
             log_('Cleanup skipped (testConfig undefined)', 'WARN');
         }
 
-        // Test result
         const testStatus = success ? '✓ PASSED' : '✗ FAILED';
         log_('>>> TEST RESULT: Manual Access Test ' + testStatus, success ? 'INFO' : 'ERROR');
         log_('', 'INFO');
@@ -246,6 +256,13 @@ function runStressTest() {
         }
 
         const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+        const headers = getHeaderMap_(managedSheet);
+        const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+        const statusCol = resolveColumn_(headers, 'status', 7);
+        const folderNameCol = resolveColumn_(headers, 'foldername', 1);
+        const folderIdCol = resolveColumn_(headers, 'folderid', 2);
+        const groupEmailCol = resolveColumn_(headers, 'groupemail', 4);
+
         startRow = managedSheet.getLastRow() + 1; // Assign (not declare)
         const newConfig = folderNames.map(name => [name, '', 'Editor']);
         managedSheet.getRange(startRow, 1, newConfig.length, 3).setValues(newConfig);
@@ -258,7 +275,7 @@ function runStressTest() {
 
         // --- Step 4: Populate User Sheets ---
         showTestMessage_('Setup Phase 2 Complete', 'The script will now populate all of the new user sheets with the test user emails.');
-        const userSheetNames = managedSheet.getRange(startRow, USER_SHEET_NAME_COL, numFolders, 1).getValues().flat();
+        const userSheetNames = managedSheet.getRange(startRow, userSheetNameCol, numFolders, 1).getValues().flat();
         const userEmailsForSheet = userEmails.map(e => [e]); // Format for setting range values
 
         userSheetNames.forEach(function (sheetName) {
@@ -293,7 +310,6 @@ function runStressTest() {
         log_('TEST DURATION: ' + testDurationSeconds + ' seconds', 'INFO');
 
         // --- Step 6: Cleanup ---
-        // Check if testConfig exists before using it (may be undefined if error occurred early)
         if (typeof testConfig !== 'undefined' && typeof numFolders !== 'undefined' && typeof startRow !== 'undefined') {
             let cleanup = testConfig.cleanup === true;
             log_('Auto-cleanup check (Stress Test): testConfig.cleanup = ' + testConfig.cleanup + ', evaluates to: ' + cleanup, 'INFO');
@@ -313,21 +329,25 @@ function runStressTest() {
                 log_('Starting automatic cleanup for stress test folders', 'INFO');
                 try {
                     const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
-                    // Read up to STATUS_COL to include USER_SHEET_NAME_COL (column 5)
-                    const managedData = managedSheet.getRange(startRow, 1, numFolders, STATUS_COL).getValues();
+                    const headers = getHeaderMap_(managedSheet);
+                    const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+                    const statusCol = resolveColumn_(headers, 'status', 7);
+                    const folderNameCol = resolveColumn_(headers, 'foldername', 1);
+                    const folderIdCol = resolveColumn_(headers, 'folderid', 2);
+                    const groupEmailCol = resolveColumn_(headers, 'groupemail', 4);
+
+                    const managedData = managedSheet.getRange(startRow, 1, numFolders, statusCol).getValues();
 
                     showTestMessage_('Cleanup', 'Cleanup in Progress. This may take a few moments.');
 
-                    // Clean up all test resources first
                     managedData.forEach(function (row) {
-                        const folderName = row[FOLDER_NAME_COL - 1];
-                        const folderId = row[FOLDER_ID_COL - 1];
-                        const userSheetName = row[USER_SHEET_NAME_COL - 1];
-                        const groupEmail = row[GROUP_EMAIL_COL - 1];
+                        const folderName = row[folderNameCol - 1];
+                        const folderId = row[folderIdCol - 1];
+                        const userSheetName = row[userSheetNameCol - 1];
+                        const groupEmail = row[groupEmailCol - 1];
                         cleanupFolderData_(folderName, folderId, groupEmail, userSheetName);
                     });
 
-                    // Then delete rows from sheet
                     managedSheet.deleteRows(startRow, numFolders);
 
                     log_('Automatic cleanup completed successfully', 'INFO');
@@ -384,11 +404,13 @@ function cleanupStressTestData() {
         // Clean up ManagedFolders sheet entries
         const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
         if (managedSheet) {
+            const headers = getHeaderMap_(managedSheet);
+            const folderNameCol = resolveColumn_(headers, 'foldername', 1);
             const data = managedSheet.getDataRange().getValues();
             const rowsToDelete = [];
             for (let i = data.length - 1; i >= 0; i--) {
-                if (data[i][FOLDER_NAME_COL - 1] && data[i][FOLDER_NAME_COL - 1].startsWith('StressTestFolder_')) {
-                    rowsToDelete.push(i + 1); // +1 because sheet rows are 1-indexed
+                if (data[i][folderNameCol - 1] && data[i][folderNameCol - 1].startsWith('StressTestFolder_')) {
+                    rowsToDelete.push(i + 1);
                 }
             }
             rowsToDelete.forEach(function (rowIndex) {
@@ -455,16 +477,22 @@ function cleanupManualTestData() {
         const folderName = folderNamePrompt.getResponseText();
 
         const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+        const headers = getHeaderMap_(managedSheet);
+        const folderNameCol = resolveColumn_(headers, 'foldername', 1);
+        const folderIdCol = resolveColumn_(headers, 'folderid', 2);
+        const groupEmailCol = resolveColumn_(headers, 'groupemail', 4);
+        const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+
         const data = managedSheet.getDataRange().getValues();
         let rowIndexToDelete = -1;
         let folderId, groupEmail, userSheetName;
 
         for (let i = 1; i < data.length; i++) {
-            if (data[i][FOLDER_NAME_COL - 1] === folderName) {
+            if (data[i][folderNameCol - 1] === folderName) {
                 rowIndexToDelete = i + 1;
-                folderId = data[i][FOLDER_ID_COL - 1];
-                groupEmail = data[i][GROUP_EMAIL_COL - 1];
-                userSheetName = data[i][USER_SHEET_NAME_COL - 1];
+                folderId = data[i][folderIdCol - 1];
+                groupEmail = data[i][groupEmailCol - 1];
+                userSheetName = data[i][userSheetNameCol - 1];
                 break;
             }
         }
@@ -508,16 +536,22 @@ function cleanupAddDeleteSeparationTestData() {
         const folderName = folderNamePrompt.getResponseText();
 
         const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+        const headers = getHeaderMap_(managedSheet);
+        const folderNameCol = resolveColumn_(headers, 'foldername', 1);
+        const folderIdCol = resolveColumn_(headers, 'folderid', 2);
+        const groupEmailCol = resolveColumn_(headers, 'groupemail', 4);
+        const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+        
         const data = managedSheet.getDataRange().getValues();
         let rowIndexToDelete = -1;
         let folderId, groupEmail, userSheetName;
 
         for (let i = 1; i < data.length; i++) {
-            if (data[i][FOLDER_NAME_COL - 1] === folderName) {
+            if (data[i][folderNameCol - 1] === folderName) {
                 rowIndexToDelete = i + 1;
-                folderId = data[i][FOLDER_ID_COL - 1];
-                groupEmail = data[i][GROUP_EMAIL_COL - 1];
-                userSheetName = data[i][USER_SHEET_NAME_COL - 1];
+                folderId = data[i][folderIdCol - 1];
+                groupEmail = data[i][groupEmailCol - 1];
+                userSheetName = data[i][userSheetNameCol - 1];
                 break;
             }
         }
@@ -588,9 +622,17 @@ function runAddDeleteSeparationTest() {
         // --- Phase 1: Initial Add ---
         log_('TEST: Initial Add Phase');
         const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+        const headers = getHeaderMap_(managedSheet);
+        const folderNameCol = resolveColumn_(headers, 'foldername', 1);
+        const roleCol = resolveColumn_(headers, 'role', 3);
+        const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+        const groupEmailCol = resolveColumn_(headers, 'groupemail', 4);
+        const folderIdCol = resolveColumn_(headers, 'folderid', 2);
+        const statusCol = resolveColumn_(headers, 'status', 7);
+
         testRowIndex = managedSheet.getLastRow() + 1;
-        managedSheet.getRange(testRowIndex, FOLDER_NAME_COL).setValue(testFolderName);
-        managedSheet.getRange(testRowIndex, ROLE_COL).setValue(testRole);
+        managedSheet.getRange(testRowIndex, folderNameCol).setValue(testFolderName);
+        managedSheet.getRange(testRowIndex, roleCol).setValue(testRole);
 
         // Use optimized single-folder sync instead of syncAdds()
         const status = syncSingleFolder_(testRowIndex, true);
@@ -599,9 +641,9 @@ function runAddDeleteSeparationTest() {
         }
         log_('Initial sync complete. Status: OK', 'INFO');
 
-        userSheetName = managedSheet.getRange(testRowIndex, USER_SHEET_NAME_COL).getValue();
-        groupEmail = managedSheet.getRange(testRowIndex, GROUP_EMAIL_COL).getValue();
-        folderId = managedSheet.getRange(testRowIndex, FOLDER_ID_COL).getValue();
+        userSheetName = managedSheet.getRange(testRowIndex, userSheetNameCol).getValue();
+        groupEmail = managedSheet.getRange(testRowIndex, groupEmailCol).getValue();
+        folderId = managedSheet.getRange(testRowIndex, folderIdCol).getValue();
         const userSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(userSheetName);
         if (!userSheet) throw new Error('Test failed: Could not find the created user sheet: ' + userSheetName);
 
@@ -681,7 +723,7 @@ function runAddDeleteSeparationTest() {
             if (confirmActualDelete !== ui.Button.YES) { ui.alert('Test cancelled.'); return false; }
             // Use optimized test-only sync for deletes
             testOnlySync_([testFolderName], false);
-            const statusFinal = managedSheet.getRange(testRowIndex, STATUS_COL).getValue();
+            const statusFinal = managedSheet.getRange(testRowIndex, statusCol).getValue();
             if (statusFinal !== 'OK') {
                 throw new Error('Sync failed after deleting user. Status: ' + statusFinal);
             }
@@ -710,7 +752,6 @@ function runAddDeleteSeparationTest() {
         const durationSeconds = ((endTime.getTime() - startTime.getTime()) / 1000).toFixed(2);
         log_('TEST DURATION: ' + durationSeconds + ' seconds', 'INFO');
 
-        // Check if testConfig exists before using it (may be undefined if error occurred early)
         if (typeof testConfig !== 'undefined') {
             let cleanup = testConfig.cleanup === true;
             log_('Auto-cleanup check (Add/Delete Test): testConfig.cleanup = ' + testConfig.cleanup + ', evaluates to: ' + cleanup, 'INFO');
@@ -732,7 +773,9 @@ function runAddDeleteSeparationTest() {
                     cleanupFolderData_(testFolderName, folderId, groupEmail, userSheetName);
 
                     const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
-                    if (testRowIndex && managedSheet.getRange(testRowIndex, FOLDER_NAME_COL).getValue() === testFolderName) {
+                    const headers = getHeaderMap_(managedSheet);
+                    const folderNameCol = resolveColumn_(headers, 'foldername', 1);
+                    if (testRowIndex && managedSheet.getRange(testRowIndex, folderNameCol).getValue() === testFolderName) {
                         managedSheet.deleteRow(testRowIndex);
                     }
 
@@ -780,14 +823,19 @@ function cleanupOrphanedTestData() {
         }
 
         const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+        const headers = getHeaderMap_(managedSheet);
+        const folderNameCol = resolveColumn_(headers, 'foldername', 1);
+        const folderIdCol = resolveColumn_(headers, 'folderid', 2);
+        const groupEmailCol = resolveColumn_(headers, 'groupemail', 4);
+        const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
         const data = managedSheet.getDataRange().getValues();
 
         let found = false;
         for (let i = data.length - 1; i >= 1; i--) {
-            if (data[i][FOLDER_NAME_COL - 1] === folderName) {
-                const folderId = data[i][FOLDER_ID_COL - 1];
-                const groupEmail = data[i][GROUP_EMAIL_COL - 1];
-                const userSheetName = data[i][USER_SHEET_NAME_COL - 1];
+            if (data[i][folderNameCol - 1] === folderName) {
+                const folderId = data[i][folderIdCol - 1];
+                const groupEmail = data[i][groupEmailCol - 1];
+                const userSheetName = data[i][userSheetNameCol - 1];
 
                 log_('Found orphaned test data for: ' + folderName, 'INFO');
                 cleanupFolderData_(folderName, folderId, groupEmail, userSheetName);
@@ -948,11 +996,15 @@ function runEmailCapabilityTest() {
     const startTime = new Date();
     const ui = SpreadsheetApp.getUi();
     const defaultRecipient = getConfigValue_('NotificationEmail', Session.getEffectiveUser().getEmail());
+    const effectiveUserEmail = Session.getEffectiveUser().getEmail();
+    const activeUserEmail = Session.getActiveUser().getEmail();
 
     try {
         log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
         log_('║  Email Capability Test                                       ║', 'INFO');
         log_('╚══════════════════════════════════════════════════════════════╝', 'INFO');
+        log_('Sender context: effectiveUser=' + (effectiveUserEmail || 'unknown') +
+            ', activeUser=' + (activeUserEmail || 'unknown'), 'INFO');
 
         const promptMessage = 'Enter the email address that should receive the test message.' +
             (defaultRecipient ? '\n\nLeave blank to send it to the configured NotificationEmail (' + defaultRecipient + ').' : '');
@@ -990,7 +1042,9 @@ function runEmailCapabilityTest() {
         });
 
         log_('VERIFICATION PASSED: Test email sent to ' + recipient + '.', 'INFO');
-        showTestMessage_('Email Sent', 'A test email was sent to ' + recipient + '. Please confirm it arrived.');
+        showTestMessage_('Email Sent', 'A test email was sent to ' + recipient + '. Please confirm it arrived.' +
+            '\n\nIf it does not arrive (especially for external addresses), check Admin Console > Email Log Search ' +
+            'for routing/rejections and confirm external mail policies for Apps Script/API sends.');
         success = true;
     } catch (e) {
         log_('TEST FAILED: ' + e.toString() + ' Stack: ' + e.stack, 'ERROR');
@@ -1235,14 +1289,19 @@ function clearAllTestsData(skipConfirmation = false) {
 
         const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
         if (managedSheet) {
+            const headers = getHeaderMap_(managedSheet);
+            const folderNameCol = resolveColumn_(headers, 'foldername', 1);
+            const folderIdCol = resolveColumn_(headers, 'folderid', 2);
+            const groupEmailCol = resolveColumn_(headers, 'groupemail', 4);
+            const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
             const data = managedSheet.getDataRange().getValues();
             const rowsToDelete = [];
             for (let i = data.length - 1; i >= 1; i--) {
-                const folderName = data[i][FOLDER_NAME_COL - 1];
+                const folderName = data[i][folderNameCol - 1];
                 if (folderName && (folderName === manualTestFolderName || folderName.startsWith('StressTestFolder_'))) {
-                    const folderId = data[i][FOLDER_ID_COL - 1];
-                    const groupEmail = data[i][GROUP_EMAIL_COL - 1];
-                    const userSheetName = data[i][USER_SHEET_NAME_COL - 1];
+                    const folderId = data[i][folderIdCol - 1];
+                    const groupEmail = data[i][groupEmailCol - 1];
+                    const userSheetName = data[i][userSheetNameCol - 1];
                     // Note: cleanupFolderData_ will try to delete the sheet, but it's already deleted above
                     // That's fine - it will log a warning and continue with group/folder cleanup
                     cleanupFolderData_(folderName, folderId, groupEmail, userSheetName);
@@ -1279,7 +1338,10 @@ function clearAllTestsData(skipConfirmation = false) {
  * @returns {string} The status of the sync.
  */
 function syncSingleFolder_(rowIndex, addOnly = false) {
-  const folderName = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME).getRange(rowIndex, 1).getValue();
+  const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+  const headers = getHeaderMap_(managedSheet);
+  const folderNameCol = resolveColumn_(headers, 'foldername', 1);
+  const folderName = managedSheet.getRange(rowIndex, folderNameCol).getValue();
   log_('Fast sync for single folder: ' + folderName + ' (row ' + rowIndex + ')');
   try {
     processManagedFolders_({
@@ -1332,16 +1394,21 @@ function cleanupFolderByName() {
         const folderName = folderNamePrompt.getResponseText();
 
         const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+        const headers = getHeaderMap_(managedSheet);
+        const folderNameCol = resolveColumn_(headers, 'foldername', 1);
+        const folderIdCol = resolveColumn_(headers, 'folderid', 2);
+        const groupEmailCol = resolveColumn_(headers, 'groupemail', 4);
+        const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
         const data = managedSheet.getDataRange().getValues();
         let rowIndexToDelete = -1;
         let folderId, groupEmail, userSheetName;
 
         for (let i = 1; i < data.length; i++) {
-            if (data[i][FOLDER_NAME_COL - 1] === folderName) {
+            if (data[i][folderNameCol - 1] === folderName) {
                 rowIndexToDelete = i + 1;
-                folderId = data[i][FOLDER_ID_COL - 1];
-                groupEmail = data[i][GROUP_EMAIL_COL - 1];
-                userSheetName = data[i][USER_SHEET_NAME_COL - 1];
+                folderId = data[i][folderIdCol - 1];
+                groupEmail = data[i][groupEmailCol - 1];
+                userSheetName = data[i][userSheetNameCol - 1];
                 break;
             }
         }
@@ -1369,28 +1436,74 @@ function cleanupFolderByName() {
 }
 
 function removeBlankRows() {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
-    if (!sheet) {
-        SpreadsheetApp.getUi().alert('ManagedFolders sheet not found.');
-        return;
-    }
-    const data = sheet.getDataRange().getValues();
-    const rowsToDelete = [];
-    for (let i = data.length - 1; i >= 1; i--) { // Start from bottom, skip header
-        const folderName = data[i][FOLDER_NAME_COL - 1];
-        const folderId = data[i][FOLDER_ID_COL - 1];
-        if (!folderName && !folderId) {
-            rowsToDelete.push(i + 1);
+    let totalRowsDeleted = 0;
+
+    /**
+     * Helper function to remove blank rows from a specific sheet.
+     * A row is considered blank if its key identifying column(s) are empty.
+     * @param {string} sheetName The name of the sheet to clean.
+     * @param {Array<number>} keyColumnIndexes An array of 1-based column indexes to check. If all are empty, the row is deleted.
+     */
+    function _removeBlankRowsFromSheet(sheetName, keyColumnIndexes = [1]) {
+        const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+        if (!sheet) {
+            log_(`removeBlankRows: Sheet "${sheetName}" not found.`, 'WARN');
+            return 0;
         }
+
+        const lastRow = sheet.getLastRow();
+        if (lastRow <= 1) {
+            return 0; // Nothing to do
+        }
+
+        const data = sheet.getDataRange().getValues();
+        let deletedCount = 0;
+
+        // Iterate backwards to safely delete rows without messing up indices
+        for (let i = data.length - 1; i >= 1; i--) { // Start from bottom, skip header
+            const rowData = data[i];
+            
+            // A row is considered effectively blank if all its key columns are empty.
+            const isEffectivelyBlank = keyColumnIndexes.every(colIndex => {
+                const cellValue = rowData[colIndex - 1]; // convert 1-based to 0-based
+                return !cellValue || String(cellValue).trim() === '';
+            });
+            
+            if (isEffectivelyBlank) {
+                sheet.deleteRow(i + 1); // sheet rows are 1-indexed
+                deletedCount++;
+            }
+        }
+        
+        if (deletedCount > 0) {
+            log_(`Removed ${deletedCount} blank row(s) from "${sheetName}".`);
+        }
+        return deletedCount;
     }
 
-    if (rowsToDelete.length > 0) {
-        rowsToDelete.forEach(function(row) {
-            sheet.deleteRow(row);
-        });
-        SpreadsheetApp.getUi().alert(rowsToDelete.length + ' blank row(s) have been removed.');
-    } else {
-        SpreadsheetApp.getUi().alert('No blank rows found.');
+    try {
+        const managedSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+        if(managedSheet) {
+            const managedHeaders = getHeaderMap_(managedSheet);
+            const folderNameCol = resolveColumn_(managedHeaders, 'foldername', 1);
+            totalRowsDeleted += _removeBlankRowsFromSheet(MANAGED_FOLDERS_SHEET_NAME, [folderNameCol]);
+        }
+        
+        const ugSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(USER_GROUPS_SHEET_NAME);
+        if(ugSheet) {
+          const ugHeaders = getHeaderMap_(ugSheet);
+          const groupNameCol = resolveColumn_(ugHeaders, 'groupname', 1);
+          totalRowsDeleted += _removeBlankRowsFromSheet(USER_GROUPS_SHEET_NAME, [groupNameCol]);
+        }
+
+        if (totalRowsDeleted > 0) {
+            SpreadsheetApp.getUi().alert(totalRowsDeleted + ' blank row(s) have been removed from the configuration sheets.');
+        } else {
+            SpreadsheetApp.getUi().alert('No blank rows found in ManagedFolders or UserGroups sheets.');
+        }
+    } catch (e) {
+        log_('Error in removeBlankRows: ' + e.message, 'ERROR');
+        SpreadsheetApp.getUi().alert('An error occurred while removing blank rows: ' + e.message);
     }
 }
 
@@ -1504,6 +1617,8 @@ function runUserGroupDeletionTest() {
 
         const ss = SpreadsheetApp.getActiveSpreadsheet();
         const userGroupsSheet = ss.getSheetByName('UserGroups');
+        const ugHeaders = getHeaderMap_(userGroupsSheet);
+        const ugDeleteCol = resolveColumn_(ugHeaders, 'delete', 6);
 
         // Add group row
         const lastRow = userGroupsSheet.getLastRow();
@@ -1548,7 +1663,7 @@ function runUserGroupDeletionTest() {
         log_('✓ Group synced successfully', 'INFO');
 
         // 2. Mark for deletion
-        userGroupsSheet.getRange(groupRow + 1, USERGROUPS_DELETE_COL).setValue(true);
+        userGroupsSheet.getRange(groupRow + 1, ugDeleteCol).setValue(true);
         log_('✓ Marked group for deletion (Delete checkbox = true)', 'INFO');
 
         // 3. Process deletions
@@ -1682,6 +1797,9 @@ function runFolderRoleDeletionTest() {
         // 2. Add folder-role to ManagedFolders
         const ss = SpreadsheetApp.getActiveSpreadsheet();
         const managedFoldersSheet = ss.getSheetByName('ManagedFolders');
+        const headers = getHeaderMap_(managedFoldersSheet);
+        const deleteCol = resolveColumn_(headers, 'delete', 9);
+
         const testRole = 'reader';
         testUserSheetName = 'TestDeleteFolderUsers';
 
@@ -1736,7 +1854,7 @@ function runFolderRoleDeletionTest() {
         log_('✓ Folder-role synced successfully, group email: ' + groupEmail, 'INFO');
 
         // 3. Mark for deletion
-        managedFoldersSheet.getRange(folderRow + 1, DELETE_COL).setValue(true);
+        managedFoldersSheet.getRange(folderRow + 1, deleteCol).setValue(true);
         log_('✓ Marked folder-role for deletion (Delete checkbox = true)', 'INFO');
 
         // 4. Process deletions

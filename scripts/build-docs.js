@@ -5,6 +5,12 @@ const yaml = require('js-yaml');
 const projectRoot = path.join(__dirname, '..');
 const commonDir = path.join(projectRoot, 'docs', 'common');
 
+function replaceAll(template, replacements) {
+  return Object.entries(replacements).reduce((updated, [needle, value]) => {
+    return updated.split(needle).join(value);
+  }, template);
+}
+
 function buildDocs() {
   console.log('Starting documentation build...');
 
@@ -42,10 +48,43 @@ function buildDocs() {
     console.log('Successfully generated docs/common/_SETUP_STEPS.md');
 
     const aiAssistantSteps = steps
-      .map(step => step.ai_assistant_guide)
-      .filter(guide => guide && guide.trim() !== '')
-      .join('\n\n');
-    fs.writeFileSync(path.join(commonDir, '_AI_ASSISTANT_STEPS.md'), aiAssistantSteps);
+      .map((step, index) => {
+        const stepNumber = index + 1;
+        const anchor = `${stepNumber}-${step.id.replace(/_/g, '-')}`;
+        const menuTitle = step.menu_title || step.title;
+        const stateLine = `*** Current state: ${stepNumber} "${menuTitle}" out of ${steps.length} steps. ***`;
+        const guideLine = `We recommend following this step at [Setup Guide](docs/SETUP_GUIDE.md#${anchor}).`;
+        const header = `### Step ${stepNumber}: ${step.title}`;
+        if (step.manual) {
+          return [
+            header,
+            stateLine,
+            guideLine,
+            'This step is manual and requires your action in a web browser.',
+            '',
+            '**Manual Action Required:**',
+            'Follow the instructions in the Setup Guide above.',
+            '',
+            "**Once you've completed the manual steps, type 'done' to continue.**",
+          ].join('\n');
+        }
+        return [
+          header,
+            stateLine,
+            guideLine,
+            'This step includes automated commands with some manual follow-up in your browser.',
+            '',
+            '**Automated Action (with your approval):**',
+            'I can run the required commands for you.',
+            '',
+            '**Manual Action Required:**',
+            'Follow the instructions in the Setup Guide above for any browser-based steps.',
+            '',
+            '**Do you want me to proceed? (yes/no)**',
+          ].join('\n');
+      })
+      .join('\n');
+    fs.writeFileSync(path.join(commonDir, '_AI_ASSISTANT_STEPS.md'), `${aiAssistantSteps}\n`);
     console.log('Successfully generated docs/common/_AI_ASSISTANT_STEPS.md');
 
 
@@ -65,6 +104,22 @@ function buildDocs() {
     fs.writeFileSync(path.join(projectRoot, 'AI_ASSISTANT_PROMPT.md'), assistantPrompt);
     console.log('Successfully generated AI_ASSISTANT_PROMPT.md');
 
+    const gptKnowledgeTemplate = fs.readFileSync(path.join(projectRoot, 'GPT_KNOWLEDGE.template.md'), 'utf8');
+    const gptKnowledge = gptKnowledgeTemplate
+      .replace('{{SETUP_STEPS_LIST}}', setupStepsList)
+      .replace('{{SETUP_STEPS}}', setupSteps)
+      .replace('{{BUNDLE_PATH}}', 'dist/apps_scripts_bundle.gs')
+      .replace('{{BUILD_COMMAND}}', 'npm run build:bundle');
+    fs.writeFileSync(path.join(projectRoot, 'GPT_KNOWLEDGE.md'), gptKnowledge);
+    console.log('Successfully generated GPT_KNOWLEDGE.md');
+
+    const gptPromptTemplate = fs.readFileSync(path.join(projectRoot, 'GPT_PROMPT.template.md'), 'utf8');
+    const gptPrompt = replaceAll(gptPromptTemplate, {
+      '{{KNOWLEDGE_FILE}}': 'GPT_KNOWLEDGE.md',
+      '{{REPO_URL}}': 'https://github.com/davidf9999/gdrive_permissions1',
+    });
+    fs.writeFileSync(path.join(projectRoot, 'GPT_PROMPT.md'), gptPrompt);
+    console.log('Successfully generated GPT_PROMPT.md');
 
     console.log('\n✅ Documentation build complete.');
   } catch (error) {

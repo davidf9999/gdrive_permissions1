@@ -75,9 +75,27 @@ function autoSync(options = {}) {
     return;
   }
 
+  let syncStartTime;
   try {
+    const props = PropertiesService.getDocumentProperties();
+    const now = Date.now();
+    const lastRunRaw = props.getProperty(AUTO_SYNC_LAST_RUN_KEY);
+    const intervalMinutes = getConfigValue_('AutoSyncInterval', 5);
+    const enforcedIntervalMs = Math.max(5, intervalMinutes) * 60 * 1000;
+
+    if (lastRunRaw) {
+      const elapsed = now - Number(lastRunRaw);
+      if (!isNaN(elapsed) && elapsed < enforcedIntervalMs) {
+        log_('AutoSync skipped: last run was ' + Math.round(elapsed / 1000) + 's ago (interval ' + intervalMinutes + ' mins).', 'DEBUG');
+        return { skipped: true, added: 0, removed: 0, failed: 0 };
+      }
+    }
+
+    props.setProperty(AUTO_SYNC_LAST_RUN_KEY, String(now));
+
     if (isInEditMode_()) {
       log_('AutoSync skipped: spreadsheet is in Edit Mode.', 'DEBUG');
+      updateSyncStatus_('Skipped', { source: 'AutoSync' });
       return;
     }
 
@@ -87,12 +105,14 @@ function autoSync(options = {}) {
     const changeDetection = detectAutoSyncChanges_();
 
     if (!changeDetection.shouldRun) {
-      log_('AutoSync skipped: No changes detected since last run.', 'DEBUG');
+      updateSyncStatus_('Skipped', { source: 'AutoSync' });
       return { skipped: true, added: 0, removed: 0, failed: 0 };
     }
 
     // Only log start message if sync will actually run
     log_('*** Starting scheduled AutoSync...');
+    updateSyncStatus_('Running', { source: 'AutoSync' });
+    syncStartTime = new Date();
 
     // Log reasons for sync
     log_('AutoSync triggered. Reasons:', 'INFO');
@@ -101,28 +121,36 @@ function autoSync(options = {}) {
     });
 
     // Determine if deletions are allowed
-    const maxDeletions = getConfigValue_('AutoSyncMaxDeletions', 0);
-    const allowDeletions = maxDeletions > 0;
+    const allowDeletions = getConfigValue_('AllowAutosyncDeletion', false);
 
     let syncResult;
     if (allowDeletions) {
-      log_('AutoSync with deletions enabled (max: ' + maxDeletions + '). Performing full sync...');
+      log_('AutoSync with deletions enabled. Performing full sync...');
       syncResult = fullSync({ silentMode: silentMode, skipSetup: true, executionSource: 'AUTO_SYNC' });
     } else {
-      log_('Performing SAFE operations (additions only)...');
+      log_('AutoSync with deletions disabled. Performing SAFE operations (additions only)...');
       syncResult = syncAdds({ silentMode: silentMode, skipSetup: true, executionSource: 'AUTO_SYNC' });
     }
 
     // Save snapshot with success/failure status
-    const props = PropertiesService.getDocumentProperties();
     if (syncResult && syncResult.failed === 0) {
       changeDetection.snapshot.lastSyncSuccessful = true;
       props.setProperty(AUTO_SYNC_CHANGE_SIGNATURE_KEY, JSON.stringify(changeDetection.snapshot));
       log_('*** Scheduled AutoSync completed successfully.');
+      updateSyncStatus_('Success', {
+        summary: syncResult,
+        durationSeconds: syncStartTime ? (new Date() - syncStartTime) / 1000 : undefined,
+        source: 'AutoSync'
+      });
     } else {
       changeDetection.snapshot.lastSyncSuccessful = false;
       props.setProperty(AUTO_SYNC_CHANGE_SIGNATURE_KEY, JSON.stringify(changeDetection.snapshot));
       log_('AutoSync did not complete successfully. Will retry on next run.', 'WARN');
+      updateSyncStatus_('Failed', {
+        summary: syncResult,
+        durationSeconds: syncStartTime ? (new Date() - syncStartTime) / 1000 : undefined,
+        source: 'AutoSync'
+      });
     }
     return syncResult;
 
@@ -130,6 +158,11 @@ function autoSync(options = {}) {
     const errorMessage = 'FATAL ERROR in autoSync: ' + e.toString() + '\n' + e.stack;
     log_(errorMessage, 'ERROR');
     sendErrorNotification_(errorMessage);
+    updateSyncStatus_('Failed', {
+      errorMessage: errorMessage,
+      durationSeconds: syncStartTime ? (new Date() - syncStartTime) / 1000 : undefined,
+      source: 'AutoSync'
+    });
 
     // Mark sync as failed in snapshot so we retry on next run
     try {
@@ -148,6 +181,27 @@ function autoSync(options = {}) {
   }
 }
 
+
+
+
+/**
+ * Helper to get all data from a sheet for hashing, ignoring filters.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet The sheet to get data from.
+ * @param {number} numCols The number of columns to include.
+ * @return {Array<Array<any>>} The data.
+ */
+function getSheetDataForHashing_(sheet, numCols) {
+  if (sheet && sheet.getLastRow() > 1) {
+    const allData = sheet.getDataRange().getValues();
+    allData.shift(); // Remove header
+    return allData.map(function(row) {
+      // Ensure row has enough columns to slice, pad with empty strings if not
+      const paddedRow = row.concat(Array(Math.max(0, numCols - row.length)).fill(''));
+      return paddedRow.slice(0, numCols);
+    });
+  }
+  return [];
+}
 
 
 /**
@@ -174,46 +228,57 @@ function detectAutoSyncChanges_() {
   let dataHash = '';
   try {
     const managedSheet = spreadsheet.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
-    const adminsSheet = spreadsheet.getSheetByName(ADMINS_SHEET_NAME);
+    const adminsSheet = spreadsheet.getSheetByName(SHEET_EDITORS_SHEET_NAME);
     const userGroupsSheet = spreadsheet.getSheetByName(USER_GROUPS_SHEET_NAME);
 
     let dataString = '';
-    if (managedSheet && managedSheet.getLastRow() > 1) {
-      // Read only user-editable columns (1-5): FolderName, FolderId, Role, GroupEmail, UserSheetName
-      // Exclude script-managed columns (6-8): LastSynced, Status, URL
-      const data = managedSheet.getRange(2, 1, managedSheet.getLastRow() - 1, USER_SHEET_NAME_COL).getValues();
+    
+    if (managedSheet) {
+      const managedHeaders = getHeaderMap_(managedSheet);
+      const userSheetNameCol = resolveColumn_(managedHeaders, 'usersheetname', 5);
+      const data = getSheetDataForHashing_(managedSheet, userSheetNameCol);
       dataString += JSON.stringify(data);
 
-      // Add user sheets from ManagedFolders to the hash
-      const userSheetNames = managedSheet.getRange(2, USER_SHEET_NAME_COL, managedSheet.getLastRow() - 1, 1).getValues().flat();
-      userSheetNames.forEach(name => {
+      const userSheetNames = data.map(function(row) { return row[userSheetNameCol - 1]; });
+      userSheetNames.forEach(function(name) {
         if (name) {
           const userSheet = spreadsheet.getSheetByName(name);
-          if (userSheet && userSheet.getLastRow() > 1) {
-            const userData = userSheet.getRange(2, 1, userSheet.getLastRow() - 1, 2).getValues();
+          if (userSheet) {
+            const userData = getSheetDataForHashing_(userSheet, 2);
             dataString += JSON.stringify(userData);
           }
         }
       });
     }
-    if (adminsSheet && adminsSheet.getLastRow() > 1) {
-      // Read only user-editable column (1): Group Email
-      // Exclude script-managed columns (Last Synced, Status)
-      const data = adminsSheet.getRange(2, 1, adminsSheet.getLastRow() - 1, 1).getValues();
+    
+    if (adminsSheet) {
+      const data = getSheetDataForHashing_(adminsSheet, 1);
       dataString += JSON.stringify(data);
     }
-    if (userGroupsSheet && userGroupsSheet.getLastRow() > 1) {
-      // Read all columns from UserGroups (no script-managed columns here)
-      const data = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 2).getValues();
-      dataString += JSON.stringify(data);
 
-      // Add user sheets from UserGroups to the hash
-      const groupNames = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 1).getValues().flat();
-      groupNames.forEach(name => {
+    if (userGroupsSheet) {
+      const ugHeaders = getHeaderMap_(userGroupsSheet);
+      const deleteCol = resolveColumn_(ugHeaders, 'delete', 6);
+      const lastRow = userGroupsSheet.getLastRow();
+
+      // Only include user-managed data (GroupName, GroupEmail, Delete flag) to avoid
+      // triggering syncs on script-managed columns like Last Synced/Status.
+      let filteredData = [];
+      if (lastRow > 1) {
+        const rawData = userGroupsSheet.getRange(2, 1, lastRow - 1, deleteCol).getValues();
+        filteredData = rawData.map(function(row) {
+          return [row[0], row[1], row[deleteCol - 1]];
+        });
+      }
+
+      dataString += JSON.stringify(filteredData);
+
+      const groupNames = filteredData.map(function(row) { return row[0]; });
+      groupNames.forEach(function(name) {
         if (name) {
-          const groupSheet = spreadsheet.getSheetByName(name + '_G');
-          if (groupSheet && groupSheet.getLastRow() > 1) {
-            const groupData = groupSheet.getRange(2, 1, groupSheet.getLastRow() - 1, 2).getValues();
+          const groupSheet = spreadsheet.getSheetByName(getUserGroupSheetName_(name));
+          if (groupSheet) {
+            const groupData = getSheetDataForHashing_(groupSheet, 2);
             dataString += JSON.stringify(groupData);
           }
         }
@@ -244,9 +309,10 @@ function detectAutoSyncChanges_() {
 
   // Check if actual data in control sheets has changed
   const previousDataHash = previousSnapshot && previousSnapshot.dataHash ? previousSnapshot.dataHash : null;
-  if (dataHash && previousDataHash && dataHash !== previousDataHash) {
+  if (dataHash && dataHash !== previousDataHash) {
     shouldRun = true;
     reasons.push('Control sheet data has changed.');
+    log_('Data hash changed. Old: ' + previousDataHash + ' New: ' + dataHash, 'DEBUG');
   }
 
   const snapshot = {
@@ -298,10 +364,10 @@ function updateAutoSyncStatusIndicator_() {
     } else {
       statusToDisplay = 'DISABLED';
     }
-    updateConfigSetting_('AutoSync Trigger Status', statusToDisplay);
+    updateStatusSetting_('AutoSync Trigger Status', statusToDisplay);
   } catch (e) {
     if (e.message.includes('sufficient')) { // Catches 'not sufficient permissions'
-      updateConfigSetting_('AutoSync Trigger Status', 'AUTH_REQUIRED');
+      updateStatusSetting_('AutoSync Trigger Status', 'AUTH_REQUIRED');
       log_('Could not update AutoSync status indicator due to missing permissions. A super admin can fix this by running an item from the "AutoSync" menu to re-authorize.', 'WARN');
     } else {
       log_('Could not update AutoSync status indicator: ' + e.message, 'WARN');
