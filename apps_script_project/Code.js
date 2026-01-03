@@ -30,7 +30,6 @@ const USERGROUPS_DELETE_COL = 6;   // User-editable: mark for deletion
 
 const ADMINS_LAST_SYNC_CELL = 'C2';
 const ADMINS_STATUS_CELL = 'D2';
-const SHEET_EDITORS_GROUP_NAME = 'sheets-editors';
 
 // User sheet header constants
 const USER_EMAIL_HEADER = 'User Email Address';
