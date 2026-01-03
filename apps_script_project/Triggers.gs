@@ -81,6 +81,8 @@ function autoSync(options = {}) {
       return;
     }
 
+    processChangeRequests_({ silentMode: silentMode });
+
     // Detect if changes warrant a sync
     const changeDetection = detectAutoSyncChanges_();
 
