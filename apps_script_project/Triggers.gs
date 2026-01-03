@@ -228,6 +228,7 @@ function detectAutoSyncChanges_() {
     const managedSheet = spreadsheet.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
     const adminsSheet = spreadsheet.getSheetByName(SHEET_EDITORS_SHEET_NAME);
     const userGroupsSheet = spreadsheet.getSheetByName(USER_GROUPS_SHEET_NAME);
+    const configSheet = spreadsheet.getSheetByName(CONFIG_SHEET_NAME);
 
     let dataString = '';
     
@@ -281,6 +282,11 @@ function detectAutoSyncChanges_() {
           }
         }
       });
+    }
+
+    if (configSheet) {
+      const configData = getSheetDataForHashing_(configSheet, 2);
+      dataString += JSON.stringify(configData);
     }
 
     // Compute SHA-256 hash
