@@ -637,6 +637,8 @@ function fullSync(options = {}) {
     if (!silentMode) showToast_('Starting full synchronization...', 'Full Sync', -1);
     log_('*** Starting full synchronization...');
 
+    processChangeRequests_({ silentMode: silentMode });
+
     // --- PRE-SYNC CHECKS ---
     validateManagedFolders_();
     const enableCircularCheck = getConfigValue_('EnableCircularDependencyCheck', true);
