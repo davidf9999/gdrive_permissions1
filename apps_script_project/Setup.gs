@@ -559,6 +559,7 @@ function arrangeSheetOrder_() {
     SYNC_HISTORY_SHEET_NAME,
     FOLDER_AUDIT_LOG_SHEET_NAME,
     'DeepFolderAuditLog',
+    CHANGE_REQUESTS_SHEET_NAME,
     'Help'
   ];
 
