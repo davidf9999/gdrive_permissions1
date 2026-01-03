@@ -23,6 +23,7 @@ const STATUS_COL = 7;              // Managed by script
 const URL_COL = 8;                 // Managed by script
 const DELETE_COL = 9;              // User-editable: mark for deletion
 
+
 // Column mapping for the UserGroups sheet
 const USERGROUPS_DELETE_COL = 6;   // User-editable: mark for deletion
 
@@ -115,6 +116,11 @@ function onEdit(e) {
   const sheetName = sheet.getName();
   const range = e.range;
   const oldValue = e.oldValue;
+
+  if (sheetName === CHANGE_REQUESTS_SHEET_NAME) {
+    handleChangeRequestEdit_(e);
+    return;
+  }
 
   // --- Handle ManagedFolders and UserGroups row deletion warning ---
   if (sheetName === MANAGED_FOLDERS_SHEET_NAME || sheetName === USER_GROUPS_SHEET_NAME) {
