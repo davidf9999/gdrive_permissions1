@@ -159,12 +159,15 @@ function applyApprovedChangeRequest_(changeSheet, rowIndex, approvalsConfig, opt
   }
 
   try {
+    const columnMap = buildColumnIndexMap_(headers);
+    const targetKeyColumn = resolveTargetKeyColumn_(targetSheetName, headers, columnMap);
+
     if (action === 'ADD') {
       applyAddChangeRequest_(targetSheet, snapshot);
     } else if (action === 'UPDATE') {
-      applyUpdateChangeRequest_(targetSheet, targetRowKey, snapshot);
+      applyUpdateChangeRequest_(targetSheet, targetRowKey, snapshot, targetKeyColumn);
     } else if (action === 'DELETE') {
-      applyDeleteChangeRequest_(targetSheet, targetRowKey, headers);
+      applyDeleteChangeRequest_(targetSheet, targetRowKey, headers, targetKeyColumn, columnMap);
     } else {
       setChangeRequestFailure_(changeSheet, rowIndex, 'Unsupported action: ' + action);
       return false;
@@ -220,6 +223,36 @@ function parseChangeRequestSnapshot_(rawSnapshot, headerLength, headers) {
   return null;
 }
 
+function buildColumnIndexMap_(headers) {
+  var map = {};
+  headers.forEach(function(header, idx) {
+    var key = header !== undefined && header !== null ? header.toString().trim() : '';
+    if (key) {
+      map[key] = idx + 1;
+    }
+  });
+  return map;
+}
+
+function resolveTargetKeyColumn_(targetSheetName, headers, columnMap) {
+  if (targetSheetName === MANAGED_FOLDERS_SHEET_NAME) {
+    var folderIdIndex = columnMap['FolderID'];
+    if (!folderIdIndex) {
+      throw new Error('FolderID column not found in ManagedFolders sheet');
+    }
+    return { name: 'FolderID', index: folderIdIndex };
+  }
+
+  for (var i = 0; i < headers.length; i++) {
+    var header = headers[i];
+    if (header !== undefined && header !== null && header !== '') {
+      return { name: header.toString(), index: i + 1 };
+    }
+  }
+
+  throw new Error('No headers found for target sheet ' + targetSheetName);
+}
+
 function normalizeSnapshotArray_(arr, headerLength) {
   const snapshot = new Array(headerLength).fill('');
   for (var i = 0; i < snapshot.length && i < arr.length; i++) {
@@ -232,44 +265,57 @@ function applyAddChangeRequest_(targetSheet, snapshot) {
   targetSheet.appendRow(snapshot);
 }
 
-function applyUpdateChangeRequest_(targetSheet, targetRowKey, snapshot) {
+function applyUpdateChangeRequest_(targetSheet, targetRowKey, snapshot, targetKeyColumn) {
   if (targetRowKey === undefined || targetRowKey === null || targetRowKey === '') {
     throw new Error('Missing TargetRowKey for UPDATE');
   }
   const dataRange = targetSheet.getDataRange();
   const values = dataRange.getValues();
+  var matchedIndexes = [];
   for (var i = 1; i < values.length; i++) {
-    if (values[i][0] == targetRowKey) {
-      targetSheet.getRange(i + 1, 1, 1, snapshot.length).setValues([snapshot]);
-      return;
+    if (values[i][targetKeyColumn.index - 1] == targetRowKey) {
+      matchedIndexes.push(i);
     }
   }
-  throw new Error('TargetRowKey not found for UPDATE: ' + targetRowKey);
+
+  if (matchedIndexes.length === 0) {
+    throw new Error('TargetRowKey not found in column ' + targetKeyColumn.name + ' for UPDATE: ' + targetRowKey);
+  }
+  if (matchedIndexes.length > 1) {
+    throw new Error('Multiple rows matched TargetRowKey in column ' + targetKeyColumn.name + ' for UPDATE: ' + targetRowKey);
+  }
+
+  targetSheet.getRange(matchedIndexes[0] + 1, 1, 1, snapshot.length).setValues([snapshot]);
 }
 
-function applyDeleteChangeRequest_(targetSheet, targetRowKey, headers) {
+function applyDeleteChangeRequest_(targetSheet, targetRowKey, headers, targetKeyColumn, columnMap) {
   if (targetRowKey === undefined || targetRowKey === null || targetRowKey === '') {
     throw new Error('Missing TargetRowKey for DELETE');
   }
 
-  var deleteColumnIndex = headers.indexOf('Delete');
-  if (deleteColumnIndex === -1) {
-    deleteColumnIndex = headers.indexOf('Deleted');
-  }
+  var deleteColumnIndex = columnMap['Delete'] || columnMap['Deleted'];
 
   const dataRange = targetSheet.getDataRange();
   const values = dataRange.getValues();
+  var matchedIndexes = [];
   for (var i = 1; i < values.length; i++) {
-    if (values[i][0] == targetRowKey) {
-      if (deleteColumnIndex !== -1) {
-        targetSheet.getRange(i + 1, deleteColumnIndex + 1).setValue(true);
-      } else {
-        targetSheet.deleteRow(i + 1);
-      }
-      return;
+    if (values[i][targetKeyColumn.index - 1] == targetRowKey) {
+      matchedIndexes.push(i);
     }
   }
-  throw new Error('TargetRowKey not found for DELETE: ' + targetRowKey);
+
+  if (matchedIndexes.length === 0) {
+    throw new Error('TargetRowKey not found in column ' + targetKeyColumn.name + ' for DELETE: ' + targetRowKey);
+  }
+  if (matchedIndexes.length > 1) {
+    throw new Error('Multiple rows matched TargetRowKey in column ' + targetKeyColumn.name + ' for DELETE: ' + targetRowKey);
+  }
+
+  if (deleteColumnIndex !== undefined && deleteColumnIndex !== null) {
+    targetSheet.getRange(matchedIndexes[0] + 1, deleteColumnIndex).setValue(true);
+  } else {
+    targetSheet.deleteRow(matchedIndexes[0] + 1);
+  }
 }
 
 function setChangeRequestFailure_(sheet, rowIndex, reason) {
@@ -371,7 +417,9 @@ function getActiveSheetEditorEmails_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheetEditorsSheet = ss.getSheetByName(SHEET_EDITORS_SHEET_NAME);
   if (!sheetEditorsSheet) return [];
-  const data = sheetEditorsSheet.getRange(2, 1, Math.max(0, sheetEditorsSheet.getLastRow() - 1), 5).getValues();
+  const lastRow = sheetEditorsSheet.getLastRow();
+  if (lastRow < 2) return [];
+  const data = sheetEditorsSheet.getRange(2, 1, Math.max(1, lastRow - 1), 5).getValues();
   return data.filter(function(row) {
     const email = row[0];
     const disabled = row[4];

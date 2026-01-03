@@ -73,6 +73,62 @@ A dedicated table that sheet editors can edit directly. Suggested columns:
 3. Introduce the new triggers: one for normalizing requests (on change) and another inside AutoSync to apply `APPROVED` rows.
 4. Update the user guides to explain how to fill `ChangeRequests` and how many approvals are required.
 
+## Manual test plan (sheet-only interactions)
+These scenarios validate the approval pipeline without Apps Script menus. Reset any banner warnings between runs and ensure installable triggers are enabled (on-change normalization and AutoSync/time-driven processing).
+
+1. **Baseline behavior (feature off)**
+   - Set `ApprovalsEnabled = FALSE` and `RequiredApprovals = 1` on Config.
+   - Edit a control sheet row directly and run a normal sync.
+   - Expect: no `ChangeRequests` interaction; sync behaves as it does today.
+
+2. **Single-approver path (default threshold)**
+   - Set `ApprovalsEnabled = TRUE`, `RequiredApprovals = 1`.
+   - Add a `PENDING` row in `ChangeRequests` for an `ADD` or `UPDATE` action.
+   - Trigger processing (on-change/AutoSync) and confirm the row flips to `APPROVED` then `APPLIED` without extra approvers.
+   - Expect: target control sheet reflects the change; `AppliedAt` is set; banner has no warnings.
+
+3. **Happy path with multiple approvers**
+   - Set `RequiredApprovals = 2` (or higher, within available editors).
+   - Requester adds a `PENDING` row; note `ApprovalsNeeded` is populated and requester email captured.
+   - Two distinct sheet editors type their emails into `Approver_*` columns.
+   - After trigger run, expect `Status` transitions to `APPROVED`, then `APPLIED`, with both approvers recorded and requester not counted.
+
+4. **Requester cannot self-approve**
+   - With `RequiredApprovals > 1`, add a request and have the requester fill the first `Approver_*` cell with their own email.
+   - Trigger processing should leave `Status = PENDING` and a banner or note indicating self-approval is ignored.
+   - Add a second distinct approver; expect approval proceeds only after sufficient non-requester emails are present.
+
+5. **Insufficient sheet editors warning**
+   - Temporarily remove editors from `SheetEditors` so the count is lower than `RequiredApprovals`.
+   - Add a `PENDING` request.
+   - Expect: processing leaves request pending/blocked, updates the banner row with a warning about unavailable approvers, and does not apply changes.
+   - Restore editors and re-run processing; confirm warning clears and the request can advance with valid approvers.
+
+6. **Denial / cancellation flow**
+   - Add a `PENDING` request with `RequiredApprovals > 1`.
+   - An editor sets `Status = DENIED` (optionally fills `DenyReason`).
+   - Expect: row becomes immutable for further approvals; no changes are applied to control sheets; AutoSync skips it and logs denial.
+   - Repeat with `Status = CANCELLED` to mirror requester withdrawal.
+
+7. **Expiry handling**
+   - Configure `ApprovalExpiryHours` to a small value (e.g., 0.01) for testing.
+   - Add a `PENDING` request with no approvers and wait past the threshold, then trigger processing.
+   - Expect: `Status` flips to `EXPIRED`, and the request is not applied. Reset expiry to normal after test.
+
+8. **Conflict/validation guardrail**
+   - Create two requests targeting the same `TargetRowKey` (one `UPDATE`, one `DELETE`).
+   - Approve both and run processing.
+   - Expect: the second request should be blocked or marked `DENIED` with a reason indicating conflict or missing key, preventing double-apply.
+
+9. **AutoSync integration**
+   - With `ApprovalsEnabled = TRUE`, place at least one approved request and one pending request.
+   - Run AutoSync/full sync.
+   - Expect: approved request is applied before normal sync steps; pending request remains untouched; logs reflect ordered processing.
+
+10. **Post-apply cleanup**
+   - After successful applications, verify that `Status = APPLIED`, `AppliedAt` is populated, and no residual notes exist.
+   - Optionally clear old applied/expired rows and confirm banner remains clear.
+
 ## Limitations
 - Approvals remain asynchronous; users should not expect immediate application after adding approvers because triggers run on schedule.
 - Free-form `ProposedRowSnapshot` requires clear formatting guidance to avoid malformed updates; consider providing helper formulas (e.g., `TEXTJOIN`) to assemble payloads.

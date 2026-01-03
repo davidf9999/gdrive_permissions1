@@ -161,11 +161,11 @@ describe('processChangeRequests_', () => {
   it('applies approved requests when threshold is met', () => {
     const changeRequestsData = [
       ['ID', 'RequestedBy', 'RequestedAt', 'TargetSheet', 'TargetRowKey', 'Action', 'ProposedRowSnapshot', 'Status', 'ApprovalsNeeded', 'Approver1', 'Approver2', 'Extra', 'DenyReason', 'AppliedAt'],
-      ['CR-1', 'requester@example.com', new Date('2024-01-01'), 'ManagedFolders', 1, 'UPDATE', JSON.stringify(['1', 'Updated Name', '']), 'PENDING', 2, 'approver1@example.com', 'approver2@example.com', '', '', ''],
+      ['CR-1', 'requester@example.com', new Date('2024-01-01'), 'ManagedFolders', 'folder-1', 'UPDATE', JSON.stringify(['Updated Name', 'folder-1', false]), 'PENDING', 2, 'approver1@example.com', 'approver2@example.com', '', '', ''],
     ];
     const targetSheetData = [
-      ['ID', 'Name', 'Delete'],
-      [1, 'Original Name', false],
+      ['Name', 'FolderID', 'Delete'],
+      ['Original Name', 'folder-1', false],
     ];
 
     const changeSheet = createMockSheet(CHANGE_REQUESTS_SHEET_NAME, changeRequestsData);
@@ -185,19 +185,51 @@ describe('processChangeRequests_', () => {
 
     processChangeRequests_({ silentMode: true });
 
-    expect(targetSheet.data[1][1]).toBe('Updated Name');
+    expect(targetSheet.data[1][0]).toBe('Updated Name');
     expect(changeSheet.data[1][CHANGE_REQUEST_STATUS_COL - 1]).toBe(CHANGE_REQUEST_STATUS_APPLIED);
     expect(changeSheet.data[1][CHANGE_REQUEST_APPLIED_AT_COL - 1]).toBeInstanceOf(Date);
+  });
+
+  it('denies requests when multiple rows match the target key column', () => {
+    const changeRequestsData = [
+      ['ID', 'RequestedBy', 'RequestedAt', 'TargetSheet', 'TargetRowKey', 'Action', 'ProposedRowSnapshot', 'Status', 'ApprovalsNeeded', 'Approver1', 'Approver2', 'Extra', 'DenyReason', 'AppliedAt'],
+      ['CR-1', 'requester@example.com', new Date('2024-01-01'), 'ManagedFolders', 'folder-dup', 'UPDATE', JSON.stringify(['Updated Name', 'folder-dup', false]), 'PENDING', 2, 'approver1@example.com', 'approver2@example.com', '', '', ''],
+    ];
+    const targetSheetData = [
+      ['Name', 'FolderID', 'Delete'],
+      ['Original Name', 'folder-dup', false],
+      ['Another Name', 'folder-dup', false],
+    ];
+
+    const changeSheet = createMockSheet(CHANGE_REQUESTS_SHEET_NAME, changeRequestsData);
+    const targetSheet = createMockSheet('ManagedFolders', targetSheetData);
+    const spreadsheet = createMockSpreadsheet([changeSheet, targetSheet]);
+
+    global.SpreadsheetApp = {
+      getActiveSpreadsheet: jest.fn(() => spreadsheet),
+    };
+
+    jest.spyOn(global, 'getApprovalsConfig_').mockReturnValue({
+      enabled: true,
+      requiredApprovals: 2,
+      expiryHours: 0,
+      availableEditors: 3,
+    });
+
+    processChangeRequests_({ silentMode: true });
+
+    expect(changeSheet.data[1][CHANGE_REQUEST_STATUS_COL - 1]).toBe(CHANGE_REQUEST_STATUS_DENIED);
+    expect(changeSheet.data[1][CHANGE_REQUEST_DENY_REASON_COL - 1]).toContain('Multiple rows matched');
   });
 
   it('stops when required approvals exceed available editors', () => {
     const changeRequestsData = [
       ['ID', 'RequestedBy', 'RequestedAt', 'TargetSheet', 'TargetRowKey', 'Action', 'ProposedRowSnapshot', 'Status', 'ApprovalsNeeded', 'Approver1', 'Approver2', 'Extra', 'DenyReason', 'AppliedAt'],
-      ['CR-1', 'requester@example.com', new Date('2024-01-01'), 'ManagedFolders', 1, 'UPDATE', JSON.stringify(['1', 'Updated Name', '']), 'PENDING', 5, 'approver1@example.com', '', '', '', ''],
+      ['CR-1', 'requester@example.com', new Date('2024-01-01'), 'ManagedFolders', 'folder-1', 'UPDATE', JSON.stringify(['Updated Name', 'folder-1', false]), 'PENDING', 5, 'approver1@example.com', '', '', '', ''],
     ];
     const targetSheetData = [
-      ['ID', 'Name', 'Delete'],
-      [1, 'Original Name', false],
+      ['Name', 'FolderID', 'Delete'],
+      ['Original Name', 'folder-1', false],
     ];
 
     const changeSheet = createMockSheet(CHANGE_REQUESTS_SHEET_NAME, changeRequestsData);
@@ -219,7 +251,7 @@ describe('processChangeRequests_', () => {
 
     expect(changeSheet.notes['1,1']).toContain('exceeds active sheet editors');
     expect(changeSheet.data[1][CHANGE_REQUEST_STATUS_COL - 1]).toBe('PENDING');
-    expect(targetSheet.data[1][1]).toBe('Original Name');
+    expect(targetSheet.data[1][0]).toBe('Original Name');
   });
 
   it('expires pending requests after configured hours', () => {
@@ -228,12 +260,12 @@ describe('processChangeRequests_', () => {
 
     const changeRequestsData = [
       ['ID', 'RequestedBy', 'RequestedAt', 'TargetSheet', 'TargetRowKey', 'Action', 'ProposedRowSnapshot', 'Status', 'ApprovalsNeeded', 'Approver1', 'Approver2', 'Extra', 'DenyReason', 'AppliedAt'],
-      ['CR-1', 'requester@example.com', new Date('2024-01-01T00:00:00Z'), 'ManagedFolders', 1, 'UPDATE', JSON.stringify(['1', 'Updated Name', '']), 'PENDING', 2, '', '', '', '', ''],
+      ['CR-1', 'requester@example.com', new Date('2024-01-01T00:00:00Z'), 'ManagedFolders', 'folder-1', 'UPDATE', JSON.stringify(['Updated Name', 'folder-1', false]), 'PENDING', 2, '', '', '', '', ''],
     ];
 
     const targetSheetData = [
-      ['ID', 'Name', 'Delete'],
-      [1, 'Original Name', false],
+      ['Name', 'FolderID', 'Delete'],
+      ['Original Name', 'folder-1', false],
     ];
 
     const changeSheet = createMockSheet(CHANGE_REQUESTS_SHEET_NAME, changeRequestsData);
@@ -255,6 +287,23 @@ describe('processChangeRequests_', () => {
 
     expect(changeSheet.data[1][CHANGE_REQUEST_STATUS_COL - 1]).toBe(CHANGE_REQUEST_STATUS_EXPIRED);
     expect(changeSheet.data[1][CHANGE_REQUEST_DENY_REASON_COL - 1]).toContain('Expired');
-    expect(targetSheet.data[1][1]).toBe('Original Name');
+    expect(targetSheet.data[1][0]).toBe('Original Name');
+  });
+});
+
+describe('getActiveSheetEditorEmails_', () => {
+  it('returns an empty list when there are no editor rows', () => {
+    const sheetEditorsData = [
+      ['Email', 'Name', 'Role', 'Notes', 'Disabled'],
+    ];
+
+    const sheetEditorsSheet = createMockSheet(SHEET_EDITORS_SHEET_NAME, sheetEditorsData);
+    const spreadsheet = createMockSpreadsheet([sheetEditorsSheet]);
+
+    global.SpreadsheetApp = {
+      getActiveSpreadsheet: jest.fn(() => spreadsheet),
+    };
+
+    expect(getActiveSheetEditorEmails_()).toEqual([]);
   });
 });
