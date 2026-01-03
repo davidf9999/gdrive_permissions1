@@ -33,8 +33,7 @@ const ALLOWED_ORIGINS = DEFAULT_ALLOWED_ORIGINS.split(',')
   .map((origin) => origin.trim())
   .filter(Boolean);
 const BACKEND_API_KEY = process.env.BACKEND_API_KEY || null;
-const ALLOW_ANON =
-  process.env.ALLOW_ANON === 'true' || process.env.NODE_ENV === 'development';
+const ALLOW_ANON = process.env.ALLOW_ANON === 'true';
 
 let stepsIndex = [];
 let stepsById = new Map();
@@ -498,6 +497,10 @@ async function routeRequest(req, res) {
 async function bootstrap() {
   await loadSteps();
   await loadMeta();
+
+  if (ALLOW_ANON) {
+    console.warn('WARNING: ALLOW_ANON is enabled. Authentication is disabled.');
+  }
 
   const server = http.createServer((req, res) => {
     routeRequest(req, res);

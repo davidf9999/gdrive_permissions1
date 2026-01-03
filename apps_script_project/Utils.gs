@@ -103,6 +103,7 @@ function generateGroupEmail_(baseName) {
 function validateUniqueGroupEmails_() {
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   const emailMap = new Map(); // email -> [{sheet: string, row: number, context: string}]
+  let sheetEditorsGroupEmail = '';
 
   // 1. Collect emails from UserGroups sheet (including generated ones)
   const userGroupsSheet = spreadsheet.getSheetByName(USER_GROUPS_SHEET_NAME);
@@ -119,7 +120,19 @@ function validateUniqueGroupEmails_() {
       if (!groupName) continue;
 
       let groupEmail = data[i][groupEmailCol - 1];
-      if (!groupEmail) {
+      if (groupName === SHEET_EDITORS_SHEET_NAME) {
+        if (!groupEmail) {
+          groupEmail = getConfigValue_('SheetEditorsGroupEmail', '') || getConfigValue_('AdminGroupEmail', '');
+        }
+        if (!groupEmail) {
+          try {
+            groupEmail = generateGroupEmail_(SHEET_EDITORS_GROUP_NAME);
+          } catch (e) {
+            // Ignore groups that can't have an email generated; they will be skipped later.
+            continue;
+          }
+        }
+      } else if (!groupEmail) {
         try {
           groupEmail = generateGroupEmail_(groupName);
         } catch (e) {
@@ -129,6 +142,9 @@ function validateUniqueGroupEmails_() {
       }
       
       const email = groupEmail.toString().trim().toLowerCase();
+      if (groupName === SHEET_EDITORS_SHEET_NAME) {
+        sheetEditorsGroupEmail = email;
+      }
       if (!emailMap.has(email)) emailMap.set(email, []);
       emailMap.get(email).push({
         sheet: USER_GROUPS_SHEET_NAME,
@@ -176,6 +192,27 @@ function validateUniqueGroupEmails_() {
         sheet: MANAGED_FOLDERS_SHEET_NAME,
         row: i + 2,
         context: `Folder: "${folderName}", Role: "${role}"`
+      });
+    }
+  }
+
+  const rawConfigEmail = getConfigValue_('SheetEditorsGroupEmail', '') || getConfigValue_('AdminGroupEmail', '');
+  if (rawConfigEmail) {
+    const email = String(rawConfigEmail).trim().toLowerCase();
+    if (email && email !== sheetEditorsGroupEmail) {
+      let configRow = 0;
+      const configSheet = spreadsheet.getSheetByName(CONFIG_SHEET_NAME);
+      if (configSheet) {
+        const foundRow = findRowByValue_(configSheet, 1, 'SheetEditorsGroupEmail');
+        if (foundRow > 0) {
+          configRow = foundRow;
+        }
+      }
+      if (!emailMap.has(email)) emailMap.set(email, []);
+      emailMap.get(email).push({
+        sheet: CONFIG_SHEET_NAME,
+        row: configRow,
+        context: 'SheetEditorsGroupEmail (Config)'
       });
     }
   }
