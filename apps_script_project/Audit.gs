@@ -20,7 +20,10 @@ function validateUserSheets_() {
     return true; // No folders to validate
   }
 
-  const userSheetNames = managedFoldersSheet.getRange(2, USER_SHEET_NAME_COL, managedFoldersSheet.getLastRow() - 1, 1).getValues().flat();
+  const headers = getHeaderMap_(managedFoldersSheet);
+  const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+
+  const userSheetNames = managedFoldersSheet.getRange(2, userSheetNameCol, managedFoldersSheet.getLastRow() - 1, 1).getValues().flat();
   let isValid = true;
 
   // Check for duplicate user sheet names
@@ -140,13 +143,20 @@ function auditMemberRolesOnFolders_() {
     return;
   }
 
-  const managedFoldersData = managedFoldersSheet.getRange(2, 1, managedFoldersSheet.getLastRow() - 1, GROUP_EMAIL_COL).getValues();
+  const headers = getHeaderMap_(managedFoldersSheet);
+  const folderNameCol = resolveColumn_(headers, 'foldername', 1);
+  const folderIdCol = resolveColumn_(headers, 'folderid', 2);
+  const roleCol = resolveColumn_(headers, 'role', 3);
+  const groupEmailCol = resolveColumn_(headers, 'groupemail', 4);
+  const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+  
+  const managedFoldersData = managedFoldersSheet.getRange(2, 1, managedFoldersSheet.getLastRow() - 1, Math.max(...Object.values(headers))).getValues();
   managedFoldersData.forEach(row => {
-    const folderName = row[FOLDER_NAME_COL - 1];
-    const folderId = row[FOLDER_ID_COL - 1];
-    const expectedRole = row[ROLE_COL - 1];
-    const groupEmail = row[GROUP_EMAIL_COL - 1].toLowerCase();
-    const userSheetName = row[USER_SHEET_NAME_COL - 1];
+    const folderName = row[folderNameCol - 1];
+    const folderId = row[folderIdCol - 1];
+    const expectedRole = row[roleCol - 1];
+    const groupEmail = row[groupEmailCol - 1].toLowerCase();
+    const userSheetName = row[userSheetNameCol - 1];
 
     if (!folderId || !groupEmail || !expectedRole || !userSheetName) return;
 
@@ -165,14 +175,15 @@ function auditMemberRolesOnFolders_() {
       const folder = DriveApp.getFolderById(folderId);
       const viewers = folder.getViewers().map(u => u.getEmail().toLowerCase());
       const editors = folder.getEditors().map(u => u.getEmail().toLowerCase());
+      const groupRole = getRoleFromAccessLists_(groupEmail, editors, viewers);
+
+      auditGroupRoleOnFolder_(folder, folderName, expectedRole, groupEmail);
 
       sheetMembers.forEach(memberEmail => {
         const member = memberEmail.toLowerCase();
-        let actualRole = 'NONE';
-        if (editors.includes(member)) {
-          actualRole = 'EDITOR';
-        } else if (viewers.includes(member)) {
-          actualRole = 'VIEWER';
+        let actualRole = getRoleFromAccessLists_(member, editors, viewers);
+        if (actualRole === 'NONE' && groupRole !== 'NONE') {
+          actualRole = groupRole;
         }
 
         if (actualRole.toUpperCase() !== expectedRole.toUpperCase()) {
@@ -208,6 +219,18 @@ function auditGroupRoleOnFolder_(folder, folderName, expectedRole, groupEmail) {
     if (!hasCorrectPermission) {
         logAndAudit_('Folder Permission', folderName, 'Permission Mismatch', 'Expected: ' + expectedRole + ', Actual: ' + actualRole);
     }
+}
+
+function getRoleFromAccessLists_(email, editors, viewers) {
+  if (!email) return 'NONE';
+  const normalizedEmail = email.toLowerCase();
+  if (editors.includes(normalizedEmail)) {
+    return 'EDITOR';
+  }
+  if (viewers.includes(normalizedEmail)) {
+    return 'VIEWER';
+  }
+  return 'NONE';
 }
 
 function deepAuditFolder() {
@@ -275,14 +298,13 @@ function deepAuditFolder() {
       if (sheetMembers.size > 0) {
         const viewers = item.item.getViewers().map(u => u.getEmail().toLowerCase());
         const editors = item.item.getEditors().map(u => u.getEmail().toLowerCase());
+        const groupRole = getRoleFromAccessLists_(groupEmail, editors, viewers);
 
         sheetMembers.forEach(memberEmail => {
           const member = memberEmail.toLowerCase();
-          let actualRole = 'NONE';
-          if (editors.includes(member)) {
-            actualRole = 'EDITOR';
-          } else if (viewers.includes(member)) {
-            actualRole = 'VIEWER';
+          let actualRole = getRoleFromAccessLists_(member, editors, viewers);
+          if (actualRole === 'NONE' && groupRole !== 'NONE') {
+            actualRole = groupRole;
           }
 
           if (actualRole.toUpperCase() !== expectedRole.toUpperCase()) {
@@ -332,14 +354,22 @@ function getFolderHierarchy_(folder, path = '') {
 function getManagedFolderInfoById_(folderId) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
   if (!sheet) return null;
-  const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, GROUP_EMAIL_COL).getValues();
+
+  const headers = getHeaderMap_(sheet);
+  const folderNameCol = resolveColumn_(headers, 'foldername', 1);
+  const folderIdCol = resolveColumn_(headers, 'folderid', 2);
+  const roleCol = resolveColumn_(headers, 'role', 3);
+  const groupEmailCol = resolveColumn_(headers, 'groupemail', 4);
+  const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+
+  const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, Math.max(...Object.values(headers))).getValues();
   for (let i = 0; i < data.length; i++) {
-    if (data[i][FOLDER_ID_COL - 1] === folderId) {
+    if (data[i][folderIdCol - 1] === folderId) {
       return {
-        folderName: data[i][FOLDER_NAME_COL - 1],
-        groupEmail: data[i][GROUP_EMAIL_COL - 1].toLowerCase(),
-        userSheetName: data[i][USER_SHEET_NAME_COL - 1],
-        expectedRole: data[i][ROLE_COL - 1]
+        folderName: data[i][folderNameCol - 1],
+        groupEmail: data[i][groupEmailCol - 1].toLowerCase(),
+        userSheetName: data[i][userSheetNameCol - 1],
+        expectedRole: data[i][roleCol - 1]
       };
     }
   }

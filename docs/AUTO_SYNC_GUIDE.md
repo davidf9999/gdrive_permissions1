@@ -9,6 +9,8 @@ The AutoSync feature allows the Permission Manager to run automatically on a sch
 - **24/7 operations** - Changes are automatically applied within the scheduled interval
 - **Avoiding OAuth complexity** - The script runs with the owner's permissions only
 
+**Note:** Only Google Workspace Super Admins can use the Permissions Manager menu items. Sheet Editors only update the sheets and rely on Super Admins to run menu actions.
+
 ---
 
 ## How It Works
@@ -17,7 +19,7 @@ The AutoSync feature allows the Permission Manager to run automatically on a sch
 
 **Without AutoSync:**
 1. A user edits a sheet (e.g., adds a team member's email).
-2. The user must manually click "Permissions Manager → Full Sync".
+2. The user must manually click "Permissions Manager → ManualSync → Full Sync".
 3. The user may need to authenticate with Google.
 4. May encounter permission errors if not a Google Workspace user with appropriate access.
 
@@ -34,10 +36,11 @@ The AutoSync feature allows the Permission Manager to run automatically on a sch
 ### Step 1: Enable AutoSync
 
 1. Open your Permission Manager spreadsheet.
-2. Go to **Permissions Manager → AutoSync → ⚡ Setup AutoSync (Every 5 Minutes)**.
-3. Click "OK" when prompted.
+2. (Optional) In the **Config** sheet, set `AutoSyncInterval` to the number of minutes you want between runs (minimum 5).
+3. Go to **Permissions Manager → AutoSync → 🚀 Enable/Update AutoSync**.
+4. Click "OK" when prompted.
 
-That's it! The script will now run automatically every five minutes.
+That's it! The script will now run automatically based on the interval in the Config sheet.
 
 ### Step 2: Verify It's Running
 
@@ -50,34 +53,22 @@ To confirm AutoSync is active:
 
 ## Configuration Options
 
-### Choose Your Sync Frequency
+### Configure the AutoSync Interval
 
-**5-Minute Sync (Recommended)**
-- Menu: `Permissions Manager → AutoSync → ⚡ Setup AutoSync (Every 5 Minutes)`
-- Runs roughly every five minutes.
-- Good for: Active organizations with frequent changes.
-
-**Daily Sync**
-- Menu: `Permissions Manager → AutoSync → 📅 Setup Daily Sync`
-- Runs once per day at a specific hour.
-- Good for: Low-activity organizations.
-
-**Custom Interval**
-- Menu: `Permissions Manager → AutoSync → ⚙️ Setup Custom Interval`
-- Choose: 1, 2, 4, 6, 8, or 12 hours.
-- Good for: Specific needs.
-
-### Enable/Disable in Config Sheet
-
-You can temporarily disable AutoSync without removing the trigger:
+AutoSync runs on a time-based trigger, and the interval is controlled in the **Config** sheet.
 
 1. Open the **Config** sheet.
-2. Find the row: `EnableAutoSync`.
-3. Change the value:
-   - `TRUE` - Auto-sync will run on schedule.
-   - `FALSE` - Auto-sync will skip (but trigger remains installed).
+2. Set `AutoSyncInterval` to the number of minutes between runs (minimum 5).
+3. Re-run **Permissions Manager → AutoSync → 🚀 Enable/Update AutoSync** to apply the new interval.
 
-This is useful if you want to pause automatic syncing temporarily (e.g., during maintenance).
+### Disable AutoSync
+
+To pause automatic syncing, remove the trigger:
+
+1. Go to **Permissions Manager → AutoSync → 🛑 Disable AutoSync**.
+2. Confirm when prompted.
+
+You can re-enable it at any time using **Permissions Manager → AutoSync → 🚀 Enable/Update AutoSync**.
 
 ---
 
@@ -130,9 +121,9 @@ After assigning this custom role, the script owner's account will have the neces
 
 ### Setting Up for Your Team Members
 
-1. **You (the script owner/admin) set up AutoSync ONCE:**
+1. **You (the script owner/super admin) set up AutoSync ONCE:**
    - Install the script (see main README for setup instructions).
-   - Run `Permissions Manager → AutoSync → ⚡ Setup AutoSync (Every 5 Minutes)` from the menu.
+   - Run `Permissions Manager → AutoSync → 🚀 Enable/Update AutoSync` from the menu.
    - This creates a time-based trigger that runs under your account.
 
 2. **Your team members can now:**
@@ -149,13 +140,13 @@ After assigning this custom role, the script owner's account will have the neces
 
 ### Manual Sync (For Immediate Changes)
 
-If you (the script owner/admin) need an immediate sync to apply changes without waiting for the scheduled AutoSync:
+If you (the script owner/super admin) need an immediate sync to apply changes without waiting for the scheduled AutoSync:
 
-1. Go to **Permissions Manager → AutoSync → ▶️ Run Manual Sync Now**.
+1. Go to **Permissions Manager → AutoSync → ▶️ Run AutoSync Now**.
 2. Confirm when prompted.
 3. Changes will be applied immediately.
 
-Note: This manual trigger requires you (the script owner/admin) to be logged in and execute it. It does not run under the permissions of other team members.
+Note: This manual trigger requires you (the script owner/super admin) to be logged in and execute it. It does not run under the permissions of other team members.
 
 ---
 
@@ -170,8 +161,8 @@ The system distinguishes between two types of deletions, each handled differentl
 By default, AutoSync is designed to be **non-destructive** when removing individual users from groups. This is a critical safety feature to prevent accidental removal of user permissions.
 
 -   **Auto-sync only performs additions:** It will process new users added to sheets, but it will **not** automatically remove users or revoke permissions.
--   **User deletions require manual action:** When the script detects that a user should be removed from a group (e.g., their email was removed from a user sheet), it does not perform the deletion automatically. Instead, it sends an email notification to the administrator (configured in the `Config` sheet) with the subject "⚠️ Manual Action Required: Permission Deletions Pending".
--   **Manual Deletion Step:** To execute the pending user removals/disablements, you (the administrator) must run **Permissions Manager → ManualSync → Remove/Disable Users from Groups** from the menu. This allows you to review and confirm the changes before they are applied.
+-   **User deletions require manual action:** When the script detects that a user should be removed from a group (e.g., their email was removed from a user sheet), it does not perform the deletion automatically. Instead, it sends an email notification to the Super Admin (configured in the `Config` sheet) with the subject "⚠️ Manual Action Required: Permission Deletions Pending".
+-   **Manual Deletion Step:** To execute the pending user removals/disablements, you (the Super Admin) must run **Permissions Manager → ManualSync → Sync Groups - Remove/Disable Users** from the menu. This allows you to review and confirm the changes before they are applied.
 
 This "Risk-Based" approach ensures a human is always in the loop for removing user access, preventing accidental lockouts or data exposure.
 
@@ -240,7 +231,7 @@ To improve auditability and prevent the spreadsheet from growing too large, the 
 
 -   **The Problem:** Google Sheets automatically saves version history, which can cause the file to grow over time, potentially impacting performance or hitting Google Drive limits.
 -   **The Solution:** A `MaxFileSizeMB` setting in the `Config` sheet (defaulting to 100 MB) acts as a safeguard.
--   **How it works:** Before each AutoSync, the script checks the spreadsheet's total size. If it exceeds the configured limit, the sync is **aborted**, and an email alert is sent to the administrator. This prevents the file from becoming unusably large and prompts you to perform manual cleanup.
+-   **How it works:** Before each AutoSync, the script checks the spreadsheet's total size. If it exceeds the configured limit, the sync is **aborted**, and an email alert is sent to the Super Admin. This prevents the file from becoming unusably large and prompts you to perform manual cleanup.
 -   **Manual Cleanup:** You can delete old versions by going to **File → Version history → See version history** in your spreadsheet. This action helps to reduce the file size.
 
 ### Handling Errors
@@ -257,7 +248,7 @@ If AutoSync encounters an error:
    - Look for entries starting with "*** Starting scheduled AutoSync...".
 
 3. **Manual intervention:**
-   - Run **Permissions Manager → AutoSync → ▶️ Run Manual Sync Now** to see the error in real-time.
+   - Run **Permissions Manager → AutoSync → ▶️ Run AutoSync Now** to see the error in real-time.
    - Fix the issue in the sheet or underlying configuration.
    - The next scheduled run will retry automatically.
 
@@ -303,7 +294,7 @@ If AutoSync encounters an error:
 
 4. **Re-install trigger:**
    - Menu: `Permissions Manager → AutoSync → 🛑 Disable AutoSync`.
-   - Menu: `Permissions Manager → AutoSync → ⚡ Setup AutoSync (Every 5 Minutes)`.
+   - Menu: `Permissions Manager → AutoSync → 🚀 Enable/Update AutoSync`.
 
 ---
 
@@ -311,11 +302,11 @@ If AutoSync encounters an error:
 
 ### Do sheet editors need Google Workspace accounts?
 
-**No!** Sheet editors can use free Gmail accounts. Only the **script owner/admin** (the Google Workspace account that owns and deploys the Apps Script project) needs a Google Workspace account with the necessary administrative privileges.
+**No!** Sheet editors can use free Gmail accounts. Only the **script owner/super admin** (the Google Workspace account that owns and deploys the Apps Script project) needs a Google Workspace account with the necessary administrative privileges.
 
-### Can multiple admins use AutoSync?
+### Can multiple super admins use AutoSync?
 
-The AutoSync trigger runs under the permissions of the **script owner's** Google Workspace account (whoever originally deployed the script). While other administrators can edit the sheets and trigger manual syncs, the automated process always uses the script owner's credentials.
+The AutoSync trigger runs under the permissions of the **script owner's** Google Workspace account (whoever originally deployed the script). While other super admins can edit the sheets and trigger manual syncs, the automated process always uses the script owner's credentials.
 
 ### Does AutoSync use quotas?
 
@@ -351,7 +342,7 @@ To completely remove the AutoSync trigger:
 2. Confirm when prompted.
 3. The trigger is removed.
 
-You can always re-enable it later using **Permissions Manager → AutoSync → ⚡ Setup AutoSync**.
+You can always re-enable it later using **Permissions Manager → AutoSync → 🚀 Enable/Update AutoSync**.
 
 ---
 
@@ -364,7 +355,7 @@ You can always re-enable it later using **Permissions Manager → AutoSync → �
 3. ✅ **Train team members:**
    - "Edit the sheet, changes apply automatically within minutes."
    - "Check the `Status` column if unsure about the sync result."
-4. ✅ **Run Folders Audit weekly** - Use **Permissions Manager → Folders Audit** to periodically verify all permissions are correct.
+4. ✅ **Run Folders Audit weekly** - Use **Permissions Manager → Audits → Folders Audit** to periodically verify all permissions are correct.
 
 ### For Production Deployments:
 
@@ -379,7 +370,7 @@ You can always re-enable it later using **Permissions Manager → AutoSync → �
 
 ### Trigger Lifecycle
 
-When you run "Setup AutoSync":
+When you run \"Enable/Update AutoSync\":
 
 1. The script creates a time-based trigger via `ScriptApp.newTrigger()`.
 2. This trigger is stored in the Apps Script project's trigger list.
@@ -390,18 +381,18 @@ When you run "Setup AutoSync":
 ### Security Model
 
 - **Script runs as:** The Google Workspace account that owns the Apps Script project (the script owner).
-- **Permissions used:** The script owner's Google Workspace admin permissions (as configured in the "Google Workspace Permissions for the Script Owner" section).
+- **Permissions used:** The script owner's Google Workspace Super Admin permissions (as configured in the \"Google Workspace Permissions for the Script Owner\" section).
 - **Other sheet editors see:** Only the spreadsheet interface, with no direct access to the script code or triggers.
 - **OAuth:** Only the script owner needs to authorize the script's access to Google services.
 
-This design allows team members to edit sheets without needing their own Google Workspace admin accounts or complex authentication.
+This design allows team members to edit sheets without needing their own Google Workspace Super Admin accounts or complex authentication.
 
 ### Change Detection & Self-Healing
 
 AutoSync intelligently detects when changes require a sync:
 
 **When AutoSync Runs:**
-1. **Data Changes** - When `ManagedFolders`, `SheetEditors`, or `UserGroups` sheets are modified.
+1. **Data Changes** - When `ManagedFolders`, `SheetEditors_G`, or `UserGroups` sheets are modified.
    - The script uses an SHA-256 hash of the actual data content to detect changes.
    - It ignores formatting, validation rules, and status updates, ensuring only meaningful data changes trigger a sync.
 2. **Folder Changes** - When managed Google Drive folders are modified (e.g., renamed, moved).
@@ -428,7 +419,7 @@ If you have questions about AutoSync:
 
 1. Check this guide first.
 2. Review the `Log` sheet for errors and warnings.
-3. Run a manual sync (**Permissions Manager → AutoSync → ▶️ Run Manual Sync Now**) to test immediately.
+3. Run a manual sync (**Permissions Manager → AutoSync → ▶️ Run AutoSync Now**) to test immediately.
 4. Open an issue on [GitHub](https://www.github.com/davidf9999/gdrive_permissions1/issues).
 
 ---

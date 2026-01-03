@@ -84,12 +84,12 @@ Because they create real folders and groups, they are much slower than unit test
 
 The following steps provide a gradual plan to safely verify that the scheduled, automatic sync is working correctly.
 
-**Phase 1: Admin Verification (Default Safe Mode)**
+**Phase 1: Super Admin Verification (Default Safe Mode)**
 
 The system is designed to be safe by default. The automatic sync will only process additions; it will not automatically remove users. Deletions require manual approval.
 
 1.  **Enable and Verify the Trigger**:
-    *   In your spreadsheet, go to **Permissions Manager → AutoSync → ⚡ Setup AutoSync (Every 5 Minutes)**.
+    *   In your spreadsheet, go to **Permissions Manager → AutoSync → 🚀 Enable/Update AutoSync**.
     *   The first time you run this, it's normal to see a `"No AutoSync triggers were found."` message, followed by an `"AutoSync Enabled"` confirmation.
     *   Verify it's active by going to **Permissions Manager → AutoSync → 📊 View Trigger Status**.
 
@@ -104,22 +104,22 @@ The system is designed to be safe by default. The automatic sync will only proce
     *   **Verification**:
         *   The user will **NOT** be removed from the Google Group. This is the expected safe behavior.
         *   Check your email. You should receive a **"MANUAL ACTION REQUIRED"** notification listing the pending deletion.
-        *   To complete the deletion, you must manually run **Permissions Manager → ManualSync → Remove/Disable Users from Groups**.
+        *   To complete the deletion, you must manually run **Permissions Manager → ManualSync → Sync Groups - Remove/Disable Users**.
 
 **Phase 2: Standard User Verification**
 
-This simulates the experience for a non-technical user.
+This simulates the experience for a Sheet Editor.
 
 1.  **Share the Spreadsheet**:
-    *   Share the main Google Spreadsheet with a non-admin user (a regular Gmail account is perfect) and give them **Editor** access to the spreadsheet itself.
+    *   Share the main Google Spreadsheet with a Sheet Editor (a regular Gmail account is perfect) and give them **Editor** access to the spreadsheet itself.
 
 2.  **Instruct the User**:
-    *   Ask the non-admin user to add a new test user's email to a permission sheet.
+    *   Ask the Sheet Editor to add a new test user's email to a permission sheet.
     *   Crucially, tell them **not to click any menu items**; they should only edit the cell.
 
 3.  **Wait and Verify**:
-    *   After the next 5-minute sync, you (the admin) can verify that the new user was added to the correct Google Group.
-    *   The non-admin user will see the **`Status`** column in the `ManagedFolders` sheet update, confirming their change was processed automatically without any manual action on their part.
+    *   After the next 5-minute sync, you (the Super Admin) can verify that the new user was added to the correct Google Group.
+    *   The Sheet Editor will see the **`Status`** column in the `ManagedFolders` sheet update, confirming their change was processed automatically without any manual action on their part.
 
 ## Viewing Test Logs
 
@@ -132,7 +132,7 @@ If you have enabled the [Advanced Logging with Google Cloud](../README.md#advanc
 Prerequisites for tests that manage Google Groups:
 - In Apps Script, add the Admin Directory API (advanced service).
 - In Google Cloud, enable the Admin SDK for the linked project.
-- You must be using a Google Workspace account with sufficient admin privileges.
+- You must be using a Google Workspace account with sufficient Super Admin privileges.
 
 If Admin SDK is not available (e.g., personal `@gmail.com` account), the tests will alert and abort, and sync flows will mark rows as `SKIPPED (No Admin SDK)`.
 

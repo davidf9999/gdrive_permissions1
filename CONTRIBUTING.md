@@ -94,6 +94,44 @@ To ensure consistency, key documentation files are generated from templates and 
 - **Run `npm test`** before submitting your PR and describe any additional
   manual verification in the PR body.
 
+### Resolving PR conflicts with `main`
+
+When a feature branch falls behind `main`, resolve conflicts on the branch before reopening or updating the PR:
+
+1. Fetch the latest changes and rebase or merge:
+   - **Rebase (preferred for small, clean histories):**
+     ```bash
+     git checkout <feature-branch>
+     git fetch origin
+     git rebase origin/main
+     ```
+   - **Merge (if rebasing is risky or the branch is shared):**
+     ```bash
+     git checkout <feature-branch>
+     git fetch origin
+     git merge origin/main
+     ```
+2. Resolve conflicts in your editor, then `git add` the fixed files.
+3. Continue the rebase (`git rebase --continue`) or complete the merge with a commit.
+4. Run the relevant checks (at minimum `npm run build:docs` for doc/template changes).
+5. Push updates (use `git push --force-with-lease` after a rebase, or a normal push after a merge).
+
+If you cannot change the original branch, you can create a patch for someone else to apply:
+
+```bash
+git checkout <feature-branch>
+git fetch origin
+git rebase origin/main  # or merge
+# resolve conflicts, add files, finish the rebase/merge
+git format-patch origin/main --stdout > update.patch
+```
+
+The patch can be attached to the issue/PR or shared privately. The maintainer can apply it with:
+
+```bash
+git apply update.patch
+```
+
 ## Pull Request Checklist
 
 - [ ] The change is covered by unit tests or reasoning about the Apps Script

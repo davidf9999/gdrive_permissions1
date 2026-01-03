@@ -363,7 +363,7 @@ fullSync() {
        f. Track deletions in summary
      }
 
-  6. Sync SheetEditors (existing)
+  6. Sync SheetEditors_G (existing)
   7. Sync UserGroups (existing)
   8. Sync ManagedFolders (existing)
   9. Unlock sheets

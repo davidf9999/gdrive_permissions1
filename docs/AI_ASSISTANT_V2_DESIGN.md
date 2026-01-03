@@ -1,6 +1,6 @@
-# AI Assistant v2 - Design & Implementation Plan
+# Gemini CLI Assistant v2 - Design & Implementation Plan
 
-This document outlines the final architecture for the AI Assistant v2. The core of this new design is a "stateless" but state-aware state machine that dynamically discovers the user's setup progress at the beginning of each session.
+This document outlines the final architecture for the Gemini CLI Assistant v2. The core of this new design is a "stateless" but state-aware state machine that dynamically discovers the user's setup progress at the beginning of each session.
 
 ## 1. Core Principles & Goals
 
@@ -91,4 +91,4 @@ To address potential user confusion regarding the various Google accounts and ro
     - Refactor the existing linear assistant logic into discrete "action" functions that are called by the FSM for each state. These actions will contain the granular sub-step logic.
 4.  **Phase 4: Documentation**
     - Create the User Role Clarification table/diagram and insert it into the [Setup Guide](SETUP_GUIDE.md).
-    - Update the main [AI Assistant Guide](AI_ASSISTANT_GUIDE.md) to reflect the new, more robust functionality.
+    - Update the main [Gemini CLI Assistant Guide](AI_ASSISTANT_GUIDE.md) to reflect the new, more robust functionality.
