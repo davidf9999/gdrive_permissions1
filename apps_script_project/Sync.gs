@@ -367,6 +367,14 @@ function syncAdds(options = {}) {
   const silentMode = options && options.silentMode !== undefined ? options.silentMode : false;
   const skipSetup = options && options.skipSetup !== undefined ? options.skipSetup : false;
 
+  if (shouldGatePermissionEdits_()) {
+    processChangeRequests_({ silentMode: silentMode });
+    if (!silentMode) {
+      SpreadsheetApp.getUi().alert('Approvals are enabled. Direct sync is skipped; use ChangeRequests approvals.');
+    }
+    return { skipped: true, added: 0, removed: 0, failed: 0 };
+  }
+
   if (!skipSetup) {
     setupControlSheets_();
   }
@@ -475,6 +483,12 @@ function syncDeletes() {
   const ui = SpreadsheetApp.getUi();
   const startTime = new Date();
   
+  if (shouldGatePermissionEdits_()) {
+    processChangeRequests_({ silentMode: false });
+    ui.alert('Approvals are enabled. Direct sync is skipped; use ChangeRequests approvals.');
+    return;
+  }
+
   // --- Phase 1: Planning ---
   log_('*** Starting user removal planning phase...');
   showToast_('Planning user removals...', 'Remove Users', 10);
@@ -616,6 +630,14 @@ function syncDeletes() {
 function fullSync(options = {}) {
   const silentMode = options && options.silentMode !== undefined ? options.silentMode : false;
   const skipSetup = options && options.skipSetup !== undefined ? options.skipSetup : false;
+
+  if (shouldGatePermissionEdits_()) {
+    processChangeRequests_({ silentMode: silentMode });
+    if (!silentMode) {
+      SpreadsheetApp.getUi().alert('Approvals are enabled. Direct sync is skipped; use ChangeRequests approvals.');
+    }
+    return { skipped: true, added: 0, removed: 0, failed: 0 };
+  }
 
   log_('Running script version ' + SCRIPT_VERSION);
 
@@ -761,6 +783,12 @@ function fullSync(options = {}) {
 }
 
 function syncManagedFoldersAdds() {
+  if (shouldGatePermissionEdits_()) {
+    processChangeRequests_({ silentMode: false });
+    SpreadsheetApp.getUi().alert('Approvals are enabled. Direct sync is skipped; use ChangeRequests approvals.');
+    return;
+  }
+
   setupControlSheets_();
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(15000)) {
@@ -806,6 +834,12 @@ function syncManagedFoldersDeletes() {
   const ui = SpreadsheetApp.getUi();
   const startTime = new Date();
   
+  if (shouldGatePermissionEdits_()) {
+    processChangeRequests_({ silentMode: false });
+    ui.alert('Approvals are enabled. Direct sync is skipped; use ChangeRequests approvals.');
+    return;
+  }
+
   // --- Phase 1: Planning ---
   log_('*** Starting folder deletion planning phase...');
   showToast_('Planning folder deletions...', 'Sync Deletes', 10);

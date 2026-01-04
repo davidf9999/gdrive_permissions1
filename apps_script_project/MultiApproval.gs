@@ -168,7 +168,7 @@ function processChangeRequests_(options = {}) {
     }
 
     const approvals = collectApprovalsFromRow_(row, approvalsConfig.requiredApprovals, row[columnMap.requestedBy - 1], columnMap);
-    if (approvals.length >= approvalsConfig.requiredApprovals || approvalsConfig.requiredApprovals <= 1) {
+    if (approvals.length >= approvalsConfig.requiredApprovals) {
       sheet.getRange(rowIndex, columnMap.status).setValue(CHANGE_REQUEST_STATUS_APPROVED);
     }
 
@@ -448,7 +448,7 @@ function tallyChangeRequestApprovals_(sheet, approvalsConfig, columnMap) {
     if (isTerminalChangeRequestStatus_(status)) return;
 
     const approvals = collectApprovalsFromRow_(row, approvalsConfig.requiredApprovals, row[resolvedColumnMap.requestedBy - 1], resolvedColumnMap);
-    if (approvals.length >= approvalsConfig.requiredApprovals || approvalsConfig.requiredApprovals <= 1) {
+    if (approvals.length >= approvalsConfig.requiredApprovals) {
       sheet.getRange(rowIndex, resolvedColumnMap.status).setValue(CHANGE_REQUEST_STATUS_APPROVED);
     } else {
       sheet.getRange(rowIndex, resolvedColumnMap.status).setValue(CHANGE_REQUEST_STATUS_PENDING);
@@ -467,8 +467,8 @@ function collectApprovalsFromRow_(rowValues, approvalsRequired, requestedBy, col
     if (!email) continue;
     const normalized = email.toString().trim().toLowerCase();
     if (!normalized) continue;
-    if (approvalsRequired > 1 && normalized === lowerRequestedBy) {
-      continue; // no self-approval when multiple approvals required
+    if (normalized === lowerRequestedBy) {
+      continue; // no self-approval
     }
     if (approvals.indexOf(normalized) === -1) {
       approvals.push(normalized);
@@ -478,10 +478,10 @@ function collectApprovalsFromRow_(rowValues, approvalsRequired, requestedBy, col
 }
 
 function getApprovalsConfig_() {
-  const enabled = getConfigValue_('ApprovalsEnabled', false) === true;
-  const requiredApprovalsRaw = getConfigValue_('RequiredApprovals', 1);
-  const requiredApprovals = Math.max(1, parseInt(requiredApprovalsRaw, 10) || 1);
-  const expiryHoursRaw = getConfigValue_('ApprovalExpiryHours', 0);
+  const enabled = getConfigValueFresh_('ApprovalsEnabled', false) === true;
+  const requiredApprovalsRaw = getConfigValueFresh_('RequiredApprovals', 1);
+  const requiredApprovals = Math.min(3, Math.max(1, parseInt(requiredApprovalsRaw, 10) || 1));
+  const expiryHoursRaw = getConfigValueFresh_('ApprovalExpiryHours', 0);
   const expiryHours = Math.max(0, parseInt(expiryHoursRaw, 10) || 0);
   const activeEditors = getActiveSheetEditorEmails_();
   return {
@@ -494,7 +494,7 @@ function getApprovalsConfig_() {
 
 function shouldGatePermissionEdits_() {
   const approvalsConfig = getApprovalsConfig_();
-  return approvalsConfig.enabled && approvalsConfig.requiredApprovals > 1;
+  return approvalsConfig.enabled === true;
 }
 
 function isChangeRequestEditableRange_(sheet, range) {
@@ -611,9 +611,10 @@ function findExistingChangeRequestRow_(changeSheet, targetSheetName, targetRowKe
   return -1;
 }
 
-function countPendingChangeRequests_() {
+function countPendingChangeRequests_(options) {
   const approvalsConfig = getApprovalsConfig_();
-  if (!approvalsConfig.enabled || approvalsConfig.requiredApprovals <= 1) return 0;
+  const ignoreEnabled = options && options.ignoreEnabled === true;
+  if (!approvalsConfig.enabled && !ignoreEnabled) return 0;
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const changeSheet = ss.getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
@@ -630,6 +631,7 @@ function countPendingChangeRequests_() {
       pending++;
     }
   });
+  log_('Approvals pending count: enabled=' + approvalsConfig.enabled + ', required=' + approvalsConfig.requiredApprovals + ', pending=' + pending + ', ignoreEnabled=' + ignoreEnabled, 'DEBUG');
   return pending;
 }
 

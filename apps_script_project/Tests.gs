@@ -1247,7 +1247,8 @@ function runApprovalGatingTest() {
         const valueCol = resolveColumn_(configHeaders, 'value', 2);
         const approvalsRow = findRowByValue_(configSheet, settingCol, 'ApprovalsEnabled');
         const oldValue = configSheet.getRange(approvalsRow, valueCol).getValue();
-        configSheet.getRange(approvalsRow, valueCol).setValue(!oldValue);
+        const newValue = !oldValue;
+        configSheet.getRange(approvalsRow, valueCol).setValue(newValue);
         onEdit({
             source: ss,
             range: configSheet.getRange(approvalsRow, valueCol),

@@ -5,7 +5,7 @@ This project enforces a centralized access policy for spreadsheet sheets via `ge
 ## Categories
 
 ### 1) Permissions data (editable by sheet editors, optionally approval-gated)
-These sheets contain permission inputs and can be edited by sheet editors. When multi-approver gating is enabled (`ApprovalsEnabled = TRUE` and `RequiredApprovals > 1`), direct edits are queued as ChangeRequests instead of being applied immediately.
+These sheets contain permission inputs and can be edited by sheet editors. When multi-approver gating is enabled (`ApprovalsEnabled = TRUE`), direct edits are queued as ChangeRequests instead of being applied immediately.
 
 Included sheets:
 - `ManagedFolders`
@@ -38,5 +38,7 @@ Included sheets:
 - When approvals are required, ChangeRequests are created automatically from permission sheet edits.
 - `Approver_*` columns are allowed for approvals.
 - The ChangeRequests sheet is hidden when approvals are disabled.
+- Manual sync menu actions skip direct changes while approvals are required.
+Note: for external (non-organization) editors, Apps Script may not expose the editor email in edit events, so approver identity is based on the email entered in the sheet.
 
 For more detail on approvals workflow, see `docs/MULTI_APPROVAL_SHEET_ONLY_DESIGN.md`.

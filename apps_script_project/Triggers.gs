@@ -68,6 +68,7 @@ function removeAutoSync() {
  */
 function autoSync(options = {}) {
   const silentMode = (options && options.triggerUid) || (options && options.silentMode);
+  const forceRun = options && options.forceRun === true;
   const lock = LockService.getScriptLock();
 
   if (!lock.tryLock(10000)) {
@@ -82,12 +83,16 @@ function autoSync(options = {}) {
     const lastRunRaw = props.getProperty(AUTO_SYNC_LAST_RUN_KEY);
     const intervalMinutes = getConfigValue_('AutoSyncInterval', 5);
     const enforcedIntervalMs = Math.max(5, intervalMinutes) * 60 * 1000;
+    const forceIntervalMinutes = Math.max(0, parseInt(getConfigValue_('AutoSyncForceIntervalMinutes', 60), 10) || 0);
+    const forceIntervalMs = forceIntervalMinutes > 0 ? forceIntervalMinutes * 60 * 1000 : 0;
+    const lastForcedRunRaw = props.getProperty(AUTO_SYNC_LAST_FORCED_RUN_KEY);
+    const lastVersion = props.getProperty(AUTO_SYNC_LAST_VERSION_KEY);
 
-    if (lastRunRaw) {
+    if (!forceRun && lastRunRaw) {
       const elapsed = now - Number(lastRunRaw);
       if (!isNaN(elapsed) && elapsed < enforcedIntervalMs) {
         log_('AutoSync skipped: last run was ' + Math.round(elapsed / 1000) + 's ago (interval ' + intervalMinutes + ' mins).', 'DEBUG');
-        return { skipped: true, added: 0, removed: 0, failed: 0 };
+        return { skipped: true, added: 0, removed: 0, failed: 0, reason: 'interval' };
       }
     }
 
@@ -96,17 +101,42 @@ function autoSync(options = {}) {
     if (isInEditMode_()) {
       log_('AutoSync skipped: spreadsheet is in Edit Mode.', 'DEBUG');
       updateSyncStatus_('Skipped', { source: 'AutoSync' });
-      return;
+      return { skipped: true, added: 0, removed: 0, failed: 0, reason: 'edit_mode' };
     }
 
     processChangeRequests_({ silentMode: silentMode });
+
+    if (shouldGatePermissionEdits_()) {
+      const pendingApprovals = countPendingChangeRequests_();
+      if (pendingApprovals > 0) {
+        log_('AutoSync continuing with pending ChangeRequests (' + pendingApprovals + ') awaiting approval.', 'INFO');
+      }
+    }
+
+    let forceDueToInterval = false;
+    if (forceIntervalMs > 0) {
+      const lastForcedRun = lastForcedRunRaw ? Number(lastForcedRunRaw) : 0;
+      if (!lastForcedRun || isNaN(lastForcedRun) || now - lastForcedRun >= forceIntervalMs) {
+        forceDueToInterval = true;
+      }
+    }
+
+    const forceDueToVersion = lastVersion !== SCRIPT_VERSION;
 
     // Detect if changes warrant a sync
     const changeDetection = detectAutoSyncChanges_();
 
     if (!changeDetection.shouldRun) {
-      updateSyncStatus_('Skipped', { source: 'AutoSync' });
-      return { skipped: true, added: 0, removed: 0, failed: 0 };
+      if (forceDueToInterval) {
+        changeDetection.shouldRun = true;
+        changeDetection.reasons.push('Forced interval elapsed (' + forceIntervalMinutes + ' mins).');
+      } else if (forceDueToVersion) {
+        changeDetection.shouldRun = true;
+        changeDetection.reasons.push('Script version changed. Forcing AutoSync.');
+      } else {
+        updateSyncStatus_('Skipped', { source: 'AutoSync' });
+        return { skipped: true, added: 0, removed: 0, failed: 0, reason: 'no_changes' };
+      }
     }
 
     // Only log start message if sync will actually run
@@ -136,6 +166,10 @@ function autoSync(options = {}) {
     if (syncResult && syncResult.failed === 0) {
       changeDetection.snapshot.lastSyncSuccessful = true;
       props.setProperty(AUTO_SYNC_CHANGE_SIGNATURE_KEY, JSON.stringify(changeDetection.snapshot));
+      props.setProperty(AUTO_SYNC_LAST_VERSION_KEY, SCRIPT_VERSION);
+      if (forceDueToInterval || forceDueToVersion) {
+        props.setProperty(AUTO_SYNC_LAST_FORCED_RUN_KEY, String(now));
+      }
       log_('*** Scheduled AutoSync completed successfully.');
       updateSyncStatus_('Success', {
         summary: syncResult,
@@ -145,6 +179,10 @@ function autoSync(options = {}) {
     } else {
       changeDetection.snapshot.lastSyncSuccessful = false;
       props.setProperty(AUTO_SYNC_CHANGE_SIGNATURE_KEY, JSON.stringify(changeDetection.snapshot));
+      props.setProperty(AUTO_SYNC_LAST_VERSION_KEY, SCRIPT_VERSION);
+      if (forceDueToInterval || forceDueToVersion) {
+        props.setProperty(AUTO_SYNC_LAST_FORCED_RUN_KEY, String(now));
+      }
       log_('AutoSync did not complete successfully. Will retry on next run.', 'WARN');
       updateSyncStatus_('Failed', {
         summary: syncResult,
@@ -380,5 +418,3 @@ function updateAutoSyncStatusIndicator_() {
     }
   }
 }
-
-// ... (The rest of the file is unchanged)

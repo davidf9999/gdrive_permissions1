@@ -22,6 +22,9 @@ const FOLDER_AUDIT_LOG_SHEET_NAME = 'FoldersAuditLog';
 const SYNC_HISTORY_SHEET_NAME = 'SyncHistory';
 const DEFAULT_MAX_LOG_LENGTH = 10000;
 const AUTO_SYNC_CHANGE_SIGNATURE_KEY = 'AutoSyncChangeSignature';
+const AUTO_SYNC_LAST_RUN_KEY = 'AutoSyncLastRun';
+const AUTO_SYNC_LAST_FORCED_RUN_KEY = 'AutoSyncLastForcedRun';
+const AUTO_SYNC_LAST_VERSION_KEY = 'AutoSyncLastVersion';
 
 const ADMINS_LAST_SYNC_CELL = 'C2';
 const ADMINS_STATUS_CELL = 'D2';
@@ -105,7 +108,7 @@ function validateEnvironment_() {
 function onEdit(e) {
   if (!e || !e.source) return;
 
-  const sheet = e.source.getActiveSheet();
+  const sheet = (e.range && e.range.getSheet) ? e.range.getSheet() : e.source.getActiveSheet();
   const sheetName = sheet.getName();
   const range = e.range;
   const oldValue = e.oldValue;
@@ -230,7 +233,9 @@ function onEdit(e) {
 
     const settingName = sheet.getRange(editedRow, settingCol).getValue();
     if (settingName === 'ApprovalsEnabled' || settingName === 'RequiredApprovals') {
-      const pendingRequests = countPendingChangeRequests_();
+      const pendingRequests = countPendingChangeRequests_({ ignoreEnabled: true });
+      const approvalsConfig = getApprovalsConfig_();
+      log_('Approvals config edit guard: enabled=' + approvalsConfig.enabled + ', required=' + approvalsConfig.requiredApprovals + ', pending=' + pendingRequests, 'DEBUG');
       if (pendingRequests > 0) {
         const cachedValue = getCachedConfigValue_(settingName);
         if (oldValue !== undefined) {
@@ -242,6 +247,19 @@ function onEdit(e) {
         }
         SpreadsheetApp.getActiveSpreadsheet().toast('Clear pending ChangeRequests before modifying approvals.', 'Edit Reverted', 12);
         return;
+      }
+      if (settingName === 'RequiredApprovals') {
+        const requestedValue = range.getValue();
+        const approvalsRequested = Math.min(3, Math.max(1, parseInt(requestedValue, 10) || 1));
+        if (approvalsConfig.availableEditors > 0 && approvalsRequested > approvalsConfig.availableEditors) {
+          range.setValue(oldValue);
+          SpreadsheetApp.getActiveSpreadsheet().toast('RequiredApprovals cannot exceed active Sheet Editors.', 'Edit Reverted', 12);
+          return;
+        }
+        if (requestedValue !== approvalsRequested) {
+          range.setValue(approvalsRequested);
+          SpreadsheetApp.getActiveSpreadsheet().toast('RequiredApprovals capped at 3.', 'Adjusted', 10);
+        }
       }
       ensureChangeRequestsSheet_();
     }
@@ -597,9 +615,12 @@ function showVersion_() {
  * Wrapper function to run AutoSync manually from menu
  */
 function runAutoSyncNow() {
-  const summary = autoSync({ silentMode: true });
+  const summary = autoSync({ silentMode: true, forceRun: true });
   if (summary && summary.skipped) {
-    const summaryMessage = 'AutoSync skipped: No changes detected since last run.';
+    let summaryMessage = 'AutoSync skipped: No changes detected since last run.';
+    if (summary.reason === 'interval') {
+      summaryMessage = 'AutoSync skipped: run interval has not elapsed yet.';
+    }
     SpreadsheetApp.getUi().alert(summaryMessage);
   } else if (summary) {
     const summaryMessage = 'Manual AutoSync complete. Total changes: ' + summary.added + ' added, ' + summary.removed + ' removed, ' + summary.failed + ' failed.';
@@ -962,6 +983,24 @@ function getConfigValue_(key, defaultValue) {
   return defaultValue;
 }
 
+function getConfigValueFresh_(key, defaultValue) {
+  const configSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG_SHEET_NAME);
+  if (!configSheet) return defaultValue;
+  const lastRow = configSheet.getLastRow();
+  if (lastRow < 2) return defaultValue;
+  const data = configSheet.getRange(2, 1, lastRow - 1, 2).getValues();
+  for (let i = 0; i < data.length; i++) {
+    if (data[i][0] === key) {
+      const value = data[i][1];
+      if (typeof value === 'string') {
+        return normalizeBooleanConfigValue_(value);
+      }
+      return value;
+    }
+  }
+  return defaultValue;
+}
+
 /**
  * Normalizes a boolean config value string to a boolean.
  * Handles various formats: 'ENABLED', 'ENABLED ✅', 'DISABLED', 'DISABLED ❌', etc.
@@ -1198,7 +1237,6 @@ function clearAllLogs() {
     setupDeepAuditLogSheet_(deepFolderAuditLogSheet);
   }
 
-  ui.alert('All logs have been cleared.');
 }
 
 function clearAuxiliaryLogs() {
@@ -5010,7 +5048,7 @@ function processChangeRequests_(options = {}) {
     }
 
     const approvals = collectApprovalsFromRow_(row, approvalsConfig.requiredApprovals, row[columnMap.requestedBy - 1], columnMap);
-    if (approvals.length >= approvalsConfig.requiredApprovals || approvalsConfig.requiredApprovals <= 1) {
+    if (approvals.length >= approvalsConfig.requiredApprovals) {
       sheet.getRange(rowIndex, columnMap.status).setValue(CHANGE_REQUEST_STATUS_APPROVED);
     }
 
@@ -5290,7 +5328,7 @@ function tallyChangeRequestApprovals_(sheet, approvalsConfig, columnMap) {
     if (isTerminalChangeRequestStatus_(status)) return;
 
     const approvals = collectApprovalsFromRow_(row, approvalsConfig.requiredApprovals, row[resolvedColumnMap.requestedBy - 1], resolvedColumnMap);
-    if (approvals.length >= approvalsConfig.requiredApprovals || approvalsConfig.requiredApprovals <= 1) {
+    if (approvals.length >= approvalsConfig.requiredApprovals) {
       sheet.getRange(rowIndex, resolvedColumnMap.status).setValue(CHANGE_REQUEST_STATUS_APPROVED);
     } else {
       sheet.getRange(rowIndex, resolvedColumnMap.status).setValue(CHANGE_REQUEST_STATUS_PENDING);
@@ -5309,8 +5347,8 @@ function collectApprovalsFromRow_(rowValues, approvalsRequired, requestedBy, col
     if (!email) continue;
     const normalized = email.toString().trim().toLowerCase();
     if (!normalized) continue;
-    if (approvalsRequired > 1 && normalized === lowerRequestedBy) {
-      continue; // no self-approval when multiple approvals required
+    if (normalized === lowerRequestedBy) {
+      continue; // no self-approval
     }
     if (approvals.indexOf(normalized) === -1) {
       approvals.push(normalized);
@@ -5320,10 +5358,10 @@ function collectApprovalsFromRow_(rowValues, approvalsRequired, requestedBy, col
 }
 
 function getApprovalsConfig_() {
-  const enabled = getConfigValue_('ApprovalsEnabled', false) === true;
-  const requiredApprovalsRaw = getConfigValue_('RequiredApprovals', 1);
-  const requiredApprovals = Math.max(1, parseInt(requiredApprovalsRaw, 10) || 1);
-  const expiryHoursRaw = getConfigValue_('ApprovalExpiryHours', 0);
+  const enabled = getConfigValueFresh_('ApprovalsEnabled', false) === true;
+  const requiredApprovalsRaw = getConfigValueFresh_('RequiredApprovals', 1);
+  const requiredApprovals = Math.min(3, Math.max(1, parseInt(requiredApprovalsRaw, 10) || 1));
+  const expiryHoursRaw = getConfigValueFresh_('ApprovalExpiryHours', 0);
   const expiryHours = Math.max(0, parseInt(expiryHoursRaw, 10) || 0);
   const activeEditors = getActiveSheetEditorEmails_();
   return {
@@ -5336,7 +5374,7 @@ function getApprovalsConfig_() {
 
 function shouldGatePermissionEdits_() {
   const approvalsConfig = getApprovalsConfig_();
-  return approvalsConfig.enabled && approvalsConfig.requiredApprovals > 1;
+  return approvalsConfig.enabled === true;
 }
 
 function isChangeRequestEditableRange_(sheet, range) {
@@ -5453,9 +5491,10 @@ function findExistingChangeRequestRow_(changeSheet, targetSheetName, targetRowKe
   return -1;
 }
 
-function countPendingChangeRequests_() {
+function countPendingChangeRequests_(options) {
   const approvalsConfig = getApprovalsConfig_();
-  if (!approvalsConfig.enabled || approvalsConfig.requiredApprovals <= 1) return 0;
+  const ignoreEnabled = options && options.ignoreEnabled === true;
+  if (!approvalsConfig.enabled && !ignoreEnabled) return 0;
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const changeSheet = ss.getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
@@ -5472,6 +5511,7 @@ function countPendingChangeRequests_() {
       pending++;
     }
   });
+  log_('Approvals pending count: enabled=' + approvalsConfig.enabled + ', required=' + approvalsConfig.requiredApprovals + ', pending=' + pending + ', ignoreEnabled=' + ignoreEnabled, 'DEBUG');
   return pending;
 }
 
@@ -5971,6 +6011,7 @@ function setupControlSheets_() {
       'EnableSheetLocking': { value: true, description: 'Check to enable the sheet locking mechanism during sync operations. This is recommended to prevent data inconsistencies.' },
       'EnableCircularDependencyCheck': { value: true, description: 'Check to enable circular dependency validation during sync. This prevents infinite loops when groups contain each other.' },
       'AutoSyncInterval': { value: 5, description: 'The interval in minutes for the AutoSync trigger. Minimum is 5 minutes. Use the "Enable/Update AutoSync" menu item to apply a new interval.' },
+      'AutoSyncForceIntervalMinutes': { value: 60, description: 'Force a full AutoSync at least this often (in minutes), even if no changes are detected. Use 0 to disable.' },
       'AllowAutosyncDeletion': { value: true, description: 'Check to allow AutoSync to automatically remove users from groups. WARNING: If a user is accidentally removed from a sheet, their access will be revoked on the next sync.' },
       'AllowGroupFolderDeletion': { value: false, description: 'Master switch: Enable deletion of groups and folder-role bindings via Delete checkbox. Google Drive folders are never deleted. When disabled, Delete checkboxes are ignored and sync aborts on orphan sheets.' },
       'RetryMaxRetries': { value: 5, description: 'The maximum number of times to retry a failed API call (e.g., due to rate limiting).'},
@@ -5979,7 +6020,7 @@ function setupControlSheets_() {
     },
     '--- Change Approvals ---': {
       'ApprovalsEnabled': { value: false, description: 'Check to require multi-approver gating for control sheet edits captured in the ChangeRequests sheet.' },
-      'RequiredApprovals': { value: 1, description: 'Number of unique sheet editors needed to approve a change request before it is applied. Default of 1 means no additional approvals are required.' },
+      'RequiredApprovals': { value: 1, description: 'Number of unique sheet editors needed to approve a change request before it is applied. Default of 1 means one approver is required. Max: 3 (and cannot exceed active Sheet Editors).' },
       'ApprovalExpiryHours': { value: 0, description: 'Optional: expire pending change requests after this many hours. Leave 0 to disable expiry.' }
     },
     '--- Email Notifications ---': {
@@ -6957,6 +6998,14 @@ function syncAdds(options = {}) {
   const silentMode = options && options.silentMode !== undefined ? options.silentMode : false;
   const skipSetup = options && options.skipSetup !== undefined ? options.skipSetup : false;
 
+  if (shouldGatePermissionEdits_()) {
+    processChangeRequests_({ silentMode: silentMode });
+    if (!silentMode) {
+      SpreadsheetApp.getUi().alert('Approvals are enabled. Direct sync is skipped; use ChangeRequests approvals.');
+    }
+    return { skipped: true, added: 0, removed: 0, failed: 0 };
+  }
+
   if (!skipSetup) {
     setupControlSheets_();
   }
@@ -7065,6 +7114,12 @@ function syncDeletes() {
   const ui = SpreadsheetApp.getUi();
   const startTime = new Date();
   
+  if (shouldGatePermissionEdits_()) {
+    processChangeRequests_({ silentMode: false });
+    ui.alert('Approvals are enabled. Direct sync is skipped; use ChangeRequests approvals.');
+    return;
+  }
+
   // --- Phase 1: Planning ---
   log_('*** Starting user removal planning phase...');
   showToast_('Planning user removals...', 'Remove Users', 10);
@@ -7206,6 +7261,14 @@ function syncDeletes() {
 function fullSync(options = {}) {
   const silentMode = options && options.silentMode !== undefined ? options.silentMode : false;
   const skipSetup = options && options.skipSetup !== undefined ? options.skipSetup : false;
+
+  if (shouldGatePermissionEdits_()) {
+    processChangeRequests_({ silentMode: silentMode });
+    if (!silentMode) {
+      SpreadsheetApp.getUi().alert('Approvals are enabled. Direct sync is skipped; use ChangeRequests approvals.');
+    }
+    return { skipped: true, added: 0, removed: 0, failed: 0 };
+  }
 
   log_('Running script version ' + SCRIPT_VERSION);
 
@@ -7351,6 +7414,12 @@ function fullSync(options = {}) {
 }
 
 function syncManagedFoldersAdds() {
+  if (shouldGatePermissionEdits_()) {
+    processChangeRequests_({ silentMode: false });
+    SpreadsheetApp.getUi().alert('Approvals are enabled. Direct sync is skipped; use ChangeRequests approvals.');
+    return;
+  }
+
   setupControlSheets_();
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(15000)) {
@@ -7396,6 +7465,12 @@ function syncManagedFoldersDeletes() {
   const ui = SpreadsheetApp.getUi();
   const startTime = new Date();
   
+  if (shouldGatePermissionEdits_()) {
+    processChangeRequests_({ silentMode: false });
+    ui.alert('Approvals are enabled. Direct sync is skipped; use ChangeRequests approvals.');
+    return;
+  }
+
   // --- Phase 1: Planning ---
   log_('*** Starting folder deletion planning phase...');
   showToast_('Planning folder deletions...', 'Sync Deletes', 10);
@@ -8863,7 +8938,8 @@ function runApprovalGatingTest() {
         const valueCol = resolveColumn_(configHeaders, 'value', 2);
         const approvalsRow = findRowByValue_(configSheet, settingCol, 'ApprovalsEnabled');
         const oldValue = configSheet.getRange(approvalsRow, valueCol).getValue();
-        configSheet.getRange(approvalsRow, valueCol).setValue(!oldValue);
+        const newValue = !oldValue;
+        configSheet.getRange(approvalsRow, valueCol).setValue(newValue);
         onEdit({
             source: ss,
             range: configSheet.getRange(approvalsRow, valueCol),
@@ -10289,6 +10365,7 @@ function removeAutoSync() {
  */
 function autoSync(options = {}) {
   const silentMode = (options && options.triggerUid) || (options && options.silentMode);
+  const forceRun = options && options.forceRun === true;
   const lock = LockService.getScriptLock();
 
   if (!lock.tryLock(10000)) {
@@ -10303,12 +10380,16 @@ function autoSync(options = {}) {
     const lastRunRaw = props.getProperty(AUTO_SYNC_LAST_RUN_KEY);
     const intervalMinutes = getConfigValue_('AutoSyncInterval', 5);
     const enforcedIntervalMs = Math.max(5, intervalMinutes) * 60 * 1000;
+    const forceIntervalMinutes = Math.max(0, parseInt(getConfigValue_('AutoSyncForceIntervalMinutes', 60), 10) || 0);
+    const forceIntervalMs = forceIntervalMinutes > 0 ? forceIntervalMinutes * 60 * 1000 : 0;
+    const lastForcedRunRaw = props.getProperty(AUTO_SYNC_LAST_FORCED_RUN_KEY);
+    const lastVersion = props.getProperty(AUTO_SYNC_LAST_VERSION_KEY);
 
-    if (lastRunRaw) {
+    if (!forceRun && lastRunRaw) {
       const elapsed = now - Number(lastRunRaw);
       if (!isNaN(elapsed) && elapsed < enforcedIntervalMs) {
         log_('AutoSync skipped: last run was ' + Math.round(elapsed / 1000) + 's ago (interval ' + intervalMinutes + ' mins).', 'DEBUG');
-        return { skipped: true, added: 0, removed: 0, failed: 0 };
+        return { skipped: true, added: 0, removed: 0, failed: 0, reason: 'interval' };
       }
     }
 
@@ -10317,17 +10398,42 @@ function autoSync(options = {}) {
     if (isInEditMode_()) {
       log_('AutoSync skipped: spreadsheet is in Edit Mode.', 'DEBUG');
       updateSyncStatus_('Skipped', { source: 'AutoSync' });
-      return;
+      return { skipped: true, added: 0, removed: 0, failed: 0, reason: 'edit_mode' };
     }
 
     processChangeRequests_({ silentMode: silentMode });
+
+    if (shouldGatePermissionEdits_()) {
+      const pendingApprovals = countPendingChangeRequests_();
+      if (pendingApprovals > 0) {
+        log_('AutoSync continuing with pending ChangeRequests (' + pendingApprovals + ') awaiting approval.', 'INFO');
+      }
+    }
+
+    let forceDueToInterval = false;
+    if (forceIntervalMs > 0) {
+      const lastForcedRun = lastForcedRunRaw ? Number(lastForcedRunRaw) : 0;
+      if (!lastForcedRun || isNaN(lastForcedRun) || now - lastForcedRun >= forceIntervalMs) {
+        forceDueToInterval = true;
+      }
+    }
+
+    const forceDueToVersion = lastVersion !== SCRIPT_VERSION;
 
     // Detect if changes warrant a sync
     const changeDetection = detectAutoSyncChanges_();
 
     if (!changeDetection.shouldRun) {
-      updateSyncStatus_('Skipped', { source: 'AutoSync' });
-      return { skipped: true, added: 0, removed: 0, failed: 0 };
+      if (forceDueToInterval) {
+        changeDetection.shouldRun = true;
+        changeDetection.reasons.push('Forced interval elapsed (' + forceIntervalMinutes + ' mins).');
+      } else if (forceDueToVersion) {
+        changeDetection.shouldRun = true;
+        changeDetection.reasons.push('Script version changed. Forcing AutoSync.');
+      } else {
+        updateSyncStatus_('Skipped', { source: 'AutoSync' });
+        return { skipped: true, added: 0, removed: 0, failed: 0, reason: 'no_changes' };
+      }
     }
 
     // Only log start message if sync will actually run
@@ -10357,6 +10463,10 @@ function autoSync(options = {}) {
     if (syncResult && syncResult.failed === 0) {
       changeDetection.snapshot.lastSyncSuccessful = true;
       props.setProperty(AUTO_SYNC_CHANGE_SIGNATURE_KEY, JSON.stringify(changeDetection.snapshot));
+      props.setProperty(AUTO_SYNC_LAST_VERSION_KEY, SCRIPT_VERSION);
+      if (forceDueToInterval || forceDueToVersion) {
+        props.setProperty(AUTO_SYNC_LAST_FORCED_RUN_KEY, String(now));
+      }
       log_('*** Scheduled AutoSync completed successfully.');
       updateSyncStatus_('Success', {
         summary: syncResult,
@@ -10366,6 +10476,10 @@ function autoSync(options = {}) {
     } else {
       changeDetection.snapshot.lastSyncSuccessful = false;
       props.setProperty(AUTO_SYNC_CHANGE_SIGNATURE_KEY, JSON.stringify(changeDetection.snapshot));
+      props.setProperty(AUTO_SYNC_LAST_VERSION_KEY, SCRIPT_VERSION);
+      if (forceDueToInterval || forceDueToVersion) {
+        props.setProperty(AUTO_SYNC_LAST_FORCED_RUN_KEY, String(now));
+      }
       log_('AutoSync did not complete successfully. Will retry on next run.', 'WARN');
       updateSyncStatus_('Failed', {
         summary: syncResult,
@@ -10601,5 +10715,3 @@ function updateAutoSyncStatusIndicator_() {
     }
   }
 }
-
-// ... (The rest of the file is unchanged)

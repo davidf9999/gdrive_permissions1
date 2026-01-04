@@ -12,6 +12,9 @@ const FOLDER_AUDIT_LOG_SHEET_NAME = 'FoldersAuditLog';
 const SYNC_HISTORY_SHEET_NAME = 'SyncHistory';
 const DEFAULT_MAX_LOG_LENGTH = 10000;
 const AUTO_SYNC_CHANGE_SIGNATURE_KEY = 'AutoSyncChangeSignature';
+const AUTO_SYNC_LAST_RUN_KEY = 'AutoSyncLastRun';
+const AUTO_SYNC_LAST_FORCED_RUN_KEY = 'AutoSyncLastForcedRun';
+const AUTO_SYNC_LAST_VERSION_KEY = 'AutoSyncLastVersion';
 
 const ADMINS_LAST_SYNC_CELL = 'C2';
 const ADMINS_STATUS_CELL = 'D2';
@@ -95,7 +98,7 @@ function validateEnvironment_() {
 function onEdit(e) {
   if (!e || !e.source) return;
 
-  const sheet = e.source.getActiveSheet();
+  const sheet = (e.range && e.range.getSheet) ? e.range.getSheet() : e.source.getActiveSheet();
   const sheetName = sheet.getName();
   const range = e.range;
   const oldValue = e.oldValue;
@@ -220,7 +223,9 @@ function onEdit(e) {
 
     const settingName = sheet.getRange(editedRow, settingCol).getValue();
     if (settingName === 'ApprovalsEnabled' || settingName === 'RequiredApprovals') {
-      const pendingRequests = countPendingChangeRequests_();
+      const pendingRequests = countPendingChangeRequests_({ ignoreEnabled: true });
+      const approvalsConfig = getApprovalsConfig_();
+      log_('Approvals config edit guard: enabled=' + approvalsConfig.enabled + ', required=' + approvalsConfig.requiredApprovals + ', pending=' + pendingRequests, 'DEBUG');
       if (pendingRequests > 0) {
         const cachedValue = getCachedConfigValue_(settingName);
         if (oldValue !== undefined) {
@@ -232,6 +237,19 @@ function onEdit(e) {
         }
         SpreadsheetApp.getActiveSpreadsheet().toast('Clear pending ChangeRequests before modifying approvals.', 'Edit Reverted', 12);
         return;
+      }
+      if (settingName === 'RequiredApprovals') {
+        const requestedValue = range.getValue();
+        const approvalsRequested = Math.min(3, Math.max(1, parseInt(requestedValue, 10) || 1));
+        if (approvalsConfig.availableEditors > 0 && approvalsRequested > approvalsConfig.availableEditors) {
+          range.setValue(oldValue);
+          SpreadsheetApp.getActiveSpreadsheet().toast('RequiredApprovals cannot exceed active Sheet Editors.', 'Edit Reverted', 12);
+          return;
+        }
+        if (requestedValue !== approvalsRequested) {
+          range.setValue(approvalsRequested);
+          SpreadsheetApp.getActiveSpreadsheet().toast('RequiredApprovals capped at 3.', 'Adjusted', 10);
+        }
       }
       ensureChangeRequestsSheet_();
     }
@@ -587,9 +605,12 @@ function showVersion_() {
  * Wrapper function to run AutoSync manually from menu
  */
 function runAutoSyncNow() {
-  const summary = autoSync({ silentMode: true });
+  const summary = autoSync({ silentMode: true, forceRun: true });
   if (summary && summary.skipped) {
-    const summaryMessage = 'AutoSync skipped: No changes detected since last run.';
+    let summaryMessage = 'AutoSync skipped: No changes detected since last run.';
+    if (summary.reason === 'interval') {
+      summaryMessage = 'AutoSync skipped: run interval has not elapsed yet.';
+    }
     SpreadsheetApp.getUi().alert(summaryMessage);
   } else if (summary) {
     const summaryMessage = 'Manual AutoSync complete. Total changes: ' + summary.added + ' added, ' + summary.removed + ' removed, ' + summary.failed + ' failed.';

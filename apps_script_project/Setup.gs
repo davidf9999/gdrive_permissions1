@@ -262,6 +262,7 @@ function setupControlSheets_() {
       'EnableSheetLocking': { value: true, description: 'Check to enable the sheet locking mechanism during sync operations. This is recommended to prevent data inconsistencies.' },
       'EnableCircularDependencyCheck': { value: true, description: 'Check to enable circular dependency validation during sync. This prevents infinite loops when groups contain each other.' },
       'AutoSyncInterval': { value: 5, description: 'The interval in minutes for the AutoSync trigger. Minimum is 5 minutes. Use the "Enable/Update AutoSync" menu item to apply a new interval.' },
+      'AutoSyncForceIntervalMinutes': { value: 60, description: 'Force a full AutoSync at least this often (in minutes), even if no changes are detected. Use 0 to disable.' },
       'AllowAutosyncDeletion': { value: true, description: 'Check to allow AutoSync to automatically remove users from groups. WARNING: If a user is accidentally removed from a sheet, their access will be revoked on the next sync.' },
       'AllowGroupFolderDeletion': { value: false, description: 'Master switch: Enable deletion of groups and folder-role bindings via Delete checkbox. Google Drive folders are never deleted. When disabled, Delete checkboxes are ignored and sync aborts on orphan sheets.' },
       'RetryMaxRetries': { value: 5, description: 'The maximum number of times to retry a failed API call (e.g., due to rate limiting).'},
@@ -270,7 +271,7 @@ function setupControlSheets_() {
     },
     '--- Change Approvals ---': {
       'ApprovalsEnabled': { value: false, description: 'Check to require multi-approver gating for control sheet edits captured in the ChangeRequests sheet.' },
-      'RequiredApprovals': { value: 1, description: 'Number of unique sheet editors needed to approve a change request before it is applied. Default of 1 means no additional approvals are required.' },
+      'RequiredApprovals': { value: 1, description: 'Number of unique sheet editors needed to approve a change request before it is applied. Default of 1 means one approver is required. Max: 3 (and cannot exceed active Sheet Editors).' },
       'ApprovalExpiryHours': { value: 0, description: 'Optional: expire pending change requests after this many hours. Leave 0 to disable expiry.' }
     },
     '--- Email Notifications ---': {

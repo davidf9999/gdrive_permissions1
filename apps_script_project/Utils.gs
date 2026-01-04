@@ -346,6 +346,24 @@ function getConfigValue_(key, defaultValue) {
   return defaultValue;
 }
 
+function getConfigValueFresh_(key, defaultValue) {
+  const configSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG_SHEET_NAME);
+  if (!configSheet) return defaultValue;
+  const lastRow = configSheet.getLastRow();
+  if (lastRow < 2) return defaultValue;
+  const data = configSheet.getRange(2, 1, lastRow - 1, 2).getValues();
+  for (let i = 0; i < data.length; i++) {
+    if (data[i][0] === key) {
+      const value = data[i][1];
+      if (typeof value === 'string') {
+        return normalizeBooleanConfigValue_(value);
+      }
+      return value;
+    }
+  }
+  return defaultValue;
+}
+
 /**
  * Normalizes a boolean config value string to a boolean.
  * Handles various formats: 'ENABLED', 'ENABLED ✅', 'DISABLED', 'DISABLED ❌', etc.
@@ -582,7 +600,6 @@ function clearAllLogs() {
     setupDeepAuditLogSheet_(deepFolderAuditLogSheet);
   }
 
-  ui.alert('All logs have been cleared.');
 }
 
 function clearAuxiliaryLogs() {

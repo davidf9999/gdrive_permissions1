@@ -9,7 +9,7 @@ See `docs/SHEET_ACCESS_POLICY.md` for the centralized sheet access policy enforc
 ## Core sheet surfaces
 ### Config sheet additions
 - `ApprovalsEnabled` (boolean) – turns the feature on/off. Default: `FALSE` to preserve current behavior.
-- `RequiredApprovals` (number) – minimum distinct approvers for each request. Default: `1`. Reject values <1 and warn if the value is higher than the number of sheet editors listed in `SheetEditors`.
+- `RequiredApprovals` (number) – minimum distinct approvers for each request. Default: `1` (one approver required). Maximum: `3`, and cannot exceed active Sheet Editors.
 - `ApprovalExpiryHours` (number, optional) – auto-expire stale requests (e.g., 72 hours).
 Note: changes to `ApprovalsEnabled` or `RequiredApprovals` are blocked while any ChangeRequests are pending.
 
@@ -27,7 +27,7 @@ A dedicated table that sheet editors can edit directly. Suggested columns:
 | `ProposedRowSnapshot` | Serialized values for the intended row (e.g., JSON or pipe-separated columns). |
 | `Status` | `PENDING`, `APPROVED`, `DENIED`, `CANCELLED`, `APPLIED`, `EXPIRED`. Data validation enforces allowed values. |
 | `ApprovalsNeeded` | Derived from `RequiredApprovals`; computed by script for each row. |
-| `Approver_1..N` | Each column holds one approver email. Deduplicate and reject the requester when `RequiredApprovals > 1`. |
+| `Approver_1..N` | Each column holds one approver email. Deduplicate and reject the requester. |
 | `DenyReason` | Free text when `Status = DENIED` or `CANCELLED`. |
 | `AppliedAt` | Timestamp when the change is pushed to the control sheet. |
 
@@ -59,6 +59,7 @@ Note: when `ApprovalsEnabled = FALSE`, the `ChangeRequests` sheet may be hidden.
        - `DELETE`: remove or mark inactive by key.
      - Log success/failure in the Log sheet, set `Status = APPLIED`, and record `AppliedAt`.
    - If validation fails (e.g., key missing), set `Status = DENIED` with a reason.
+   - When approvals are enabled, manual sync menu actions skip direct changes and only process approved ChangeRequests.
 
 4. **Expiry and cleanup**
    - A scheduled trigger checks `RequestedAt` + `ApprovalExpiryHours`; if exceeded and still pending, set `Status = EXPIRED` and log it.
@@ -68,7 +69,7 @@ Note: when `ApprovalsEnabled = FALSE`, the `ChangeRequests` sheet may be hidden.
 - **Protected ranges**: Protect the header and computed columns in `ChangeRequests`; only allow editing of request input cells, `Status`, and `Approver_*` columns.
 - **Color cues**: Conditional formatting for `PENDING` (yellow), `APPROVED` (green), `DENIED/EXPIRED` (red/grey) to guide sheet editors without menus.
 - **Error messaging**: The top banner row shows the latest validation error (e.g., missing `TargetRowKey`, approvals > editors, or malformed `ProposedRowSnapshot`).
-- **No self-approval**: The script ignores `Approver_*` entries matching `RequestedBy` when `RequiredApprovals > 1`.
+- **No self-approval**: The script ignores `Approver_*` entries matching `RequestedBy`.
 - **Idempotency**: The script tracks `RequestId` in Document Properties to avoid reapplying already-applied rows if a trigger reruns.
 
 ## Rollout approach
@@ -98,7 +99,7 @@ These scenarios validate the approval pipeline without Apps Script menus. Reset 
    - After trigger run, expect `Status` transitions to `APPROVED`, then `APPLIED`, with both approvers recorded and requester not counted.
 
 4. **Requester cannot self-approve**
-   - With `RequiredApprovals > 1`, add a request and have the requester fill the first `Approver_*` cell with their own email.
+   - With approvals enabled, add a request and have the requester fill the first `Approver_*` cell with their own email.
    - Trigger processing should leave `Status = PENDING` and a banner or note indicating self-approval is ignored.
    - Add a second distinct approver; expect approval proceeds only after sufficient non-requester emails are present.
 
@@ -109,7 +110,7 @@ These scenarios validate the approval pipeline without Apps Script menus. Reset 
    - Restore editors and re-run processing; confirm warning clears and the request can advance with valid approvers.
 
 6. **Denial / cancellation flow**
-   - Add a `PENDING` request with `RequiredApprovals > 1`.
+   - Add a `PENDING` request with approvals enabled.
    - An editor sets `Status = DENIED` (optionally fills `DenyReason`).
    - Expect: row becomes immutable for further approvals; no changes are applied to control sheets; AutoSync skips it and logs denial.
    - Repeat with `Status = CANCELLED` to mirror requester withdrawal.
