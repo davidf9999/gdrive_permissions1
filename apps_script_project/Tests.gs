@@ -1173,6 +1173,7 @@ function runApprovalGatingTest() {
     let testRowIndex = null;
     let testEmail = null;
     let success = false;
+    let approvalRowIndex = null;
 
     try {
         updateConfigSetting_('ApprovalsEnabled', true);
@@ -1187,59 +1188,52 @@ function runApprovalGatingTest() {
         updateConfigSetting_('RequiredApprovals', 2);
         ensureChangeRequestsSheet_();
 
-        const sheetEditorsHeaders = getHeaderMap_(sheetEditorsSheet);
-        const emailCol = resolveColumn_(sheetEditorsHeaders, 'sheet editor emails', 1);
-        testRowIndex = sheetEditorsSheet.getLastRow() + 1;
         testEmail = 'approval-test+' + new Date().getTime() + '@example.com';
-        sheetEditorsSheet.getRange(testRowIndex, emailCol).setValue(testEmail);
-        const rowValues = sheetEditorsSheet.getRange(testRowIndex, 1, 1, sheetEditorsSheet.getLastColumn()).getValues()[0];
-
-        onEdit({
-            source: ss,
-            range: sheetEditorsSheet.getRange(testRowIndex, emailCol),
-            oldValue: undefined,
-            user: { getEmail: function() { return Session.getEffectiveUser().getEmail(); } }
-        });
-
-        const revertedValue = sheetEditorsSheet.getRange(testRowIndex, emailCol).getValue();
-        if (revertedValue) {
-            throw new Error('Permission edit was not reverted.');
-        }
-
-        changeSheet = ss.getSheetByName(changeSheetName);
-        const updatedColumnMap = getChangeRequestsColumnMap_(changeSheet);
-        const dataRange = changeSheet.getLastRow() > 1
-            ? changeSheet.getRange(2, 1, changeSheet.getLastRow() - 1, changeSheet.getLastColumn())
-            : null;
-        const data = dataRange ? dataRange.getValues() : [];
-        let matchingRowIndex = -1;
-        for (let i = 0; i < data.length; i++) {
-            const row = data[i];
-            const targetSheet = row[updatedColumnMap.targetSheet - 1];
-            const targetKey = row[updatedColumnMap.targetRowKey - 1];
-            const action = row[updatedColumnMap.action - 1];
-            const status = row[updatedColumnMap.status - 1];
-            if (targetSheet === SHEET_EDITORS_SHEET_NAME && targetKey === testEmail && action === 'UPDATE' && status === CHANGE_REQUEST_STATUS_PENDING) {
-                matchingRowIndex = i + 2;
-                break;
-            }
-        }
-        if (matchingRowIndex === -1) {
-            throw new Error('ChangeRequest was not created for permission edit.');
+        const snapshot = { changeType: 'TEST_PERMISSION_DELTA', email: testEmail, action: 'ADD' };
+        const approvalResult = ensureChangeRequestForDelta_(SHEET_EDITORS_SHEET_NAME, testEmail, 'ADD', snapshot, Session.getEffectiveUser().getEmail());
+        approvalRowIndex = approvalResult.rowIndex;
+        if (!approvalRowIndex || approvalRowIndex < 2) {
+            throw new Error('Permission delta ChangeRequest was not created.');
         }
 
         // Populate approvers then ensure upsert clears all approver columns
-        updatedColumnMap.approverCols.forEach(function(colIndex) {
-            changeSheet.getRange(matchingRowIndex, colIndex).setValue('approver@example.com');
-        });
-        upsertChangeRequest_(SHEET_EDITORS_SHEET_NAME, testEmail, 'UPDATE', JSON.stringify(rowValues), Session.getEffectiveUser().getEmail());
+        changeSheet = ss.getSheetByName(changeSheetName);
+        const updatedColumnMap = getChangeRequestsColumnMap_(changeSheet);
+        if (updatedColumnMap.approverCols.length >= 2) {
+            changeSheet.getRange(approvalRowIndex, updatedColumnMap.approverCols[0]).setValue('approver1@example.com');
+            changeSheet.getRange(approvalRowIndex, updatedColumnMap.approverCols[1]).setValue('approver2@example.com');
+        } else if (updatedColumnMap.approverCols.length === 1) {
+            changeSheet.getRange(approvalRowIndex, updatedColumnMap.approverCols[0]).setValue('approver1@example.com');
+        }
+        upsertChangeRequest_(SHEET_EDITORS_SHEET_NAME, testEmail, 'UPDATE', JSON.stringify([testEmail, false]), Session.getEffectiveUser().getEmail());
         const refreshedMap = getChangeRequestsColumnMap_(changeSheet);
+        const updateRowIndex = findExistingChangeRequestRow_(changeSheet, SHEET_EDITORS_SHEET_NAME, testEmail, 'UPDATE', refreshedMap);
+        if (updateRowIndex < 2) {
+            throw new Error('UPDATE ChangeRequest was not created.');
+        }
         refreshedMap.approverCols.forEach(function(colIndex) {
-            const value = changeSheet.getRange(matchingRowIndex, colIndex).getValue();
+            const value = changeSheet.getRange(updateRowIndex, colIndex).getValue();
             if (value) {
                 throw new Error('Approver columns were not cleared after upsert.');
             }
         });
+
+        // Approve permission delta and ensure it is not auto-applied to sheets
+        updatedColumnMap.approverCols.forEach(function(colIndex) {
+            changeSheet.getRange(approvalRowIndex, colIndex).setValue('approver@example.com');
+        });
+        processChangeRequests_({ silentMode: true });
+        const finalStatus = changeSheet.getRange(approvalRowIndex, updatedColumnMap.status).getValue();
+        const appliedAt = updatedColumnMap.appliedAt ? changeSheet.getRange(approvalRowIndex, updatedColumnMap.appliedAt).getValue() : null;
+        if (finalStatus !== CHANGE_REQUEST_STATUS_APPROVED) {
+            throw new Error('Permission delta ChangeRequest did not reach APPROVED status.');
+        }
+        if (appliedAt) {
+            throw new Error('Permission delta ChangeRequest should not be applied by processChangeRequests_.');
+        }
+
+        // Create a pending request to block approvals config edits
+        ensureChangeRequestForDelta_(SHEET_EDITORS_SHEET_NAME, testEmail + '-pending', 'ADD', snapshot, Session.getEffectiveUser().getEmail());
 
         // Attempt to change approvals while pending request exists
         const configHeaders = getHeaderMap_(configSheet);
@@ -1268,14 +1262,6 @@ function runApprovalGatingTest() {
         return false;
     } finally {
         try {
-            if (testRowIndex && testRowIndex <= sheetEditorsSheet.getLastRow()) {
-                sheetEditorsSheet.deleteRow(testRowIndex);
-            }
-        } catch (e) {
-            log_('Failed to clean up test row: ' + e.message, 'WARN');
-        }
-
-        try {
             changeSheet = ss.getSheetByName(changeSheetName);
             if (changeSheet && changeSheet.getLastRow() > 1 && testEmail) {
                 const columnMap = getChangeRequestsColumnMap_(changeSheet);
@@ -1283,7 +1269,8 @@ function runApprovalGatingTest() {
                 const data = dataRange.getValues();
                 for (let i = data.length - 1; i >= 0; i--) {
                     const row = data[i];
-                    if (row[columnMap.targetSheet - 1] === SHEET_EDITORS_SHEET_NAME && row[columnMap.targetRowKey - 1] === testEmail) {
+                    const rowKey = row[columnMap.targetRowKey - 1];
+                    if (row[columnMap.targetSheet - 1] === SHEET_EDITORS_SHEET_NAME && rowKey && rowKey.toString().indexOf(testEmail) === 0) {
                         changeSheet.deleteRow(i + 2);
                     }
                 }

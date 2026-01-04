@@ -399,16 +399,75 @@ function _batchSetPermissions(jobs) {
     const summary = { failed: 0 };
     if (shouldSkipGroupOps_()) return summary;
 
-    const requests = jobs.filter(job => !job.error && job.folderId && job.groupEmail && job.role)
-        .map(job => {
-            const driveApiRole = (job.role.toLowerCase() === 'editor') ? 'writer' : (job.role.toLowerCase() === 'viewer') ? 'reader' : 'commenter';
-            return {
-                method: 'POST',
-                path: `/drive/v3/files/${job.folderId}/permissions?supportsAllDrives=true&sendNotificationEmail=false`,
-                payload: JSON.stringify({ type: 'group', role: driveApiRole, emailAddress: job.groupEmail }),
-                job: job
-            };
+    const approvalsConfig = getApprovalsConfig_();
+    const approvalsEnabled = approvalsConfig.enabled;
+    let changeRequestContext = null;
+    if (approvalsEnabled) {
+      ensureChangeRequestsSheet_();
+      const changeSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
+      if (changeSheet) {
+        changeRequestContext = {
+          changeSheet: changeSheet,
+          columnMap: getChangeRequestsColumnMap_(changeSheet),
+          approvalsConfig: approvalsConfig
+        };
+      }
+    }
+
+    const requests = [];
+    jobs.forEach(function(job) {
+        if (job.error || !job.folderId || !job.groupEmail || !job.role) {
+          return;
+        }
+
+        const driveApiRole = (job.role.toLowerCase() === 'editor') ? 'writer' : (job.role.toLowerCase() === 'viewer') ? 'reader' : 'commenter';
+        const existingPermission = getFolderGroupPermissionInfo_(job.folderId, job.groupEmail);
+        if (existingPermission && existingPermission.role === driveApiRole) {
+          log_(`Permission "${job.role}" already set for group "${job.groupEmail}" on folder "${job.folderName}". Skipping.`, 'INFO');
+          return;
+        }
+
+        let action = existingPermission ? 'UPDATE' : 'ADD';
+        let requestPath = '';
+        let payload = null;
+        if (action === 'UPDATE' && existingPermission && existingPermission.id) {
+          requestPath = `/drive/v3/files/${job.folderId}/permissions/${existingPermission.id}?supportsAllDrives=true`;
+          payload = JSON.stringify({ role: driveApiRole });
+        } else {
+          action = 'ADD';
+          requestPath = `/drive/v3/files/${job.folderId}/permissions?supportsAllDrives=true&sendNotificationEmail=false`;
+          payload = JSON.stringify({ type: 'group', role: driveApiRole, emailAddress: job.groupEmail });
+        }
+
+        let changeRequestRowIndex = null;
+        if (approvalsEnabled) {
+          const targetRowKey = buildFolderPermissionRowKey_(job.folderId, job.groupEmail, job.role);
+          const snapshot = {
+            changeType: 'FOLDER_PERMISSION',
+            folderId: job.folderId,
+            folderName: job.folderName,
+            groupEmail: job.groupEmail,
+            desiredRole: driveApiRole,
+            currentRole: existingPermission ? existingPermission.role : null,
+            action: action
+          };
+          const result = ensureChangeRequestForDelta_(MANAGED_FOLDERS_SHEET_NAME, targetRowKey, action, snapshot, 'SYSTEM', changeRequestContext);
+          if (result.rowIndex > 0) {
+            changeRequestRowIndex = result.rowIndex;
+          }
+          if (result.status !== CHANGE_REQUEST_STATUS_APPROVED) {
+            return;
+          }
+        }
+
+        requests.push({
+            method: action === 'UPDATE' ? 'PATCH' : 'POST',
+            path: requestPath,
+            payload: payload,
+            job: job,
+            changeRequestRowIndex: changeRequestRowIndex
         });
+    });
 
     if (requests.length === 0) return summary;
 
@@ -417,12 +476,19 @@ function _batchSetPermissions(jobs) {
 
     batchResponse.forEach((part, i) => {
         const job = requests[i].job;
+        const rowIndex = requests[i].changeRequestRowIndex;
         if (part.success) {
             log_(`Successfully set role "${job.role}" for group "${job.groupEmail}" on folder "${job.folderName}"`, 'INFO');
+            if (approvalsEnabled && changeRequestContext && rowIndex) {
+              markChangeRequestAppliedByRow_(changeRequestContext.changeSheet, rowIndex, changeRequestContext.columnMap);
+            }
         } else {
             // Ignore "permission already exists" errors, treat as success
             if (part.body && part.body.includes('duplicate')) {
                  log_(`Permission for group "${job.groupEmail}" on folder "${job.folderName}" already exists. Skipping.`, 'INFO');
+                 if (approvalsEnabled && changeRequestContext && rowIndex) {
+                   markChangeRequestAppliedByRow_(changeRequestContext.changeSheet, rowIndex, changeRequestContext.columnMap);
+                 }
             } else {
                 summary.failed++;
                 job.error = true;
@@ -431,6 +497,34 @@ function _batchSetPermissions(jobs) {
         }
     });
     return summary;
+}
+
+function buildFolderPermissionRowKey_(folderId, groupEmail, role) {
+  return [folderId || '', (groupEmail || '').toLowerCase(), (role || '').toLowerCase()].join('|');
+}
+
+function getFolderGroupPermissionInfo_(folderId, groupEmail) {
+  if (!folderId || !groupEmail || typeof Drive === 'undefined') {
+    return null;
+  }
+  try {
+    const permissions = Drive.Permissions.list(folderId, {
+      fields: 'permissions(id,emailAddress,role,type)'
+    }).permissions || [];
+    const normalized = groupEmail.toLowerCase();
+    const match = permissions.find(function(permission) {
+      return permission.type === 'group' &&
+        permission.emailAddress &&
+        permission.emailAddress.toLowerCase() === normalized;
+    });
+    if (!match) {
+      return null;
+    }
+    return { id: match.id, role: match.role };
+  } catch (e) {
+    log_(`Could not inspect permissions for folder ${folderId}: ${e.message}`, 'WARN');
+    return null;
+  }
 }
 
 /**
@@ -1175,7 +1269,7 @@ function renameSheetIfExists_(oldName, newName) {
 }
 
 function _executeMembershipChunkWithRetries_(requests, groupEmail, config) {
-  const summary = { added: 0, removed: 0, failed: 0 };
+  const summary = { added: 0, removed: 0, failed: 0, appliedEmails: [], failedEmails: [] };
   if (!requests || requests.length === 0) {
     return summary;
   }
@@ -1194,15 +1288,18 @@ function _executeMembershipChunkWithRetries_(requests, groupEmail, config) {
       if (part.success) {
         if (originalRequest.operation === 'add') summary.added++;
         if (originalRequest.operation === 'remove') summary.removed++;
+        summary.appliedEmails.push(originalRequest.email);
       } else {
         // Handle idempotent cases (desired state already achieved)
         if (originalRequest.operation === 'add' && part.status === 409 && part.body.includes('Member already exists')) {
           // For add: if member already exists, treat as success (desired state achieved)
           summary.added++;
+          summary.appliedEmails.push(originalRequest.email);
           log_(`Member ${originalRequest.email} already exists in group ${groupEmail}. Treating as success.`, 'INFO');
         } else if (originalRequest.operation === 'remove' && (part.status === 404 || (part.status === 400 && part.body.includes('Resource Not Found')))) {
           // For remove: if member not found, treat as success (desired state achieved)
           summary.removed++;
+          summary.appliedEmails.push(originalRequest.email);
           log_(`Member ${originalRequest.email} not found in group ${groupEmail}. Treating as success.`, 'INFO');
         } else if (part.status === 403 && part.body.includes('quotaExceeded')) {
           // Only retry on "quotaExceeded" errors
@@ -1210,6 +1307,7 @@ function _executeMembershipChunkWithRetries_(requests, groupEmail, config) {
         } else {
           // All other errors are permanent failures
           summary.failed++;
+          summary.failedEmails.push(originalRequest.email);
           log_(`A batch operation permanently failed for group ${groupEmail} on user ${originalRequest.email}. Status: ${part.status}. Details: ${part.body}`, 'ERROR');
         }
       }
@@ -1226,6 +1324,9 @@ function _executeMembershipChunkWithRetries_(requests, groupEmail, config) {
         Utilities.sleep(delay);
       } else {
         summary.failed += failedRequests.length;
+        failedRequests.forEach(function(request) {
+          summary.failedEmails.push(request.email);
+        });
         log_(`Max retries reached for ${groupEmail}. ${failedRequests.length} operations could not be completed.`, 'ERROR');
       }
     } else {
@@ -1241,6 +1342,9 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
   const addOnly = options && options.addOnly !== undefined ? options.addOnly : false;
   const removeOnly = options && options.removeOnly !== undefined ? options.removeOnly : false;
   const returnPlanOnly = options && options.returnPlanOnly !== undefined ? options.returnPlanOnly : false;
+  const approvalsConfig = getApprovalsConfig_();
+  const approvalsEnabled = approvalsConfig.enabled && !returnPlanOnly;
+  const changeRequestContext = approvalsEnabled ? {} : null;
   
   const MEMBERSHIP_BATCH_SIZE = config.MembershipBatchSize || 15;
   const INTER_BATCH_DELAY_MS = 1000;
@@ -1295,16 +1399,73 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
       return (removeOnly && emailsToRemove.length > 0) ? { groupEmail, groupName: userSheetName, usersToRemove: emailsToRemove } : null;
     }
 
+    if (approvalsEnabled) {
+      ensureChangeRequestsSheet_();
+      const changeSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
+      if (changeSheet) {
+        changeRequestContext.changeSheet = changeSheet;
+        changeRequestContext.columnMap = getChangeRequestsColumnMap_(changeSheet);
+        changeRequestContext.approvalsConfig = approvalsConfig;
+      }
+    }
+
     if (emailsToAdd.length === 0 && emailsToRemove.length === 0) {
       log_(`No membership changes required for group "${groupEmail}". Sync complete.`);
       return totalSummary;
     }
 
+    const addRequestRowsByEmail = {};
+    const removeRequestRowsByEmail = {};
+    let approvedAdds = removeOnly ? [] : emailsToAdd;
+    let approvedRemoves = addOnly ? [] : emailsToRemove;
+
+    if (approvalsEnabled) {
+      if (!removeOnly) {
+        approvedAdds = [];
+        emailsToAdd.forEach(function(email) {
+          const snapshot = {
+            changeType: 'GROUP_MEMBERSHIP',
+            groupEmail: groupEmail,
+            userSheetName: userSheetName,
+            email: email,
+            action: 'ADD'
+          };
+          const result = ensureChangeRequestForDelta_(userSheetName, email, 'ADD', snapshot, 'SYSTEM', changeRequestContext);
+          if (result.rowIndex > 0) {
+            addRequestRowsByEmail[email] = result.rowIndex;
+          }
+          if (result.status === CHANGE_REQUEST_STATUS_APPROVED) {
+            approvedAdds.push(email);
+          }
+        });
+      }
+
+      if (!addOnly) {
+        approvedRemoves = [];
+        emailsToRemove.forEach(function(email) {
+          const snapshot = {
+            changeType: 'GROUP_MEMBERSHIP',
+            groupEmail: groupEmail,
+            userSheetName: userSheetName,
+            email: email,
+            action: 'REMOVE'
+          };
+          const result = ensureChangeRequestForDelta_(userSheetName, email, 'REMOVE', snapshot, 'SYSTEM', changeRequestContext);
+          if (result.rowIndex > 0) {
+            removeRequestRowsByEmail[email] = result.rowIndex;
+          }
+          if (result.status === CHANGE_REQUEST_STATUS_APPROVED) {
+            approvedRemoves.push(email);
+          }
+        });
+      }
+    }
+
     // Process additions in chunks
-    if (!removeOnly && emailsToAdd.length > 0) {
-      log_(`Processing ${emailsToAdd.length} additions in chunks of ${MEMBERSHIP_BATCH_SIZE}...`);
-      for (let i = 0; i < emailsToAdd.length; i += MEMBERSHIP_BATCH_SIZE) {
-        const chunk = emailsToAdd.slice(i, i + MEMBERSHIP_BATCH_SIZE);
+    if (!removeOnly && approvedAdds.length > 0) {
+      log_(`Processing ${approvedAdds.length} additions in chunks of ${MEMBERSHIP_BATCH_SIZE}...`);
+      for (let i = 0; i < approvedAdds.length; i += MEMBERSHIP_BATCH_SIZE) {
+        const chunk = approvedAdds.slice(i, i + MEMBERSHIP_BATCH_SIZE);
         const requests = chunk.map(email => ({
           method: 'POST',
           path: `/admin/directory/v1/groups/${groupEmail}/members`,
@@ -1317,18 +1478,26 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
         const chunkSummary = _executeMembershipChunkWithRetries_(requests, groupEmail, config);
         totalSummary.added += chunkSummary.added;
         totalSummary.failed += chunkSummary.failed;
+        if (approvalsEnabled && changeRequestContext && changeRequestContext.changeSheet) {
+          chunkSummary.appliedEmails.forEach(function(email) {
+            const rowIndex = addRequestRowsByEmail[email];
+            if (rowIndex) {
+              markChangeRequestAppliedByRow_(changeRequestContext.changeSheet, rowIndex, changeRequestContext.columnMap);
+            }
+          });
+        }
         
-        if (i + MEMBERSHIP_BATCH_SIZE < emailsToAdd.length) {
+        if (i + MEMBERSHIP_BATCH_SIZE < approvedAdds.length) {
           Utilities.sleep(INTER_BATCH_DELAY_MS);
         }
       }
     }
 
     // Process removals in chunks
-    if (!addOnly && emailsToRemove.length > 0) {
-      log_(`Processing ${emailsToRemove.length} removals in chunks of ${MEMBERSHIP_BATCH_SIZE}...`);
-      for (let i = 0; i < emailsToRemove.length; i += MEMBERSHIP_BATCH_SIZE) {
-        const chunk = emailsToRemove.slice(i, i + MEMBERSHIP_BATCH_SIZE);
+    if (!addOnly && approvedRemoves.length > 0) {
+      log_(`Processing ${approvedRemoves.length} removals in chunks of ${MEMBERSHIP_BATCH_SIZE}...`);
+      for (let i = 0; i < approvedRemoves.length; i += MEMBERSHIP_BATCH_SIZE) {
+        const chunk = approvedRemoves.slice(i, i + MEMBERSHIP_BATCH_SIZE);
         const requests = chunk.map(email => ({
           method: 'DELETE',
           path: `/admin/directory/v1/groups/${groupEmail}/members/${email}`,
@@ -1340,8 +1509,16 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
         const chunkSummary = _executeMembershipChunkWithRetries_(requests, groupEmail, config);
         totalSummary.removed += chunkSummary.removed;
         totalSummary.failed += chunkSummary.failed;
+        if (approvalsEnabled && changeRequestContext && changeRequestContext.changeSheet) {
+          chunkSummary.appliedEmails.forEach(function(email) {
+            const rowIndex = removeRequestRowsByEmail[email];
+            if (rowIndex) {
+              markChangeRequestAppliedByRow_(changeRequestContext.changeSheet, rowIndex, changeRequestContext.columnMap);
+            }
+          });
+        }
 
-        if (i + MEMBERSHIP_BATCH_SIZE < emailsToRemove.length) {
+        if (i + MEMBERSHIP_BATCH_SIZE < approvedRemoves.length) {
           Utilities.sleep(INTER_BATCH_DELAY_MS);
         }
       }

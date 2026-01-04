@@ -104,6 +104,18 @@ function handleChangeRequestEdit_(e) {
 
   const approvalsConfig = getApprovalsConfig_();
   const columnMap = getChangeRequestsColumnMap_(sheet);
+  if (isChangeRequestApproverEdit_(e, columnMap)) {
+    const value = e.range.getValue();
+    if (value && !isValidApproverEmail_(value, approvalsConfig)) {
+      if (e.oldValue !== undefined) {
+        e.range.setValue(e.oldValue);
+      } else {
+        e.range.clearContent();
+      }
+      SpreadsheetApp.getActiveSpreadsheet().toast('Approver must be an active Sheet Editor email.', 'Invalid Approver', 8);
+      return;
+    }
+  }
   normalizeChangeRequestRow_(sheet, e.range.getRow(), approvalsConfig, e.user, columnMap);
   tallyChangeRequestApprovals_(sheet, approvalsConfig, columnMap);
 }
@@ -167,13 +179,17 @@ function processChangeRequests_(options = {}) {
       }
     }
 
-    const approvals = collectApprovalsFromRow_(row, approvalsConfig.requiredApprovals, row[columnMap.requestedBy - 1], columnMap);
+    const approvals = collectApprovalsFromRow_(row, approvalsConfig.requiredApprovals, row[columnMap.requestedBy - 1], columnMap, approvalsConfig.activeEditorsSet);
     if (approvals.length >= approvalsConfig.requiredApprovals) {
       sheet.getRange(rowIndex, columnMap.status).setValue(CHANGE_REQUEST_STATUS_APPROVED);
     }
 
     const updatedStatus = sheet.getRange(rowIndex, columnMap.status).getValue();
     if (updatedStatus === CHANGE_REQUEST_STATUS_APPROVED) {
+      const snapshotRaw = row[columnMap.proposedSnapshot - 1];
+      if (isPermissionDeltaSnapshot_(snapshotRaw)) {
+        return;
+      }
       const applied = applyApprovedChangeRequest_(sheet, rowIndex, approvalsConfig, options, columnMap);
       if (applied) {
         appliedCount++;
@@ -184,6 +200,105 @@ function processChangeRequests_(options = {}) {
   if (!options.silentMode && appliedCount > 0) {
     log_('Applied ' + appliedCount + ' approved change request(s).', 'INFO');
   }
+}
+
+function buildPermissionDeltaSnapshot_(payload) {
+  const snapshot = payload && typeof payload === 'object' ? Object.assign({}, payload) : {};
+  snapshot.__permissionDelta = true;
+  return JSON.stringify(snapshot);
+}
+
+function isPermissionDeltaSnapshot_(snapshotRaw) {
+  if (!snapshotRaw || typeof snapshotRaw !== 'string') {
+    return false;
+  }
+  try {
+    const parsed = JSON.parse(snapshotRaw);
+    return parsed && parsed.__permissionDelta === true;
+  } catch (e) {
+    return false;
+  }
+}
+
+function ensureChangeRequestForDelta_(targetSheetName, targetRowKey, action, deltaSnapshot, requestedBy, options) {
+  const approvalsConfig = options && options.approvalsConfig ? options.approvalsConfig : getApprovalsConfig_();
+  if (!approvalsConfig.enabled) {
+    return { status: CHANGE_REQUEST_STATUS_APPROVED, rowIndex: -1, created: false };
+  }
+  if (!targetSheetName || !targetRowKey || !action) {
+    log_('Skipped ChangeRequest creation: missing targetSheetName/targetRowKey/action.', 'WARN');
+    return { status: CHANGE_REQUEST_STATUS_DENIED, rowIndex: -1, created: false };
+  }
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let changeSheet = options && options.changeSheet ? options.changeSheet : ss.getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
+  if (!changeSheet) {
+    ensureChangeRequestsSheet_();
+    changeSheet = ss.getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
+  }
+  if (!changeSheet) {
+    return { status: CHANGE_REQUEST_STATUS_DENIED, rowIndex: -1, created: false };
+  }
+
+  const columnMap = options && options.columnMap ? options.columnMap : getChangeRequestsColumnMap_(changeSheet);
+  const snapshotRaw = buildPermissionDeltaSnapshot_(deltaSnapshot);
+  const existingRow = findExistingChangeRequestRow_(changeSheet, targetSheetName, targetRowKey, action, columnMap);
+  const now = new Date();
+
+  if (existingRow > 0) {
+    const existingStatus = (changeSheet.getRange(existingRow, columnMap.status).getValue() || '').toString().toUpperCase() || CHANGE_REQUEST_STATUS_PENDING;
+    const existingSnapshot = changeSheet.getRange(existingRow, columnMap.proposedSnapshot).getValue();
+    if (existingSnapshot !== snapshotRaw) {
+      changeSheet.getRange(existingRow, columnMap.proposedSnapshot).setValue(snapshotRaw);
+      changeSheet.getRange(existingRow, columnMap.requestedAt).setValue(now);
+      if (requestedBy) {
+        changeSheet.getRange(existingRow, columnMap.requestedBy).setValue(requestedBy);
+      }
+      changeSheet.getRange(existingRow, columnMap.status).setValue(CHANGE_REQUEST_STATUS_PENDING);
+      changeSheet.getRange(existingRow, columnMap.approvalsNeeded).setValue(approvalsConfig.requiredApprovals);
+      if (columnMap.denyReason) {
+        changeSheet.getRange(existingRow, columnMap.denyReason).clearContent();
+      }
+      if (columnMap.appliedAt) {
+        changeSheet.getRange(existingRow, columnMap.appliedAt).clearContent();
+      }
+      if (columnMap.approverCols && columnMap.approverCols.length) {
+        columnMap.approverCols.forEach(function(colIndex) {
+          changeSheet.getRange(existingRow, colIndex).clearContent();
+        });
+      }
+      return { status: CHANGE_REQUEST_STATUS_PENDING, rowIndex: existingRow, created: false };
+    }
+    return { status: existingStatus, rowIndex: existingRow, created: false };
+  }
+
+  const newRow = [];
+  newRow[columnMap.id - 1] = '';
+  newRow[columnMap.requestedBy - 1] = requestedBy || '';
+  newRow[columnMap.requestedAt - 1] = now;
+  newRow[columnMap.targetSheet - 1] = targetSheetName;
+  newRow[columnMap.targetRowKey - 1] = targetRowKey;
+  newRow[columnMap.action - 1] = action;
+  newRow[columnMap.proposedSnapshot - 1] = snapshotRaw;
+  newRow[columnMap.status - 1] = CHANGE_REQUEST_STATUS_PENDING;
+  newRow[columnMap.approvalsNeeded - 1] = approvalsConfig.requiredApprovals;
+  changeSheet.appendRow(newRow);
+  const appendedRowIndex = changeSheet.getLastRow();
+  normalizeChangeRequestRow_(changeSheet, appendedRowIndex, approvalsConfig, null, columnMap);
+  return { status: CHANGE_REQUEST_STATUS_PENDING, rowIndex: appendedRowIndex, created: true };
+}
+
+function markChangeRequestAppliedByRow_(changeSheet, rowIndex, columnMap) {
+  if (!changeSheet || !rowIndex || rowIndex < 2) return false;
+  const resolvedColumnMap = columnMap || getChangeRequestsColumnMap_(changeSheet);
+  changeSheet.getRange(rowIndex, resolvedColumnMap.status).setValue(CHANGE_REQUEST_STATUS_APPLIED);
+  if (resolvedColumnMap.appliedAt) {
+    changeSheet.getRange(rowIndex, resolvedColumnMap.appliedAt).setValue(new Date());
+  }
+  if (resolvedColumnMap.denyReason) {
+    changeSheet.getRange(rowIndex, resolvedColumnMap.denyReason).clearContent();
+  }
+  return true;
 }
 
 /**
@@ -404,6 +519,25 @@ function isTerminalChangeRequestStatus_(status) {
     status === CHANGE_REQUEST_STATUS_CANCELLED || status === CHANGE_REQUEST_STATUS_EXPIRED;
 }
 
+function isChangeRequestApproverEdit_(event, columnMap) {
+  if (!event || !event.range || !columnMap || !columnMap.approverCols) return false;
+  const column = event.range.getColumn();
+  return columnMap.approverCols.indexOf(column) !== -1;
+}
+
+function isValidApproverEmail_(email, approvalsConfig) {
+  if (!email) return false;
+  const normalized = email.toString().trim().toLowerCase();
+  if (!normalized) return false;
+  if (SINGLE_EMAIL_VALIDATION_REGEX && !SINGLE_EMAIL_VALIDATION_REGEX.test(normalized)) {
+    return false;
+  }
+  if (!approvalsConfig || !approvalsConfig.activeEditorsSet) {
+    return true;
+  }
+  return approvalsConfig.activeEditorsSet.has(normalized);
+}
+
 function normalizeChangeRequestRow_(sheet, rowIndex, approvalsConfig, eventUser, columnMap) {
   const resolvedColumnMap = columnMap || getChangeRequestsColumnMap_(sheet);
   const lastColumn = sheet.getLastColumn();
@@ -447,16 +581,23 @@ function tallyChangeRequestApprovals_(sheet, approvalsConfig, columnMap) {
     const status = (row[resolvedColumnMap.status - 1] || '').toString().toUpperCase();
     if (isTerminalChangeRequestStatus_(status)) return;
 
-    const approvals = collectApprovalsFromRow_(row, approvalsConfig.requiredApprovals, row[resolvedColumnMap.requestedBy - 1], resolvedColumnMap);
+    const approvals = collectApprovalsFromRow_(row, approvalsConfig.requiredApprovals, row[resolvedColumnMap.requestedBy - 1], resolvedColumnMap, approvalsConfig.activeEditorsSet);
+    const invalidApprovers = collectInvalidApproversFromRow_(row, resolvedColumnMap, approvalsConfig);
     if (approvals.length >= approvalsConfig.requiredApprovals) {
       sheet.getRange(rowIndex, resolvedColumnMap.status).setValue(CHANGE_REQUEST_STATUS_APPROVED);
     } else {
       sheet.getRange(rowIndex, resolvedColumnMap.status).setValue(CHANGE_REQUEST_STATUS_PENDING);
     }
+    const statusCell = sheet.getRange(rowIndex, resolvedColumnMap.status);
+    if (invalidApprovers.length > 0) {
+      statusCell.setNote('Invalid approver(s): ' + invalidApprovers.join(', ') + '. Approvers must be active Sheet Editors.');
+    } else if (statusCell.getNote()) {
+      statusCell.clearNote();
+    }
   });
 }
 
-function collectApprovalsFromRow_(rowValues, approvalsRequired, requestedBy, columnMap) {
+function collectApprovalsFromRow_(rowValues, approvalsRequired, requestedBy, columnMap, allowedApproversSet) {
   const approvals = [];
   const lowerRequestedBy = requestedBy ? requestedBy.toString().toLowerCase() : '';
   if (!columnMap || !columnMap.approverCols || !columnMap.approverCols.length) return approvals;
@@ -467,6 +608,12 @@ function collectApprovalsFromRow_(rowValues, approvalsRequired, requestedBy, col
     if (!email) continue;
     const normalized = email.toString().trim().toLowerCase();
     if (!normalized) continue;
+    if (SINGLE_EMAIL_VALIDATION_REGEX && !SINGLE_EMAIL_VALIDATION_REGEX.test(normalized)) {
+      continue;
+    }
+    if (allowedApproversSet && !allowedApproversSet.has(normalized)) {
+      continue;
+    }
     if (normalized === lowerRequestedBy) {
       continue; // no self-approval
     }
@@ -477,6 +624,21 @@ function collectApprovalsFromRow_(rowValues, approvalsRequired, requestedBy, col
   return approvals;
 }
 
+function collectInvalidApproversFromRow_(rowValues, columnMap, approvalsConfig) {
+  const invalid = [];
+  if (!columnMap || !columnMap.approverCols || !columnMap.approverCols.length) return invalid;
+  for (var i = 0; i < columnMap.approverCols.length; i++) {
+    var colIndex = columnMap.approverCols[i];
+    if (!colIndex) continue;
+    var email = rowValues[colIndex - 1];
+    if (!email) continue;
+    if (!isValidApproverEmail_(email, approvalsConfig)) {
+      invalid.push(email.toString().trim());
+    }
+  }
+  return invalid;
+}
+
 function getApprovalsConfig_() {
   const enabled = getConfigValueFresh_('ApprovalsEnabled', false) === true;
   const requiredApprovalsRaw = getConfigValueFresh_('RequiredApprovals', 1);
@@ -484,11 +646,16 @@ function getApprovalsConfig_() {
   const expiryHoursRaw = getConfigValueFresh_('ApprovalExpiryHours', 0);
   const expiryHours = Math.max(0, parseInt(expiryHoursRaw, 10) || 0);
   const activeEditors = getActiveSheetEditorEmails_();
+  const activeEditorsSet = new Set(activeEditors.map(function(email) {
+    return email.toString().trim().toLowerCase();
+  }));
   return {
     enabled: enabled,
     requiredApprovals: requiredApprovals,
     expiryHours: expiryHours,
-    availableEditors: activeEditors.length
+    availableEditors: activeEditors.length,
+    activeEditors: activeEditors,
+    activeEditorsSet: activeEditorsSet
   };
 }
 

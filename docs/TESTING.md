@@ -162,10 +162,10 @@ The testing functions are available in the **Permissions Manager > Testing** men
 
 *   **Menu:** `Permissions Manager > Testing > Run Approval Gating Test`
 *   **Purpose:** Verifies approval gating behaviors without external APIs:
-    *   Permission sheet edits are reverted and staged as ChangeRequests.
+    *   Permission deltas can be queued as ChangeRequests.
     *   Approver columns expand to match `RequiredApprovals`.
     *   Pending requests block edits to approval settings.
-*   **Notes:** The test appends temporary rows to `SheetEditors_G` and `ChangeRequests`, then cleans them up.
+*   **Notes:** The test appends temporary rows to `ChangeRequests`, then cleans them up.
 
 ### Stress Test
 

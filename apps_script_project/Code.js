@@ -161,27 +161,7 @@ function onEdit(e) {
   }
 
   if (accessPolicy.category === 'permissions' && shouldGatePermissionEdits_()) {
-    if (!range || range.getRow() <= 1 || range.getNumRows() > 1 || range.getNumColumns() > 1) {
-      if (oldValue !== undefined) {
-        range.setValue(oldValue);
-      } else {
-        range.clearContent();
-      }
-      SpreadsheetApp.getActiveSpreadsheet().toast('Permission changes require approval. Edit a single data cell.', 'Edit Reverted', 10);
-      return;
-    }
-
-    const rowValues = sheet.getRange(range.getRow(), 1, 1, sheet.getLastColumn()).getValues()[0];
-    const queued = queueChangeRequestFromEdit_(sheet, range, e.user, rowValues);
-    if (oldValue !== undefined) {
-      range.setValue(oldValue);
-    } else {
-      range.clearContent();
-    }
-    const message = queued
-      ? 'Change request created. Awaiting approvals.'
-      : 'Unable to create change request. See logs.';
-    SpreadsheetApp.getActiveSpreadsheet().toast(message, 'Approval Required', 10);
+    SpreadsheetApp.getActiveSpreadsheet().toast('Permission changes will be queued for approval during sync.', 'Approval Required', 10);
     return;
   }
 

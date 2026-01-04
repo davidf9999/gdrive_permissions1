@@ -841,7 +841,7 @@ function ensureChangeRequestsSheet_() {
   statusRange.setDataValidation(statusRule);
 
   const actionRange = changeSheet.getRange(2, columnMap.action, changeSheet.getMaxRows() - 1, 1);
-  const actionRule = SpreadsheetApp.newDataValidation().requireValueInList(['ADD', 'UPDATE', 'DELETE'], true).build();
+  const actionRule = SpreadsheetApp.newDataValidation().requireValueInList(['ADD', 'UPDATE', 'DELETE', 'REMOVE'], true).build();
   actionRange.setDataValidation(actionRule);
 
   const approvalsEnabled = getConfigValue_('ApprovalsEnabled', false) === true;
