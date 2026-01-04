@@ -7,6 +7,7 @@ const outputFile = path.join(outputDir, 'apps_scripts_bundle.gs');
 
 // Core files that must be loaded in a specific order.
 const coreFiles = [
+    'Version.generated.js',
     'Code.js',
     'Utils.gs',
     'ConfigDiagnostic.gs',
@@ -23,6 +24,12 @@ try {
     // Ensure the output directory exists
     if (!fs.existsSync(outputDir)) {
         fs.mkdirSync(outputDir);
+    }
+
+    // Ensure generated version module exists to avoid undefined SCRIPT_VERSION at runtime
+    const versionModulePath = path.join(sourceDir, 'Version.generated.js');
+    if (!fs.existsSync(versionModulePath)) {
+        throw new Error('Version.generated.js is missing. Run "node scripts/sync-version.js" first.');
     }
 
     // Discover all other .gs and .js files automatically

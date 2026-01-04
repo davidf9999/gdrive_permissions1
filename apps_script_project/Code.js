@@ -1,5 +1,5 @@
 /***** CONFIGURATION CONSTANTS *****/
-const SCRIPT_VERSION = '1.0.0';
+// SCRIPT_VERSION is injected by Version.generated.js (see docs/VERSIONING.md).
 const MANAGED_FOLDERS_SHEET_NAME = 'ManagedFolders';
 const SHEET_EDITORS_SHEET_NAME = 'SheetEditors_G';
 const SHEET_EDITORS_GROUP_NAME = 'Sheet Editors';
