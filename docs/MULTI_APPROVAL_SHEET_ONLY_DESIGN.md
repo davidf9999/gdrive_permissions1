@@ -4,12 +4,14 @@
 - Deliver optional multi-approver gating for control-sheet edits without relying on custom menus (sheet editors cannot run Apps Script menu handlers).
 - All interactions for requesting, approving, or denying changes must happen through sheet edits and validations that the installable triggers can observe.
 - Keep the default behavior unchanged when the required approval count is `1`.
+See `docs/SHEET_ACCESS_POLICY.md` for the centralized sheet access policy enforced by the script.
 
 ## Core sheet surfaces
 ### Config sheet additions
 - `ApprovalsEnabled` (boolean) – turns the feature on/off. Default: `FALSE` to preserve current behavior.
 - `RequiredApprovals` (number) – minimum distinct approvers for each request. Default: `1`. Reject values <1 and warn if the value is higher than the number of sheet editors listed in `SheetEditors`.
 - `ApprovalExpiryHours` (number, optional) – auto-expire stale requests (e.g., 72 hours).
+Note: changes to `ApprovalsEnabled` or `RequiredApprovals` are blocked while any ChangeRequests are pending.
 
 ### ChangeRequests sheet (new)
 A dedicated table that sheet editors can edit directly. Suggested columns:
@@ -28,6 +30,8 @@ A dedicated table that sheet editors can edit directly. Suggested columns:
 | `Approver_1..N` | Each column holds one approver email. Deduplicate and reject the requester when `RequiredApprovals > 1`. |
 | `DenyReason` | Free text when `Status = DENIED` or `CANCELLED`. |
 | `AppliedAt` | Timestamp when the change is pushed to the control sheet. |
+
+Note: when `ApprovalsEnabled = FALSE`, the `ChangeRequests` sheet may be hidden. Approver columns are expanded automatically to match the current `RequiredApprovals` setting.
 
 ### Optional views
 - **ChangeQueue**: A filtered view or helper sheet showing rows where `Status = PENDING` or `Status = APPROVED` with remaining approvals.

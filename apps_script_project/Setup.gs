@@ -270,7 +270,7 @@ function setupControlSheets_() {
     },
     '--- Change Approvals ---': {
       'ApprovalsEnabled': { value: false, description: 'Check to require multi-approver gating for control sheet edits captured in the ChangeRequests sheet.' },
-      'RequiredApprovals': { value: 1, description: 'Number of unique sheet editors needed to approve a change request before it is applied. Default preserves current behavior.' },
+      'RequiredApprovals': { value: 1, description: 'Number of unique sheet editors needed to approve a change request before it is applied. Default of 1 means no additional approvals are required.' },
       'ApprovalExpiryHours': { value: 0, description: 'Optional: expire pending change requests after this many hours. Leave 0 to disable expiry.' }
     },
     '--- Email Notifications ---': {
@@ -382,7 +382,8 @@ function applyConfigValidation_() {
   const booleanSettings = [
     'EnableSheetLocking', 'AllowAutosyncDeletion', 'AllowGroupFolderDeletion', 'EnableCircularDependencyCheck',
     'EnableEmailNotifications', 'NotifyOnSyncSuccess', 'NotifyDeletionsPending', 'NotifyOnGroupFolderDeletion',
-    'NotifySheetEditorsOnErrors', 'EnableGCPLogging', 'EnableToasts', 'ShowTestPrompts', 'TestCleanup', 'TestAutoConfirm'
+    'NotifySheetEditorsOnErrors', 'EnableGCPLogging', 'EnableToasts', 'ShowTestPrompts', 'TestCleanup', 'TestAutoConfirm',
+    'ApprovalsEnabled'
   ];
 
   // Add dropdown validation for LogLevel
@@ -804,19 +805,30 @@ function setupFolderAuditLogSheet_(sheet) {
 function ensureChangeRequestsSheet_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let changeSheet = ss.getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
-  const headers = ['RequestId', 'RequestedBy', 'RequestedAt', 'TargetSheet', 'TargetRowKey', 'Action', 'ProposedRowSnapshot', 'Status', 'ApprovalsNeeded', 'Approver_1', 'Approver_2', 'Approver_3', 'DenyReason', 'AppliedAt'];
+  const approvalsRequiredRaw = getConfigValue_('RequiredApprovals', 1);
+  const approvalsRequired = Math.max(1, parseInt(approvalsRequiredRaw, 10) || 1);
 
   if (!changeSheet) {
     changeSheet = ss.insertSheet(CHANGE_REQUESTS_SHEET_NAME);
+    const headers = buildChangeRequestsHeaders_(approvalsRequired);
     changeSheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
     changeSheet.setFrozenRows(1);
     log_('Created "ChangeRequests" sheet.');
   } else {
+    ensureChangeRequestApproverColumns_(changeSheet, approvalsRequired);
+    const existingHeaders = changeSheet.getRange(1, 1, 1, changeSheet.getLastColumn()).getValues()[0];
+    const approverCount = Math.max(approvalsRequired, findChangeRequestApproverColumns_(existingHeaders).length);
+    const headers = buildChangeRequestsHeaders_(approverCount);
+    if (changeSheet.getLastColumn() < headers.length) {
+      changeSheet.insertColumnsAfter(changeSheet.getLastColumn(), headers.length - changeSheet.getLastColumn());
+    }
     changeSheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
     changeSheet.setFrozenRows(1);
   }
+  markSystemSheet_(changeSheet);
 
-  const statusRange = changeSheet.getRange(2, CHANGE_REQUEST_STATUS_COL, changeSheet.getMaxRows() - 1, 1);
+  const columnMap = getChangeRequestsColumnMap_(changeSheet);
+  const statusRange = changeSheet.getRange(2, columnMap.status, changeSheet.getMaxRows() - 1, 1);
   const statusRule = SpreadsheetApp.newDataValidation().requireValueInList([
     CHANGE_REQUEST_STATUS_PENDING,
     CHANGE_REQUEST_STATUS_APPROVED,
@@ -827,7 +839,39 @@ function ensureChangeRequestsSheet_() {
   ], true).build();
   statusRange.setDataValidation(statusRule);
 
-  const actionRange = changeSheet.getRange(2, CHANGE_REQUEST_ACTION_COL, changeSheet.getMaxRows() - 1, 1);
+  const actionRange = changeSheet.getRange(2, columnMap.action, changeSheet.getMaxRows() - 1, 1);
   const actionRule = SpreadsheetApp.newDataValidation().requireValueInList(['ADD', 'UPDATE', 'DELETE'], true).build();
   actionRange.setDataValidation(actionRule);
+
+  const approvalsEnabled = getConfigValue_('ApprovalsEnabled', false) === true;
+  try {
+    if (!approvalsEnabled && !changeSheet.isSheetHidden()) {
+      changeSheet.hideSheet();
+    } else if (approvalsEnabled && changeSheet.isSheetHidden()) {
+      changeSheet.showSheet();
+    }
+  } catch (e) {
+    log_('Could not update ChangeRequests visibility: ' + e.message, 'WARN');
+  }
+}
+
+function buildChangeRequestsHeaders_(approverCount) {
+  const headers = [
+    'RequestId',
+    'RequestedBy',
+    'RequestedAt',
+    'TargetSheet',
+    'TargetRowKey',
+    'Action',
+    'ProposedRowSnapshot',
+    'Status',
+    'ApprovalsNeeded'
+  ];
+
+  const count = Math.max(1, parseInt(approverCount, 10) || 1);
+  for (let i = 1; i <= count; i++) {
+    headers.push('Approver_' + i);
+  }
+  headers.push('DenyReason', 'AppliedAt');
+  return headers;
 }

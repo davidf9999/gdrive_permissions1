@@ -158,6 +158,15 @@ The testing functions are available in the **Permissions Manager > Testing** men
     7.  You will be prompted to verify that the user's access has been revoked.
     8.  Finally, you will be given the option to clean up all the test data that was created.
 
+### Approval Gating Test
+
+*   **Menu:** `Permissions Manager > Testing > Run Approval Gating Test`
+*   **Purpose:** Verifies approval gating behaviors without external APIs:
+    *   Permission sheet edits are reverted and staged as ChangeRequests.
+    *   Approver columns expand to match `RequiredApprovals`.
+    *   Pending requests block edits to approval settings.
+*   **Notes:** The test appends temporary rows to `SheetEditors_G` and `ChangeRequests`, then cleans them up.
+
 ### Stress Test
 
 *   **Menu:** `Permissions Manager > Testing > Run Stress Test`

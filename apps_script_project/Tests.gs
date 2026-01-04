@@ -1152,6 +1152,152 @@ function runSheetLockingTest_() {
     return success;
 }
 
+function runApprovalGatingTest() {
+    SCRIPT_EXECUTION_MODE = 'TEST';
+    log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
+    log_('║  Approval Gating Test                                        ║', 'INFO');
+    log_('╚══════════════════════════════════════════════════════════════╝', 'INFO');
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const configSheet = ss.getSheetByName(CONFIG_SHEET_NAME);
+    const sheetEditorsSheet = ss.getSheetByName(SHEET_EDITORS_SHEET_NAME);
+    const changeSheetName = CHANGE_REQUESTS_SHEET_NAME;
+    let changeSheet = ss.getSheetByName(changeSheetName);
+    if (!configSheet || !sheetEditorsSheet) {
+        log_('Approval Gating Test failed: missing required sheets.', 'ERROR');
+        return false;
+    }
+
+    const originalApprovalsEnabled = getConfigValue_('ApprovalsEnabled', false);
+    const originalRequiredApprovals = getConfigValue_('RequiredApprovals', 1);
+    let testRowIndex = null;
+    let testEmail = null;
+    let success = false;
+
+    try {
+        updateConfigSetting_('ApprovalsEnabled', true);
+        updateConfigSetting_('RequiredApprovals', 4);
+        ensureChangeRequestsSheet_();
+        changeSheet = ss.getSheetByName(changeSheetName);
+        const columnMap = getChangeRequestsColumnMap_(changeSheet);
+        if (!columnMap.approverCols || columnMap.approverCols.length < 4) {
+            throw new Error('Approver columns not expanded to RequiredApprovals.');
+        }
+
+        updateConfigSetting_('RequiredApprovals', 2);
+        ensureChangeRequestsSheet_();
+
+        const sheetEditorsHeaders = getHeaderMap_(sheetEditorsSheet);
+        const emailCol = resolveColumn_(sheetEditorsHeaders, 'sheet editor emails', 1);
+        testRowIndex = sheetEditorsSheet.getLastRow() + 1;
+        testEmail = 'approval-test+' + new Date().getTime() + '@example.com';
+        sheetEditorsSheet.getRange(testRowIndex, emailCol).setValue(testEmail);
+        const rowValues = sheetEditorsSheet.getRange(testRowIndex, 1, 1, sheetEditorsSheet.getLastColumn()).getValues()[0];
+
+        onEdit({
+            source: ss,
+            range: sheetEditorsSheet.getRange(testRowIndex, emailCol),
+            oldValue: undefined,
+            user: { getEmail: function() { return Session.getEffectiveUser().getEmail(); } }
+        });
+
+        const revertedValue = sheetEditorsSheet.getRange(testRowIndex, emailCol).getValue();
+        if (revertedValue) {
+            throw new Error('Permission edit was not reverted.');
+        }
+
+        changeSheet = ss.getSheetByName(changeSheetName);
+        const updatedColumnMap = getChangeRequestsColumnMap_(changeSheet);
+        const dataRange = changeSheet.getLastRow() > 1
+            ? changeSheet.getRange(2, 1, changeSheet.getLastRow() - 1, changeSheet.getLastColumn())
+            : null;
+        const data = dataRange ? dataRange.getValues() : [];
+        let matchingRowIndex = -1;
+        for (let i = 0; i < data.length; i++) {
+            const row = data[i];
+            const targetSheet = row[updatedColumnMap.targetSheet - 1];
+            const targetKey = row[updatedColumnMap.targetRowKey - 1];
+            const action = row[updatedColumnMap.action - 1];
+            const status = row[updatedColumnMap.status - 1];
+            if (targetSheet === SHEET_EDITORS_SHEET_NAME && targetKey === testEmail && action === 'UPDATE' && status === CHANGE_REQUEST_STATUS_PENDING) {
+                matchingRowIndex = i + 2;
+                break;
+            }
+        }
+        if (matchingRowIndex === -1) {
+            throw new Error('ChangeRequest was not created for permission edit.');
+        }
+
+        // Populate approvers then ensure upsert clears all approver columns
+        updatedColumnMap.approverCols.forEach(function(colIndex) {
+            changeSheet.getRange(matchingRowIndex, colIndex).setValue('approver@example.com');
+        });
+        upsertChangeRequest_(SHEET_EDITORS_SHEET_NAME, testEmail, 'UPDATE', JSON.stringify(rowValues), Session.getEffectiveUser().getEmail());
+        const refreshedMap = getChangeRequestsColumnMap_(changeSheet);
+        refreshedMap.approverCols.forEach(function(colIndex) {
+            const value = changeSheet.getRange(matchingRowIndex, colIndex).getValue();
+            if (value) {
+                throw new Error('Approver columns were not cleared after upsert.');
+            }
+        });
+
+        // Attempt to change approvals while pending request exists
+        const configHeaders = getHeaderMap_(configSheet);
+        const settingCol = resolveColumn_(configHeaders, 'setting', 1);
+        const valueCol = resolveColumn_(configHeaders, 'value', 2);
+        const approvalsRow = findRowByValue_(configSheet, settingCol, 'ApprovalsEnabled');
+        const oldValue = configSheet.getRange(approvalsRow, valueCol).getValue();
+        configSheet.getRange(approvalsRow, valueCol).setValue(!oldValue);
+        onEdit({
+            source: ss,
+            range: configSheet.getRange(approvalsRow, valueCol),
+            oldValue: oldValue,
+            user: { getEmail: function() { return Session.getEffectiveUser().getEmail(); } }
+        });
+        const finalValue = configSheet.getRange(approvalsRow, valueCol).getValue();
+        if (finalValue !== oldValue) {
+            throw new Error('Approvals config change was not blocked while pending requests exist.');
+        }
+
+        success = true;
+        log_('Approval Gating Test PASSED.', 'INFO');
+        return true;
+    } catch (e) {
+        log_('Approval Gating Test FAILED: ' + e.message, 'ERROR');
+        return false;
+    } finally {
+        try {
+            if (testRowIndex && testRowIndex <= sheetEditorsSheet.getLastRow()) {
+                sheetEditorsSheet.deleteRow(testRowIndex);
+            }
+        } catch (e) {
+            log_('Failed to clean up test row: ' + e.message, 'WARN');
+        }
+
+        try {
+            changeSheet = ss.getSheetByName(changeSheetName);
+            if (changeSheet && changeSheet.getLastRow() > 1 && testEmail) {
+                const columnMap = getChangeRequestsColumnMap_(changeSheet);
+                const dataRange = changeSheet.getRange(2, 1, changeSheet.getLastRow() - 1, changeSheet.getLastColumn());
+                const data = dataRange.getValues();
+                for (let i = data.length - 1; i >= 0; i--) {
+                    const row = data[i];
+                    if (row[columnMap.targetSheet - 1] === SHEET_EDITORS_SHEET_NAME && row[columnMap.targetRowKey - 1] === testEmail) {
+                        changeSheet.deleteRow(i + 2);
+                    }
+                }
+            }
+        } catch (e) {
+            log_('Failed to clean up ChangeRequests rows: ' + e.message, 'WARN');
+        }
+
+        updateConfigSetting_('ApprovalsEnabled', originalApprovalsEnabled);
+        updateConfigSetting_('RequiredApprovals', originalRequiredApprovals);
+        ensureChangeRequestsSheet_();
+        SCRIPT_EXECUTION_MODE = 'DEFAULT';
+    }
+}
+
 
 /**
  * Runs all three test functions in sequence.
@@ -1183,6 +1329,7 @@ function runAllTests() {
             { name: 'Manual Access Test', func: runManualAccessTest },
             { name: 'Stress Test', func: runStressTest },
             { name: 'Add/Delete Separation Test', func: runAddDeleteSeparationTest },
+            { name: 'Approval Gating Test', func: runApprovalGatingTest },
             { name: 'AutoSync Error Email Test', func: runAutoSyncErrorEmailTest },
             { name: 'Sheet Locking Test', func: runSheetLockingTest_ },
             { name: 'Circular Dependency Test', func: runCircularDependencyTest_ },

@@ -13,21 +13,6 @@ const SYNC_HISTORY_SHEET_NAME = 'SyncHistory';
 const DEFAULT_MAX_LOG_LENGTH = 10000;
 const AUTO_SYNC_CHANGE_SIGNATURE_KEY = 'AutoSyncChangeSignature';
 
-// Column mapping for the ManagedFolders sheet
-const FOLDER_NAME_COL = 1;
-const FOLDER_ID_COL = 2;
-const ROLE_COL = 3;
-const GROUP_EMAIL_COL = 4;        // User-editable: manually specify for Hebrew names
-const USER_SHEET_NAME_COL = 5;    // Managed by script
-const LAST_SYNCED_COL = 6;         // Managed by script
-const STATUS_COL = 7;              // Managed by script
-const URL_COL = 8;                 // Managed by script
-const DELETE_COL = 9;              // User-editable: mark for deletion
-
-
-// Column mapping for the UserGroups sheet
-const USERGROUPS_DELETE_COL = 6;   // User-editable: mark for deletion
-
 const ADMINS_LAST_SYNC_CELL = 'C2';
 const ADMINS_STATUS_CELL = 'D2';
 
@@ -116,9 +101,20 @@ function onEdit(e) {
   const oldValue = e.oldValue;
 
   if (sheetName === CHANGE_REQUESTS_SHEET_NAME) {
+    if (!isChangeRequestEditableRange_(sheet, range)) {
+      if (oldValue !== undefined) {
+        range.setValue(oldValue);
+      } else {
+        range.clearContent();
+      }
+      SpreadsheetApp.getActiveSpreadsheet().toast('ChangeRequests edits are limited to approval fields.', 'Edit Reverted', 8);
+      return;
+    }
     handleChangeRequestEdit_(e);
     return;
   }
+
+  const accessPolicy = getSheetAccessPolicy_(sheetName);
 
   // --- Handle ManagedFolders and UserGroups row deletion warning ---
   if (sheetName === MANAGED_FOLDERS_SHEET_NAME || sheetName === USER_GROUPS_SHEET_NAME) {
@@ -151,8 +147,53 @@ function onEdit(e) {
     return;
   }
 
+  if (accessPolicy.category === 'read-only') {
+    if (oldValue !== undefined) {
+      range.setValue(oldValue);
+    } else {
+      range.clearContent();
+    }
+    SpreadsheetApp.getActiveSpreadsheet().toast('This sheet is read-only.', 'Edit Reverted', 8);
+    return;
+  }
+
+  if (accessPolicy.category === 'permissions' && shouldGatePermissionEdits_()) {
+    if (!range || range.getRow() <= 1 || range.getNumRows() > 1 || range.getNumColumns() > 1) {
+      if (oldValue !== undefined) {
+        range.setValue(oldValue);
+      } else {
+        range.clearContent();
+      }
+      SpreadsheetApp.getActiveSpreadsheet().toast('Permission changes require approval. Edit a single data cell.', 'Edit Reverted', 10);
+      return;
+    }
+
+    const rowValues = sheet.getRange(range.getRow(), 1, 1, sheet.getLastColumn()).getValues()[0];
+    const queued = queueChangeRequestFromEdit_(sheet, range, e.user, rowValues);
+    if (oldValue !== undefined) {
+      range.setValue(oldValue);
+    } else {
+      range.clearContent();
+    }
+    const message = queued
+      ? 'Change request created. Awaiting approvals.'
+      : 'Unable to create change request. See logs.';
+    SpreadsheetApp.getActiveSpreadsheet().toast(message, 'Approval Required', 10);
+    return;
+  }
+
   // --- Handle Config sheet protection ---
   if (sheetName === CONFIG_SHEET_NAME) {
+    if (!isSuperAdmin_()) {
+      if (oldValue !== undefined) {
+        range.setValue(oldValue);
+      } else {
+        range.clearContent();
+      }
+      SpreadsheetApp.getActiveSpreadsheet().toast('Config edits are restricted to super admins.', 'Edit Reverted', 10);
+      return;
+    }
+
     const editedRow = range.getRow();
     const editedCol = range.getColumn();
     const headerMap = getHeaderMap_(sheet);
@@ -177,21 +218,23 @@ function onEdit(e) {
       return;
     }
 
-  }
-
-  // --- Handle Status sheet protection ---
-  if (sheetName === STATUS_SHEET_NAME) {
-    if (range.getNumRows() > 1 || range.getNumColumns() > 1) {
-      return;
+    const settingName = sheet.getRange(editedRow, settingCol).getValue();
+    if (settingName === 'ApprovalsEnabled' || settingName === 'RequiredApprovals') {
+      const pendingRequests = countPendingChangeRequests_();
+      if (pendingRequests > 0) {
+        const cachedValue = getCachedConfigValue_(settingName);
+        if (oldValue !== undefined) {
+          range.setValue(oldValue);
+        } else if (cachedValue !== undefined && cachedValue !== null) {
+          range.setValue(cachedValue);
+        } else {
+          range.clearContent();
+        }
+        SpreadsheetApp.getActiveSpreadsheet().toast('Clear pending ChangeRequests before modifying approvals.', 'Edit Reverted', 12);
+        return;
+      }
+      ensureChangeRequestsSheet_();
     }
-
-    if (oldValue !== undefined) {
-      range.setValue(oldValue);
-    } else {
-      range.clearContent();
-    }
-    SpreadsheetApp.getActiveSpreadsheet().toast('Status indicators are read-only.', 'Edit Reverted', 10);
-    return;
   }
 }
 
@@ -476,6 +519,7 @@ function createTestingMenu_(ui) {
     .addItem('Run Manual Access Test', 'runManualAccessTest')
     .addItem('Run Stress Test', 'runStressTest')
     .addItem('Run Add/Delete Separation Test', 'runAddDeleteSeparationTest')
+    .addItem('Run Approval Gating Test', 'runApprovalGatingTest')
     .addItem('Run AutoSync Error Email Test', 'runAutoSyncErrorEmailTest')
     .addItem('Run Sheet Locking Test', 'runSheetLockingTest_')
     .addItem('Run Circular Dependency Test', 'runCircularDependencyTest_')

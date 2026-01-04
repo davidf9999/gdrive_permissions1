@@ -530,6 +530,7 @@ function checkForOrphanSheets_() {
     requiredSheetNames.add(FOLDER_AUDIT_LOG_SHEET_NAME);
     requiredSheetNames.add(SYNC_HISTORY_SHEET_NAME);
     requiredSheetNames.add(STATUS_SHEET_NAME);
+    requiredSheetNames.add(CHANGE_REQUESTS_SHEET_NAME);
     requiredSheetNames.add('DeepFolderAuditLog');
     requiredSheetNames.add('Help');
 

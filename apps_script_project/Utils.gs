@@ -315,6 +315,18 @@ function getConfiguration_() {
   return config;
 }
 
+function getCachedConfigValue_(key) {
+  const cache = CacheService.getScriptCache();
+  const cachedConfig = cache.get('config');
+  if (!cachedConfig) return null;
+  try {
+    const config = JSON.parse(cachedConfig);
+    return config[key];
+  } catch (e) {
+    return null;
+  }
+}
+
 /**
  * Gets a configuration value by key with optional default value.
  * Handles boolean strings (ENABLED/DISABLED) and normalizes them to true/false.
@@ -348,6 +360,10 @@ function normalizeBooleanConfigValue_(value) {
     const upperValue = value.toUpperCase().trim();
     if (upperValue.startsWith('ENABLED')) return true;
     if (upperValue.startsWith('DISABLED')) return false;
+    if (upperValue === 'TRUE') return true;
+    if (upperValue === 'FALSE') return false;
+    if (upperValue === 'YES') return true;
+    if (upperValue === 'NO') return false;
   }
   return value;
 }
@@ -735,6 +751,80 @@ function isSystemSheet_(sheet) {
   } catch (e) {
     return false;
   }
+}
+
+function getSheetAccessPolicy_(sheetName) {
+  if (!sheetName) {
+    return { category: 'other' };
+  }
+
+  if (sheetName === CONFIG_SHEET_NAME) {
+    return { category: 'config' };
+  }
+
+  if (sheetName === CHANGE_REQUESTS_SHEET_NAME) {
+    return { category: 'change-requests' };
+  }
+
+  if (isReadOnlySystemSheetName_(sheetName)) {
+    return { category: 'read-only' };
+  }
+
+  if (isPermissionDataSheetName_(sheetName)) {
+    return { category: 'permissions' };
+  }
+
+  return { category: 'other' };
+}
+
+function isReadOnlySystemSheetName_(sheetName) {
+  const readOnlyNames = [
+    STATUS_SHEET_NAME,
+    LOG_SHEET_NAME,
+    TEST_LOG_SHEET_NAME,
+    FOLDER_AUDIT_LOG_SHEET_NAME,
+    SYNC_HISTORY_SHEET_NAME,
+    CHANGE_REQUESTS_SHEET_NAME,
+    'DeepFolderAuditLog',
+    'Help'
+  ];
+  return readOnlyNames.indexOf(sheetName) !== -1;
+}
+
+function isPermissionDataSheetName_(sheetName) {
+  const permissionSheets = getPermissionDataSheetNames_();
+  return permissionSheets.has(sheetName);
+}
+
+function getPermissionDataSheetNames_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const names = new Set([
+    MANAGED_FOLDERS_SHEET_NAME,
+    USER_GROUPS_SHEET_NAME,
+    SHEET_EDITORS_SHEET_NAME
+  ]);
+
+  const managedSheet = ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+  if (managedSheet && managedSheet.getLastRow() > 1) {
+    const headers = getHeaderMap_(managedSheet);
+    const userSheetNameCol = resolveColumn_(headers, 'usersheetname', 5);
+    if (userSheetNameCol) {
+      const userSheetNames = managedSheet.getRange(2, userSheetNameCol, managedSheet.getLastRow() - 1, 1).getValues();
+      userSheetNames.forEach(function(row) {
+        if (row[0]) names.add(row[0].toString().trim());
+      });
+    }
+  }
+
+  const userGroupsSheet = ss.getSheetByName(USER_GROUPS_SHEET_NAME);
+  if (userGroupsSheet && userGroupsSheet.getLastRow() > 1) {
+    const groupNames = userGroupsSheet.getRange(2, 1, userGroupsSheet.getLastRow() - 1, 1).getValues();
+    groupNames.forEach(function(row) {
+      if (row[0]) names.add(getUserGroupSheetName_(row[0].toString()));
+    });
+  }
+
+  return names;
 }
 
 function updateStatusSetting_(settingName, value) {
