@@ -171,27 +171,7 @@ function onEdit(e) {
   }
 
   if (accessPolicy.category === 'permissions' && shouldGatePermissionEdits_()) {
-    if (!range || range.getRow() <= 1 || range.getNumRows() > 1 || range.getNumColumns() > 1) {
-      if (oldValue !== undefined) {
-        range.setValue(oldValue);
-      } else {
-        range.clearContent();
-      }
-      SpreadsheetApp.getActiveSpreadsheet().toast('Permission changes require approval. Edit a single data cell.', 'Edit Reverted', 10);
-      return;
-    }
-
-    const rowValues = sheet.getRange(range.getRow(), 1, 1, sheet.getLastColumn()).getValues()[0];
-    const queued = queueChangeRequestFromEdit_(sheet, range, e.user, rowValues);
-    if (oldValue !== undefined) {
-      range.setValue(oldValue);
-    } else {
-      range.clearContent();
-    }
-    const message = queued
-      ? 'Change request created. Awaiting approvals.'
-      : 'Unable to create change request. See logs.';
-    SpreadsheetApp.getActiveSpreadsheet().toast(message, 'Approval Required', 10);
+    SpreadsheetApp.getActiveSpreadsheet().toast('Permission changes will be queued for approval during sync.', 'Approval Required', 10);
     return;
   }
 
@@ -2749,16 +2729,75 @@ function _batchSetPermissions(jobs) {
     const summary = { failed: 0 };
     if (shouldSkipGroupOps_()) return summary;
 
-    const requests = jobs.filter(job => !job.error && job.folderId && job.groupEmail && job.role)
-        .map(job => {
-            const driveApiRole = (job.role.toLowerCase() === 'editor') ? 'writer' : (job.role.toLowerCase() === 'viewer') ? 'reader' : 'commenter';
-            return {
-                method: 'POST',
-                path: `/drive/v3/files/${job.folderId}/permissions?supportsAllDrives=true&sendNotificationEmail=false`,
-                payload: JSON.stringify({ type: 'group', role: driveApiRole, emailAddress: job.groupEmail }),
-                job: job
-            };
+    const approvalsConfig = getApprovalsConfig_();
+    const approvalsEnabled = approvalsConfig.enabled;
+    let changeRequestContext = null;
+    if (approvalsEnabled) {
+      ensureChangeRequestsSheet_();
+      const changeSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
+      if (changeSheet) {
+        changeRequestContext = {
+          changeSheet: changeSheet,
+          columnMap: getChangeRequestsColumnMap_(changeSheet),
+          approvalsConfig: approvalsConfig
+        };
+      }
+    }
+
+    const requests = [];
+    jobs.forEach(function(job) {
+        if (job.error || !job.folderId || !job.groupEmail || !job.role) {
+          return;
+        }
+
+        const driveApiRole = (job.role.toLowerCase() === 'editor') ? 'writer' : (job.role.toLowerCase() === 'viewer') ? 'reader' : 'commenter';
+        const existingPermission = getFolderGroupPermissionInfo_(job.folderId, job.groupEmail);
+        if (existingPermission && existingPermission.role === driveApiRole) {
+          log_(`Permission "${job.role}" already set for group "${job.groupEmail}" on folder "${job.folderName}". Skipping.`, 'INFO');
+          return;
+        }
+
+        let action = existingPermission ? 'UPDATE' : 'ADD';
+        let requestPath = '';
+        let payload = null;
+        if (action === 'UPDATE' && existingPermission && existingPermission.id) {
+          requestPath = `/drive/v3/files/${job.folderId}/permissions/${existingPermission.id}?supportsAllDrives=true`;
+          payload = JSON.stringify({ role: driveApiRole });
+        } else {
+          action = 'ADD';
+          requestPath = `/drive/v3/files/${job.folderId}/permissions?supportsAllDrives=true&sendNotificationEmail=false`;
+          payload = JSON.stringify({ type: 'group', role: driveApiRole, emailAddress: job.groupEmail });
+        }
+
+        let changeRequestRowIndex = null;
+        if (approvalsEnabled) {
+          const targetRowKey = buildFolderPermissionRowKey_(job.folderId, job.groupEmail, job.role);
+          const snapshot = {
+            changeType: 'FOLDER_PERMISSION',
+            folderId: job.folderId,
+            folderName: job.folderName,
+            groupEmail: job.groupEmail,
+            desiredRole: driveApiRole,
+            currentRole: existingPermission ? existingPermission.role : null,
+            action: action
+          };
+          const result = ensureChangeRequestForDelta_(MANAGED_FOLDERS_SHEET_NAME, targetRowKey, action, snapshot, 'SYSTEM', changeRequestContext);
+          if (result.rowIndex > 0) {
+            changeRequestRowIndex = result.rowIndex;
+          }
+          if (result.status !== CHANGE_REQUEST_STATUS_APPROVED) {
+            return;
+          }
+        }
+
+        requests.push({
+            method: action === 'UPDATE' ? 'PATCH' : 'POST',
+            path: requestPath,
+            payload: payload,
+            job: job,
+            changeRequestRowIndex: changeRequestRowIndex
         });
+    });
 
     if (requests.length === 0) return summary;
 
@@ -2767,12 +2806,19 @@ function _batchSetPermissions(jobs) {
 
     batchResponse.forEach((part, i) => {
         const job = requests[i].job;
+        const rowIndex = requests[i].changeRequestRowIndex;
         if (part.success) {
             log_(`Successfully set role "${job.role}" for group "${job.groupEmail}" on folder "${job.folderName}"`, 'INFO');
+            if (approvalsEnabled && changeRequestContext && rowIndex) {
+              markChangeRequestAppliedByRow_(changeRequestContext.changeSheet, rowIndex, changeRequestContext.columnMap);
+            }
         } else {
             // Ignore "permission already exists" errors, treat as success
             if (part.body && part.body.includes('duplicate')) {
                  log_(`Permission for group "${job.groupEmail}" on folder "${job.folderName}" already exists. Skipping.`, 'INFO');
+                 if (approvalsEnabled && changeRequestContext && rowIndex) {
+                   markChangeRequestAppliedByRow_(changeRequestContext.changeSheet, rowIndex, changeRequestContext.columnMap);
+                 }
             } else {
                 summary.failed++;
                 job.error = true;
@@ -2781,6 +2827,34 @@ function _batchSetPermissions(jobs) {
         }
     });
     return summary;
+}
+
+function buildFolderPermissionRowKey_(folderId, groupEmail, role) {
+  return [folderId || '', (groupEmail || '').toLowerCase(), (role || '').toLowerCase()].join('|');
+}
+
+function getFolderGroupPermissionInfo_(folderId, groupEmail) {
+  if (!folderId || !groupEmail || typeof Drive === 'undefined') {
+    return null;
+  }
+  try {
+    const permissions = Drive.Permissions.list(folderId, {
+      fields: 'permissions(id,emailAddress,role,type)'
+    }).permissions || [];
+    const normalized = groupEmail.toLowerCase();
+    const match = permissions.find(function(permission) {
+      return permission.type === 'group' &&
+        permission.emailAddress &&
+        permission.emailAddress.toLowerCase() === normalized;
+    });
+    if (!match) {
+      return null;
+    }
+    return { id: match.id, role: match.role };
+  } catch (e) {
+    log_(`Could not inspect permissions for folder ${folderId}: ${e.message}`, 'WARN');
+    return null;
+  }
 }
 
 /**
@@ -3525,7 +3599,7 @@ function renameSheetIfExists_(oldName, newName) {
 }
 
 function _executeMembershipChunkWithRetries_(requests, groupEmail, config) {
-  const summary = { added: 0, removed: 0, failed: 0 };
+  const summary = { added: 0, removed: 0, failed: 0, appliedEmails: [], failedEmails: [] };
   if (!requests || requests.length === 0) {
     return summary;
   }
@@ -3544,15 +3618,18 @@ function _executeMembershipChunkWithRetries_(requests, groupEmail, config) {
       if (part.success) {
         if (originalRequest.operation === 'add') summary.added++;
         if (originalRequest.operation === 'remove') summary.removed++;
+        summary.appliedEmails.push(originalRequest.email);
       } else {
         // Handle idempotent cases (desired state already achieved)
         if (originalRequest.operation === 'add' && part.status === 409 && part.body.includes('Member already exists')) {
           // For add: if member already exists, treat as success (desired state achieved)
           summary.added++;
+          summary.appliedEmails.push(originalRequest.email);
           log_(`Member ${originalRequest.email} already exists in group ${groupEmail}. Treating as success.`, 'INFO');
         } else if (originalRequest.operation === 'remove' && (part.status === 404 || (part.status === 400 && part.body.includes('Resource Not Found')))) {
           // For remove: if member not found, treat as success (desired state achieved)
           summary.removed++;
+          summary.appliedEmails.push(originalRequest.email);
           log_(`Member ${originalRequest.email} not found in group ${groupEmail}. Treating as success.`, 'INFO');
         } else if (part.status === 403 && part.body.includes('quotaExceeded')) {
           // Only retry on "quotaExceeded" errors
@@ -3560,6 +3637,7 @@ function _executeMembershipChunkWithRetries_(requests, groupEmail, config) {
         } else {
           // All other errors are permanent failures
           summary.failed++;
+          summary.failedEmails.push(originalRequest.email);
           log_(`A batch operation permanently failed for group ${groupEmail} on user ${originalRequest.email}. Status: ${part.status}. Details: ${part.body}`, 'ERROR');
         }
       }
@@ -3576,6 +3654,9 @@ function _executeMembershipChunkWithRetries_(requests, groupEmail, config) {
         Utilities.sleep(delay);
       } else {
         summary.failed += failedRequests.length;
+        failedRequests.forEach(function(request) {
+          summary.failedEmails.push(request.email);
+        });
         log_(`Max retries reached for ${groupEmail}. ${failedRequests.length} operations could not be completed.`, 'ERROR');
       }
     } else {
@@ -3591,6 +3672,9 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
   const addOnly = options && options.addOnly !== undefined ? options.addOnly : false;
   const removeOnly = options && options.removeOnly !== undefined ? options.removeOnly : false;
   const returnPlanOnly = options && options.returnPlanOnly !== undefined ? options.returnPlanOnly : false;
+  const approvalsConfig = getApprovalsConfig_();
+  const approvalsEnabled = approvalsConfig.enabled && !returnPlanOnly;
+  const changeRequestContext = approvalsEnabled ? {} : null;
   
   const MEMBERSHIP_BATCH_SIZE = config.MembershipBatchSize || 15;
   const INTER_BATCH_DELAY_MS = 1000;
@@ -3645,16 +3729,73 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
       return (removeOnly && emailsToRemove.length > 0) ? { groupEmail, groupName: userSheetName, usersToRemove: emailsToRemove } : null;
     }
 
+    if (approvalsEnabled) {
+      ensureChangeRequestsSheet_();
+      const changeSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
+      if (changeSheet) {
+        changeRequestContext.changeSheet = changeSheet;
+        changeRequestContext.columnMap = getChangeRequestsColumnMap_(changeSheet);
+        changeRequestContext.approvalsConfig = approvalsConfig;
+      }
+    }
+
     if (emailsToAdd.length === 0 && emailsToRemove.length === 0) {
       log_(`No membership changes required for group "${groupEmail}". Sync complete.`);
       return totalSummary;
     }
 
+    const addRequestRowsByEmail = {};
+    const removeRequestRowsByEmail = {};
+    let approvedAdds = removeOnly ? [] : emailsToAdd;
+    let approvedRemoves = addOnly ? [] : emailsToRemove;
+
+    if (approvalsEnabled) {
+      if (!removeOnly) {
+        approvedAdds = [];
+        emailsToAdd.forEach(function(email) {
+          const snapshot = {
+            changeType: 'GROUP_MEMBERSHIP',
+            groupEmail: groupEmail,
+            userSheetName: userSheetName,
+            email: email,
+            action: 'ADD'
+          };
+          const result = ensureChangeRequestForDelta_(userSheetName, email, 'ADD', snapshot, 'SYSTEM', changeRequestContext);
+          if (result.rowIndex > 0) {
+            addRequestRowsByEmail[email] = result.rowIndex;
+          }
+          if (result.status === CHANGE_REQUEST_STATUS_APPROVED) {
+            approvedAdds.push(email);
+          }
+        });
+      }
+
+      if (!addOnly) {
+        approvedRemoves = [];
+        emailsToRemove.forEach(function(email) {
+          const snapshot = {
+            changeType: 'GROUP_MEMBERSHIP',
+            groupEmail: groupEmail,
+            userSheetName: userSheetName,
+            email: email,
+            action: 'REMOVE'
+          };
+          const result = ensureChangeRequestForDelta_(userSheetName, email, 'REMOVE', snapshot, 'SYSTEM', changeRequestContext);
+          if (result.rowIndex > 0) {
+            removeRequestRowsByEmail[email] = result.rowIndex;
+          }
+          if (result.status === CHANGE_REQUEST_STATUS_APPROVED) {
+            approvedRemoves.push(email);
+          }
+        });
+      }
+    }
+
     // Process additions in chunks
-    if (!removeOnly && emailsToAdd.length > 0) {
-      log_(`Processing ${emailsToAdd.length} additions in chunks of ${MEMBERSHIP_BATCH_SIZE}...`);
-      for (let i = 0; i < emailsToAdd.length; i += MEMBERSHIP_BATCH_SIZE) {
-        const chunk = emailsToAdd.slice(i, i + MEMBERSHIP_BATCH_SIZE);
+    if (!removeOnly && approvedAdds.length > 0) {
+      log_(`Processing ${approvedAdds.length} additions in chunks of ${MEMBERSHIP_BATCH_SIZE}...`);
+      for (let i = 0; i < approvedAdds.length; i += MEMBERSHIP_BATCH_SIZE) {
+        const chunk = approvedAdds.slice(i, i + MEMBERSHIP_BATCH_SIZE);
         const requests = chunk.map(email => ({
           method: 'POST',
           path: `/admin/directory/v1/groups/${groupEmail}/members`,
@@ -3667,18 +3808,26 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
         const chunkSummary = _executeMembershipChunkWithRetries_(requests, groupEmail, config);
         totalSummary.added += chunkSummary.added;
         totalSummary.failed += chunkSummary.failed;
+        if (approvalsEnabled && changeRequestContext && changeRequestContext.changeSheet) {
+          chunkSummary.appliedEmails.forEach(function(email) {
+            const rowIndex = addRequestRowsByEmail[email];
+            if (rowIndex) {
+              markChangeRequestAppliedByRow_(changeRequestContext.changeSheet, rowIndex, changeRequestContext.columnMap);
+            }
+          });
+        }
         
-        if (i + MEMBERSHIP_BATCH_SIZE < emailsToAdd.length) {
+        if (i + MEMBERSHIP_BATCH_SIZE < approvedAdds.length) {
           Utilities.sleep(INTER_BATCH_DELAY_MS);
         }
       }
     }
 
     // Process removals in chunks
-    if (!addOnly && emailsToRemove.length > 0) {
-      log_(`Processing ${emailsToRemove.length} removals in chunks of ${MEMBERSHIP_BATCH_SIZE}...`);
-      for (let i = 0; i < emailsToRemove.length; i += MEMBERSHIP_BATCH_SIZE) {
-        const chunk = emailsToRemove.slice(i, i + MEMBERSHIP_BATCH_SIZE);
+    if (!addOnly && approvedRemoves.length > 0) {
+      log_(`Processing ${approvedRemoves.length} removals in chunks of ${MEMBERSHIP_BATCH_SIZE}...`);
+      for (let i = 0; i < approvedRemoves.length; i += MEMBERSHIP_BATCH_SIZE) {
+        const chunk = approvedRemoves.slice(i, i + MEMBERSHIP_BATCH_SIZE);
         const requests = chunk.map(email => ({
           method: 'DELETE',
           path: `/admin/directory/v1/groups/${groupEmail}/members/${email}`,
@@ -3690,8 +3839,16 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
         const chunkSummary = _executeMembershipChunkWithRetries_(requests, groupEmail, config);
         totalSummary.removed += chunkSummary.removed;
         totalSummary.failed += chunkSummary.failed;
+        if (approvalsEnabled && changeRequestContext && changeRequestContext.changeSheet) {
+          chunkSummary.appliedEmails.forEach(function(email) {
+            const rowIndex = removeRequestRowsByEmail[email];
+            if (rowIndex) {
+              markChangeRequestAppliedByRow_(changeRequestContext.changeSheet, rowIndex, changeRequestContext.columnMap);
+            }
+          });
+        }
 
-        if (i + MEMBERSHIP_BATCH_SIZE < emailsToRemove.length) {
+        if (i + MEMBERSHIP_BATCH_SIZE < approvedRemoves.length) {
           Utilities.sleep(INTER_BATCH_DELAY_MS);
         }
       }
@@ -4984,6 +5141,18 @@ function handleChangeRequestEdit_(e) {
 
   const approvalsConfig = getApprovalsConfig_();
   const columnMap = getChangeRequestsColumnMap_(sheet);
+  if (isChangeRequestApproverEdit_(e, columnMap)) {
+    const value = e.range.getValue();
+    if (value && !isValidApproverEmail_(value, approvalsConfig)) {
+      if (e.oldValue !== undefined) {
+        e.range.setValue(e.oldValue);
+      } else {
+        e.range.clearContent();
+      }
+      SpreadsheetApp.getActiveSpreadsheet().toast('Approver must be an active Sheet Editor email.', 'Invalid Approver', 8);
+      return;
+    }
+  }
   normalizeChangeRequestRow_(sheet, e.range.getRow(), approvalsConfig, e.user, columnMap);
   tallyChangeRequestApprovals_(sheet, approvalsConfig, columnMap);
 }
@@ -5047,13 +5216,17 @@ function processChangeRequests_(options = {}) {
       }
     }
 
-    const approvals = collectApprovalsFromRow_(row, approvalsConfig.requiredApprovals, row[columnMap.requestedBy - 1], columnMap);
+    const approvals = collectApprovalsFromRow_(row, approvalsConfig.requiredApprovals, row[columnMap.requestedBy - 1], columnMap, approvalsConfig.activeEditorsSet);
     if (approvals.length >= approvalsConfig.requiredApprovals) {
       sheet.getRange(rowIndex, columnMap.status).setValue(CHANGE_REQUEST_STATUS_APPROVED);
     }
 
     const updatedStatus = sheet.getRange(rowIndex, columnMap.status).getValue();
     if (updatedStatus === CHANGE_REQUEST_STATUS_APPROVED) {
+      const snapshotRaw = row[columnMap.proposedSnapshot - 1];
+      if (isPermissionDeltaSnapshot_(snapshotRaw)) {
+        return;
+      }
       const applied = applyApprovedChangeRequest_(sheet, rowIndex, approvalsConfig, options, columnMap);
       if (applied) {
         appliedCount++;
@@ -5064,6 +5237,105 @@ function processChangeRequests_(options = {}) {
   if (!options.silentMode && appliedCount > 0) {
     log_('Applied ' + appliedCount + ' approved change request(s).', 'INFO');
   }
+}
+
+function buildPermissionDeltaSnapshot_(payload) {
+  const snapshot = payload && typeof payload === 'object' ? Object.assign({}, payload) : {};
+  snapshot.__permissionDelta = true;
+  return JSON.stringify(snapshot);
+}
+
+function isPermissionDeltaSnapshot_(snapshotRaw) {
+  if (!snapshotRaw || typeof snapshotRaw !== 'string') {
+    return false;
+  }
+  try {
+    const parsed = JSON.parse(snapshotRaw);
+    return parsed && parsed.__permissionDelta === true;
+  } catch (e) {
+    return false;
+  }
+}
+
+function ensureChangeRequestForDelta_(targetSheetName, targetRowKey, action, deltaSnapshot, requestedBy, options) {
+  const approvalsConfig = options && options.approvalsConfig ? options.approvalsConfig : getApprovalsConfig_();
+  if (!approvalsConfig.enabled) {
+    return { status: CHANGE_REQUEST_STATUS_APPROVED, rowIndex: -1, created: false };
+  }
+  if (!targetSheetName || !targetRowKey || !action) {
+    log_('Skipped ChangeRequest creation: missing targetSheetName/targetRowKey/action.', 'WARN');
+    return { status: CHANGE_REQUEST_STATUS_DENIED, rowIndex: -1, created: false };
+  }
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let changeSheet = options && options.changeSheet ? options.changeSheet : ss.getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
+  if (!changeSheet) {
+    ensureChangeRequestsSheet_();
+    changeSheet = ss.getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
+  }
+  if (!changeSheet) {
+    return { status: CHANGE_REQUEST_STATUS_DENIED, rowIndex: -1, created: false };
+  }
+
+  const columnMap = options && options.columnMap ? options.columnMap : getChangeRequestsColumnMap_(changeSheet);
+  const snapshotRaw = buildPermissionDeltaSnapshot_(deltaSnapshot);
+  const existingRow = findExistingChangeRequestRow_(changeSheet, targetSheetName, targetRowKey, action, columnMap);
+  const now = new Date();
+
+  if (existingRow > 0) {
+    const existingStatus = (changeSheet.getRange(existingRow, columnMap.status).getValue() || '').toString().toUpperCase() || CHANGE_REQUEST_STATUS_PENDING;
+    const existingSnapshot = changeSheet.getRange(existingRow, columnMap.proposedSnapshot).getValue();
+    if (existingSnapshot !== snapshotRaw) {
+      changeSheet.getRange(existingRow, columnMap.proposedSnapshot).setValue(snapshotRaw);
+      changeSheet.getRange(existingRow, columnMap.requestedAt).setValue(now);
+      if (requestedBy) {
+        changeSheet.getRange(existingRow, columnMap.requestedBy).setValue(requestedBy);
+      }
+      changeSheet.getRange(existingRow, columnMap.status).setValue(CHANGE_REQUEST_STATUS_PENDING);
+      changeSheet.getRange(existingRow, columnMap.approvalsNeeded).setValue(approvalsConfig.requiredApprovals);
+      if (columnMap.denyReason) {
+        changeSheet.getRange(existingRow, columnMap.denyReason).clearContent();
+      }
+      if (columnMap.appliedAt) {
+        changeSheet.getRange(existingRow, columnMap.appliedAt).clearContent();
+      }
+      if (columnMap.approverCols && columnMap.approverCols.length) {
+        columnMap.approverCols.forEach(function(colIndex) {
+          changeSheet.getRange(existingRow, colIndex).clearContent();
+        });
+      }
+      return { status: CHANGE_REQUEST_STATUS_PENDING, rowIndex: existingRow, created: false };
+    }
+    return { status: existingStatus, rowIndex: existingRow, created: false };
+  }
+
+  const newRow = [];
+  newRow[columnMap.id - 1] = '';
+  newRow[columnMap.requestedBy - 1] = requestedBy || '';
+  newRow[columnMap.requestedAt - 1] = now;
+  newRow[columnMap.targetSheet - 1] = targetSheetName;
+  newRow[columnMap.targetRowKey - 1] = targetRowKey;
+  newRow[columnMap.action - 1] = action;
+  newRow[columnMap.proposedSnapshot - 1] = snapshotRaw;
+  newRow[columnMap.status - 1] = CHANGE_REQUEST_STATUS_PENDING;
+  newRow[columnMap.approvalsNeeded - 1] = approvalsConfig.requiredApprovals;
+  changeSheet.appendRow(newRow);
+  const appendedRowIndex = changeSheet.getLastRow();
+  normalizeChangeRequestRow_(changeSheet, appendedRowIndex, approvalsConfig, null, columnMap);
+  return { status: CHANGE_REQUEST_STATUS_PENDING, rowIndex: appendedRowIndex, created: true };
+}
+
+function markChangeRequestAppliedByRow_(changeSheet, rowIndex, columnMap) {
+  if (!changeSheet || !rowIndex || rowIndex < 2) return false;
+  const resolvedColumnMap = columnMap || getChangeRequestsColumnMap_(changeSheet);
+  changeSheet.getRange(rowIndex, resolvedColumnMap.status).setValue(CHANGE_REQUEST_STATUS_APPLIED);
+  if (resolvedColumnMap.appliedAt) {
+    changeSheet.getRange(rowIndex, resolvedColumnMap.appliedAt).setValue(new Date());
+  }
+  if (resolvedColumnMap.denyReason) {
+    changeSheet.getRange(rowIndex, resolvedColumnMap.denyReason).clearContent();
+  }
+  return true;
 }
 
 /**
@@ -5284,6 +5556,25 @@ function isTerminalChangeRequestStatus_(status) {
     status === CHANGE_REQUEST_STATUS_CANCELLED || status === CHANGE_REQUEST_STATUS_EXPIRED;
 }
 
+function isChangeRequestApproverEdit_(event, columnMap) {
+  if (!event || !event.range || !columnMap || !columnMap.approverCols) return false;
+  const column = event.range.getColumn();
+  return columnMap.approverCols.indexOf(column) !== -1;
+}
+
+function isValidApproverEmail_(email, approvalsConfig) {
+  if (!email) return false;
+  const normalized = email.toString().trim().toLowerCase();
+  if (!normalized) return false;
+  if (SINGLE_EMAIL_VALIDATION_REGEX && !SINGLE_EMAIL_VALIDATION_REGEX.test(normalized)) {
+    return false;
+  }
+  if (!approvalsConfig || !approvalsConfig.activeEditorsSet) {
+    return true;
+  }
+  return approvalsConfig.activeEditorsSet.has(normalized);
+}
+
 function normalizeChangeRequestRow_(sheet, rowIndex, approvalsConfig, eventUser, columnMap) {
   const resolvedColumnMap = columnMap || getChangeRequestsColumnMap_(sheet);
   const lastColumn = sheet.getLastColumn();
@@ -5327,16 +5618,23 @@ function tallyChangeRequestApprovals_(sheet, approvalsConfig, columnMap) {
     const status = (row[resolvedColumnMap.status - 1] || '').toString().toUpperCase();
     if (isTerminalChangeRequestStatus_(status)) return;
 
-    const approvals = collectApprovalsFromRow_(row, approvalsConfig.requiredApprovals, row[resolvedColumnMap.requestedBy - 1], resolvedColumnMap);
+    const approvals = collectApprovalsFromRow_(row, approvalsConfig.requiredApprovals, row[resolvedColumnMap.requestedBy - 1], resolvedColumnMap, approvalsConfig.activeEditorsSet);
+    const invalidApprovers = collectInvalidApproversFromRow_(row, resolvedColumnMap, approvalsConfig);
     if (approvals.length >= approvalsConfig.requiredApprovals) {
       sheet.getRange(rowIndex, resolvedColumnMap.status).setValue(CHANGE_REQUEST_STATUS_APPROVED);
     } else {
       sheet.getRange(rowIndex, resolvedColumnMap.status).setValue(CHANGE_REQUEST_STATUS_PENDING);
     }
+    const statusCell = sheet.getRange(rowIndex, resolvedColumnMap.status);
+    if (invalidApprovers.length > 0) {
+      statusCell.setNote('Invalid approver(s): ' + invalidApprovers.join(', ') + '. Approvers must be active Sheet Editors.');
+    } else if (statusCell.getNote()) {
+      statusCell.clearNote();
+    }
   });
 }
 
-function collectApprovalsFromRow_(rowValues, approvalsRequired, requestedBy, columnMap) {
+function collectApprovalsFromRow_(rowValues, approvalsRequired, requestedBy, columnMap, allowedApproversSet) {
   const approvals = [];
   const lowerRequestedBy = requestedBy ? requestedBy.toString().toLowerCase() : '';
   if (!columnMap || !columnMap.approverCols || !columnMap.approverCols.length) return approvals;
@@ -5347,6 +5645,12 @@ function collectApprovalsFromRow_(rowValues, approvalsRequired, requestedBy, col
     if (!email) continue;
     const normalized = email.toString().trim().toLowerCase();
     if (!normalized) continue;
+    if (SINGLE_EMAIL_VALIDATION_REGEX && !SINGLE_EMAIL_VALIDATION_REGEX.test(normalized)) {
+      continue;
+    }
+    if (allowedApproversSet && !allowedApproversSet.has(normalized)) {
+      continue;
+    }
     if (normalized === lowerRequestedBy) {
       continue; // no self-approval
     }
@@ -5357,6 +5661,21 @@ function collectApprovalsFromRow_(rowValues, approvalsRequired, requestedBy, col
   return approvals;
 }
 
+function collectInvalidApproversFromRow_(rowValues, columnMap, approvalsConfig) {
+  const invalid = [];
+  if (!columnMap || !columnMap.approverCols || !columnMap.approverCols.length) return invalid;
+  for (var i = 0; i < columnMap.approverCols.length; i++) {
+    var colIndex = columnMap.approverCols[i];
+    if (!colIndex) continue;
+    var email = rowValues[colIndex - 1];
+    if (!email) continue;
+    if (!isValidApproverEmail_(email, approvalsConfig)) {
+      invalid.push(email.toString().trim());
+    }
+  }
+  return invalid;
+}
+
 function getApprovalsConfig_() {
   const enabled = getConfigValueFresh_('ApprovalsEnabled', false) === true;
   const requiredApprovalsRaw = getConfigValueFresh_('RequiredApprovals', 1);
@@ -5364,11 +5683,16 @@ function getApprovalsConfig_() {
   const expiryHoursRaw = getConfigValueFresh_('ApprovalExpiryHours', 0);
   const expiryHours = Math.max(0, parseInt(expiryHoursRaw, 10) || 0);
   const activeEditors = getActiveSheetEditorEmails_();
+  const activeEditorsSet = new Set(activeEditors.map(function(email) {
+    return email.toString().trim().toLowerCase();
+  }));
   return {
     enabled: enabled,
     requiredApprovals: requiredApprovals,
     expiryHours: expiryHours,
-    availableEditors: activeEditors.length
+    availableEditors: activeEditors.length,
+    activeEditors: activeEditors,
+    activeEditorsSet: activeEditorsSet
   };
 }
 
@@ -6590,7 +6914,7 @@ function ensureChangeRequestsSheet_() {
   statusRange.setDataValidation(statusRule);
 
   const actionRange = changeSheet.getRange(2, columnMap.action, changeSheet.getMaxRows() - 1, 1);
-  const actionRule = SpreadsheetApp.newDataValidation().requireValueInList(['ADD', 'UPDATE', 'DELETE'], true).build();
+  const actionRule = SpreadsheetApp.newDataValidation().requireValueInList(['ADD', 'UPDATE', 'DELETE', 'REMOVE'], true).build();
   actionRange.setDataValidation(actionRule);
 
   const approvalsEnabled = getConfigValue_('ApprovalsEnabled', false) === true;
@@ -6644,6 +6968,9 @@ function syncSheetEditors(options = {}) {
   const silentMode = options && options.silentMode !== undefined ? options.silentMode : false;
   const totalSummary = { added: 0, removed: 0, failed: 0 };
   let userGroupsSheet;
+  const approvalsConfig = getApprovalsConfig_();
+  const approvalsEnabled = approvalsConfig.enabled;
+  let changeRequestContext = null;
 
   try {
     log_('DEBUG: syncSheetEditors started.', 'DEBUG');
@@ -6705,20 +7032,77 @@ function syncSheetEditors(options = {}) {
     const currentSheetEditorSet = new Set(currentSheetEditors);
     
     const emailsToAdd = Array.from(desiredSheetEditorSet).filter(email => !currentSheetEditorSet.has(email));
-    if (emailsToAdd.length > 0) {
-      log_('Adding ' + emailsToAdd.length + ' spreadsheet editor(s): ' + emailsToAdd.join(', '));
-      spreadsheet.addEditors(emailsToAdd);
-      totalSummary.added += emailsToAdd.length;
+    const emailsToRemove = currentSheetEditors.filter(email => !desiredSheetEditorSet.has(email));
+    let approvedEmailsToAdd = emailsToAdd;
+    let approvedEmailsToRemove = addOnly ? [] : emailsToRemove;
+    const addRequestRowsByEmail = {};
+    const removeRequestRowsByEmail = {};
+
+    if (approvalsEnabled) {
+      ensureChangeRequestsSheet_();
+      const changeSheet = spreadsheet.getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
+      if (changeSheet) {
+        changeRequestContext = {
+          changeSheet: changeSheet,
+          columnMap: getChangeRequestsColumnMap_(changeSheet),
+          approvalsConfig: approvalsConfig
+        };
+      }
+      approvedEmailsToAdd = [];
+      emailsToAdd.forEach(function(email) {
+        const targetRowKey = 'FILE_EDITOR|' + email;
+        const snapshot = { changeType: 'SHEET_EDITOR_FILE', email: email, action: 'ADD' };
+        const result = ensureChangeRequestForDelta_(SHEET_EDITORS_SHEET_NAME, targetRowKey, 'ADD', snapshot, 'SYSTEM', changeRequestContext);
+        if (result.rowIndex > 0) {
+          addRequestRowsByEmail[email] = result.rowIndex;
+        }
+        if (result.status === CHANGE_REQUEST_STATUS_APPROVED) {
+          approvedEmailsToAdd.push(email);
+        }
+      });
+
+      if (!addOnly) {
+        approvedEmailsToRemove = [];
+        emailsToRemove.forEach(function(email) {
+          const targetRowKey = 'FILE_EDITOR|' + email;
+          const snapshot = { changeType: 'SHEET_EDITOR_FILE', email: email, action: 'REMOVE' };
+          const result = ensureChangeRequestForDelta_(SHEET_EDITORS_SHEET_NAME, targetRowKey, 'REMOVE', snapshot, 'SYSTEM', changeRequestContext);
+          if (result.rowIndex > 0) {
+            removeRequestRowsByEmail[email] = result.rowIndex;
+          }
+          if (result.status === CHANGE_REQUEST_STATUS_APPROVED) {
+            approvedEmailsToRemove.push(email);
+          }
+        });
+      }
+    }
+
+    if (approvedEmailsToAdd.length > 0) {
+      log_('Adding ' + approvedEmailsToAdd.length + ' spreadsheet editor(s): ' + approvedEmailsToAdd.join(', '));
+      approvedEmailsToAdd.forEach(function(email) {
+        try {
+          spreadsheet.addEditor(email);
+          totalSummary.added++;
+          if (approvalsEnabled && changeRequestContext && addRequestRowsByEmail[email]) {
+            markChangeRequestAppliedByRow_(changeRequestContext.changeSheet, addRequestRowsByEmail[email], changeRequestContext.columnMap);
+          }
+        } catch (e) {
+          log_('Failed to add spreadsheet editor ' + email + ': ' + e.message, 'ERROR');
+          totalSummary.failed++;
+        }
+      });
     }
     
     if (!addOnly) {
-      const emailsToRemove = currentSheetEditors.filter(email => !desiredSheetEditorSet.has(email));
-      if (emailsToRemove.length > 0) {
-        log_('Removing ' + emailsToRemove.length + ' spreadsheet editor(s): ' + emailsToRemove.join(', '));
-        emailsToRemove.forEach(function(email) {
+      if (approvedEmailsToRemove.length > 0) {
+        log_('Removing ' + approvedEmailsToRemove.length + ' spreadsheet editor(s): ' + approvedEmailsToRemove.join(', '));
+        approvedEmailsToRemove.forEach(function(email) {
           try {
             spreadsheet.removeEditor(email);
             totalSummary.removed++;
+            if (approvalsEnabled && changeRequestContext && removeRequestRowsByEmail[email]) {
+              markChangeRequestAppliedByRow_(changeRequestContext.changeSheet, removeRequestRowsByEmail[email], changeRequestContext.columnMap);
+            }
           } catch (e) {
             log_('Failed to remove spreadsheet editor ' + email + ': ' + e.message, 'ERROR');
             totalSummary.failed++;
@@ -6762,6 +7146,50 @@ function syncSheetEditors(options = {}) {
 
     const membersToAdd = desiredMembers.filter(email => !currentMemberSet.has(email));
     const membersToRemove = currentMembers.filter(m => !desiredMemberSet.has(m.email.toLowerCase()) && m.role !== 'OWNER').map(m => m.email);
+    let approvedMembersToAdd = membersToAdd;
+    let approvedMembersToRemove = addOnly ? [] : membersToRemove;
+    const addMemberRequestRowsByEmail = {};
+    const removeMemberRequestRowsByEmail = {};
+
+    if (approvalsEnabled) {
+      approvedMembersToAdd = [];
+      membersToAdd.forEach(function(email) {
+        const targetRowKey = 'GROUP_MEMBER|' + email;
+        const snapshot = {
+          changeType: 'SHEET_EDITOR_GROUP',
+          groupEmail: groupEmail,
+          email: email,
+          action: 'ADD'
+        };
+        const result = ensureChangeRequestForDelta_(SHEET_EDITORS_SHEET_NAME, targetRowKey, 'ADD', snapshot, 'SYSTEM', changeRequestContext);
+        if (result.rowIndex > 0) {
+          addMemberRequestRowsByEmail[email] = result.rowIndex;
+        }
+        if (result.status === CHANGE_REQUEST_STATUS_APPROVED) {
+          approvedMembersToAdd.push(email);
+        }
+      });
+
+      if (!addOnly) {
+        approvedMembersToRemove = [];
+        membersToRemove.forEach(function(email) {
+          const targetRowKey = 'GROUP_MEMBER|' + email;
+          const snapshot = {
+            changeType: 'SHEET_EDITOR_GROUP',
+            groupEmail: groupEmail,
+            email: email,
+            action: 'REMOVE'
+          };
+          const result = ensureChangeRequestForDelta_(SHEET_EDITORS_SHEET_NAME, targetRowKey, 'REMOVE', snapshot, 'SYSTEM', changeRequestContext);
+          if (result.rowIndex > 0) {
+            removeMemberRequestRowsByEmail[email] = result.rowIndex;
+          }
+          if (result.status === CHANGE_REQUEST_STATUS_APPROVED) {
+            approvedMembersToRemove.push(email);
+          }
+        });
+      }
+    }
     
     log_('DEBUG: Members to add: ' + membersToAdd.length, 'DEBUG');
     log_('DEBUG: Members to remove: ' + membersToRemove.length, 'DEBUG');
@@ -6771,10 +7199,10 @@ function syncSheetEditors(options = {}) {
     const INTER_BATCH_DELAY_MS = 1000;
 
     // Process additions
-    if (membersToAdd.length > 0) {
-      log_(`SheetEditors Group Sync: Adding ${membersToAdd.length} members...`);
-      for (let i = 0; i < membersToAdd.length; i += MEMBERSHIP_BATCH_SIZE) {
-        const chunk = membersToAdd.slice(i, i + MEMBERSHIP_BATCH_SIZE);
+    if (approvedMembersToAdd.length > 0) {
+      log_(`SheetEditors Group Sync: Adding ${approvedMembersToAdd.length} members...`);
+      for (let i = 0; i < approvedMembersToAdd.length; i += MEMBERSHIP_BATCH_SIZE) {
+        const chunk = approvedMembersToAdd.slice(i, i + MEMBERSHIP_BATCH_SIZE);
         const requests = chunk.map(email => ({
           method: 'POST',
           path: `/admin/directory/v1/groups/${groupEmail}/members`,
@@ -6785,15 +7213,23 @@ function syncSheetEditors(options = {}) {
         const chunkSummary = _executeMembershipChunkWithRetries_(requests, groupEmail, config);
         totalSummary.added += chunkSummary.added;
         totalSummary.failed += chunkSummary.failed;
-        if (i + MEMBERSHIP_BATCH_SIZE < membersToAdd.length) Utilities.sleep(INTER_BATCH_DELAY_MS);
+        if (approvalsEnabled && changeRequestContext && changeRequestContext.changeSheet) {
+          chunkSummary.appliedEmails.forEach(function(email) {
+            const rowIndex = addMemberRequestRowsByEmail[email];
+            if (rowIndex) {
+              markChangeRequestAppliedByRow_(changeRequestContext.changeSheet, rowIndex, changeRequestContext.columnMap);
+            }
+          });
+        }
+        if (i + MEMBERSHIP_BATCH_SIZE < approvedMembersToAdd.length) Utilities.sleep(INTER_BATCH_DELAY_MS);
       }
     }
 
     // Process removals
-    if (!addOnly && membersToRemove.length > 0) {
-      log_(`SheetEditors Group Sync: Removing ${membersToRemove.length} members...`);
-      for (let i = 0; i < membersToRemove.length; i += MEMBERSHIP_BATCH_SIZE) {
-        const chunk = membersToRemove.slice(i, i + MEMBERSHIP_BATCH_SIZE);
+    if (!addOnly && approvedMembersToRemove.length > 0) {
+      log_(`SheetEditors Group Sync: Removing ${approvedMembersToRemove.length} members...`);
+      for (let i = 0; i < approvedMembersToRemove.length; i += MEMBERSHIP_BATCH_SIZE) {
+        const chunk = approvedMembersToRemove.slice(i, i + MEMBERSHIP_BATCH_SIZE);
         const requests = chunk.map(email => ({
           method: 'DELETE',
           path: `/admin/directory/v1/groups/${groupEmail}/members/${email}`,
@@ -6803,7 +7239,15 @@ function syncSheetEditors(options = {}) {
         const chunkSummary = _executeMembershipChunkWithRetries_(requests, groupEmail, config);
         totalSummary.removed += chunkSummary.removed;
         totalSummary.failed += chunkSummary.failed;
-        if (i + MEMBERSHIP_BATCH_SIZE < membersToRemove.length) Utilities.sleep(INTER_BATCH_DELAY_MS);
+        if (approvalsEnabled && changeRequestContext && changeRequestContext.changeSheet) {
+          chunkSummary.appliedEmails.forEach(function(email) {
+            const rowIndex = removeMemberRequestRowsByEmail[email];
+            if (rowIndex) {
+              markChangeRequestAppliedByRow_(changeRequestContext.changeSheet, rowIndex, changeRequestContext.columnMap);
+            }
+          });
+        }
+        if (i + MEMBERSHIP_BATCH_SIZE < approvedMembersToRemove.length) Utilities.sleep(INTER_BATCH_DELAY_MS);
       }
     }
 
@@ -6998,13 +7442,7 @@ function syncAdds(options = {}) {
   const silentMode = options && options.silentMode !== undefined ? options.silentMode : false;
   const skipSetup = options && options.skipSetup !== undefined ? options.skipSetup : false;
 
-  if (shouldGatePermissionEdits_()) {
-    processChangeRequests_({ silentMode: silentMode });
-    if (!silentMode) {
-      SpreadsheetApp.getUi().alert('Approvals are enabled. Direct sync is skipped; use ChangeRequests approvals.');
-    }
-    return { skipped: true, added: 0, removed: 0, failed: 0 };
-  }
+  processChangeRequests_({ silentMode: silentMode });
 
   if (!skipSetup) {
     setupControlSheets_();
@@ -7114,11 +7552,7 @@ function syncDeletes() {
   const ui = SpreadsheetApp.getUi();
   const startTime = new Date();
   
-  if (shouldGatePermissionEdits_()) {
-    processChangeRequests_({ silentMode: false });
-    ui.alert('Approvals are enabled. Direct sync is skipped; use ChangeRequests approvals.');
-    return;
-  }
+  processChangeRequests_({ silentMode: false });
 
   // --- Phase 1: Planning ---
   log_('*** Starting user removal planning phase...');
@@ -7261,14 +7695,6 @@ function syncDeletes() {
 function fullSync(options = {}) {
   const silentMode = options && options.silentMode !== undefined ? options.silentMode : false;
   const skipSetup = options && options.skipSetup !== undefined ? options.skipSetup : false;
-
-  if (shouldGatePermissionEdits_()) {
-    processChangeRequests_({ silentMode: silentMode });
-    if (!silentMode) {
-      SpreadsheetApp.getUi().alert('Approvals are enabled. Direct sync is skipped; use ChangeRequests approvals.');
-    }
-    return { skipped: true, added: 0, removed: 0, failed: 0 };
-  }
 
   log_('Running script version ' + SCRIPT_VERSION);
 
@@ -7414,11 +7840,7 @@ function fullSync(options = {}) {
 }
 
 function syncManagedFoldersAdds() {
-  if (shouldGatePermissionEdits_()) {
-    processChangeRequests_({ silentMode: false });
-    SpreadsheetApp.getUi().alert('Approvals are enabled. Direct sync is skipped; use ChangeRequests approvals.');
-    return;
-  }
+  processChangeRequests_({ silentMode: false });
 
   setupControlSheets_();
   const lock = LockService.getScriptLock();
@@ -7465,11 +7887,7 @@ function syncManagedFoldersDeletes() {
   const ui = SpreadsheetApp.getUi();
   const startTime = new Date();
   
-  if (shouldGatePermissionEdits_()) {
-    processChangeRequests_({ silentMode: false });
-    ui.alert('Approvals are enabled. Direct sync is skipped; use ChangeRequests approvals.');
-    return;
-  }
+  processChangeRequests_({ silentMode: false });
 
   // --- Phase 1: Planning ---
   log_('*** Starting folder deletion planning phase...');
@@ -8864,6 +9282,7 @@ function runApprovalGatingTest() {
     let testRowIndex = null;
     let testEmail = null;
     let success = false;
+    let approvalRowIndex = null;
 
     try {
         updateConfigSetting_('ApprovalsEnabled', true);
@@ -8878,59 +9297,52 @@ function runApprovalGatingTest() {
         updateConfigSetting_('RequiredApprovals', 2);
         ensureChangeRequestsSheet_();
 
-        const sheetEditorsHeaders = getHeaderMap_(sheetEditorsSheet);
-        const emailCol = resolveColumn_(sheetEditorsHeaders, 'sheet editor emails', 1);
-        testRowIndex = sheetEditorsSheet.getLastRow() + 1;
         testEmail = 'approval-test+' + new Date().getTime() + '@example.com';
-        sheetEditorsSheet.getRange(testRowIndex, emailCol).setValue(testEmail);
-        const rowValues = sheetEditorsSheet.getRange(testRowIndex, 1, 1, sheetEditorsSheet.getLastColumn()).getValues()[0];
-
-        onEdit({
-            source: ss,
-            range: sheetEditorsSheet.getRange(testRowIndex, emailCol),
-            oldValue: undefined,
-            user: { getEmail: function() { return Session.getEffectiveUser().getEmail(); } }
-        });
-
-        const revertedValue = sheetEditorsSheet.getRange(testRowIndex, emailCol).getValue();
-        if (revertedValue) {
-            throw new Error('Permission edit was not reverted.');
-        }
-
-        changeSheet = ss.getSheetByName(changeSheetName);
-        const updatedColumnMap = getChangeRequestsColumnMap_(changeSheet);
-        const dataRange = changeSheet.getLastRow() > 1
-            ? changeSheet.getRange(2, 1, changeSheet.getLastRow() - 1, changeSheet.getLastColumn())
-            : null;
-        const data = dataRange ? dataRange.getValues() : [];
-        let matchingRowIndex = -1;
-        for (let i = 0; i < data.length; i++) {
-            const row = data[i];
-            const targetSheet = row[updatedColumnMap.targetSheet - 1];
-            const targetKey = row[updatedColumnMap.targetRowKey - 1];
-            const action = row[updatedColumnMap.action - 1];
-            const status = row[updatedColumnMap.status - 1];
-            if (targetSheet === SHEET_EDITORS_SHEET_NAME && targetKey === testEmail && action === 'UPDATE' && status === CHANGE_REQUEST_STATUS_PENDING) {
-                matchingRowIndex = i + 2;
-                break;
-            }
-        }
-        if (matchingRowIndex === -1) {
-            throw new Error('ChangeRequest was not created for permission edit.');
+        const snapshot = { changeType: 'TEST_PERMISSION_DELTA', email: testEmail, action: 'ADD' };
+        const approvalResult = ensureChangeRequestForDelta_(SHEET_EDITORS_SHEET_NAME, testEmail, 'ADD', snapshot, Session.getEffectiveUser().getEmail());
+        approvalRowIndex = approvalResult.rowIndex;
+        if (!approvalRowIndex || approvalRowIndex < 2) {
+            throw new Error('Permission delta ChangeRequest was not created.');
         }
 
         // Populate approvers then ensure upsert clears all approver columns
-        updatedColumnMap.approverCols.forEach(function(colIndex) {
-            changeSheet.getRange(matchingRowIndex, colIndex).setValue('approver@example.com');
-        });
-        upsertChangeRequest_(SHEET_EDITORS_SHEET_NAME, testEmail, 'UPDATE', JSON.stringify(rowValues), Session.getEffectiveUser().getEmail());
+        changeSheet = ss.getSheetByName(changeSheetName);
+        const updatedColumnMap = getChangeRequestsColumnMap_(changeSheet);
+        if (updatedColumnMap.approverCols.length >= 2) {
+            changeSheet.getRange(approvalRowIndex, updatedColumnMap.approverCols[0]).setValue('approver1@example.com');
+            changeSheet.getRange(approvalRowIndex, updatedColumnMap.approverCols[1]).setValue('approver2@example.com');
+        } else if (updatedColumnMap.approverCols.length === 1) {
+            changeSheet.getRange(approvalRowIndex, updatedColumnMap.approverCols[0]).setValue('approver1@example.com');
+        }
+        upsertChangeRequest_(SHEET_EDITORS_SHEET_NAME, testEmail, 'UPDATE', JSON.stringify([testEmail, false]), Session.getEffectiveUser().getEmail());
         const refreshedMap = getChangeRequestsColumnMap_(changeSheet);
+        const updateRowIndex = findExistingChangeRequestRow_(changeSheet, SHEET_EDITORS_SHEET_NAME, testEmail, 'UPDATE', refreshedMap);
+        if (updateRowIndex < 2) {
+            throw new Error('UPDATE ChangeRequest was not created.');
+        }
         refreshedMap.approverCols.forEach(function(colIndex) {
-            const value = changeSheet.getRange(matchingRowIndex, colIndex).getValue();
+            const value = changeSheet.getRange(updateRowIndex, colIndex).getValue();
             if (value) {
                 throw new Error('Approver columns were not cleared after upsert.');
             }
         });
+
+        // Approve permission delta and ensure it is not auto-applied to sheets
+        updatedColumnMap.approverCols.forEach(function(colIndex) {
+            changeSheet.getRange(approvalRowIndex, colIndex).setValue('approver@example.com');
+        });
+        processChangeRequests_({ silentMode: true });
+        const finalStatus = changeSheet.getRange(approvalRowIndex, updatedColumnMap.status).getValue();
+        const appliedAt = updatedColumnMap.appliedAt ? changeSheet.getRange(approvalRowIndex, updatedColumnMap.appliedAt).getValue() : null;
+        if (finalStatus !== CHANGE_REQUEST_STATUS_APPROVED) {
+            throw new Error('Permission delta ChangeRequest did not reach APPROVED status.');
+        }
+        if (appliedAt) {
+            throw new Error('Permission delta ChangeRequest should not be applied by processChangeRequests_.');
+        }
+
+        // Create a pending request to block approvals config edits
+        ensureChangeRequestForDelta_(SHEET_EDITORS_SHEET_NAME, testEmail + '-pending', 'ADD', snapshot, Session.getEffectiveUser().getEmail());
 
         // Attempt to change approvals while pending request exists
         const configHeaders = getHeaderMap_(configSheet);
@@ -8959,14 +9371,6 @@ function runApprovalGatingTest() {
         return false;
     } finally {
         try {
-            if (testRowIndex && testRowIndex <= sheetEditorsSheet.getLastRow()) {
-                sheetEditorsSheet.deleteRow(testRowIndex);
-            }
-        } catch (e) {
-            log_('Failed to clean up test row: ' + e.message, 'WARN');
-        }
-
-        try {
             changeSheet = ss.getSheetByName(changeSheetName);
             if (changeSheet && changeSheet.getLastRow() > 1 && testEmail) {
                 const columnMap = getChangeRequestsColumnMap_(changeSheet);
@@ -8974,7 +9378,8 @@ function runApprovalGatingTest() {
                 const data = dataRange.getValues();
                 for (let i = data.length - 1; i >= 0; i--) {
                     const row = data[i];
-                    if (row[columnMap.targetSheet - 1] === SHEET_EDITORS_SHEET_NAME && row[columnMap.targetRowKey - 1] === testEmail) {
+                    const rowKey = row[columnMap.targetRowKey - 1];
+                    if (row[columnMap.targetSheet - 1] === SHEET_EDITORS_SHEET_NAME && rowKey && rowKey.toString().indexOf(testEmail) === 0) {
                         changeSheet.deleteRow(i + 2);
                     }
                 }
