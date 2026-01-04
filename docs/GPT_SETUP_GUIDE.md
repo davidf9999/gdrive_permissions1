@@ -21,8 +21,12 @@ This guide explains how to configure an OpenAI GPT Assistant to assist with `gdr
 1. Open ChatGPT and create a new Custom GPT.
 2. Set the **System Instructions** to the content of `GPT_PROMPT.md`.
 3. Ensure the GPT can access the backend base URL that serves `/knowledge`, `/steps`, and `/bundle`.
-4. Do not upload `GPT_KNOWLEDGE.md` in the Knowledge section; it must be fetched from the backend at runtime.
-5. Save the GPT.
+4. In **Actions → Secrets**, add a secret named `BACKEND_API_KEY` with your backend key.
+5. In the Action request headers, include either:
+   - `X-API-Key: ${BACKEND_API_KEY}`
+   - `Authorization: Bearer ${BACKEND_API_KEY}`
+6. Do not upload `GPT_KNOWLEDGE.md` in the Knowledge section; it must be fetched from the backend at runtime.
+7. Save the GPT.
 
 ## Usage knowledge sources
 - The GPT should fetch usage guides from the backend endpoints:

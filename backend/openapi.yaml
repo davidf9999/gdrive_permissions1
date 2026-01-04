@@ -8,8 +8,8 @@ info:
     gdrive_permissions1 project. This API is designed for deterministic behavior
     (content baked into the deployed container image) with an optional best-effort
     drift check against GitHub.
-    Authentication uses the X-API-Key header (BACKEND_API_KEY). Local development
-    can bypass auth by setting ALLOW_ANON=true or NODE_ENV=development.
+    Authentication uses the X-API-Key header or Authorization: Bearer (BACKEND_API_KEY).
+    Local development can bypass auth by setting ALLOW_ANON=true or NODE_ENV=development.
 servers:
   - url: https://gpt-backend-4nutlbijta-ew.a.run.app
     description: Cloud Run service base URL
@@ -228,12 +228,16 @@ paths:
                     type: object
 security:
   - ApiKeyAuth: []
+  - BearerAuth: []
 components:
   securitySchemes:
     ApiKeyAuth:
       type: apiKey
       in: header
       name: X-API-Key
+    BearerAuth:
+      type: http
+      scheme: bearer
   schemas:
     MetaResponse:
       type: object

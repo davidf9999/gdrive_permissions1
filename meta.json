@@ -1,6 +1,6 @@
 {
   "service": "gdrive-permissions-backend",
-  "version_tag": "v1.0.13",
+  "version_tag": "v1.0.14",
   "git_sha": "d28c2b2f9e2804f9835e2a1fc962ded516b77b91",
   "build_time_utc": "2026-01-04T18:27:21.465Z",
   "artifacts": {

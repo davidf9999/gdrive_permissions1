@@ -44,7 +44,7 @@ Pick the runtime your team supports best; functionality is similar for a thin fi
 ## Security, reliability, and ops
 - Use read-only GitHub credentials (deploy key or GitHub App token) or serve from a public bucket with signed URLs if acceptable.
 - Require `BACKEND_API_KEY` in production; you may allow anonymous access in local development only.
-- Add request logging, basic rate limiting, and health checks (can the backend fetch the target file?).
+- Add request logging, basic rate limiting (e.g., `RATE_LIMIT_MAX`/`RATE_LIMIT_WINDOW_MS`), and health checks.
 - Fail closed: if the GPT cannot fetch the knowledge file, treat it as an error to be fixed, not something to silently ignore.
 - Cost should be low on Cloud Run/Cloud Storage for light usage (likely near-zero at small scale).
 

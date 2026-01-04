@@ -34,6 +34,9 @@ const ALLOWED_ORIGINS = DEFAULT_ALLOWED_ORIGINS.split(',')
   .filter(Boolean);
 const BACKEND_API_KEY = process.env.BACKEND_API_KEY || null;
 const ALLOW_ANON = process.env.ALLOW_ANON === 'true';
+const RATE_LIMIT_MAX = Number(process.env.RATE_LIMIT_MAX || 0);
+const RATE_LIMIT_WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MS || 60_000);
+const RATE_LIMIT_STORE = new Map();
 
 let stepsIndex = [];
 let stepsById = new Map();
@@ -132,6 +135,72 @@ function sanitizeHeaders(headers) {
   });
 
   return redactedHeaders;
+}
+
+function getClientIp(req) {
+  const forwardedFor = req.headers['x-forwarded-for'];
+  if (typeof forwardedFor === 'string' && forwardedFor.trim()) {
+    return forwardedFor.split(',')[0].trim();
+  }
+  const realIp = req.headers['x-real-ip'];
+  if (typeof realIp === 'string' && realIp.trim()) {
+    return realIp.trim();
+  }
+  return req.socket?.remoteAddress || 'unknown';
+}
+
+function extractApiKey(req) {
+  const headerKey = req.headers['x-api-key'];
+  if (typeof headerKey === 'string' && headerKey.trim()) {
+    return headerKey.trim();
+  }
+
+  const authHeader = req.headers.authorization;
+  if (typeof authHeader === 'string' && authHeader.trim()) {
+    const [scheme, token] = authHeader.split(' ');
+    if (scheme && token && scheme.toLowerCase() === 'bearer') {
+      return token.trim();
+    }
+  }
+
+  return null;
+}
+
+function checkRateLimit(req) {
+  if (!RATE_LIMIT_MAX || RATE_LIMIT_MAX <= 0) {
+    return null;
+  }
+
+  const now = Date.now();
+  const clientId = getClientIp(req);
+  const entry = RATE_LIMIT_STORE.get(clientId);
+
+  if (!entry || now >= entry.resetAt) {
+    RATE_LIMIT_STORE.set(clientId, {
+      count: 1,
+      resetAt: now + RATE_LIMIT_WINDOW_MS,
+    });
+    return {
+      limited: false,
+      remaining: RATE_LIMIT_MAX - 1,
+      resetAt: now + RATE_LIMIT_WINDOW_MS,
+    };
+  }
+
+  if (entry.count >= RATE_LIMIT_MAX) {
+    return {
+      limited: true,
+      remaining: 0,
+      resetAt: entry.resetAt,
+    };
+  }
+
+  entry.count += 1;
+  return {
+    limited: false,
+    remaining: RATE_LIMIT_MAX - entry.count,
+    resetAt: entry.resetAt,
+  };
 }
 
 function handleDebug(req, res, requestId, allowedOrigin) {
@@ -401,13 +470,28 @@ async function routeRequest(req, res) {
       return;
     }
 
-    if (req.headers['x-api-key'] !== BACKEND_API_KEY) {
+    const providedKey = extractApiKey(req);
+    if (providedKey !== BACKEND_API_KEY) {
       jsonResponse(res, 401, {
         error: 'unauthorized',
         message: 'Missing or invalid API key.',
       }, { allowedOrigin });
       return;
     }
+  }
+
+  const rateLimit = checkRateLimit(req);
+  if (rateLimit?.limited) {
+    const retryAfterSeconds = Math.max(
+      1,
+      Math.ceil((rateLimit.resetAt - Date.now()) / 1000),
+    );
+    res.setHeader('Retry-After', String(retryAfterSeconds));
+    jsonResponse(res, 429, {
+      error: 'rate_limited',
+      message: 'Too many requests. Please retry later.',
+    }, { allowedOrigin });
+    return;
   }
 
   const parsedUrl = new URL(req.url, 'http://localhost');

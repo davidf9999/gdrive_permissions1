@@ -31,6 +31,7 @@ You will use this value as the `BACKEND_API_KEY` environment variable and, if
 deploying with GitHub Actions, as a repository secret.
 For local development only, you can bypass auth by setting `ALLOW_ANON=true`
 or `NODE_ENV=development`.
+The backend accepts the key via `X-API-Key` or `Authorization: Bearer <key>`.
 
 ## Run and test on your computer
 1) Install dependencies and build artifacts (knowledge, bundle, meta):
@@ -64,6 +65,19 @@ or `NODE_ENV=development`.
    ```bash
    npm test -- --runInBand
    ```
+
+## Security and usage limits
+- **Lock down access:** Keep `ALLOW_ANON` unset/false in production so every
+  request requires `BACKEND_API_KEY`.
+- **Rate limiting (optional):** Set `RATE_LIMIT_MAX` and `RATE_LIMIT_WINDOW_MS`
+  to cap requests per IP. Example: `RATE_LIMIT_MAX=10` and
+  `RATE_LIMIT_WINDOW_MS=60000` for 10 requests/minute per IP (per instance).
+- **Cloud Run cost controls:** For low traffic, set max instances and limit
+  concurrency. Example flags:
+  ```bash
+  --max-instances 2 --concurrency 10
+  ```
+  You can also set a Cloud Billing alert (e.g., $5-$10/month) to catch spikes.
 
 ## Build and run with Docker locally
 1) Ensure artifacts exist (run `npm run build` first).
