@@ -6939,6 +6939,11 @@ function ensureChangeRequestsSheet_() {
   const actionRule = SpreadsheetApp.newDataValidation().requireValueInList(['ADD', 'UPDATE', 'DELETE', 'REMOVE'], true).build();
   actionRange.setDataValidation(actionRule);
 
+  if (columnMap.appliedAt) {
+    changeSheet.getRange(2, columnMap.appliedAt, changeSheet.getMaxRows() - 1, 1)
+      .setNumberFormat('yyyy-MM-dd HH:mm:ss');
+  }
+
   const approvalsEnabled = getConfigValue_('ApprovalsEnabled', false) === true;
   try {
     if (!approvalsEnabled && !changeSheet.isSheetHidden()) {
