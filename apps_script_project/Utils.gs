@@ -862,6 +862,18 @@ function updateStatusSetting_(settingName, value) {
   }
 }
 
+function getStatusSettingValue_(statusSheet, settingName) {
+  if (!statusSheet) {
+    return '';
+  }
+  const settings = statusSheet.getRange('A:A').getValues().flat();
+  const rowIndex = settings.indexOf(settingName);
+  if (rowIndex === -1) {
+    return '';
+  }
+  return statusSheet.getRange(rowIndex + 1, 2).getValue();
+}
+
 function formatSyncSummary_(summary) {
   if (!summary) {
     return '';
@@ -946,7 +958,14 @@ function updateSyncStatus_(status, options = {}) {
     updateStatusSetting_('Last Sync Error', '');
   }
 
-  updateSyncStatusPanel_(statusSheet, normalizedStatus);
+  let panelStatus = normalizedStatus;
+  if (normalizedStatus === 'Skipped') {
+    const lastSuccessfulSync = getStatusSettingValue_(statusSheet, 'Last Successful Sync');
+    if (lastSuccessfulSync) {
+      panelStatus = 'Success';
+    }
+  }
+  updateSyncStatusPanel_(statusSheet, panelStatus);
 }
 
 /**
