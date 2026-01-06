@@ -360,6 +360,12 @@ function detectAutoSyncChanges_() {
     log_('Data hash changed. Old: ' + previousDataHash + ' New: ' + dataHash, 'DEBUG');
   }
 
+  const approvedPermissionChanges = countApprovedPermissionChangeRequests_();
+  if (approvedPermissionChanges > 0) {
+    shouldRun = true;
+    reasons.push('Approved permission change requests pending.');
+  }
+
   const snapshot = {
     dataHash: dataHash,
     capturedAt: new Date().toISOString()

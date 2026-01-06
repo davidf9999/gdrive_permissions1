@@ -5858,6 +5858,35 @@ function countPendingChangeRequests_(options) {
   return pending;
 }
 
+function countApprovedPermissionChangeRequests_() {
+  const approvalsConfig = getApprovalsConfig_();
+  if (!approvalsConfig.enabled) return 0;
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const changeSheet = ss.getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
+  if (!changeSheet) return 0;
+
+  const lastRow = changeSheet.getLastRow();
+  if (lastRow < 2) return 0;
+
+  const columnMap = getChangeRequestsColumnMap_(changeSheet);
+  const data = changeSheet.getRange(2, 1, lastRow - 1, changeSheet.getLastColumn()).getValues();
+  let approved = 0;
+
+  data.forEach(function(row) {
+    const status = (row[columnMap.status - 1] || '').toString().toUpperCase();
+    if (status !== CHANGE_REQUEST_STATUS_APPROVED) {
+      return;
+    }
+    const snapshotRaw = row[columnMap.proposedSnapshot - 1];
+    if (isPermissionDeltaSnapshot_(snapshotRaw)) {
+      approved++;
+    }
+  });
+
+  return approved;
+}
+
 function getActiveSheetEditorEmails_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheetEditorsSheet = ss.getSheetByName(SHEET_EDITORS_SHEET_NAME);
@@ -11121,6 +11150,12 @@ function detectAutoSyncChanges_() {
     shouldRun = true;
     reasons.push('Control sheet data has changed.');
     log_('Data hash changed. Old: ' + previousDataHash + ' New: ' + dataHash, 'DEBUG');
+  }
+
+  const approvedPermissionChanges = countApprovedPermissionChangeRequests_();
+  if (approvedPermissionChanges > 0) {
+    shouldRun = true;
+    reasons.push('Approved permission change requests pending.');
   }
 
   const snapshot = {
