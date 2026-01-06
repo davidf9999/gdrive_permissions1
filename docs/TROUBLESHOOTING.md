@@ -4,6 +4,29 @@ This guide provides solutions to common problems you might encounter while using
 
 ---
 
+## Sync Aborted: Orphan Sheets Found
+
+### Symptom
+
+Sync (including AutoSync) fails with an error like:
+
+```
+SYNC ABORTED: Found orphan sheets that are not in the configuration
+Orphan sheets found. Sync aborted.
+```
+
+### Cause
+
+One or more sheets exist in the spreadsheet that are not referenced by `ManagedFolders`, `UserGroups`, or `SheetEditors_G`. This can happen if someone deletes rows manually instead of using the Delete checkbox, or if old user sheets were left behind.
+
+### Solution
+
+1. Go to **Permissions Manager → Advanced → Delete Orphan Sheets**.
+2. Review the list and confirm deletion of the orphan sheets.
+3. Re-run sync (or wait for the next AutoSync).
+
+Tip: To avoid orphans, always use the **Delete** checkbox in control sheets instead of manually deleting rows.
+
 ## Emails Sent from the Script are Bouncing
 
 ### Symptom
