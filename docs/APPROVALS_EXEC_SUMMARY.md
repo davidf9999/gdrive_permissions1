@@ -20,6 +20,7 @@ Both flows behave the same with approvals enabled:
 - Apply approved non-permission ChangeRequests first.
 - Run sync and gate each permission delta independently.
 - Pending deltas are left in `PENDING`.
+- AutoSync also runs when approved permission ChangeRequests are waiting to be applied.
 
 ## Change-Need Matrix (One User in One Group)
 

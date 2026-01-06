@@ -396,7 +396,8 @@ AutoSync intelligently detects when changes require a sync:
    - The script uses an SHA-256 hash of the actual data content to detect changes.
    - It ignores formatting, validation rules, and status updates, ensuring only meaningful data changes trigger a sync.
 2. **Folder Changes** - When managed Google Drive folders are modified (e.g., renamed, moved).
-3. **Previous Sync Failed** - Automatically retries failed syncs.
+3. **Approved Permission Changes** - When there are approved ChangeRequests for permission deltas waiting to be applied.
+4. **Previous Sync Failed** - Automatically retries failed syncs.
 
 **Self-Healing Behavior:**
 - If a sync fails (due to an error, manual termination, or validation failure), AutoSync automatically retries on the next scheduled interval.
