@@ -10828,6 +10828,7 @@ function autoSync(options = {}) {
       const elapsed = now - Number(lastRunRaw);
       if (!isNaN(elapsed) && elapsed < enforcedIntervalMs) {
         log_('AutoSync skipped: last run was ' + Math.round(elapsed / 1000) + 's ago (interval ' + intervalMinutes + ' mins).', 'DEBUG');
+        updateSyncStatus_('Skipped', { source: 'AutoSync' });
         return { skipped: true, added: 0, removed: 0, failed: 0, reason: 'interval' };
       }
     }
