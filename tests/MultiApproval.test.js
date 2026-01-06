@@ -130,6 +130,8 @@ function createMockSpreadsheet(sheets) {
 
 beforeAll(() => {
   loadGasFileIntoGlobal('../apps_script_project/Code.js');
+  loadGasFileIntoGlobal('../apps_script_project/Utils.gs');
+  loadGasFileIntoGlobal('../apps_script_project/Core.gs');
   loadGasFileIntoGlobal('../apps_script_project/MultiApproval.gs');
 });
 
@@ -146,12 +148,30 @@ afterEach(() => {
 
 describe('collectApprovalsFromRow_', () => {
   it('excludes requester from approvals when more than one approval is required', () => {
-    const row = new Array(CHANGE_REQUEST_APPLIED_AT_COL).fill('');
-    row[CHANGE_REQUEST_REQUESTED_BY_COL - 1] = 'requester@example.com';
-    row[CHANGE_REQUEST_FIRST_APPROVER_COL - 1] = 'requester@example.com';
-    row[CHANGE_REQUEST_FIRST_APPROVER_COL] = 'approver@example.com';
+    const headers = [
+      'RequestId',
+      'RequestedBy',
+      'RequestedAt',
+      'TargetSheet',
+      'TargetRowKey',
+      'Action',
+      'ProposedRowSnapshot',
+      'Status',
+      'ApprovalsNeeded',
+      'Approver_1',
+      'Approver_2',
+      'DenyReason',
+      'AppliedAt'
+    ];
+    const columnMap = getChangeRequestsColumnMap_(
+      createMockSheet(CHANGE_REQUESTS_SHEET_NAME, [headers])
+    );
+    const row = new Array(headers.length).fill('');
+    row[columnMap.requestedBy - 1] = 'requester@example.com';
+    row[columnMap.approverCols[0] - 1] = 'requester@example.com';
+    row[columnMap.approverCols[1] - 1] = 'approver@example.com';
 
-    const approvals = collectApprovalsFromRow_(row, 2, 'requester@example.com');
+    const approvals = collectApprovalsFromRow_(row, 2, 'requester@example.com', columnMap);
 
     expect(approvals).toEqual(['approver@example.com']);
   });
@@ -160,7 +180,7 @@ describe('collectApprovalsFromRow_', () => {
 describe('processChangeRequests_', () => {
   it('applies approved requests when threshold is met', () => {
     const changeRequestsData = [
-      ['ID', 'RequestedBy', 'RequestedAt', 'TargetSheet', 'TargetRowKey', 'Action', 'ProposedRowSnapshot', 'Status', 'ApprovalsNeeded', 'Approver1', 'Approver2', 'Extra', 'DenyReason', 'AppliedAt'],
+      ['RequestId', 'RequestedBy', 'RequestedAt', 'TargetSheet', 'TargetRowKey', 'Action', 'ProposedRowSnapshot', 'Status', 'ApprovalsNeeded', 'Approver_1', 'Approver_2', 'Extra', 'DenyReason', 'AppliedAt'],
       ['CR-1', 'requester@example.com', new Date('2024-01-01'), 'ManagedFolders', 'folder-1', 'UPDATE', JSON.stringify(['Updated Name', 'folder-1', false]), 'PENDING', 2, 'approver1@example.com', 'approver2@example.com', '', '', ''],
     ];
     const targetSheetData = [
@@ -184,15 +204,16 @@ describe('processChangeRequests_', () => {
     });
 
     processChangeRequests_({ silentMode: true });
+    const columnMap = getChangeRequestsColumnMap_(changeSheet);
 
     expect(targetSheet.data[1][0]).toBe('Updated Name');
-    expect(changeSheet.data[1][CHANGE_REQUEST_STATUS_COL - 1]).toBe(CHANGE_REQUEST_STATUS_APPLIED);
-    expect(changeSheet.data[1][CHANGE_REQUEST_APPLIED_AT_COL - 1]).toBeInstanceOf(Date);
+    expect(changeSheet.data[1][columnMap.status - 1]).toBe(CHANGE_REQUEST_STATUS_APPLIED);
+    expect(changeSheet.data[1][columnMap.appliedAt - 1]).toBeInstanceOf(Date);
   });
 
   it('does not auto-approve or apply when approvals are disabled', () => {
     const changeRequestsData = [
-      ['ID', 'RequestedBy', 'RequestedAt', 'TargetSheet', 'TargetRowKey', 'Action', 'ProposedRowSnapshot', 'Status', 'ApprovalsNeeded', 'Approver1', 'Approver2', 'Extra', 'DenyReason', 'AppliedAt'],
+      ['RequestId', 'RequestedBy', 'RequestedAt', 'TargetSheet', 'TargetRowKey', 'Action', 'ProposedRowSnapshot', 'Status', 'ApprovalsNeeded', 'Approver_1', 'Approver_2', 'Extra', 'DenyReason', 'AppliedAt'],
       ['CR-1', 'requester@example.com', new Date('2024-01-01'), 'ManagedFolders', 'folder-1', 'UPDATE', JSON.stringify(['Updated Name', 'folder-1', false]), 'PENDING', 2, 'approver1@example.com', 'approver2@example.com', '', '', ''],
     ];
     const targetSheetData = [
@@ -216,15 +237,16 @@ describe('processChangeRequests_', () => {
     });
 
     processChangeRequests_({ silentMode: true });
+    const columnMap = getChangeRequestsColumnMap_(changeSheet);
 
-    expect(changeSheet.data[1][CHANGE_REQUEST_STATUS_COL - 1]).toBe('PENDING');
-    expect(changeSheet.data[1][CHANGE_REQUEST_APPLIED_AT_COL - 1]).toBe('');
+    expect(changeSheet.data[1][columnMap.status - 1]).toBe('PENDING');
+    expect(changeSheet.data[1][columnMap.appliedAt - 1]).toBe('');
     expect(targetSheet.data[1][0]).toBe('Original Name');
   });
 
   it('denies requests when multiple rows match the target key column', () => {
     const changeRequestsData = [
-      ['ID', 'RequestedBy', 'RequestedAt', 'TargetSheet', 'TargetRowKey', 'Action', 'ProposedRowSnapshot', 'Status', 'ApprovalsNeeded', 'Approver1', 'Approver2', 'Extra', 'DenyReason', 'AppliedAt'],
+      ['RequestId', 'RequestedBy', 'RequestedAt', 'TargetSheet', 'TargetRowKey', 'Action', 'ProposedRowSnapshot', 'Status', 'ApprovalsNeeded', 'Approver_1', 'Approver_2', 'Extra', 'DenyReason', 'AppliedAt'],
       ['CR-1', 'requester@example.com', new Date('2024-01-01'), 'ManagedFolders', 'folder-dup', 'UPDATE', JSON.stringify(['Updated Name', 'folder-dup', false]), 'PENDING', 2, 'approver1@example.com', 'approver2@example.com', '', '', ''],
     ];
     const targetSheetData = [
@@ -249,14 +271,15 @@ describe('processChangeRequests_', () => {
     });
 
     processChangeRequests_({ silentMode: true });
+    const columnMap = getChangeRequestsColumnMap_(changeSheet);
 
-    expect(changeSheet.data[1][CHANGE_REQUEST_STATUS_COL - 1]).toBe(CHANGE_REQUEST_STATUS_DENIED);
-    expect(changeSheet.data[1][CHANGE_REQUEST_DENY_REASON_COL - 1]).toContain('Multiple rows matched');
+    expect(changeSheet.data[1][columnMap.status - 1]).toBe(CHANGE_REQUEST_STATUS_DENIED);
+    expect(changeSheet.data[1][columnMap.denyReason - 1]).toContain('Multiple rows matched');
   });
 
   it('stops when required approvals exceed available editors', () => {
     const changeRequestsData = [
-      ['ID', 'RequestedBy', 'RequestedAt', 'TargetSheet', 'TargetRowKey', 'Action', 'ProposedRowSnapshot', 'Status', 'ApprovalsNeeded', 'Approver1', 'Approver2', 'Extra', 'DenyReason', 'AppliedAt'],
+      ['RequestId', 'RequestedBy', 'RequestedAt', 'TargetSheet', 'TargetRowKey', 'Action', 'ProposedRowSnapshot', 'Status', 'ApprovalsNeeded', 'Approver_1', 'Approver_2', 'Extra', 'DenyReason', 'AppliedAt'],
       ['CR-1', 'requester@example.com', new Date('2024-01-01'), 'ManagedFolders', 'folder-1', 'UPDATE', JSON.stringify(['Updated Name', 'folder-1', false]), 'PENDING', 5, 'approver1@example.com', '', '', '', ''],
     ];
     const targetSheetData = [
@@ -280,9 +303,10 @@ describe('processChangeRequests_', () => {
     });
 
     processChangeRequests_({ silentMode: true });
+    const columnMap = getChangeRequestsColumnMap_(changeSheet);
 
     expect(changeSheet.notes['1,1']).toContain('exceeds active sheet editors');
-    expect(changeSheet.data[1][CHANGE_REQUEST_STATUS_COL - 1]).toBe('PENDING');
+    expect(changeSheet.data[1][columnMap.status - 1]).toBe('PENDING');
     expect(targetSheet.data[1][0]).toBe('Original Name');
   });
 
@@ -291,7 +315,7 @@ describe('processChangeRequests_', () => {
     jest.useFakeTimers().setSystemTime(now);
 
     const changeRequestsData = [
-      ['ID', 'RequestedBy', 'RequestedAt', 'TargetSheet', 'TargetRowKey', 'Action', 'ProposedRowSnapshot', 'Status', 'ApprovalsNeeded', 'Approver1', 'Approver2', 'Extra', 'DenyReason', 'AppliedAt'],
+      ['RequestId', 'RequestedBy', 'RequestedAt', 'TargetSheet', 'TargetRowKey', 'Action', 'ProposedRowSnapshot', 'Status', 'ApprovalsNeeded', 'Approver_1', 'Approver_2', 'Extra', 'DenyReason', 'AppliedAt'],
       ['CR-1', 'requester@example.com', new Date('2024-01-01T00:00:00Z'), 'ManagedFolders', 'folder-1', 'UPDATE', JSON.stringify(['Updated Name', 'folder-1', false]), 'PENDING', 2, '', '', '', '', ''],
     ];
 
@@ -316,9 +340,10 @@ describe('processChangeRequests_', () => {
     });
 
     processChangeRequests_({ silentMode: true });
+    const columnMap = getChangeRequestsColumnMap_(changeSheet);
 
-    expect(changeSheet.data[1][CHANGE_REQUEST_STATUS_COL - 1]).toBe(CHANGE_REQUEST_STATUS_EXPIRED);
-    expect(changeSheet.data[1][CHANGE_REQUEST_DENY_REASON_COL - 1]).toContain('Expired');
+    expect(changeSheet.data[1][columnMap.status - 1]).toBe(CHANGE_REQUEST_STATUS_EXPIRED);
+    expect(changeSheet.data[1][columnMap.denyReason - 1]).toContain('Expired');
     expect(targetSheet.data[1][0]).toBe('Original Name');
   });
 });

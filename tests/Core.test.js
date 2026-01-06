@@ -25,6 +25,7 @@ eval(codeJsContent);
 
 // Load required GAS files
 loadGasFileIntoGlobal('../apps_script_project/Utils.gs');
+loadGasFileIntoGlobal('../apps_script_project/MultiApproval.gs');
 loadGasFileIntoGlobal('../apps_script_project/Core.gs');
 
 describe('_buildSyncJobs', () => {

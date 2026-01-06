@@ -16,6 +16,7 @@ describe('SheetEditors Sync', () => {
     // Load all script files needed for this test.
     loadGasFileAsGlobal('../apps_script_project/Code.js');
     loadGasFileAsGlobal('../apps_script_project/Utils.gs');
+    loadGasFileAsGlobal('../apps_script_project/MultiApproval.gs');
     loadGasFileAsGlobal('../apps_script_project/Core.gs');
     loadGasFileAsGlobal('../apps_script_project/Sync.gs');
   });
@@ -53,7 +54,7 @@ describe('SheetEditors Sync', () => {
       getSheetByName: jest.fn(),
       getEditors: jest.fn().mockReturnValue([]),
       getOwner: jest.fn().mockReturnValue(null),
-      addEditors: jest.fn(),
+      addEditor: jest.fn(),
       removeEditor: jest.fn(),
       getUi: jest.fn(() => ({
         alert: jest.fn(),
@@ -236,6 +237,6 @@ describe('SheetEditors Sync', () => {
     expect(deleteCalls.length).toBe(0);
 
     expect(global.SpreadsheetApp.removeEditor).not.toHaveBeenCalledWith(disabledUserEmail);
-    expect(global.SpreadsheetApp.addEditors).toHaveBeenCalled();
+    expect(global.SpreadsheetApp.addEditor).toHaveBeenCalled();
   });
 });
