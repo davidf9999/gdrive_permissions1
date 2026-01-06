@@ -500,7 +500,10 @@ function setupStatusSheet_() {
     .setVerticalAlignment('middle')
     .setFontSize(12)
     .setFontWeight('bold');
-  updateSyncStatusPanel_(statusSheet, 'Unknown');
+  const existingSyncStatus = existingSettings.has('Last Sync Status')
+    ? existingSettings.get('Last Sync Status').value
+    : defaultStatus['Last Sync Status'].value;
+  updateSyncStatusPanel_(statusSheet, existingSyncStatus || 'Unknown');
 }
 
 function setupLogSheets_() {
