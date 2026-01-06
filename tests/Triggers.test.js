@@ -21,6 +21,7 @@ describe('detectAutoSyncChanges_', () => {
     loadGasFileAsGlobal('../apps_script_project/Code.js');
     loadGasFileAsGlobal('../apps_script_project/Utils.gs');
     loadGasFileAsGlobal('../apps_script_project/Core.gs');
+    loadGasFileAsGlobal('../apps_script_project/MultiApproval.gs');
     loadGasFileAsGlobal('../apps_script_project/Triggers.gs');
   });
 

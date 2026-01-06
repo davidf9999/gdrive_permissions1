@@ -589,7 +589,7 @@ function syncAdds(options = {}) {
     }
   } finally {
     lock.releaseLock();
-    hideSyncInProgress_();
+    hideSyncInProgress_(silentMode);
   }
 }
 
@@ -733,7 +733,7 @@ function syncDeletes() {
     });
   } finally {
     lock.releaseLock();
-    hideSyncInProgress_();
+    hideSyncInProgress_(false);
   }
 }
 
@@ -880,7 +880,7 @@ function fullSync(options = {}) {
     }
   } finally {
     lock.releaseLock();
-    hideSyncInProgress_();
+    hideSyncInProgress_(silentMode);
   }
 }
 
@@ -924,7 +924,7 @@ function syncManagedFoldersAdds() {
     });
   } finally {
     lock.releaseLock();
-    hideSyncInProgress_();
+    hideSyncInProgress_(false);
   }
 }
 
@@ -1064,7 +1064,7 @@ function syncManagedFoldersDeletes() {
     });
   } finally {
     lock.releaseLock();
-    hideSyncInProgress_();
+    hideSyncInProgress_(false);
   }
 }
 

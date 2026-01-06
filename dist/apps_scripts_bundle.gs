@@ -1843,7 +1843,8 @@ function showSyncInProgress_(silentMode) {
   log_(message, 'INFO');
 }
 
-function hideSyncInProgress_() {
+function hideSyncInProgress_(silentMode) {
+  if (silentMode) return;
   // Try to force the host UI to refresh without showing a toast or modal that can
   // leave behind the "Working" overlay. A tiny sidebar that immediately closes
   // tends to nudge the Sheets client to repaint.
@@ -7600,7 +7601,7 @@ function syncAdds(options = {}) {
     }
   } finally {
     lock.releaseLock();
-    hideSyncInProgress_();
+    hideSyncInProgress_(silentMode);
   }
 }
 
@@ -7744,7 +7745,7 @@ function syncDeletes() {
     });
   } finally {
     lock.releaseLock();
-    hideSyncInProgress_();
+    hideSyncInProgress_(false);
   }
 }
 
@@ -7891,7 +7892,7 @@ function fullSync(options = {}) {
     }
   } finally {
     lock.releaseLock();
-    hideSyncInProgress_();
+    hideSyncInProgress_(silentMode);
   }
 }
 
@@ -7935,7 +7936,7 @@ function syncManagedFoldersAdds() {
     });
   } finally {
     lock.releaseLock();
-    hideSyncInProgress_();
+    hideSyncInProgress_(false);
   }
 }
 
@@ -8075,7 +8076,7 @@ function syncManagedFoldersDeletes() {
     });
   } finally {
     lock.releaseLock();
-    hideSyncInProgress_();
+    hideSyncInProgress_(false);
   }
 }
 

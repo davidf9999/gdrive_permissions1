@@ -1226,7 +1226,8 @@ function showSyncInProgress_(silentMode) {
   log_(message, 'INFO');
 }
 
-function hideSyncInProgress_() {
+function hideSyncInProgress_(silentMode) {
+  if (silentMode) return;
   // Try to force the host UI to refresh without showing a toast or modal that can
   // leave behind the "Working" overlay. A tiny sidebar that immediately closes
   // tends to nudge the Sheets client to repaint.
