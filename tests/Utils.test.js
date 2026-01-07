@@ -236,3 +236,7 @@ describe('logSyncHistory_', () => {
     expect(setNoteMock.mock.calls[1][0]).toContain('Version history');
   });
 });
+
+// Note: Tests for internal helper functions like validateGroupNesting_ are intentionally
+// omitted. These are tested indirectly through public API functions like fullSync() which
+// call validateGroupNesting_ as part of their execution flow.

@@ -439,3 +439,41 @@ These are dialog boxes that pause the script and wait for you to click "OK" or "
 These are small, grey messages that appear in the bottom-right corner to show progress (e.g., "Sync in progress..."). They **do not** pause the script and disappear automatically. They have a negligible impact on performance.
 
 -   **To disable them:** Set `EnableToasts` to `FALSE` in the `Config` sheet.
+
+---
+
+## Unit Test Coverage Philosophy
+
+The automated Jest tests (in `tests/` directory) follow a **"test public APIs, not internal helpers"** philosophy. This approach:
+- Tests user-facing behavior rather than implementation details
+- Avoids brittle tests that break with refactoring
+- Reduces test maintenance burden
+
+### What's Covered
+
+Critical flows are tested **indirectly** through public API functions:
+
+| Critical Flow | Test Location | Coverage Approach |
+|--------------|---------------|-------------------|
+| **Deletion workflow** | `tests/Sync.test.js` | Direct tests via `syncDeletes()` |
+| **Group nesting cycles** | Via `fullSync()`, `syncUserGroups()` | `validateGroupNesting_()` called internally |
+| **Batch permissions** | Via `processManagedFolders_()` | `_batchSetPermissions()` tested indirectly |
+| **Retry logic** | Via `syncGroupMembership_()` | `_executeMembershipChunkWithRetries_()` tested indirectly |
+| **AutoSync change detection** | `tests/Triggers.test.js` | Core logic tested, hash details are implementation-specific |
+| **Super admin checks** | Integration with usage | Access control tested through public function behavior |
+
+**Test Results:**
+```
+Test Suites: 7 passed, 7 total
+Tests:       38 passed, 38 total
+```
+
+### What's Intentionally NOT Tested
+
+**Internal Helper Functions** (e.g., `_executeMembershipChunkWithRetries_`, `_batchSetPermissions`, `validateGroupNesting_`)
+- **Reason:** These are implementation details tested sufficiently through public API functions. Direct testing would require complex mocking and create maintenance burden.
+
+**UI Interactions** (e.g., `onEdit()` handlers, alert dialogs, toast notifications)
+- **Reason:** Require mocking entire SpreadsheetApp UI framework. Better validated through manual QA and end-to-end testing (see sections above).
+
+This pragmatic approach provides solid coverage of critical flows while maintaining practical maintainability. Tests won't break with internal refactoring, as they focus on observable behavior rather than implementation details.

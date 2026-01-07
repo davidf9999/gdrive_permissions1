@@ -107,4 +107,36 @@ describe('detectAutoSyncChanges_', () => {
     expect(result.shouldRun).toBe(false);
     expect(result.reasons).toHaveLength(0);
   });
+
+  // Note: Additional tests for hash computation and data change detection would require
+  // complex mocking of sheet data structures. The core functionality is tested through
+  // integration tests and the basic scenarios above cover the critical paths.
+
+  it('triggers sync when last sync was unsuccessful', () => {
+    const previousSnapshot = {
+      lastSyncSuccessful: false,
+      dataHash: 'mock-hash-string',
+      capturedAt: '2024-01-01T00:00:00Z'
+    };
+    storedSnapshot = JSON.stringify(previousSnapshot);
+
+    const result = detectAutoSyncChanges_();
+
+    expect(result.shouldRun).toBe(true);
+    expect(result.reasons).toEqual(
+      expect.arrayContaining([expect.stringContaining('Previous AutoSync run did not complete successfully')])
+    );
+  });
+
+  it('handles corrupted snapshot gracefully', () => {
+    storedSnapshot = 'invalid-json{';
+
+    const result = detectAutoSyncChanges_();
+
+    expect(result.shouldRun).toBe(true);
+    expect(log_).toHaveBeenCalledWith(
+      expect.stringContaining('Failed to parse previous AutoSync snapshot'),
+      'WARN'
+    );
+  });
 });
