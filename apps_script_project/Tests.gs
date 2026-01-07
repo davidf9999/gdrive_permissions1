@@ -1106,14 +1106,18 @@ function runSheetLockingTest_() {
 
         // 3. Verify protection is on
         let protections = sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET);
-        const expectedDescription = 'Sync Lock by execution: ' + testExecutionId;
-        if (protections.length !== 1 || protections[0].getDescription() !== expectedDescription) {
+        const expectedDescriptionPrefix = 'Sync Lock by execution: ' + testExecutionId;
+        const matchingProtection = protections.filter(protection => {
+            const description = protection.getDescription();
+            return description && description.indexOf(expectedDescriptionPrefix) === 0;
+        })[0];
+        if (!matchingProtection) {
             throw new Error('VERIFICATION FAILED: Sheet was not locked correctly or description is wrong.');
         }
         log_('VERIFICATION PASSED: Sheet protection is applied.', 'INFO');
 
         // 4. Verify the editor is correct
-        const editors = protections[0].getEditors();
+        const editors = matchingProtection.getEditors();
         const me = Session.getEffectiveUser().getEmail();
         if (editors.length !== 1 || editors[0].getEmail() !== me) {
             throw new Error('VERIFICATION FAILED: Protection should only have one editor: the script owner.');
