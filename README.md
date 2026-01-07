@@ -215,11 +215,14 @@ required to unlock Admin SDK limits.
 
 ## Security & privacy
 
-- **Permissions requested**: the script uses the Admin SDK scope to create and
-  manage Google Groups, which requires directory-wide visibility and cannot be
-  narrowed further without breaking group provisioning or membership syncs.
-  Drive scopes are limited to files the script creates or is explicitly granted
-  access to, plus read-only access where needed for metadata checks.
+- **Permissions requested**: the script uses Admin SDK scopes to manage Google
+  Groups and Drive scopes to share folders on your behalf.
+- **Why Admin Directory scope is required**: the workflow provisions, updates,
+  and revokes Google Group memberships that map to folder access roles. Those
+  group membership operations require the Admin SDK
+  `https://www.googleapis.com/auth/admin.directory.group` scope and cannot be
+  narrowed without breaking the ability to manage groups used for access
+  control.
 - **Data location**: all managed data (folder metadata, group membership, and
   logs) stays inside your Google Spreadsheet and Workspace tenant; nothing is
   sent to external services.
