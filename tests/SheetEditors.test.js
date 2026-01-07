@@ -74,6 +74,7 @@ describe('SheetEditors Sync', () => {
     global.getOrCreateGroup_ = jest.fn((email, name) => ({ group: { id: 'group-id' }, wasNewlyCreated: false }));
     global.SCRIPT_EXECUTION_MODE = 'TEST';
     global.showTestMessage_ = jest.fn();
+    global.ensureChangeRequestsSheet_ = jest.fn();
   });
 
   // Helper to create the specific mocks for UserGroups and SheetEditors_G sheets

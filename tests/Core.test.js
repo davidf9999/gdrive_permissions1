@@ -139,6 +139,7 @@ describe('syncGroupMembership_', () => {
     global.SpreadsheetApp = {
       getActiveSpreadsheet: jest.fn()
     };
+    global.ensureChangeRequestsSheet_ = jest.fn();
   });
 
   function mockSpreadsheetForUserSheet(userSheetName, values) {
@@ -174,5 +175,111 @@ describe('syncGroupMembership_', () => {
 
     expect(summary).toEqual({ added: 0, removed: 0, failed: 0 });
     expect(_executeMembershipChunkWithRetries_).not.toHaveBeenCalled();
+  });
+});
+
+describe('isSuperAdmin_', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    global.log_ = jest.fn();
+    getActiveUserEmail_ = jest.fn();
+    getSpreadsheetOwnerEmail_ = jest.fn();
+    getSuperAdminEmails_ = jest.fn();
+    global.getActiveUserEmail_ = getActiveUserEmail_;
+    global.getSpreadsheetOwnerEmail_ = getSpreadsheetOwnerEmail_;
+    global.getSuperAdminEmails_ = getSuperAdminEmails_;
+  });
+
+  it('returns false when active user cannot be resolved', () => {
+    getActiveUserEmail_.mockReturnValue('');
+    getSpreadsheetOwnerEmail_.mockReturnValue('owner@example.com');
+    getSuperAdminEmails_.mockReturnValue(['owner@example.com']);
+
+    expect(isSuperAdmin_()).toBe(false);
+  });
+
+  it('returns true when owner is the only available super admin', () => {
+    getActiveUserEmail_.mockReturnValue('owner@example.com');
+    getSpreadsheetOwnerEmail_.mockReturnValue('owner@example.com');
+    getSuperAdminEmails_.mockReturnValue([]);
+
+    expect(isSuperAdmin_()).toBe(true);
+  });
+
+  it('returns true when wildcard super admin entries are configured', () => {
+    getActiveUserEmail_.mockReturnValue('user@example.com');
+    getSpreadsheetOwnerEmail_.mockReturnValue('owner@example.com');
+    getSuperAdminEmails_.mockReturnValue(['*']);
+
+    expect(isSuperAdmin_()).toBe(true);
+  });
+
+  it('matches explicit, domain, and wildcard domain entries', () => {
+    getSpreadsheetOwnerEmail_.mockReturnValue('owner@example.com');
+
+    getActiveUserEmail_.mockReturnValue('alice@example.com');
+    getSuperAdminEmails_.mockReturnValue(['alice@example.com']);
+    expect(isSuperAdmin_()).toBe(true);
+
+    getActiveUserEmail_.mockReturnValue('bob@example.com');
+    getSuperAdminEmails_.mockReturnValue(['@example.com']);
+    expect(isSuperAdmin_()).toBe(true);
+
+    getActiveUserEmail_.mockReturnValue('carol@example.com');
+    getSuperAdminEmails_.mockReturnValue(['*@example.com']);
+    expect(isSuperAdmin_()).toBe(true);
+  });
+
+  it('returns false when an exception is thrown', () => {
+    getActiveUserEmail_.mockImplementation(() => {
+      throw new Error('boom');
+    });
+    getSpreadsheetOwnerEmail_.mockReturnValue('owner@example.com');
+    getSuperAdminEmails_.mockReturnValue(['owner@example.com']);
+
+    expect(isSuperAdmin_()).toBe(false);
+  });
+});
+
+describe('processDeletionRequests_', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    global.log_ = jest.fn();
+  });
+
+  it('skips deletions when disabled', () => {
+    global.getConfigValue_ = jest.fn(() => false);
+    global.updateDeleteStatusWarnings_ = jest.fn();
+    global.processUserGroupDeletions_ = jest.fn();
+    global.processManagedFolderDeletions_ = jest.fn();
+
+    const result = processDeletionRequests_({ silentMode: true });
+
+    expect(result).toEqual({ userGroupsDeleted: 0, foldersDeleted: 0, skipped: true, reason: 'disabled' });
+    expect(updateDeleteStatusWarnings_).toHaveBeenCalled();
+    expect(processUserGroupDeletions_).not.toHaveBeenCalled();
+    expect(processManagedFolderDeletions_).not.toHaveBeenCalled();
+  });
+
+  it('runs deletion processing and notifies when deletions occur', () => {
+    global.getConfigValue_ = jest.fn(() => true);
+    global.processUserGroupDeletions_ = jest.fn((summary) => {
+      summary.userGroupsDeleted = 1;
+    });
+    global.processManagedFolderDeletions_ = jest.fn((summary) => {
+      summary.foldersDeleted = 2;
+    });
+    global.notifyDeletions_ = jest.fn();
+
+    const result = processDeletionRequests_({ silentMode: true });
+
+    expect(processUserGroupDeletions_).toHaveBeenCalled();
+    expect(processManagedFolderDeletions_).toHaveBeenCalled();
+    expect(notifyDeletions_).toHaveBeenCalledWith(expect.objectContaining({
+      userGroupsDeleted: 1,
+      foldersDeleted: 2
+    }));
+    expect(result.userGroupsDeleted).toBe(1);
+    expect(result.foldersDeleted).toBe(2);
   });
 });
