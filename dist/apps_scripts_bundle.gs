@@ -6685,7 +6685,6 @@ function setupControlSheets_() {
         'LogLevel': { value: 'INFO', description: 'Controls log verbosity. ERROR: critical errors only. WARN: warnings and errors. INFO: normal operations (default). DEBUG: detailed debugging including routine AutoSync checks.' },
         'MaxLogLength': { value: DEFAULT_MAX_LOG_LENGTH, description: 'The maximum number of rows to keep in the Log and TestLog sheets.' },
         'MaxFileSizeMB': { value: 100, description: 'The maximum file size in MB for the spreadsheet. If exceeded, AutoSync will be aborted and an alert sent. This prevents uncontrolled growth of version history.' },
-        '_SyncHistory': { value: 'Always enabled', description: 'Sync history is automatically tracked in the SyncHistory sheet with revision links (30-100 days retention).' },
         'EnableGCPLogging': { value: false, description: 'Experimental (see feature/gcp-logging-experimental branch). Leave FALSE on main; check only in that branch to send logs to Google Cloud Logging.' },
     },
     '--- General ---': {
@@ -6698,7 +6697,7 @@ function setupControlSheets_() {
         'TestCleanup': { value: false, description: 'Set to TRUE to automatically delete all folders, groups, and sheets created by a test. If FALSE, you will be prompted manually.' },
         'TestUserEmail': { value: currentUserEmail, description: 'The email of a real user IN YOUR WORKSPACE DOMAIN (e.g., your-name@your-domain.com) to be used for all tests. For the stress test, aliases will be generated from this email.' },
         'TestFolderName': { value: 'ManualAccessTestFolder', description: 'The name of the folder to be created during the Manual Access Test.' },
-        'TestRole': { value: 'Editor', description: 'The role to be tested during the Manual Access Test.' },
+        'TestRole': { value: 'Editor', description: 'The role to be tested during the Manual Access Test. Supported values: Editor, Viewer, Commenter.' },
         'TestNumFolders': { value: 2, description: 'The number of folders to create during the Stress Test. Total API calls are TestNumFolders * TestNumUsers. High numbers can cause API rate-limiting errors.' },
         'TestNumUsers': { value: 5, description: 'The number of users to create PER FOLDER during the Stress Test. Total API calls are TestNumFolders * TestNumUsers. High numbers can cause API rate-limiting errors.' }
     }
@@ -6788,21 +6787,6 @@ function applyConfigValidation_() {
     'ApprovalsEnabled'
   ];
 
-  // Add dropdown validation for LogLevel
-  const allSettings = configSheet.getDataRange().getValues();
-  for (let i = 0; i < allSettings.length; i++) {
-    if (allSettings[i][0] === 'LogLevel') {
-      const logLevelCell = configSheet.getRange(i + 1, 2); // Column B
-      const logLevelRule = SpreadsheetApp.newDataValidation()
-        .requireValueInList(['ERROR', 'WARN', 'INFO', 'DEBUG'], true)
-        .setAllowInvalid(false)
-        .setHelpText('Select logging verbosity: ERROR (critical only), WARN (warnings+errors), INFO (normal operations), DEBUG (detailed including routine checks)')
-        .build();
-      logLevelCell.setDataValidation(logLevelRule);
-      break;
-    }
-  }
-
   const data = configSheet.getDataRange().getValues();
 
   // First, clear all data validations from the Value column (column B)
@@ -6824,6 +6808,32 @@ function applyConfigValidation_() {
       cell.setDataValidation(rule);
     }
   }
+
+  function applyDropdownValidation_(settingName, options, helpText) {
+    for (let i = 0; i < data.length; i++) {
+      if (data[i][0] === settingName) {
+        const cell = configSheet.getRange(i + 1, 2);
+        const dropdownRule = SpreadsheetApp.newDataValidation()
+          .requireValueInList(options, true)
+          .setAllowInvalid(false)
+          .setHelpText(helpText)
+          .build();
+        cell.setDataValidation(dropdownRule);
+        break;
+      }
+    }
+  }
+
+  applyDropdownValidation_(
+    'LogLevel',
+    ['ERROR', 'WARN', 'INFO', 'DEBUG'],
+    'Select logging verbosity: ERROR (critical only), WARN (warnings+errors), INFO (normal operations), DEBUG (detailed including routine checks)'
+  );
+  applyDropdownValidation_(
+    'TestRole',
+    ['Editor', 'Viewer', 'Commenter'],
+    'Select the test role: Editor, Viewer, or Commenter.'
+  );
   // log_('Applied checkbox validation rules to Config sheet.');
 }
 
@@ -6868,7 +6878,8 @@ function setupStatusSheet_() {
     'Last Sync Duration (seconds)': { value: '', description: 'Duration of the most recent sync attempt.' },
     'Last Sync Summary': { value: '', description: 'Summary of the most recent sync changes.' },
     'Last Sync Error': { value: '', description: 'Most recent sync error message (if any).' },
-    'Last Sync Source': { value: '', description: 'Origin of the last sync (AutoSync or Manual).' }
+    'Last Sync Source': { value: '', description: 'Origin of the last sync (AutoSync or Manual).' },
+    'Sync History': { value: 'Enabled (30-100 days retention)', description: 'Sync history is automatically tracked in the SyncHistory sheet with revision links.' }
   };
 
   const existingSettings = new Map();
