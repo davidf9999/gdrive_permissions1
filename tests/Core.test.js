@@ -182,54 +182,60 @@ describe('isSuperAdmin_', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     global.log_ = jest.fn();
+    global.getActiveUserEmail_ = jest.fn();
+    global.getSpreadsheetOwnerEmail_ = jest.fn();
+    global.getSuperAdminEmails_ = jest.fn();
+    getActiveUserEmail_ = global.getActiveUserEmail_;
+    getSpreadsheetOwnerEmail_ = global.getSpreadsheetOwnerEmail_;
+    getSuperAdminEmails_ = global.getSuperAdminEmails_;
   });
 
   it('returns false when active user cannot be resolved', () => {
-    getActiveUserEmail_ = jest.fn(() => '');
-    getSpreadsheetOwnerEmail_ = jest.fn(() => 'owner@example.com');
-    getSuperAdminEmails_ = jest.fn(() => ['owner@example.com']);
+    global.getActiveUserEmail_.mockReturnValue('');
+    global.getSpreadsheetOwnerEmail_.mockReturnValue('owner@example.com');
+    global.getSuperAdminEmails_.mockReturnValue(['owner@example.com']);
 
     expect(isSuperAdmin_()).toBe(false);
   });
 
   it('returns true when owner is the only available super admin', () => {
-    getActiveUserEmail_ = jest.fn(() => 'owner@example.com');
-    getSpreadsheetOwnerEmail_ = jest.fn(() => 'owner@example.com');
-    getSuperAdminEmails_ = jest.fn(() => []);
+    global.getActiveUserEmail_.mockReturnValue('owner@example.com');
+    global.getSpreadsheetOwnerEmail_.mockReturnValue('owner@example.com');
+    global.getSuperAdminEmails_.mockReturnValue([]);
 
     expect(isSuperAdmin_()).toBe(true);
   });
 
   it('returns true when wildcard super admin entries are configured', () => {
-    getActiveUserEmail_ = jest.fn(() => 'user@example.com');
-    getSpreadsheetOwnerEmail_ = jest.fn(() => 'owner@example.com');
-    getSuperAdminEmails_ = jest.fn(() => ['*']);
+    global.getActiveUserEmail_.mockReturnValue('user@example.com');
+    global.getSpreadsheetOwnerEmail_.mockReturnValue('owner@example.com');
+    global.getSuperAdminEmails_.mockReturnValue(['*']);
 
     expect(isSuperAdmin_()).toBe(true);
   });
 
   it('matches explicit, domain, and wildcard domain entries', () => {
-    getSpreadsheetOwnerEmail_ = jest.fn(() => 'owner@example.com');
+    global.getSpreadsheetOwnerEmail_.mockReturnValue('owner@example.com');
 
-    getActiveUserEmail_ = jest.fn(() => 'alice@example.com');
-    getSuperAdminEmails_ = jest.fn(() => ['alice@example.com']);
+    global.getActiveUserEmail_.mockReturnValue('alice@example.com');
+    global.getSuperAdminEmails_.mockReturnValue(['alice@example.com']);
     expect(isSuperAdmin_()).toBe(true);
 
-    getActiveUserEmail_ = jest.fn(() => 'bob@example.com');
-    getSuperAdminEmails_ = jest.fn(() => ['@example.com']);
+    global.getActiveUserEmail_.mockReturnValue('bob@example.com');
+    global.getSuperAdminEmails_.mockReturnValue(['@example.com']);
     expect(isSuperAdmin_()).toBe(true);
 
-    getActiveUserEmail_ = jest.fn(() => 'carol@example.com');
-    getSuperAdminEmails_ = jest.fn(() => ['*@example.com']);
+    global.getActiveUserEmail_.mockReturnValue('carol@example.com');
+    global.getSuperAdminEmails_.mockReturnValue(['*@example.com']);
     expect(isSuperAdmin_()).toBe(true);
   });
 
   it('returns false when an exception is thrown', () => {
-    getActiveUserEmail_ = jest.fn(() => {
+    global.getActiveUserEmail_.mockImplementation(() => {
       throw new Error('boom');
     });
-    getSpreadsheetOwnerEmail_ = jest.fn(() => 'owner@example.com');
-    getSuperAdminEmails_ = jest.fn(() => ['owner@example.com']);
+    global.getSpreadsheetOwnerEmail_.mockReturnValue('owner@example.com');
+    global.getSuperAdminEmails_.mockReturnValue(['owner@example.com']);
 
     expect(isSuperAdmin_()).toBe(false);
   });
