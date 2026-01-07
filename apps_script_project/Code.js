@@ -257,7 +257,7 @@ function onEdit(e) {
       }
       if (settingName === 'RequiredApprovals') {
         const requestedValue = range.getValue();
-        const approvalsRequested = Math.min(3, Math.max(1, parseInt(requestedValue, 10) || 1));
+        const approvalsRequested = Math.max(1, parseInt(requestedValue, 10) || 1);
         if (approvalsConfig.availableEditors > 0 && approvalsRequested > approvalsConfig.availableEditors) {
           range.setValue(oldValue);
           SpreadsheetApp.getActiveSpreadsheet().toast('RequiredApprovals cannot exceed active Sheet Editors.', 'Edit Reverted', 12);
@@ -265,7 +265,7 @@ function onEdit(e) {
         }
         if (requestedValue !== approvalsRequested) {
           range.setValue(approvalsRequested);
-          SpreadsheetApp.getActiveSpreadsheet().toast('RequiredApprovals capped at 3.', 'Adjusted', 10);
+          SpreadsheetApp.getActiveSpreadsheet().toast('RequiredApprovals must be a whole number of at least 1.', 'Adjusted', 10);
         }
       }
       ensureChangeRequestsSheet_();
