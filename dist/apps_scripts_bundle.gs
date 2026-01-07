@@ -307,19 +307,46 @@ function buildRestrictedMenu_() {
 function isSuperAdmin_() {
   try {
     const userEmail = getActiveUserEmail_();
-    const ownerEmail = getSpreadsheetOwnerEmail_();
     if (!userEmail) {
       log_('Could not resolve active user email. Defaulting to restricted mode.', 'WARN');
       return false;
     }
     const resolvedEmail = userEmail;
 
+    const hasConfiguredAdmins = hasConfiguredSuperAdmins_();
     const superAdmins = getSuperAdminEmails_();
-    if (!superAdmins.length) {
-      if (ownerEmail && ownerEmail === resolvedEmail) {
+    if (!hasConfiguredAdmins) {
+      const ownerEmail = getSpreadsheetOwnerEmail_();
+      if (!ownerEmail) {
+        log_('No super admin emails configured and owner email unavailable. Defaulting to restricted mode for ' + resolvedEmail + '.', 'WARN');
+        return false;
+      }
+      let verifiedOwnerEmail = '';
+      try {
+        const owner = SpreadsheetApp.getActive().getOwner();
+        if (owner && typeof owner.getEmail === 'function') {
+          const email = owner.getEmail();
+          if (email) {
+            verifiedOwnerEmail = email.toLowerCase();
+          }
+        }
+      } catch (ownerError) {
+        log_('Secondary owner verification failed: ' + ownerError.message + '. Defaulting to restricted mode for ' + resolvedEmail + '.', 'WARN');
+        return false;
+      }
+      if (!verifiedOwnerEmail) {
+        log_('Secondary owner verification unavailable. Defaulting to restricted mode for ' + resolvedEmail + '.', 'WARN');
+        return false;
+      }
+      if (verifiedOwnerEmail !== ownerEmail) {
+        log_('Owner verification mismatch (' + ownerEmail + ' vs ' + verifiedOwnerEmail + '). Defaulting to restricted mode for ' + resolvedEmail + '.', 'WARN');
+        return false;
+      }
+      if (verifiedOwnerEmail === resolvedEmail) {
+        log_('Super admin access granted to verified spreadsheet owner ' + resolvedEmail + '.', 'INFO');
         return true;
       }
-      log_('No super admin emails configured. Defaulting to restricted mode for ' + resolvedEmail + '.', 'WARN');
+      log_('No super admin emails configured. Active user is not the verified owner (' + resolvedEmail + ').', 'WARN');
       return false;
     }
 
@@ -349,6 +376,23 @@ function isSuperAdmin_() {
     log_('Could not determine super admin status: ' + e.message, 'WARN');
     return false;
   }
+}
+
+function hasConfiguredSuperAdmins_() {
+  const config = typeof getConfiguration_ === 'function' ? getConfiguration_() : {};
+  const rawValue = config['SuperAdminEmails'];
+
+  if (rawValue === undefined || rawValue === null) {
+    return false;
+  }
+
+  if (Array.isArray(rawValue)) {
+    return rawValue.some(function (value) {
+      return String(value).trim().length > 0;
+    });
+  }
+
+  return String(rawValue).trim().length > 0;
 }
 
 function getSuperAdminEmails_() {
