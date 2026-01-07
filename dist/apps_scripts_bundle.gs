@@ -542,6 +542,7 @@ function createTestingMenu_(ui) {
     .addItem('Run Structural Edit Restriction Test', 'runStructuralEditRestrictionTest_')
     .addItem('Run AutoSync Error Email Test', 'runAutoSyncErrorEmailTest')
     .addItem('Run Sheet Locking Test', 'runSheetLockingTest_')
+    .addItem('Run SheetEditors Group Guard Test', 'runSheetEditorsGroupGuardTest_')
     .addItem('Run Circular Dependency Test', 'runCircularDependencyTest_')
     .addSeparator()
     .addItem('Run UserGroup Deletion Test', 'runUserGroupDeletionTest')
@@ -5801,8 +5802,10 @@ function normalizeChangeRequestRow_(sheet, rowIndex, approvalsConfig, eventUser,
     updates.push({ col: resolvedColumnMap.status, value: status });
   }
 
-  const approvalsNeeded = approvalsConfig && approvalsConfig.requiredApprovals !== undefined ? approvalsConfig.requiredApprovals : 1;
-  updates.push({ col: resolvedColumnMap.approvalsNeeded, value: approvalsNeeded });
+  if (!isTerminalChangeRequestStatus_(status)) {
+    const approvalsNeeded = approvalsConfig && approvalsConfig.requiredApprovals !== undefined ? approvalsConfig.requiredApprovals : 1;
+    updates.push({ col: resolvedColumnMap.approvalsNeeded, value: approvalsNeeded });
+  }
 
   if (updates.length > 0) {
     updates.forEach(function(update) {
@@ -7115,7 +7118,7 @@ function setupFolderAuditLogSheet_(sheet) {
 function ensureChangeRequestsSheet_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let changeSheet = ss.getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
-  const approvalsRequiredRaw = getConfigValue_('RequiredApprovals', 1);
+  const approvalsRequiredRaw = getConfigValueFresh_('RequiredApprovals', 1);
   const approvalsRequired = Math.max(1, parseInt(approvalsRequiredRaw, 10) || 1);
 
   if (!changeSheet) {
@@ -7254,12 +7257,17 @@ function syncSheetEditors(options = {}) {
     log_('DEBUG: Reading group email from cell.', 'DEBUG');
     let groupEmail = groupEmailCell.getValue().toString().trim().toLowerCase();
     log_('DEBUG: Group email from sheet: ' + groupEmail, 'DEBUG');
-    if (!groupEmail && groupOpsAvailable) {
-      groupEmail = generateGroupEmail_(SHEET_EDITORS_GROUP_NAME);
-      log_('DEBUG: Generated group email: ' + groupEmail, 'DEBUG');
-      log_('DEBUG: Writing generated email back to cell.', 'DEBUG');
-      groupEmailCell.setValue(groupEmail);
-      log_(`Generated and set SheetEditors group email in UserGroups sheet: ${groupEmail}`, 'INFO');
+    if (!groupEmail) {
+      const resolvedEmail = resolveSheetEditorsGroupEmail_('Permissions Manager Sheet Editors', groupEmail, {
+        groupOpsAvailable: groupOpsAvailable
+      });
+      if (resolvedEmail) {
+        groupEmail = resolvedEmail.toLowerCase();
+        log_('DEBUG: Resolved SheetEditors group email: ' + groupEmail, 'DEBUG');
+        log_('DEBUG: Writing resolved email back to cell.', 'DEBUG');
+        groupEmailCell.setValue(groupEmail);
+        log_(`Resolved and set SheetEditors group email in UserGroups sheet: ${groupEmail}`, 'INFO');
+      }
     }
 
     // --- SPREADSHEET EDITOR SYNC (File-level permissions) ---
@@ -7660,7 +7668,41 @@ function syncSheetEditors(options = {}) {
   return totalSummary;
 }
 
+function resolveSheetEditorsGroupEmail_(groupName, currentEmail, options = {}) {
+  if (currentEmail) {
+    return currentEmail;
+  }
 
+  const groupOpsAvailable = options.groupOpsAvailable !== undefined ? options.groupOpsAvailable : !shouldSkipGroupOps_();
+  if (!groupOpsAvailable) {
+    return '';
+  }
+
+  const overrideGroups = options.groupsOverride;
+  let groups = [];
+  if (overrideGroups) {
+    groups = overrideGroups;
+  } else {
+    try {
+      const query = "name='" + String(groupName || '').replace(/'/g, "\\'") + "'";
+      const response = AdminDirectory.Groups.list({ query: query, maxResults: 10 }) || {};
+      groups = response.groups || [];
+    } catch (e) {
+      log_('Failed to search for existing SheetEditors groups by name: ' + e.message, 'WARN');
+      groups = [];
+    }
+  }
+
+  if (groups.length > 1) {
+    throw new Error('Multiple groups named "' + groupName + '" found. Set GroupEmail in UserGroups to the correct group to prevent duplicates.');
+  }
+
+  if (groups.length === 1 && groups[0].email) {
+    return groups[0].email.toString().trim().toLowerCase();
+  }
+
+  return generateGroupEmail_(groupName);
+}
 
 function syncUserGroups(options = {}) {
   const returnPlanOnly = options && options.returnPlanOnly !== undefined ? options.returnPlanOnly : false;
@@ -9884,6 +9926,57 @@ function runApprovalGatingTest() {
     }
 }
 
+function runSheetEditorsGroupGuardTest_() {
+    SCRIPT_EXECUTION_MODE = 'TEST';
+    log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
+    log_('║  SheetEditors Group Guard Test                               ║', 'INFO');
+    log_('╚══════════════════════════════════════════════════════════════╝', 'INFO');
+
+    const groupName = 'Permissions Manager Sheet Editors';
+    const generated = generateGroupEmail_(groupName);
+    let success = false;
+
+    try {
+        const single = resolveSheetEditorsGroupEmail_(groupName, '', {
+            groupOpsAvailable: true,
+            groupsOverride: [{ email: 'existing@' + generated.split('@')[1] }]
+        });
+        if (!single || single.indexOf('existing@') !== 0) {
+            throw new Error('Expected to resolve existing group email.');
+        }
+
+        let threw = false;
+        try {
+            resolveSheetEditorsGroupEmail_(groupName, '', {
+                groupOpsAvailable: true,
+                groupsOverride: [{ email: 'one@example.com' }, { email: 'two@example.com' }]
+            });
+        } catch (e) {
+            threw = true;
+        }
+        if (!threw) {
+            throw new Error('Expected error when multiple groups exist.');
+        }
+
+        const generatedFallback = resolveSheetEditorsGroupEmail_(groupName, '', {
+            groupOpsAvailable: true,
+            groupsOverride: []
+        });
+        if (!generatedFallback || generatedFallback !== generated) {
+            throw new Error('Expected generated group email when none exist.');
+        }
+
+        success = true;
+        log_('SheetEditors Group Guard Test PASSED.', 'INFO');
+        return true;
+    } catch (e) {
+        log_('SheetEditors Group Guard Test FAILED: ' + e.message, 'ERROR');
+        return false;
+    } finally {
+        SCRIPT_EXECUTION_MODE = 'DEFAULT';
+    }
+}
+
 function runStructuralEditRestrictionTest_() {
     SCRIPT_EXECUTION_MODE = 'TEST';
     log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
@@ -9990,6 +10083,7 @@ function runAllTests() {
             { name: 'Structural Edit Restriction Test', func: runStructuralEditRestrictionTest_ },
             { name: 'AutoSync Error Email Test', func: runAutoSyncErrorEmailTest },
             { name: 'Sheet Locking Test', func: runSheetLockingTest_ },
+            { name: 'SheetEditors Group Guard Test', func: runSheetEditorsGroupGuardTest_ },
             { name: 'Circular Dependency Test', func: runCircularDependencyTest_ },
             { name: 'UserGroup Deletion Test', func: runUserGroupDeletionTest },
             { name: 'Folder-Role Deletion Test', func: runFolderRoleDeletionTest },

@@ -532,6 +532,7 @@ function createTestingMenu_(ui) {
     .addItem('Run Structural Edit Restriction Test', 'runStructuralEditRestrictionTest_')
     .addItem('Run AutoSync Error Email Test', 'runAutoSyncErrorEmailTest')
     .addItem('Run Sheet Locking Test', 'runSheetLockingTest_')
+    .addItem('Run SheetEditors Group Guard Test', 'runSheetEditorsGroupGuardTest_')
     .addItem('Run Circular Dependency Test', 'runCircularDependencyTest_')
     .addSeparator()
     .addItem('Run UserGroup Deletion Test', 'runUserGroupDeletionTest')

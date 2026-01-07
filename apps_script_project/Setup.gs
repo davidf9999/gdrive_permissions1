@@ -809,7 +809,7 @@ function setupFolderAuditLogSheet_(sheet) {
 function ensureChangeRequestsSheet_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let changeSheet = ss.getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
-  const approvalsRequiredRaw = getConfigValue_('RequiredApprovals', 1);
+  const approvalsRequiredRaw = getConfigValueFresh_('RequiredApprovals', 1);
   const approvalsRequired = Math.max(1, parseInt(approvalsRequiredRaw, 10) || 1);
 
   if (!changeSheet) {

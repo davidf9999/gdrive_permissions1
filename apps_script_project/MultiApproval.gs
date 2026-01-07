@@ -614,8 +614,10 @@ function normalizeChangeRequestRow_(sheet, rowIndex, approvalsConfig, eventUser,
     updates.push({ col: resolvedColumnMap.status, value: status });
   }
 
-  const approvalsNeeded = approvalsConfig && approvalsConfig.requiredApprovals !== undefined ? approvalsConfig.requiredApprovals : 1;
-  updates.push({ col: resolvedColumnMap.approvalsNeeded, value: approvalsNeeded });
+  if (!isTerminalChangeRequestStatus_(status)) {
+    const approvalsNeeded = approvalsConfig && approvalsConfig.requiredApprovals !== undefined ? approvalsConfig.requiredApprovals : 1;
+    updates.push({ col: resolvedColumnMap.approvalsNeeded, value: approvalsNeeded });
+  }
 
   if (updates.length > 0) {
     updates.forEach(function(update) {

@@ -1368,6 +1368,57 @@ function runApprovalGatingTest() {
     }
 }
 
+function runSheetEditorsGroupGuardTest_() {
+    SCRIPT_EXECUTION_MODE = 'TEST';
+    log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
+    log_('║  SheetEditors Group Guard Test                               ║', 'INFO');
+    log_('╚══════════════════════════════════════════════════════════════╝', 'INFO');
+
+    const groupName = 'Permissions Manager Sheet Editors';
+    const generated = generateGroupEmail_(groupName);
+    let success = false;
+
+    try {
+        const single = resolveSheetEditorsGroupEmail_(groupName, '', {
+            groupOpsAvailable: true,
+            groupsOverride: [{ email: 'existing@' + generated.split('@')[1] }]
+        });
+        if (!single || single.indexOf('existing@') !== 0) {
+            throw new Error('Expected to resolve existing group email.');
+        }
+
+        let threw = false;
+        try {
+            resolveSheetEditorsGroupEmail_(groupName, '', {
+                groupOpsAvailable: true,
+                groupsOverride: [{ email: 'one@example.com' }, { email: 'two@example.com' }]
+            });
+        } catch (e) {
+            threw = true;
+        }
+        if (!threw) {
+            throw new Error('Expected error when multiple groups exist.');
+        }
+
+        const generatedFallback = resolveSheetEditorsGroupEmail_(groupName, '', {
+            groupOpsAvailable: true,
+            groupsOverride: []
+        });
+        if (!generatedFallback || generatedFallback !== generated) {
+            throw new Error('Expected generated group email when none exist.');
+        }
+
+        success = true;
+        log_('SheetEditors Group Guard Test PASSED.', 'INFO');
+        return true;
+    } catch (e) {
+        log_('SheetEditors Group Guard Test FAILED: ' + e.message, 'ERROR');
+        return false;
+    } finally {
+        SCRIPT_EXECUTION_MODE = 'DEFAULT';
+    }
+}
+
 function runStructuralEditRestrictionTest_() {
     SCRIPT_EXECUTION_MODE = 'TEST';
     log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
@@ -1474,6 +1525,7 @@ function runAllTests() {
             { name: 'Structural Edit Restriction Test', func: runStructuralEditRestrictionTest_ },
             { name: 'AutoSync Error Email Test', func: runAutoSyncErrorEmailTest },
             { name: 'Sheet Locking Test', func: runSheetLockingTest_ },
+            { name: 'SheetEditors Group Guard Test', func: runSheetEditorsGroupGuardTest_ },
             { name: 'Circular Dependency Test', func: runCircularDependencyTest_ },
             { name: 'UserGroup Deletion Test', func: runUserGroupDeletionTest },
             { name: 'Folder-Role Deletion Test', func: runFolderRoleDeletionTest },

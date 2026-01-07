@@ -61,12 +61,17 @@ function syncSheetEditors(options = {}) {
     log_('DEBUG: Reading group email from cell.', 'DEBUG');
     let groupEmail = groupEmailCell.getValue().toString().trim().toLowerCase();
     log_('DEBUG: Group email from sheet: ' + groupEmail, 'DEBUG');
-    if (!groupEmail && groupOpsAvailable) {
-      groupEmail = generateGroupEmail_(SHEET_EDITORS_GROUP_NAME);
-      log_('DEBUG: Generated group email: ' + groupEmail, 'DEBUG');
-      log_('DEBUG: Writing generated email back to cell.', 'DEBUG');
-      groupEmailCell.setValue(groupEmail);
-      log_(`Generated and set SheetEditors group email in UserGroups sheet: ${groupEmail}`, 'INFO');
+    if (!groupEmail) {
+      const resolvedEmail = resolveSheetEditorsGroupEmail_('Permissions Manager Sheet Editors', groupEmail, {
+        groupOpsAvailable: groupOpsAvailable
+      });
+      if (resolvedEmail) {
+        groupEmail = resolvedEmail.toLowerCase();
+        log_('DEBUG: Resolved SheetEditors group email: ' + groupEmail, 'DEBUG');
+        log_('DEBUG: Writing resolved email back to cell.', 'DEBUG');
+        groupEmailCell.setValue(groupEmail);
+        log_(`Resolved and set SheetEditors group email in UserGroups sheet: ${groupEmail}`, 'INFO');
+      }
     }
 
     // --- SPREADSHEET EDITOR SYNC (File-level permissions) ---
@@ -467,7 +472,41 @@ function syncSheetEditors(options = {}) {
   return totalSummary;
 }
 
+function resolveSheetEditorsGroupEmail_(groupName, currentEmail, options = {}) {
+  if (currentEmail) {
+    return currentEmail;
+  }
 
+  const groupOpsAvailable = options.groupOpsAvailable !== undefined ? options.groupOpsAvailable : !shouldSkipGroupOps_();
+  if (!groupOpsAvailable) {
+    return '';
+  }
+
+  const overrideGroups = options.groupsOverride;
+  let groups = [];
+  if (overrideGroups) {
+    groups = overrideGroups;
+  } else {
+    try {
+      const query = "name='" + String(groupName || '').replace(/'/g, "\\'") + "'";
+      const response = AdminDirectory.Groups.list({ query: query, maxResults: 10 }) || {};
+      groups = response.groups || [];
+    } catch (e) {
+      log_('Failed to search for existing SheetEditors groups by name: ' + e.message, 'WARN');
+      groups = [];
+    }
+  }
+
+  if (groups.length > 1) {
+    throw new Error('Multiple groups named "' + groupName + '" found. Set GroupEmail in UserGroups to the correct group to prevent duplicates.');
+  }
+
+  if (groups.length === 1 && groups[0].email) {
+    return groups[0].email.toString().trim().toLowerCase();
+  }
+
+  return generateGroupEmail_(groupName);
+}
 
 function syncUserGroups(options = {}) {
   const returnPlanOnly = options && options.returnPlanOnly !== undefined ? options.returnPlanOnly : false;
