@@ -2883,6 +2883,7 @@ function _batchSetPermissions(jobs) {
           approvalsConfig: approvalsConfig
         };
       }
+
     } else {
       log_('ChangeRequests sheet helper unavailable; skipping permission change logging.', 'WARN');
     }
