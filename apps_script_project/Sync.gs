@@ -595,31 +595,19 @@ function syncUserGroups(options = {}) {
 
           const groupSheetName = getUserGroupSheetName_(groupName);
           const groupSheetResult = getOrCreateUserSheet_(groupSheetName);
-          if (groupSheetResult.wasNewlyCreated) {
+          const groupResult = getOrCreateGroup_(groupEmail, groupName);
+          if (groupSheetResult.wasNewlyCreated || groupResult.wasNewlyCreated) {
             logStructuralChangeRequest_(
               USER_GROUPS_SHEET_NAME,
               groupName,
               'ADD',
               {
-                changeType: 'STRUCTURAL_USER_SHEET_CREATE',
+                changeType: 'STRUCTURAL_USERGROUP_PROVISION',
                 groupName: groupName,
                 groupEmail: groupEmail,
-                userSheetName: groupSheetName
-              },
-              'SYSTEM'
-            );
-          }
-
-          const groupResult = getOrCreateGroup_(groupEmail, groupName);
-          if (groupResult.wasNewlyCreated) {
-            logStructuralChangeRequest_(
-              USER_GROUPS_SHEET_NAME,
-              groupName,
-              'ADD',
-              {
-                changeType: 'STRUCTURAL_GROUP_CREATE',
-                groupName: groupName,
-                groupEmail: groupEmail
+                userSheetName: groupSheetName,
+                createdUserSheet: groupSheetResult.wasNewlyCreated,
+                createdGroup: groupResult.wasNewlyCreated
               },
               'SYSTEM'
             );

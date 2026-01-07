@@ -27,7 +27,7 @@ ChangeRequests are created from two sources:
 Approvals gate **each permission change**, not the entire sync. The ChangeRequest key `(TargetSheet, TargetRowKey, Action)` defines a unique change:
 - `APPROVED` → apply the change.
 - `PENDING` → skip the change until approved.
-- Terminal statuses (`APPLIED`, `DENIED`, `CANCELLED`, `EXPIRED`) → skip.
+- Terminal statuses (`APPLIED`, `DENIED`, `EXPIRED`) → skip.
 
 ## ChangeRequests sheet fields (key columns)
 
@@ -40,10 +40,10 @@ Approvals gate **each permission change**, not the entire sync. The ChangeReques
 | `TargetRowKey` | Identifier for the target row or permission delta. |
 | `Action` | `ADD`, `UPDATE`, `DELETE`, or `REMOVE`. |
 | `ProposedRowSnapshot` | Serialized values (JSON or pipe-separated). |
-| `Status` | `PENDING`, `APPROVED`, `DENIED`, `CANCELLED`, `APPLIED`, `EXPIRED`. |
+| `Status` | `PENDING`, `APPROVED`, `DENIED`, `APPLIED`, `EXPIRED`. Auto-managed (read-only). |
 | `ApprovalsNeeded` | Total approvals required (not remaining). |
-| `Approver_1..N` | Approver emails. |
-| `DenyReason` | Free text when denied/cancelled. |
+| `Approver_1..N` | Approver emails (max 3). |
+| `DenyReason` | Any text here auto-denies and clears approvers. |
 | `AppliedAt` | Timestamp when applied. |
 
 ## Configuration inputs
@@ -58,6 +58,13 @@ Guardrail: changes to `ApprovalsEnabled` or `RequiredApprovals` are blocked whil
 - **Approvals enabled**: permission deltas create `PENDING` rows and apply only after approval.
 - **Approvals disabled**: permission deltas still create ChangeRequests, auto-applied with `ApprovalsNeeded = 0`.
 - The `ChangeRequests` sheet is always visible and is treated as an audit log.
+
+## Status rules (auto-managed)
+- `PENDING`: default until enough approvers are listed.
+- `APPROVED`: set automatically when required approver count is met.
+- `DENIED`: set automatically when `DenyReason` is non-empty (clears approvers).
+- `APPLIED`: set by the system after the change executes.
+- `EXPIRED`: set by the system when the request times out.
 
 ## AutoSync interactions
 AutoSync runs when there are approved ChangeRequests waiting to apply, so approved permission deltas do not sit idle.

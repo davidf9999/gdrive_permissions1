@@ -324,6 +324,7 @@ function setupControlSheets_() {
         }
     }
     configSheet.getRange(2, 1, newSettings.length, 3).setValues(newSettings);
+    applyConfigSectionStyles_(configSheet, newSettings);
     configSheet.setFrozenRows(1);
     log_('Created "Config" sheet with default settings and descriptions.');
   } else {
@@ -368,6 +369,7 @@ function setupControlSheets_() {
         }
     }
     configSheet.getRange(2, 1, newSettings.length, 3).setValues(newSettings);
+    applyConfigSectionStyles_(configSheet, newSettings);
   }
   markSystemSheet_(configSheet);
   applyConfigValidation_();
@@ -424,6 +426,25 @@ function applyConfigValidation_() {
     }
   }
   // log_('Applied checkbox validation rules to Config sheet.');
+}
+
+function applyConfigSectionStyles_(configSheet, settingsRows) {
+  if (!configSheet || !settingsRows || !settingsRows.length) {
+    return;
+  }
+  const headerRows = [];
+  for (let i = 0; i < settingsRows.length; i++) {
+    const label = settingsRows[i][0];
+    if (label && label.toString().indexOf('---') === 0) {
+      headerRows.push(i + 2);
+    }
+  }
+  if (!headerRows.length) {
+    return;
+  }
+  headerRows.forEach(function(rowIndex) {
+    configSheet.getRange(rowIndex, 1, 1, 3).setFontWeight('bold');
+  });
 }
 
 function setupStatusSheet_() {
@@ -810,7 +831,7 @@ function ensureChangeRequestsSheet_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let changeSheet = ss.getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
   const approvalsRequiredRaw = getConfigValueFresh_('RequiredApprovals', 1);
-  const approvalsRequired = Math.max(1, parseInt(approvalsRequiredRaw, 10) || 1);
+  const approvalsRequired = Math.min(3, Math.max(1, parseInt(approvalsRequiredRaw, 10) || 1));
 
   if (!changeSheet) {
     changeSheet = ss.insertSheet(CHANGE_REQUESTS_SHEET_NAME);
@@ -819,6 +840,7 @@ function ensureChangeRequestsSheet_() {
     changeSheet.setFrozenRows(1);
     log_('Created "ChangeRequests" sheet.');
   } else {
+    pruneExtraApproverColumns_(changeSheet, 3);
     ensureChangeRequestApproverColumns_(changeSheet, approvalsRequired);
     const existingHeaders = changeSheet.getRange(1, 1, 1, changeSheet.getLastColumn()).getValues()[0];
     const approverCount = Math.max(approvalsRequired, findChangeRequestApproverColumns_(existingHeaders).length);
@@ -837,7 +859,6 @@ function ensureChangeRequestsSheet_() {
     CHANGE_REQUEST_STATUS_PENDING,
     CHANGE_REQUEST_STATUS_APPROVED,
     CHANGE_REQUEST_STATUS_DENIED,
-    CHANGE_REQUEST_STATUS_CANCELLED,
     CHANGE_REQUEST_STATUS_APPLIED,
     CHANGE_REQUEST_STATUS_EXPIRED
   ], true).build();
@@ -851,6 +872,9 @@ function ensureChangeRequestsSheet_() {
     changeSheet.getRange(2, columnMap.appliedAt, changeSheet.getMaxRows() - 1, 1)
       .setNumberFormat('yyyy-MM-dd HH:mm:ss');
   }
+
+  applyChangeRequestsProtection_(changeSheet, columnMap);
+  applyChangeRequestsHeaderNotes_(changeSheet, columnMap);
 
   try {
     if (changeSheet.isSheetHidden()) {
@@ -874,10 +898,77 @@ function buildChangeRequestsHeaders_(approverCount) {
     'ApprovalsNeeded'
   ];
 
-  const count = Math.max(1, parseInt(approverCount, 10) || 1);
+  const count = Math.min(3, Math.max(1, parseInt(approverCount, 10) || 1));
   for (let i = 1; i <= count; i++) {
     headers.push('Approver_' + i);
   }
   headers.push('DenyReason', 'AppliedAt');
   return headers;
+}
+
+function pruneExtraApproverColumns_(sheet, maxApprovers) {
+  if (!sheet || !maxApprovers) return;
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const approverCols = [];
+  headers.forEach(function(header, index) {
+    if (header && header.toString().trim().indexOf('Approver_') === 0) {
+      approverCols.push(index + 1);
+    }
+  });
+  if (approverCols.length <= maxApprovers) {
+    return;
+  }
+  const extraCols = approverCols.slice(maxApprovers).sort(function(a, b) { return b - a; });
+  extraCols.forEach(function(colIndex) {
+    sheet.deleteColumn(colIndex);
+  });
+}
+
+function applyChangeRequestsHeaderNotes_(sheet, columnMap) {
+  if (!sheet || !columnMap) return;
+  const statusNote = 'Auto-managed. APPROVED when enough approvers are listed. DENIED when DenyReason is set. APPLIED/EXPIRED are system-only.';
+  const approverNote = 'Enter active Sheet Editor email(s). Unique approvers only; requester cannot approve.';
+  const denyNote = 'Any text here auto-denies and clears approvers. Clear the reason to re-open.';
+
+  if (columnMap.status) {
+    sheet.getRange(1, columnMap.status).setNote(statusNote);
+  }
+  if (columnMap.denyReason) {
+    sheet.getRange(1, columnMap.denyReason).setNote(denyNote);
+  }
+  if (columnMap.approverCols && columnMap.approverCols.length) {
+    columnMap.approverCols.forEach(function(colIndex) {
+      sheet.getRange(1, colIndex).setNote(approverNote);
+    });
+  }
+}
+
+function applyChangeRequestsProtection_(sheet, columnMap) {
+  if (!sheet || !columnMap) {
+    return;
+  }
+
+  const description = 'ChangeRequests protection';
+  const protections = sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET) || [];
+  let protection = protections.find(function(item) {
+    return item.getDescription && item.getDescription() === description;
+  });
+
+  if (!protection) {
+    protection = sheet.protect().setDescription(description);
+  }
+
+  protection.setWarningOnly(false);
+
+  const unprotectedRanges = [];
+  if (columnMap.denyReason) {
+    unprotectedRanges.push(sheet.getRange(2, columnMap.denyReason, sheet.getMaxRows() - 1, 1));
+  }
+  if (columnMap.approverCols && columnMap.approverCols.length) {
+    columnMap.approverCols.forEach(function(colIndex) {
+      unprotectedRanges.push(sheet.getRange(2, colIndex, sheet.getMaxRows() - 1, 1));
+    });
+  }
+
+  protection.setUnprotectedRanges(unprotectedRanges);
 }

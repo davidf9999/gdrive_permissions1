@@ -57,9 +57,16 @@ function onOpen() {
 
   menu.addToUi();
 
-  setupControlSheets_();
-  setupLogSheets_();
-  ensureChangeRequestsSheet_();
+  const setupFlags = getSetupNeedsOnOpen_();
+  if (setupFlags.needsControlSetup) {
+    setupControlSheets_();
+  }
+  if (setupFlags.needsLogSetup) {
+    setupLogSheets_();
+  }
+  if (setupFlags.needsChangeRequests && !setupFlags.needsControlSetup) {
+    ensureChangeRequestsSheet_();
+  }
 
   if (superAdmin) {
     // updateAutoSyncStatusIndicator_();
@@ -68,6 +75,25 @@ function onOpen() {
     applyRestrictedView_();
     ensureHelpSheetVisible_();
   }
+}
+
+function getSetupNeedsOnOpen_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const needsControlSetup = !ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME) ||
+    !ss.getSheetByName(SHEET_EDITORS_SHEET_NAME) ||
+    !ss.getSheetByName(USER_GROUPS_SHEET_NAME) ||
+    !ss.getSheetByName(CONFIG_SHEET_NAME);
+  const needsLogSetup = !ss.getSheetByName(LOG_SHEET_NAME) ||
+    !ss.getSheetByName(TEST_LOG_SHEET_NAME) ||
+    !ss.getSheetByName(STATUS_SHEET_NAME) ||
+    !ss.getSheetByName(FOLDER_AUDIT_LOG_SHEET_NAME) ||
+    !ss.getSheetByName(SYNC_HISTORY_SHEET_NAME);
+  const needsChangeRequests = !ss.getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
+  return {
+    needsControlSetup: needsControlSetup,
+    needsLogSetup: needsLogSetup,
+    needsChangeRequests: needsChangeRequests
+  };
 }
 
 /**
@@ -1755,6 +1781,7 @@ function clearCache() {
     ui.alert('An error occurred while clearing the cache: ' + e.message);
   }
 }
+
 function getAdminEmails_() {
   const adminSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_EDITORS_SHEET_NAME);
   if (!adminSheet) {
@@ -2691,20 +2718,9 @@ function _sequentiallyCreateFolders(jobs, sheet, silentMode, totalSummary, colMa
             job.folder = result.folder;
             job.folderId = result.folder.getId();
             job.folderName = result.folder.getName(); // Update name in case it was corrected
-            if (result.wasNewlyCreated) {
+            job.createdFolder = result.wasNewlyCreated === true;
+            if (job.createdFolder) {
               totalSummary.added++;
-              logStructuralChangeRequest_(
-                MANAGED_FOLDERS_SHEET_NAME,
-                'FOLDER|' + job.folderId,
-                'ADD',
-                {
-                  changeType: 'STRUCTURAL_FOLDER_CREATE',
-                  folderId: job.folderId,
-                  folderName: job.folderName,
-                  rowIndex: job.rowIndex
-                },
-                'SYSTEM'
-              );
             }
 
             // Write updates to sheet immediately
@@ -2762,22 +2778,9 @@ function _sequentiallyCreateGroupsAndSheets(jobs, sheet, lockManager, totalSumma
 
     // Create resources
     const sheetResult = getOrCreateUserSheet_(job.userSheetName);
-    if (sheetResult.wasNewlyCreated) {
+    job.createdUserSheet = sheetResult.wasNewlyCreated === true;
+    if (job.createdUserSheet) {
       totalSummary.added++;
-      logStructuralChangeRequest_(
-        MANAGED_FOLDERS_SHEET_NAME,
-        bindingKey,
-        'ADD',
-        {
-          changeType: 'STRUCTURAL_USER_SHEET_CREATE',
-          folderId: job.folderId || '',
-          folderName: job.folderName,
-          role: job.role,
-          groupEmail: job.groupEmail,
-          userSheetName: job.userSheetName
-        },
-        'SYSTEM'
-      );
     }
     const userSheet = sheetResult.sheet;
 
@@ -2786,22 +2789,33 @@ function _sequentiallyCreateGroupsAndSheets(jobs, sheet, lockManager, totalSumma
     }
     
     const groupResult = getOrCreateGroup_(job.groupEmail, job.userSheetName);
-    if (groupResult.wasNewlyCreated) {
+    job.createdGroup = groupResult.wasNewlyCreated === true;
+    if (job.createdGroup) {
       totalSummary.added++;
-      logStructuralChangeRequest_(
+    }
+
+    if (job.createdFolder || job.createdUserSheet || job.createdGroup) {
+      const logRowIndex = logStructuralChangeRequest_(
         MANAGED_FOLDERS_SHEET_NAME,
         bindingKey,
         'ADD',
         {
-          changeType: 'STRUCTURAL_GROUP_CREATE',
+          changeType: 'STRUCTURAL_MANAGED_FOLDER_PROVISION',
           folderId: job.folderId || '',
           folderName: job.folderName,
           role: job.role,
           groupEmail: job.groupEmail,
-          groupName: job.userSheetName
+          userSheetName: job.userSheetName,
+          createdFolder: job.createdFolder === true,
+          createdUserSheet: job.createdUserSheet === true,
+          createdGroup: job.createdGroup === true,
+          initialPermissionApplied: false
         },
         'SYSTEM'
       );
+      if (logRowIndex && logRowIndex > 0) {
+        job.provisioningLogRowIndex = logRowIndex;
+      }
     }
   });
 }
@@ -2851,6 +2865,7 @@ function _batchSetPermissions(jobs) {
         }
 
         let changeRequestRowIndex = null;
+        const shouldSkipPermissionLog = job.provisioningLogRowIndex && action === 'ADD';
         const targetRowKey = buildFolderPermissionRowKey_(job.folderId, job.groupEmail, job.role);
         const snapshot = {
           changeType: 'FOLDER_PERMISSION',
@@ -2861,15 +2876,17 @@ function _batchSetPermissions(jobs) {
           currentRole: existingPermission ? existingPermission.role : null,
           action: action
         };
-        const result = ensureChangeRequestForDelta_(MANAGED_FOLDERS_SHEET_NAME, targetRowKey, action, snapshot, 'SYSTEM', Object.assign({}, changeRequestContext || {}, {
-          approvalsNeededOverride: 0,
-          autoApprove: true
-        }));
-        if (result.rowIndex > 0) {
-          changeRequestRowIndex = result.rowIndex;
-        }
-        if (result.status !== CHANGE_REQUEST_STATUS_APPROVED) {
-          return;
+        if (!shouldSkipPermissionLog) {
+          const result = ensureChangeRequestForDelta_(MANAGED_FOLDERS_SHEET_NAME, targetRowKey, action, snapshot, 'SYSTEM', Object.assign({}, changeRequestContext || {}, {
+            approvalsNeededOverride: 0,
+            autoApprove: true
+          }));
+          if (result.rowIndex > 0) {
+            changeRequestRowIndex = result.rowIndex;
+          }
+          if (result.status !== CHANGE_REQUEST_STATUS_APPROVED) {
+            return;
+          }
         }
 
         requests.push({
@@ -2894,12 +2911,18 @@ function _batchSetPermissions(jobs) {
             if (changeRequestContext && rowIndex) {
               markChangeRequestAppliedByRow_(changeRequestContext.changeSheet, rowIndex, changeRequestContext.columnMap);
             }
+            if (changeRequestContext && job.provisioningLogRowIndex) {
+              updateProvisioningPermissionApplied_(changeRequestContext, job.provisioningLogRowIndex);
+            }
         } else {
             // Ignore "permission already exists" errors, treat as success
             if (part.body && part.body.includes('duplicate')) {
                  log_(`Permission for group "${job.groupEmail}" on folder "${job.folderName}" already exists. Skipping.`, 'INFO');
                  if (changeRequestContext && rowIndex) {
                    markChangeRequestAppliedByRow_(changeRequestContext.changeSheet, rowIndex, changeRequestContext.columnMap);
+                 }
+                 if (changeRequestContext && job.provisioningLogRowIndex) {
+                   updateProvisioningPermissionApplied_(changeRequestContext, job.provisioningLogRowIndex);
                  }
             } else {
                 summary.failed++;
@@ -2913,6 +2936,27 @@ function _batchSetPermissions(jobs) {
 
 function buildFolderPermissionRowKey_(folderId, groupEmail, role) {
   return [folderId || '', (groupEmail || '').toLowerCase(), (role || '').toLowerCase()].join('|');
+}
+
+function updateProvisioningPermissionApplied_(changeRequestContext, rowIndex) {
+  if (!changeRequestContext || !changeRequestContext.changeSheet || !rowIndex) {
+    return;
+  }
+  const columnMap = changeRequestContext.columnMap || getChangeRequestsColumnMap_(changeRequestContext.changeSheet);
+  const snapshotCell = changeRequestContext.changeSheet.getRange(rowIndex, columnMap.proposedSnapshot);
+  const snapshotRaw = snapshotCell.getValue();
+  if (!snapshotRaw || typeof snapshotRaw !== 'string') {
+    return;
+  }
+  try {
+    const parsed = JSON.parse(snapshotRaw);
+    if (parsed && parsed.initialPermissionApplied !== true) {
+      parsed.initialPermissionApplied = true;
+      snapshotCell.setValue(JSON.stringify(parsed));
+    }
+  } catch (e) {
+    log_('Failed to update provisioning ChangeRequest snapshot: ' + e.message, 'WARN');
+  }
 }
 
 function getFolderGroupPermissionInfo_(folderId, groupEmail) {
@@ -5191,12 +5235,28 @@ function openUrl(url) {
  */
 
 const CHANGE_REQUESTS_SHEET_NAME = 'ChangeRequests';
+var FORCE_TEST_CHANGE_REQUESTS = false;
+
+function setTestChangeRequestLogging_(enabled) {
+  FORCE_TEST_CHANGE_REQUESTS = enabled === true;
+}
+
+function shouldSuppressTestChangeRequests_(options) {
+  if (FORCE_TEST_CHANGE_REQUESTS) return false;
+  if (options && options.allowTestLogging) return false;
+  if (typeof SCRIPT_EXECUTION_MODE !== 'undefined' && SCRIPT_EXECUTION_MODE === 'TEST') {
+    const testCleanup = typeof getConfigValueFresh_ === 'function'
+      ? getConfigValueFresh_('TestCleanup', false)
+      : getConfigValue_('TestCleanup', false);
+    return testCleanup === true;
+  }
+  return false;
+}
 
 // Change request statuses
 const CHANGE_REQUEST_STATUS_PENDING = 'PENDING';
 const CHANGE_REQUEST_STATUS_APPROVED = 'APPROVED';
 const CHANGE_REQUEST_STATUS_DENIED = 'DENIED';
-const CHANGE_REQUEST_STATUS_CANCELLED = 'CANCELLED';
 const CHANGE_REQUEST_STATUS_APPLIED = 'APPLIED';
 const CHANGE_REQUEST_STATUS_EXPIRED = 'EXPIRED';
 
@@ -5250,7 +5310,7 @@ function findChangeRequestApproverColumns_(headers) {
 
 function ensureChangeRequestApproverColumns_(sheet, requiredApprovals) {
   if (!sheet) return;
-  var requiredCount = Math.max(1, parseInt(requiredApprovals, 10) || 1);
+  var requiredCount = Math.min(3, Math.max(1, parseInt(requiredApprovals, 10) || 1));
   var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   var approverCols = findChangeRequestApproverColumns_(headers);
   if (approverCols.length >= requiredCount) {
@@ -5409,6 +5469,9 @@ function isPermissionDeltaSnapshot_(snapshotRaw) {
 }
 
 function ensureChangeRequestForDelta_(targetSheetName, targetRowKey, action, deltaSnapshot, requestedBy, options) {
+  if (shouldSuppressTestChangeRequests_(options)) {
+    return { status: CHANGE_REQUEST_STATUS_APPROVED, rowIndex: -1, created: false, suppressed: true };
+  }
   const approvalsConfig = options && options.approvalsConfig ? options.approvalsConfig : getApprovalsConfig_();
   if (!targetSheetName || !targetRowKey || !action) {
     log_('Skipped ChangeRequest creation: missing targetSheetName/targetRowKey/action.', 'WARN');
@@ -5492,6 +5555,9 @@ function ensureChangeRequestForDelta_(targetSheetName, targetRowKey, action, del
 }
 
 function logStructuralChangeRequest_(targetSheetName, targetRowKey, action, snapshot, requestedBy, options) {
+  if (shouldSuppressTestChangeRequests_(options)) {
+    return false;
+  }
   if (!targetSheetName || !targetRowKey || !action) {
     log_('Skipped structural ChangeRequest logging: missing targetSheetName/targetRowKey/action.', 'WARN');
     return false;
@@ -5527,7 +5593,7 @@ function logStructuralChangeRequest_(targetSheetName, targetRowKey, action, snap
     changeSheet.getRange(appendedRowIndex, columnMap.appliedAt).setValue(now);
   }
   log_('Logged structural change for ' + targetSheetName + ' key=' + targetRowKey, 'INFO');
-  return true;
+  return appendedRowIndex;
 }
 
 function markChangeRequestAppliedByRow_(changeSheet, rowIndex, columnMap) {
@@ -5758,7 +5824,7 @@ function setChangeRequestFailure_(sheet, rowIndex, reason, columnMap) {
 
 function isTerminalChangeRequestStatus_(status) {
   return status === CHANGE_REQUEST_STATUS_APPLIED || status === CHANGE_REQUEST_STATUS_DENIED ||
-    status === CHANGE_REQUEST_STATUS_CANCELLED || status === CHANGE_REQUEST_STATUS_EXPIRED;
+    status === CHANGE_REQUEST_STATUS_EXPIRED;
 }
 
 function isChangeRequestApproverEdit_(event, columnMap) {
@@ -5788,6 +5854,7 @@ function normalizeChangeRequestRow_(sheet, rowIndex, approvalsConfig, eventUser,
   const updates = [];
   const requestedBy = rowValues[resolvedColumnMap.requestedBy - 1] || (eventUser && eventUser.getEmail && eventUser.getEmail());
   const status = (rowValues[resolvedColumnMap.status - 1] || '').toString().toUpperCase() || CHANGE_REQUEST_STATUS_PENDING;
+  const denyReason = resolvedColumnMap.denyReason ? rowValues[resolvedColumnMap.denyReason - 1] : '';
 
   if (!rowValues[resolvedColumnMap.id - 1]) {
     updates.push({ col: resolvedColumnMap.id, value: 'CR-' + new Date().getTime() + '-' + Math.floor(Math.random() * 1000) });
@@ -5802,7 +5869,18 @@ function normalizeChangeRequestRow_(sheet, rowIndex, approvalsConfig, eventUser,
     updates.push({ col: resolvedColumnMap.status, value: status });
   }
 
-  if (!isTerminalChangeRequestStatus_(status)) {
+  if (denyReason) {
+    updates.push({ col: resolvedColumnMap.status, value: CHANGE_REQUEST_STATUS_DENIED });
+    if (resolvedColumnMap.approverCols && resolvedColumnMap.approverCols.length) {
+      resolvedColumnMap.approverCols.forEach(function(colIndex) {
+        updates.push({ col: colIndex, value: '' });
+      });
+    }
+  } else if (status === CHANGE_REQUEST_STATUS_DENIED) {
+    updates.push({ col: resolvedColumnMap.status, value: CHANGE_REQUEST_STATUS_PENDING });
+  }
+
+  if (!isTerminalChangeRequestStatus_(status) && !denyReason) {
     const approvalsNeeded = approvalsConfig && approvalsConfig.requiredApprovals !== undefined ? approvalsConfig.requiredApprovals : 1;
     updates.push({ col: resolvedColumnMap.approvalsNeeded, value: approvalsNeeded });
   }
@@ -5823,6 +5901,16 @@ function tallyChangeRequestApprovals_(sheet, approvalsConfig, columnMap) {
   data.forEach(function(row, idx) {
     const rowIndex = idx + 2;
     const status = (row[resolvedColumnMap.status - 1] || '').toString().toUpperCase();
+    const denyReason = resolvedColumnMap.denyReason ? row[resolvedColumnMap.denyReason - 1] : '';
+    if (denyReason) {
+      sheet.getRange(rowIndex, resolvedColumnMap.status).setValue(CHANGE_REQUEST_STATUS_DENIED);
+      if (resolvedColumnMap.approverCols && resolvedColumnMap.approverCols.length) {
+        resolvedColumnMap.approverCols.forEach(function(colIndex) {
+          sheet.getRange(rowIndex, colIndex).clearContent();
+        });
+      }
+      return;
+    }
     if (isTerminalChangeRequestStatus_(status)) return;
 
     const approvals = collectApprovalsFromRow_(row, approvalsConfig.requiredApprovals, row[resolvedColumnMap.requestedBy - 1], resolvedColumnMap, approvalsConfig.activeEditorsSet);
@@ -5919,12 +6007,13 @@ function isChangeRequestEditableRange_(sheet, range) {
   if (!headerName) return false;
 
   if (headerName.indexOf('Approver_') === 0) return true;
-  if (headerName === 'Status' || headerName === 'DenyReason') return true;
+  if (headerName === 'DenyReason') return true;
   return false;
 }
 
 function queueChangeRequestFromEdit_(sheet, range, eventUser, rowValuesOverride) {
   if (!sheet || !range) return false;
+  if (shouldSuppressTestChangeRequests_()) return false;
   if (!shouldGatePermissionEdits_()) return false;
 
   const rowIndex = range.getRow();
@@ -5946,6 +6035,7 @@ function queueChangeRequestFromEdit_(sheet, range, eventUser, rowValuesOverride)
 }
 
 function upsertChangeRequest_(targetSheetName, targetRowKey, action, snapshotRaw, requestedBy) {
+  if (shouldSuppressTestChangeRequests_()) return false;
   const approvalsConfig = getApprovalsConfig_();
   if (!approvalsConfig.enabled) return false;
 
@@ -6633,6 +6723,7 @@ function setupControlSheets_() {
         }
     }
     configSheet.getRange(2, 1, newSettings.length, 3).setValues(newSettings);
+    applyConfigSectionStyles_(configSheet, newSettings);
     configSheet.setFrozenRows(1);
     log_('Created "Config" sheet with default settings and descriptions.');
   } else {
@@ -6677,6 +6768,7 @@ function setupControlSheets_() {
         }
     }
     configSheet.getRange(2, 1, newSettings.length, 3).setValues(newSettings);
+    applyConfigSectionStyles_(configSheet, newSettings);
   }
   markSystemSheet_(configSheet);
   applyConfigValidation_();
@@ -6733,6 +6825,25 @@ function applyConfigValidation_() {
     }
   }
   // log_('Applied checkbox validation rules to Config sheet.');
+}
+
+function applyConfigSectionStyles_(configSheet, settingsRows) {
+  if (!configSheet || !settingsRows || !settingsRows.length) {
+    return;
+  }
+  const headerRows = [];
+  for (let i = 0; i < settingsRows.length; i++) {
+    const label = settingsRows[i][0];
+    if (label && label.toString().indexOf('---') === 0) {
+      headerRows.push(i + 2);
+    }
+  }
+  if (!headerRows.length) {
+    return;
+  }
+  headerRows.forEach(function(rowIndex) {
+    configSheet.getRange(rowIndex, 1, 1, 3).setFontWeight('bold');
+  });
 }
 
 function setupStatusSheet_() {
@@ -7119,7 +7230,7 @@ function ensureChangeRequestsSheet_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let changeSheet = ss.getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
   const approvalsRequiredRaw = getConfigValueFresh_('RequiredApprovals', 1);
-  const approvalsRequired = Math.max(1, parseInt(approvalsRequiredRaw, 10) || 1);
+  const approvalsRequired = Math.min(3, Math.max(1, parseInt(approvalsRequiredRaw, 10) || 1));
 
   if (!changeSheet) {
     changeSheet = ss.insertSheet(CHANGE_REQUESTS_SHEET_NAME);
@@ -7128,6 +7239,7 @@ function ensureChangeRequestsSheet_() {
     changeSheet.setFrozenRows(1);
     log_('Created "ChangeRequests" sheet.');
   } else {
+    pruneExtraApproverColumns_(changeSheet, 3);
     ensureChangeRequestApproverColumns_(changeSheet, approvalsRequired);
     const existingHeaders = changeSheet.getRange(1, 1, 1, changeSheet.getLastColumn()).getValues()[0];
     const approverCount = Math.max(approvalsRequired, findChangeRequestApproverColumns_(existingHeaders).length);
@@ -7146,7 +7258,6 @@ function ensureChangeRequestsSheet_() {
     CHANGE_REQUEST_STATUS_PENDING,
     CHANGE_REQUEST_STATUS_APPROVED,
     CHANGE_REQUEST_STATUS_DENIED,
-    CHANGE_REQUEST_STATUS_CANCELLED,
     CHANGE_REQUEST_STATUS_APPLIED,
     CHANGE_REQUEST_STATUS_EXPIRED
   ], true).build();
@@ -7160,6 +7271,9 @@ function ensureChangeRequestsSheet_() {
     changeSheet.getRange(2, columnMap.appliedAt, changeSheet.getMaxRows() - 1, 1)
       .setNumberFormat('yyyy-MM-dd HH:mm:ss');
   }
+
+  applyChangeRequestsProtection_(changeSheet, columnMap);
+  applyChangeRequestsHeaderNotes_(changeSheet, columnMap);
 
   try {
     if (changeSheet.isSheetHidden()) {
@@ -7183,12 +7297,79 @@ function buildChangeRequestsHeaders_(approverCount) {
     'ApprovalsNeeded'
   ];
 
-  const count = Math.max(1, parseInt(approverCount, 10) || 1);
+  const count = Math.min(3, Math.max(1, parseInt(approverCount, 10) || 1));
   for (let i = 1; i <= count; i++) {
     headers.push('Approver_' + i);
   }
   headers.push('DenyReason', 'AppliedAt');
   return headers;
+}
+
+function pruneExtraApproverColumns_(sheet, maxApprovers) {
+  if (!sheet || !maxApprovers) return;
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const approverCols = [];
+  headers.forEach(function(header, index) {
+    if (header && header.toString().trim().indexOf('Approver_') === 0) {
+      approverCols.push(index + 1);
+    }
+  });
+  if (approverCols.length <= maxApprovers) {
+    return;
+  }
+  const extraCols = approverCols.slice(maxApprovers).sort(function(a, b) { return b - a; });
+  extraCols.forEach(function(colIndex) {
+    sheet.deleteColumn(colIndex);
+  });
+}
+
+function applyChangeRequestsHeaderNotes_(sheet, columnMap) {
+  if (!sheet || !columnMap) return;
+  const statusNote = 'Auto-managed. APPROVED when enough approvers are listed. DENIED when DenyReason is set. APPLIED/EXPIRED are system-only.';
+  const approverNote = 'Enter active Sheet Editor email(s). Unique approvers only; requester cannot approve.';
+  const denyNote = 'Any text here auto-denies and clears approvers. Clear the reason to re-open.';
+
+  if (columnMap.status) {
+    sheet.getRange(1, columnMap.status).setNote(statusNote);
+  }
+  if (columnMap.denyReason) {
+    sheet.getRange(1, columnMap.denyReason).setNote(denyNote);
+  }
+  if (columnMap.approverCols && columnMap.approverCols.length) {
+    columnMap.approverCols.forEach(function(colIndex) {
+      sheet.getRange(1, colIndex).setNote(approverNote);
+    });
+  }
+}
+
+function applyChangeRequestsProtection_(sheet, columnMap) {
+  if (!sheet || !columnMap) {
+    return;
+  }
+
+  const description = 'ChangeRequests protection';
+  const protections = sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET) || [];
+  let protection = protections.find(function(item) {
+    return item.getDescription && item.getDescription() === description;
+  });
+
+  if (!protection) {
+    protection = sheet.protect().setDescription(description);
+  }
+
+  protection.setWarningOnly(false);
+
+  const unprotectedRanges = [];
+  if (columnMap.denyReason) {
+    unprotectedRanges.push(sheet.getRange(2, columnMap.denyReason, sheet.getMaxRows() - 1, 1));
+  }
+  if (columnMap.approverCols && columnMap.approverCols.length) {
+    columnMap.approverCols.forEach(function(colIndex) {
+      unprotectedRanges.push(sheet.getRange(2, colIndex, sheet.getMaxRows() - 1, 1));
+    });
+  }
+
+  protection.setUnprotectedRanges(unprotectedRanges);
 }
 
 // =====================================================================================
@@ -7791,31 +7972,19 @@ function syncUserGroups(options = {}) {
 
           const groupSheetName = getUserGroupSheetName_(groupName);
           const groupSheetResult = getOrCreateUserSheet_(groupSheetName);
-          if (groupSheetResult.wasNewlyCreated) {
+          const groupResult = getOrCreateGroup_(groupEmail, groupName);
+          if (groupSheetResult.wasNewlyCreated || groupResult.wasNewlyCreated) {
             logStructuralChangeRequest_(
               USER_GROUPS_SHEET_NAME,
               groupName,
               'ADD',
               {
-                changeType: 'STRUCTURAL_USER_SHEET_CREATE',
+                changeType: 'STRUCTURAL_USERGROUP_PROVISION',
                 groupName: groupName,
                 groupEmail: groupEmail,
-                userSheetName: groupSheetName
-              },
-              'SYSTEM'
-            );
-          }
-
-          const groupResult = getOrCreateGroup_(groupEmail, groupName);
-          if (groupResult.wasNewlyCreated) {
-            logStructuralChangeRequest_(
-              USER_GROUPS_SHEET_NAME,
-              groupName,
-              'ADD',
-              {
-                changeType: 'STRUCTURAL_GROUP_CREATE',
-                groupName: groupName,
-                groupEmail: groupEmail
+                userSheetName: groupSheetName,
+                createdUserSheet: groupSheetResult.wasNewlyCreated,
+                createdGroup: groupResult.wasNewlyCreated
               },
               'SYSTEM'
             );
@@ -8558,8 +8727,25 @@ function isTestSheet_(sheetName) {
 // =====================================================================================
 /***** DEVELOPER-ONLY TEST FUNCTIONS *****/
 
+function beginTestApprovalsBypass_() {
+    const originalApprovalsEnabled = getConfigValue_('ApprovalsEnabled', false);
+    const originalRequiredApprovals = getConfigValue_('RequiredApprovals', 1);
+    updateConfigSetting_('ApprovalsEnabled', false);
+    updateConfigSetting_('RequiredApprovals', 1);
+    ensureChangeRequestsSheet_();
+    return { enabled: originalApprovalsEnabled, required: originalRequiredApprovals };
+}
+
+function endTestApprovalsBypass_(state) {
+    if (!state) return;
+    updateConfigSetting_('ApprovalsEnabled', state.enabled);
+    updateConfigSetting_('RequiredApprovals', state.required);
+    ensureChangeRequestsSheet_();
+}
+
 function runManualAccessTest() {
     SCRIPT_EXECUTION_MODE = 'TEST';
+    const approvalsState = beginTestApprovalsBypass_();
 
     // Test header
     log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
@@ -8743,6 +8929,7 @@ function runManualAccessTest() {
         log_('>>> TEST RESULT: Manual Access Test ' + testStatus, success ? 'INFO' : 'ERROR');
         log_('', 'INFO');
 
+        endTestApprovalsBypass_(approvalsState);
         SCRIPT_EXECUTION_MODE = 'DEFAULT';
     }
     return success;
@@ -8755,6 +8942,7 @@ function runManualAccessTest() {
  */
 function runStressTest() {
     SCRIPT_EXECUTION_MODE = 'TEST';
+    const approvalsState = beginTestApprovalsBypass_();
 
     // Test header
     log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
@@ -8926,6 +9114,7 @@ function runStressTest() {
         log_('>>> TEST RESULT: Stress Test ' + testStatus, success ? 'INFO' : 'ERROR');
         log_('', 'INFO');
 
+        endTestApprovalsBypass_(approvalsState);
         SCRIPT_EXECUTION_MODE = 'DEFAULT';
     }
     return success;
@@ -9139,6 +9328,7 @@ function cleanupAddDeleteSeparationTestData() {
 
 function runAddDeleteSeparationTest() {
     SCRIPT_EXECUTION_MODE = 'TEST';
+    const approvalsState = beginTestApprovalsBypass_();
 
     // Test header
     log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
@@ -9413,6 +9603,7 @@ function cleanupOrphanedTestData() {
         log_('Error during orphaned data cleanup: ' + e.toString(), 'ERROR');
         SpreadsheetApp.getUi().alert('Cleanup failed: ' + e.message);
     } finally {
+        endTestApprovalsBypass_(approvalsState);
         SCRIPT_EXECUTION_MODE = 'DEFAULT';
     }
 }
@@ -9712,6 +9903,7 @@ function runSheetLockingTest_() {
 
 function runApprovalGatingTest() {
     SCRIPT_EXECUTION_MODE = 'TEST';
+    setTestChangeRequestLogging_(true);
     log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
     log_('║  Approval Gating Test                                        ║', 'INFO');
     log_('╚══════════════════════════════════════════════════════════════╝', 'INFO');
@@ -9922,6 +10114,7 @@ function runApprovalGatingTest() {
         updateConfigSetting_('ApprovalsEnabled', originalApprovalsEnabled);
         updateConfigSetting_('RequiredApprovals', originalRequiredApprovals);
         ensureChangeRequestsSheet_();
+        setTestChangeRequestLogging_(false);
         SCRIPT_EXECUTION_MODE = 'DEFAULT';
     }
 }
@@ -10481,6 +10674,7 @@ function runCircularDependencyTest_() {
  */
 function runUserGroupDeletionTest() {
     SCRIPT_EXECUTION_MODE = 'TEST';  // Set mode FIRST before any logging
+    const approvalsState = beginTestApprovalsBypass_();
 
     const testName = 'UserGroup Deletion Test';
     log_('', 'INFO');
@@ -10645,6 +10839,7 @@ function runUserGroupDeletionTest() {
         const testStatus = success ? '✓ PASSED' : '✗ FAILED';
         log_('>>> TEST RESULT: ' + testName + ' ' + testStatus, success ? 'INFO' : 'ERROR');
         log_('', 'INFO');
+        endTestApprovalsBypass_(approvalsState);
         SCRIPT_EXECUTION_MODE = 'DEFAULT';
     }
     return success;
@@ -10657,6 +10852,7 @@ function runUserGroupDeletionTest() {
  */
 function runFolderRoleDeletionTest() {
     SCRIPT_EXECUTION_MODE = 'TEST';  // Set mode FIRST before any logging
+    const approvalsState = beginTestApprovalsBypass_();
 
     const testName = 'Folder-Role Deletion Test';
     log_('', 'INFO');
@@ -10855,6 +11051,7 @@ function runFolderRoleDeletionTest() {
         const testStatus = success ? '✓ PASSED' : '✗ FAILED';
         log_('>>> TEST RESULT: ' + testName + ' ' + testStatus, success ? 'INFO' : 'ERROR');
         log_('', 'INFO');
+        endTestApprovalsBypass_(approvalsState);
         SCRIPT_EXECUTION_MODE = 'DEFAULT';
     }
     return success;
@@ -10867,6 +11064,7 @@ function runFolderRoleDeletionTest() {
  */
 function runDeletionDisabledTest() {
     SCRIPT_EXECUTION_MODE = 'TEST';  // Set mode FIRST before any logging
+    const approvalsState = beginTestApprovalsBypass_();
 
     const testName = 'Deletion Disabled Test';
     log_('', 'INFO');
@@ -10989,6 +11187,7 @@ function runDeletionDisabledTest() {
         const testStatus = success ? '✓ PASSED' : '✗ FAILED';
         log_('>>> TEST RESULT: ' + testName + ' ' + testStatus, success ? 'INFO' : 'ERROR');
         log_('', 'INFO');
+        endTestApprovalsBypass_(approvalsState);
         SCRIPT_EXECUTION_MODE = 'DEFAULT';
     }
     return success;
@@ -11001,6 +11200,7 @@ function runDeletionDisabledTest() {
  */
 function runIdempotentDeletionTest() {
     SCRIPT_EXECUTION_MODE = 'TEST';  // Set mode FIRST before any logging
+    const approvalsState = beginTestApprovalsBypass_();
 
     const testName = 'Idempotent Deletion Test';
     log_('', 'INFO');
@@ -11348,6 +11548,7 @@ function cleanupDeletionTestData() {
         log_(err.stack, 'ERROR');
         SpreadsheetApp.getUi().alert('Cleanup Failed', 'An error occurred during cleanup. Check TestLog for details.', SpreadsheetApp.getUi().ButtonSet.OK);
     } finally {
+        endTestApprovalsBypass_(approvalsState);
         SCRIPT_EXECUTION_MODE = 'DEFAULT';
     }
 }

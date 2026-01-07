@@ -47,9 +47,16 @@ function onOpen() {
 
   menu.addToUi();
 
-  setupControlSheets_();
-  setupLogSheets_();
-  ensureChangeRequestsSheet_();
+  const setupFlags = getSetupNeedsOnOpen_();
+  if (setupFlags.needsControlSetup) {
+    setupControlSheets_();
+  }
+  if (setupFlags.needsLogSetup) {
+    setupLogSheets_();
+  }
+  if (setupFlags.needsChangeRequests && !setupFlags.needsControlSetup) {
+    ensureChangeRequestsSheet_();
+  }
 
   if (superAdmin) {
     // updateAutoSyncStatusIndicator_();
@@ -58,6 +65,25 @@ function onOpen() {
     applyRestrictedView_();
     ensureHelpSheetVisible_();
   }
+}
+
+function getSetupNeedsOnOpen_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const needsControlSetup = !ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME) ||
+    !ss.getSheetByName(SHEET_EDITORS_SHEET_NAME) ||
+    !ss.getSheetByName(USER_GROUPS_SHEET_NAME) ||
+    !ss.getSheetByName(CONFIG_SHEET_NAME);
+  const needsLogSetup = !ss.getSheetByName(LOG_SHEET_NAME) ||
+    !ss.getSheetByName(TEST_LOG_SHEET_NAME) ||
+    !ss.getSheetByName(STATUS_SHEET_NAME) ||
+    !ss.getSheetByName(FOLDER_AUDIT_LOG_SHEET_NAME) ||
+    !ss.getSheetByName(SYNC_HISTORY_SHEET_NAME);
+  const needsChangeRequests = !ss.getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
+  return {
+    needsControlSetup: needsControlSetup,
+    needsLogSetup: needsLogSetup,
+    needsChangeRequests: needsChangeRequests
+  };
 }
 
 /**

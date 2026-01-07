@@ -1,7 +1,24 @@
 /***** DEVELOPER-ONLY TEST FUNCTIONS *****/
 
+function beginTestApprovalsBypass_() {
+    const originalApprovalsEnabled = getConfigValue_('ApprovalsEnabled', false);
+    const originalRequiredApprovals = getConfigValue_('RequiredApprovals', 1);
+    updateConfigSetting_('ApprovalsEnabled', false);
+    updateConfigSetting_('RequiredApprovals', 1);
+    ensureChangeRequestsSheet_();
+    return { enabled: originalApprovalsEnabled, required: originalRequiredApprovals };
+}
+
+function endTestApprovalsBypass_(state) {
+    if (!state) return;
+    updateConfigSetting_('ApprovalsEnabled', state.enabled);
+    updateConfigSetting_('RequiredApprovals', state.required);
+    ensureChangeRequestsSheet_();
+}
+
 function runManualAccessTest() {
     SCRIPT_EXECUTION_MODE = 'TEST';
+    const approvalsState = beginTestApprovalsBypass_();
 
     // Test header
     log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
@@ -185,6 +202,7 @@ function runManualAccessTest() {
         log_('>>> TEST RESULT: Manual Access Test ' + testStatus, success ? 'INFO' : 'ERROR');
         log_('', 'INFO');
 
+        endTestApprovalsBypass_(approvalsState);
         SCRIPT_EXECUTION_MODE = 'DEFAULT';
     }
     return success;
@@ -197,6 +215,7 @@ function runManualAccessTest() {
  */
 function runStressTest() {
     SCRIPT_EXECUTION_MODE = 'TEST';
+    const approvalsState = beginTestApprovalsBypass_();
 
     // Test header
     log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
@@ -368,6 +387,7 @@ function runStressTest() {
         log_('>>> TEST RESULT: Stress Test ' + testStatus, success ? 'INFO' : 'ERROR');
         log_('', 'INFO');
 
+        endTestApprovalsBypass_(approvalsState);
         SCRIPT_EXECUTION_MODE = 'DEFAULT';
     }
     return success;
@@ -581,6 +601,7 @@ function cleanupAddDeleteSeparationTestData() {
 
 function runAddDeleteSeparationTest() {
     SCRIPT_EXECUTION_MODE = 'TEST';
+    const approvalsState = beginTestApprovalsBypass_();
 
     // Test header
     log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
@@ -855,6 +876,7 @@ function cleanupOrphanedTestData() {
         log_('Error during orphaned data cleanup: ' + e.toString(), 'ERROR');
         SpreadsheetApp.getUi().alert('Cleanup failed: ' + e.message);
     } finally {
+        endTestApprovalsBypass_(approvalsState);
         SCRIPT_EXECUTION_MODE = 'DEFAULT';
     }
 }
@@ -1154,6 +1176,7 @@ function runSheetLockingTest_() {
 
 function runApprovalGatingTest() {
     SCRIPT_EXECUTION_MODE = 'TEST';
+    setTestChangeRequestLogging_(true);
     log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
     log_('║  Approval Gating Test                                        ║', 'INFO');
     log_('╚══════════════════════════════════════════════════════════════╝', 'INFO');
@@ -1364,6 +1387,7 @@ function runApprovalGatingTest() {
         updateConfigSetting_('ApprovalsEnabled', originalApprovalsEnabled);
         updateConfigSetting_('RequiredApprovals', originalRequiredApprovals);
         ensureChangeRequestsSheet_();
+        setTestChangeRequestLogging_(false);
         SCRIPT_EXECUTION_MODE = 'DEFAULT';
     }
 }
@@ -1923,6 +1947,7 @@ function runCircularDependencyTest_() {
  */
 function runUserGroupDeletionTest() {
     SCRIPT_EXECUTION_MODE = 'TEST';  // Set mode FIRST before any logging
+    const approvalsState = beginTestApprovalsBypass_();
 
     const testName = 'UserGroup Deletion Test';
     log_('', 'INFO');
@@ -2087,6 +2112,7 @@ function runUserGroupDeletionTest() {
         const testStatus = success ? '✓ PASSED' : '✗ FAILED';
         log_('>>> TEST RESULT: ' + testName + ' ' + testStatus, success ? 'INFO' : 'ERROR');
         log_('', 'INFO');
+        endTestApprovalsBypass_(approvalsState);
         SCRIPT_EXECUTION_MODE = 'DEFAULT';
     }
     return success;
@@ -2099,6 +2125,7 @@ function runUserGroupDeletionTest() {
  */
 function runFolderRoleDeletionTest() {
     SCRIPT_EXECUTION_MODE = 'TEST';  // Set mode FIRST before any logging
+    const approvalsState = beginTestApprovalsBypass_();
 
     const testName = 'Folder-Role Deletion Test';
     log_('', 'INFO');
@@ -2297,6 +2324,7 @@ function runFolderRoleDeletionTest() {
         const testStatus = success ? '✓ PASSED' : '✗ FAILED';
         log_('>>> TEST RESULT: ' + testName + ' ' + testStatus, success ? 'INFO' : 'ERROR');
         log_('', 'INFO');
+        endTestApprovalsBypass_(approvalsState);
         SCRIPT_EXECUTION_MODE = 'DEFAULT';
     }
     return success;
@@ -2309,6 +2337,7 @@ function runFolderRoleDeletionTest() {
  */
 function runDeletionDisabledTest() {
     SCRIPT_EXECUTION_MODE = 'TEST';  // Set mode FIRST before any logging
+    const approvalsState = beginTestApprovalsBypass_();
 
     const testName = 'Deletion Disabled Test';
     log_('', 'INFO');
@@ -2431,6 +2460,7 @@ function runDeletionDisabledTest() {
         const testStatus = success ? '✓ PASSED' : '✗ FAILED';
         log_('>>> TEST RESULT: ' + testName + ' ' + testStatus, success ? 'INFO' : 'ERROR');
         log_('', 'INFO');
+        endTestApprovalsBypass_(approvalsState);
         SCRIPT_EXECUTION_MODE = 'DEFAULT';
     }
     return success;
@@ -2443,6 +2473,7 @@ function runDeletionDisabledTest() {
  */
 function runIdempotentDeletionTest() {
     SCRIPT_EXECUTION_MODE = 'TEST';  // Set mode FIRST before any logging
+    const approvalsState = beginTestApprovalsBypass_();
 
     const testName = 'Idempotent Deletion Test';
     log_('', 'INFO');
@@ -2790,6 +2821,7 @@ function cleanupDeletionTestData() {
         log_(err.stack, 'ERROR');
         SpreadsheetApp.getUi().alert('Cleanup Failed', 'An error occurred during cleanup. Check TestLog for details.', SpreadsheetApp.getUi().ButtonSet.OK);
     } finally {
+        endTestApprovalsBypass_(approvalsState);
         SCRIPT_EXECUTION_MODE = 'DEFAULT';
     }
 }

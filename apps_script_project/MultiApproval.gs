@@ -3,12 +3,28 @@
  */
 
 const CHANGE_REQUESTS_SHEET_NAME = 'ChangeRequests';
+var FORCE_TEST_CHANGE_REQUESTS = false;
+
+function setTestChangeRequestLogging_(enabled) {
+  FORCE_TEST_CHANGE_REQUESTS = enabled === true;
+}
+
+function shouldSuppressTestChangeRequests_(options) {
+  if (FORCE_TEST_CHANGE_REQUESTS) return false;
+  if (options && options.allowTestLogging) return false;
+  if (typeof SCRIPT_EXECUTION_MODE !== 'undefined' && SCRIPT_EXECUTION_MODE === 'TEST') {
+    const testCleanup = typeof getConfigValueFresh_ === 'function'
+      ? getConfigValueFresh_('TestCleanup', false)
+      : getConfigValue_('TestCleanup', false);
+    return testCleanup === true;
+  }
+  return false;
+}
 
 // Change request statuses
 const CHANGE_REQUEST_STATUS_PENDING = 'PENDING';
 const CHANGE_REQUEST_STATUS_APPROVED = 'APPROVED';
 const CHANGE_REQUEST_STATUS_DENIED = 'DENIED';
-const CHANGE_REQUEST_STATUS_CANCELLED = 'CANCELLED';
 const CHANGE_REQUEST_STATUS_APPLIED = 'APPLIED';
 const CHANGE_REQUEST_STATUS_EXPIRED = 'EXPIRED';
 
@@ -62,7 +78,7 @@ function findChangeRequestApproverColumns_(headers) {
 
 function ensureChangeRequestApproverColumns_(sheet, requiredApprovals) {
   if (!sheet) return;
-  var requiredCount = Math.max(1, parseInt(requiredApprovals, 10) || 1);
+  var requiredCount = Math.min(3, Math.max(1, parseInt(requiredApprovals, 10) || 1));
   var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   var approverCols = findChangeRequestApproverColumns_(headers);
   if (approverCols.length >= requiredCount) {
@@ -221,6 +237,9 @@ function isPermissionDeltaSnapshot_(snapshotRaw) {
 }
 
 function ensureChangeRequestForDelta_(targetSheetName, targetRowKey, action, deltaSnapshot, requestedBy, options) {
+  if (shouldSuppressTestChangeRequests_(options)) {
+    return { status: CHANGE_REQUEST_STATUS_APPROVED, rowIndex: -1, created: false, suppressed: true };
+  }
   const approvalsConfig = options && options.approvalsConfig ? options.approvalsConfig : getApprovalsConfig_();
   if (!targetSheetName || !targetRowKey || !action) {
     log_('Skipped ChangeRequest creation: missing targetSheetName/targetRowKey/action.', 'WARN');
@@ -304,6 +323,9 @@ function ensureChangeRequestForDelta_(targetSheetName, targetRowKey, action, del
 }
 
 function logStructuralChangeRequest_(targetSheetName, targetRowKey, action, snapshot, requestedBy, options) {
+  if (shouldSuppressTestChangeRequests_(options)) {
+    return false;
+  }
   if (!targetSheetName || !targetRowKey || !action) {
     log_('Skipped structural ChangeRequest logging: missing targetSheetName/targetRowKey/action.', 'WARN');
     return false;
@@ -339,7 +361,7 @@ function logStructuralChangeRequest_(targetSheetName, targetRowKey, action, snap
     changeSheet.getRange(appendedRowIndex, columnMap.appliedAt).setValue(now);
   }
   log_('Logged structural change for ' + targetSheetName + ' key=' + targetRowKey, 'INFO');
-  return true;
+  return appendedRowIndex;
 }
 
 function markChangeRequestAppliedByRow_(changeSheet, rowIndex, columnMap) {
@@ -570,7 +592,7 @@ function setChangeRequestFailure_(sheet, rowIndex, reason, columnMap) {
 
 function isTerminalChangeRequestStatus_(status) {
   return status === CHANGE_REQUEST_STATUS_APPLIED || status === CHANGE_REQUEST_STATUS_DENIED ||
-    status === CHANGE_REQUEST_STATUS_CANCELLED || status === CHANGE_REQUEST_STATUS_EXPIRED;
+    status === CHANGE_REQUEST_STATUS_EXPIRED;
 }
 
 function isChangeRequestApproverEdit_(event, columnMap) {
@@ -600,6 +622,7 @@ function normalizeChangeRequestRow_(sheet, rowIndex, approvalsConfig, eventUser,
   const updates = [];
   const requestedBy = rowValues[resolvedColumnMap.requestedBy - 1] || (eventUser && eventUser.getEmail && eventUser.getEmail());
   const status = (rowValues[resolvedColumnMap.status - 1] || '').toString().toUpperCase() || CHANGE_REQUEST_STATUS_PENDING;
+  const denyReason = resolvedColumnMap.denyReason ? rowValues[resolvedColumnMap.denyReason - 1] : '';
 
   if (!rowValues[resolvedColumnMap.id - 1]) {
     updates.push({ col: resolvedColumnMap.id, value: 'CR-' + new Date().getTime() + '-' + Math.floor(Math.random() * 1000) });
@@ -614,7 +637,18 @@ function normalizeChangeRequestRow_(sheet, rowIndex, approvalsConfig, eventUser,
     updates.push({ col: resolvedColumnMap.status, value: status });
   }
 
-  if (!isTerminalChangeRequestStatus_(status)) {
+  if (denyReason) {
+    updates.push({ col: resolvedColumnMap.status, value: CHANGE_REQUEST_STATUS_DENIED });
+    if (resolvedColumnMap.approverCols && resolvedColumnMap.approverCols.length) {
+      resolvedColumnMap.approverCols.forEach(function(colIndex) {
+        updates.push({ col: colIndex, value: '' });
+      });
+    }
+  } else if (status === CHANGE_REQUEST_STATUS_DENIED) {
+    updates.push({ col: resolvedColumnMap.status, value: CHANGE_REQUEST_STATUS_PENDING });
+  }
+
+  if (!isTerminalChangeRequestStatus_(status) && !denyReason) {
     const approvalsNeeded = approvalsConfig && approvalsConfig.requiredApprovals !== undefined ? approvalsConfig.requiredApprovals : 1;
     updates.push({ col: resolvedColumnMap.approvalsNeeded, value: approvalsNeeded });
   }
@@ -635,6 +669,16 @@ function tallyChangeRequestApprovals_(sheet, approvalsConfig, columnMap) {
   data.forEach(function(row, idx) {
     const rowIndex = idx + 2;
     const status = (row[resolvedColumnMap.status - 1] || '').toString().toUpperCase();
+    const denyReason = resolvedColumnMap.denyReason ? row[resolvedColumnMap.denyReason - 1] : '';
+    if (denyReason) {
+      sheet.getRange(rowIndex, resolvedColumnMap.status).setValue(CHANGE_REQUEST_STATUS_DENIED);
+      if (resolvedColumnMap.approverCols && resolvedColumnMap.approverCols.length) {
+        resolvedColumnMap.approverCols.forEach(function(colIndex) {
+          sheet.getRange(rowIndex, colIndex).clearContent();
+        });
+      }
+      return;
+    }
     if (isTerminalChangeRequestStatus_(status)) return;
 
     const approvals = collectApprovalsFromRow_(row, approvalsConfig.requiredApprovals, row[resolvedColumnMap.requestedBy - 1], resolvedColumnMap, approvalsConfig.activeEditorsSet);
@@ -731,12 +775,13 @@ function isChangeRequestEditableRange_(sheet, range) {
   if (!headerName) return false;
 
   if (headerName.indexOf('Approver_') === 0) return true;
-  if (headerName === 'Status' || headerName === 'DenyReason') return true;
+  if (headerName === 'DenyReason') return true;
   return false;
 }
 
 function queueChangeRequestFromEdit_(sheet, range, eventUser, rowValuesOverride) {
   if (!sheet || !range) return false;
+  if (shouldSuppressTestChangeRequests_()) return false;
   if (!shouldGatePermissionEdits_()) return false;
 
   const rowIndex = range.getRow();
@@ -758,6 +803,7 @@ function queueChangeRequestFromEdit_(sheet, range, eventUser, rowValuesOverride)
 }
 
 function upsertChangeRequest_(targetSheetName, targetRowKey, action, snapshotRaw, requestedBy) {
+  if (shouldSuppressTestChangeRequests_()) return false;
   const approvalsConfig = getApprovalsConfig_();
   if (!approvalsConfig.enabled) return false;
 

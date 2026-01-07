@@ -320,20 +320,9 @@ function _sequentiallyCreateFolders(jobs, sheet, silentMode, totalSummary, colMa
             job.folder = result.folder;
             job.folderId = result.folder.getId();
             job.folderName = result.folder.getName(); // Update name in case it was corrected
-            if (result.wasNewlyCreated) {
+            job.createdFolder = result.wasNewlyCreated === true;
+            if (job.createdFolder) {
               totalSummary.added++;
-              logStructuralChangeRequest_(
-                MANAGED_FOLDERS_SHEET_NAME,
-                'FOLDER|' + job.folderId,
-                'ADD',
-                {
-                  changeType: 'STRUCTURAL_FOLDER_CREATE',
-                  folderId: job.folderId,
-                  folderName: job.folderName,
-                  rowIndex: job.rowIndex
-                },
-                'SYSTEM'
-              );
             }
 
             // Write updates to sheet immediately
@@ -391,22 +380,9 @@ function _sequentiallyCreateGroupsAndSheets(jobs, sheet, lockManager, totalSumma
 
     // Create resources
     const sheetResult = getOrCreateUserSheet_(job.userSheetName);
-    if (sheetResult.wasNewlyCreated) {
+    job.createdUserSheet = sheetResult.wasNewlyCreated === true;
+    if (job.createdUserSheet) {
       totalSummary.added++;
-      logStructuralChangeRequest_(
-        MANAGED_FOLDERS_SHEET_NAME,
-        bindingKey,
-        'ADD',
-        {
-          changeType: 'STRUCTURAL_USER_SHEET_CREATE',
-          folderId: job.folderId || '',
-          folderName: job.folderName,
-          role: job.role,
-          groupEmail: job.groupEmail,
-          userSheetName: job.userSheetName
-        },
-        'SYSTEM'
-      );
     }
     const userSheet = sheetResult.sheet;
 
@@ -415,22 +391,33 @@ function _sequentiallyCreateGroupsAndSheets(jobs, sheet, lockManager, totalSumma
     }
     
     const groupResult = getOrCreateGroup_(job.groupEmail, job.userSheetName);
-    if (groupResult.wasNewlyCreated) {
+    job.createdGroup = groupResult.wasNewlyCreated === true;
+    if (job.createdGroup) {
       totalSummary.added++;
-      logStructuralChangeRequest_(
+    }
+
+    if (job.createdFolder || job.createdUserSheet || job.createdGroup) {
+      const logRowIndex = logStructuralChangeRequest_(
         MANAGED_FOLDERS_SHEET_NAME,
         bindingKey,
         'ADD',
         {
-          changeType: 'STRUCTURAL_GROUP_CREATE',
+          changeType: 'STRUCTURAL_MANAGED_FOLDER_PROVISION',
           folderId: job.folderId || '',
           folderName: job.folderName,
           role: job.role,
           groupEmail: job.groupEmail,
-          groupName: job.userSheetName
+          userSheetName: job.userSheetName,
+          createdFolder: job.createdFolder === true,
+          createdUserSheet: job.createdUserSheet === true,
+          createdGroup: job.createdGroup === true,
+          initialPermissionApplied: false
         },
         'SYSTEM'
       );
+      if (logRowIndex && logRowIndex > 0) {
+        job.provisioningLogRowIndex = logRowIndex;
+      }
     }
   });
 }
@@ -480,6 +467,7 @@ function _batchSetPermissions(jobs) {
         }
 
         let changeRequestRowIndex = null;
+        const shouldSkipPermissionLog = job.provisioningLogRowIndex && action === 'ADD';
         const targetRowKey = buildFolderPermissionRowKey_(job.folderId, job.groupEmail, job.role);
         const snapshot = {
           changeType: 'FOLDER_PERMISSION',
@@ -490,15 +478,17 @@ function _batchSetPermissions(jobs) {
           currentRole: existingPermission ? existingPermission.role : null,
           action: action
         };
-        const result = ensureChangeRequestForDelta_(MANAGED_FOLDERS_SHEET_NAME, targetRowKey, action, snapshot, 'SYSTEM', Object.assign({}, changeRequestContext || {}, {
-          approvalsNeededOverride: 0,
-          autoApprove: true
-        }));
-        if (result.rowIndex > 0) {
-          changeRequestRowIndex = result.rowIndex;
-        }
-        if (result.status !== CHANGE_REQUEST_STATUS_APPROVED) {
-          return;
+        if (!shouldSkipPermissionLog) {
+          const result = ensureChangeRequestForDelta_(MANAGED_FOLDERS_SHEET_NAME, targetRowKey, action, snapshot, 'SYSTEM', Object.assign({}, changeRequestContext || {}, {
+            approvalsNeededOverride: 0,
+            autoApprove: true
+          }));
+          if (result.rowIndex > 0) {
+            changeRequestRowIndex = result.rowIndex;
+          }
+          if (result.status !== CHANGE_REQUEST_STATUS_APPROVED) {
+            return;
+          }
         }
 
         requests.push({
@@ -523,12 +513,18 @@ function _batchSetPermissions(jobs) {
             if (changeRequestContext && rowIndex) {
               markChangeRequestAppliedByRow_(changeRequestContext.changeSheet, rowIndex, changeRequestContext.columnMap);
             }
+            if (changeRequestContext && job.provisioningLogRowIndex) {
+              updateProvisioningPermissionApplied_(changeRequestContext, job.provisioningLogRowIndex);
+            }
         } else {
             // Ignore "permission already exists" errors, treat as success
             if (part.body && part.body.includes('duplicate')) {
                  log_(`Permission for group "${job.groupEmail}" on folder "${job.folderName}" already exists. Skipping.`, 'INFO');
                  if (changeRequestContext && rowIndex) {
                    markChangeRequestAppliedByRow_(changeRequestContext.changeSheet, rowIndex, changeRequestContext.columnMap);
+                 }
+                 if (changeRequestContext && job.provisioningLogRowIndex) {
+                   updateProvisioningPermissionApplied_(changeRequestContext, job.provisioningLogRowIndex);
                  }
             } else {
                 summary.failed++;
@@ -542,6 +538,27 @@ function _batchSetPermissions(jobs) {
 
 function buildFolderPermissionRowKey_(folderId, groupEmail, role) {
   return [folderId || '', (groupEmail || '').toLowerCase(), (role || '').toLowerCase()].join('|');
+}
+
+function updateProvisioningPermissionApplied_(changeRequestContext, rowIndex) {
+  if (!changeRequestContext || !changeRequestContext.changeSheet || !rowIndex) {
+    return;
+  }
+  const columnMap = changeRequestContext.columnMap || getChangeRequestsColumnMap_(changeRequestContext.changeSheet);
+  const snapshotCell = changeRequestContext.changeSheet.getRange(rowIndex, columnMap.proposedSnapshot);
+  const snapshotRaw = snapshotCell.getValue();
+  if (!snapshotRaw || typeof snapshotRaw !== 'string') {
+    return;
+  }
+  try {
+    const parsed = JSON.parse(snapshotRaw);
+    if (parsed && parsed.initialPermissionApplied !== true) {
+      parsed.initialPermissionApplied = true;
+      snapshotCell.setValue(JSON.stringify(parsed));
+    }
+  } catch (e) {
+    log_('Failed to update provisioning ChangeRequest snapshot: ' + e.message, 'WARN');
+  }
 }
 
 function getFolderGroupPermissionInfo_(folderId, groupEmail) {

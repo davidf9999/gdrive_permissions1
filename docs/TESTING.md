@@ -80,6 +80,8 @@ Because they create real folders and groups, they are much slower than unit test
 *   Performing a full system health check.
 *   Troubleshooting complex, environment-specific issues.
 
+When `TestCleanup` is set to TRUE, test runs suppress ChangeRequests logging by default to avoid leaving test artifacts in the ChangeRequests sheet. The Approval Gating Test temporarily re-enables ChangeRequests logging for its assertions.
+
 ### Verifying the AutoSync Trigger
 
 The following steps provide a gradual plan to safely verify that the scheduled, automatic sync is working correctly.
@@ -135,6 +137,8 @@ Prerequisites for tests that manage Google Groups:
 - You must be using a Google Workspace account with sufficient Super Admin privileges.
 
 If Admin SDK is not available (e.g., personal `@gmail.com` account), the tests will alert and abort, and sync flows will mark rows as `SKIPPED (No Admin SDK)`.
+
+Note: Most automated tests temporarily disable approvals (`ApprovalsEnabled = FALSE`) to ensure deterministic results, and restore the original settings when the test completes.
 
 The testing functions are available in the **Permissions Manager > Testing** menu.
 

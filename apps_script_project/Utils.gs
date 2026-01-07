@@ -1125,6 +1125,7 @@ function clearCache() {
     ui.alert('An error occurred while clearing the cache: ' + e.message);
   }
 }
+
 function getAdminEmails_() {
   const adminSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_EDITORS_SHEET_NAME);
   if (!adminSheet) {
