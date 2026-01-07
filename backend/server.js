@@ -518,6 +518,10 @@ async function routeRequest(req, res) {
     }
 
     if (req.method === 'GET' && normPath === '/debug') {
+      if (process.env.NODE_ENV !== 'development') {
+        jsonResponse(res, 404, { error: 'not_found' }, { allowedOrigin });
+        return;
+      }
       handleDebug(req, res, requestId, allowedOrigin);
       return;
     }
