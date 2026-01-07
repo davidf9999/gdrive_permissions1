@@ -234,4 +234,177 @@ describe('isSuperAdmin_', () => {
 
     expect(isSuperAdmin_()).toBe(false);
   });
+
+  it('grants access for wildcard super admin entries', () => {
+    getActiveUserEmail_.mockReturnValue('anyone@example.com');
+    getSuperAdminEmails_.mockReturnValue(['*']);
+    hasConfiguredSuperAdmins_.mockReturnValue(true);
+
+    expect(isSuperAdmin_()).toBe(true);
+  });
+
+  it('grants access for matching domain entries', () => {
+    getActiveUserEmail_.mockReturnValue('user@example.com');
+    getSuperAdminEmails_.mockReturnValue(['@example.com']);
+    hasConfiguredSuperAdmins_.mockReturnValue(true);
+
+    expect(isSuperAdmin_()).toBe(true);
+  });
+
+  it('denies access when verified owner mismatches configured owner', () => {
+    getActiveUserEmail_.mockReturnValue('owner@example.com');
+    getSpreadsheetOwnerEmail_.mockReturnValue('owner@example.com');
+    getSuperAdminEmails_.mockReturnValue([]);
+    hasConfiguredSuperAdmins_.mockReturnValue(false);
+    SpreadsheetApp.getActive.mockReturnValue({
+      getOwner: jest.fn(() => ({
+        getEmail: jest.fn(() => 'other@example.com')
+      }))
+    });
+
+    expect(isSuperAdmin_()).toBe(false);
+  });
+});
+
+describe('processUserGroupDeletions_', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+
+    global.log_ = jest.fn();
+    global.getHeaderMap_ = jest.fn(() => ({ delete: 6, status: 5 }));
+    global.shouldSkipGroupOps_ = jest.fn(() => false);
+    global.findGroupsContainingMember_ = jest.fn(() => []);
+    global.logStructuralChangeRequest_ = jest.fn();
+    global.getUserGroupSheetName_ = jest.fn(groupName => `${groupName}_G`);
+    global.AdminDirectory = { Groups: { remove: jest.fn() } };
+    global.SpreadsheetApp = {
+      getActiveSpreadsheet: jest.fn(),
+      flush: jest.fn()
+    };
+  });
+
+  it('deletes checked user groups and removes rows from bottom to top', () => {
+    const data = [
+      ['Group A', 'groupa@example.com', '', '', '', true],
+      ['Group B', 'groupb@example.com', '', '', '', true]
+    ];
+    const statusCalls = [];
+    const deletedRows = [];
+    const sheet = {
+      getLastRow: jest.fn(() => data.length + 1),
+      getRange: jest.fn((row, column, numRows, numCols) => {
+        if (row === 2 && column === 1 && numRows === data.length && numCols === 6) {
+          return { getValues: jest.fn(() => data) };
+        }
+        if (numRows === undefined && numCols === undefined) {
+          return {
+            setValue: jest.fn(value => statusCalls.push({ row, column, value }))
+          };
+        }
+        return { getValues: jest.fn(() => [[]]) };
+      }),
+      deleteRow: jest.fn(rowNum => deletedRows.push(rowNum))
+    };
+    const userSheets = {
+      Group A_G: {},
+      Group B_G: {}
+    };
+    const ss = {
+      getSheetByName: jest.fn(name => (name === USER_GROUPS_SHEET_NAME ? sheet : userSheets[name] || null)),
+      deleteSheet: jest.fn()
+    };
+    SpreadsheetApp.getActiveSpreadsheet.mockReturnValue(ss);
+
+    const summary = { userGroupsDeleted: 0, errors: [] };
+    processUserGroupDeletions_(summary);
+
+    expect(AdminDirectory.Groups.remove).toHaveBeenCalledTimes(2);
+    expect(ss.deleteSheet).toHaveBeenCalledTimes(2);
+    expect(deletedRows).toEqual([3, 2]);
+    expect(summary.userGroupsDeleted).toBe(2);
+    expect(statusCalls).toEqual(expect.arrayContaining([
+      { row: 2, column: 5, value: '🗑️ DELETING...' },
+      { row: 3, column: 5, value: '🗑️ DELETING...' }
+    ]));
+  });
+});
+
+describe('processManagedFolderDeletions_', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+
+    global.log_ = jest.fn();
+    global.getHeaderMap_ = jest.fn(() => ({
+      foldername: 1,
+      folderid: 2,
+      role: 3,
+      groupemail: 4,
+      usersheetname: 5,
+      status: 7,
+      delete: 9
+    }));
+    global.shouldSkipGroupOps_ = jest.fn(() => false);
+    global.logStructuralChangeRequest_ = jest.fn();
+    global.buildFolderPermissionRowKey_ = jest.fn((folderId, groupEmail, role) => `${folderId}|${groupEmail}|${role}`);
+    global.AdminDirectory = { Groups: { remove: jest.fn() } };
+    global.DriveApp = { getFolderById: jest.fn() };
+    global.SpreadsheetApp = {
+      getActiveSpreadsheet: jest.fn(),
+      flush: jest.fn()
+    };
+  });
+
+  it('removes folder bindings and logs last-binding notice', () => {
+    const data = [
+      ['Folder A', 'folder-1', 'editor', 'groupa@example.com', 'SheetA', '', '', '', true],
+      ['Folder A', 'folder-1', 'viewer', 'groupb@example.com', 'SheetB', '', '', '', true],
+      ['Folder B', 'folder-2', 'viewer', 'groupc@example.com', 'SheetC', '', '', '', false]
+    ];
+    const statusCalls = [];
+    const deletedRows = [];
+    const sheet = {
+      getLastRow: jest.fn(() => data.length + 1),
+      getRange: jest.fn((row, column, numRows, numCols) => {
+        if (row === 2 && column === 1 && numRows === data.length && numCols === 9) {
+          return { getValues: jest.fn(() => data) };
+        }
+        if (numRows === undefined && numCols === undefined) {
+          return {
+            setValue: jest.fn(value => statusCalls.push({ row, column, value }))
+          };
+        }
+        return { getValues: jest.fn(() => [[]]) };
+      }),
+      deleteRow: jest.fn(rowNum => deletedRows.push(rowNum))
+    };
+    const userSheets = {
+      SheetA: {},
+      SheetB: {}
+    };
+    const ss = {
+      getSheetByName: jest.fn(name => (name === MANAGED_FOLDERS_SHEET_NAME ? sheet : userSheets[name] || null)),
+      deleteSheet: jest.fn()
+    };
+    const folder = { removeEditor: jest.fn(), removeViewer: jest.fn() };
+    DriveApp.getFolderById.mockReturnValue(folder);
+    SpreadsheetApp.getActiveSpreadsheet.mockReturnValue(ss);
+
+    const summary = { foldersDeleted: 0, errors: [] };
+    processManagedFolderDeletions_(summary);
+
+    expect(folder.removeEditor).toHaveBeenCalledTimes(2);
+    expect(folder.removeViewer).toHaveBeenCalledTimes(2);
+    expect(AdminDirectory.Groups.remove).toHaveBeenCalledTimes(2);
+    expect(ss.deleteSheet).toHaveBeenCalledTimes(2);
+    expect(deletedRows).toEqual([3, 2]);
+    expect(summary.foldersDeleted).toBe(2);
+    expect(log_).toHaveBeenCalledWith(
+      expect.stringContaining('All managed access to folder "Folder A" has been removed.'),
+      'INFO'
+    );
+    expect(statusCalls).toEqual(expect.arrayContaining([
+      { row: 2, column: 7, value: '🗑️ DELETING...' },
+      { row: 3, column: 7, value: '🗑️ DELETING...' }
+    ]));
+  });
 });
