@@ -1149,6 +1149,29 @@ function getAdminEmails_() {
 }
 
 const SYNC_LOCK_DESCRIPTION_PREFIX = 'Sync Lock by execution: ';
+const SYNC_LOCK_TIMESTAMP_MARKER = 'ts=';
+const SYNC_LOCK_STALE_THRESHOLD_MS = 10 * 60 * 1000;
+
+function buildSyncLockDescription_(executionId, timestampMs) {
+  return `${SYNC_LOCK_DESCRIPTION_PREFIX}${executionId} | ${SYNC_LOCK_TIMESTAMP_MARKER}${timestampMs}`;
+}
+
+function parseSyncLockDescription_(description) {
+  if (!description || !description.startsWith(SYNC_LOCK_DESCRIPTION_PREFIX)) {
+    return null;
+  }
+  const details = description.substring(SYNC_LOCK_DESCRIPTION_PREFIX.length);
+  const parts = details.split(' | ');
+  const executionId = parts[0];
+  let timestampMs = null;
+  if (parts.length > 1 && parts[1].indexOf(SYNC_LOCK_TIMESTAMP_MARKER) === 0) {
+    const parsed = Number(parts[1].substring(SYNC_LOCK_TIMESTAMP_MARKER.length));
+    if (!isNaN(parsed)) {
+      timestampMs = parsed;
+    }
+  }
+  return { executionId: executionId, timestampMs: timestampMs };
+}
 
 function removeStaleLocks_(sheets, currentExecutionId) {
   if (!sheets || sheets.length === 0) {
@@ -1156,6 +1179,7 @@ function removeStaleLocks_(sheets, currentExecutionId) {
   }
   log_('Checking for stale sheet locks from previous runs...');
   let staleLocksRemoved = 0;
+  const now = Date.now();
 
   sheets.forEach(sheet => {
     if (!sheet) return;
@@ -1163,7 +1187,19 @@ function removeStaleLocks_(sheets, currentExecutionId) {
       const protections = sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET);
       protections.forEach(protection => {
         const description = protection.getDescription();
-        if (description && description.startsWith(SYNC_LOCK_DESCRIPTION_PREFIX) && !description.endsWith(currentExecutionId)) {
+        const metadata = parseSyncLockDescription_(description);
+        if (!metadata) return;
+        if (metadata.executionId === currentExecutionId) {
+          if (!metadata.timestampMs) {
+            protection.setDescription(buildSyncLockDescription_(metadata.executionId, now));
+          }
+          return;
+        }
+        if (!metadata.timestampMs) {
+          protection.setDescription(buildSyncLockDescription_(metadata.executionId, now));
+          return;
+        }
+        if (now - metadata.timestampMs >= SYNC_LOCK_STALE_THRESHOLD_MS) {
           log_(`Found stale lock on sheet "${sheet.getName()}" from a previous execution. Removing...`, 'WARN');
           protection.remove();
           staleLocksRemoved++;
@@ -1182,7 +1218,7 @@ function removeStaleLocks_(sheets, currentExecutionId) {
 function lockSheetForEdits_(sheet, executionId) {
   if (!sheet || !executionId) return;
   try {
-    const protection = sheet.protect().setDescription(SYNC_LOCK_DESCRIPTION_PREFIX + executionId);
+    const protection = sheet.protect().setDescription(buildSyncLockDescription_(executionId, Date.now()));
     const me = Session.getEffectiveUser();
     protection.addEditor(me);
     protection.removeEditors(protection.getEditors().filter(editor => editor.getEmail() !== me.getEmail()));
@@ -1200,7 +1236,8 @@ function unlockSheetForEdits_(sheet, executionId) {
   try {
     const protections = sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET);
     protections.forEach(protection => {
-      if (protection.getDescription() === SYNC_LOCK_DESCRIPTION_PREFIX + executionId) {
+      const metadata = parseSyncLockDescription_(protection.getDescription());
+      if (metadata && metadata.executionId === executionId) {
         protection.remove();
         log_(`Sheet "${sheet.getName()}" unlocked for execution: ${executionId}.`, 'INFO');
       }
