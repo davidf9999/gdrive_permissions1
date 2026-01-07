@@ -311,7 +311,23 @@ function getConfiguration_() {
   // Remove the temporary error flag before caching
   delete config['_errorsDetected'];
 
-  cache.put('config', JSON.stringify(config), 300); // Cache for 5 minutes
+  const configJson = JSON.stringify(config);
+  const configSizeBytes = Utilities.newBlob(configJson).getBytes().length;
+  const maxCacheBytes = 90 * 1024; // Stay below Apps Script cache limit.
+  if (configSizeBytes <= maxCacheBytes) {
+    try {
+      cache.put('config', configJson, 300); // Cache for 5 minutes
+      if (!cache.get('config')) {
+        Logger.log('Config cache write failed; config will be read fresh until next attempt.');
+      }
+    } catch (e) {
+      Logger.log('Config cache write error: ' + e.message);
+    }
+  } else {
+    Logger.log(
+      'Config cache skipped: size ' + configSizeBytes + ' bytes exceeds limit of ' + maxCacheBytes + ' bytes.'
+    );
+  }
   return config;
 }
 
