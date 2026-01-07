@@ -2829,14 +2829,16 @@ function _batchSetPermissions(jobs) {
 
     const approvalsConfig = getApprovalsConfig_();
     let changeRequestContext = null;
-    ensureChangeRequestsSheet_();
-    const changeSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
-    if (changeSheet) {
-      changeRequestContext = {
-        changeSheet: changeSheet,
-        columnMap: getChangeRequestsColumnMap_(changeSheet),
-        approvalsConfig: approvalsConfig
-      };
+    if (typeof ensureChangeRequestsSheet_ === 'function') {
+      ensureChangeRequestsSheet_();
+      const changeSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
+      if (changeSheet) {
+        changeRequestContext = {
+          changeSheet: changeSheet,
+          columnMap: getChangeRequestsColumnMap_(changeSheet),
+          approvalsConfig: approvalsConfig
+        };
+      }
     }
 
     const requests = [];
@@ -3830,7 +3832,7 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
   const returnPlanOnly = options && options.returnPlanOnly !== undefined ? options.returnPlanOnly : false;
   const approvalsConfig = getApprovalsConfig_();
   const approvalsEnabled = approvalsConfig.enabled && !returnPlanOnly;
-  const shouldLogPermissionChanges = !returnPlanOnly;
+  const shouldLogPermissionChanges = !returnPlanOnly && typeof ensureChangeRequestsSheet_ === 'function';
   const changeRequestContext = shouldLogPermissionChanges ? {} : null;
   
   const MEMBERSHIP_BATCH_SIZE = config.MembershipBatchSize || 15;
@@ -3886,7 +3888,7 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
       return (removeOnly && emailsToRemove.length > 0) ? { groupEmail, groupName: userSheetName, usersToRemove: emailsToRemove } : null;
     }
 
-    if (shouldLogPermissionChanges) {
+    if (shouldLogPermissionChanges && typeof ensureChangeRequestsSheet_ === 'function') {
       ensureChangeRequestsSheet_();
       const changeSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
       if (changeSheet) {
@@ -7405,7 +7407,7 @@ function syncSheetEditors(options = {}) {
   const approvalsEnabled = approvalsConfig.enabled;
   let changeRequestContext = null;
   const groupOpsAvailable = !shouldSkipGroupOps_();
-  const shouldLogPermissionChanges = true;
+  const shouldLogPermissionChanges = typeof ensureChangeRequestsSheet_ === 'function';
 
   try {
     log_('DEBUG: syncSheetEditors started.', 'DEBUG');
@@ -7492,7 +7494,7 @@ function syncSheetEditors(options = {}) {
     const fileEditorAppliedByEmail = {};
     const combineSheetEditorOps = groupOpsAvailable;
 
-    if (shouldLogPermissionChanges) {
+    if (shouldLogPermissionChanges && typeof ensureChangeRequestsSheet_ === 'function') {
       ensureChangeRequestsSheet_();
       const changeSheet = spreadsheet.getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
       if (changeSheet) {
