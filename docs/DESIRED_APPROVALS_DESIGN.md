@@ -101,7 +101,7 @@ ChangeRequest uniqueness is `(TargetSheet, TargetRowKey, Action)`. Keys follow:
 ---
 
 ## Testing
-1. **Approvals disabled**: sync applies immediately; ChangeRequests are not created for deltas.
+1. **Approvals disabled**: sync applies immediately; ChangeRequests are still created as auto-applied audit entries (`ApprovalsNeeded = 0`).
 2. **Approvals enabled**:
    - Make sheet edits to create deltas.
    - Run sync to auto-create ChangeRequests.

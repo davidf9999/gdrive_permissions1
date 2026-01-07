@@ -322,6 +322,18 @@ function _sequentiallyCreateFolders(jobs, sheet, silentMode, totalSummary, colMa
             job.folderName = result.folder.getName(); // Update name in case it was corrected
             if (result.wasNewlyCreated) {
               totalSummary.added++;
+              logStructuralChangeRequest_(
+                MANAGED_FOLDERS_SHEET_NAME,
+                'FOLDER|' + job.folderId,
+                'ADD',
+                {
+                  changeType: 'STRUCTURAL_FOLDER_CREATE',
+                  folderId: job.folderId,
+                  folderName: job.folderName,
+                  rowIndex: job.rowIndex
+                },
+                'SYSTEM'
+              );
             }
 
             // Write updates to sheet immediately
@@ -369,6 +381,9 @@ function _sequentiallyCreateGroupsAndSheets(jobs, sheet, lockManager, totalSumma
       }
     }
     job.groupEmail = groupEmail;
+    const bindingKey = job.folderId
+      ? buildFolderPermissionRowKey_(job.folderId, job.groupEmail, job.role)
+      : 'ROW|' + job.rowIndex;
 
     // Write updates to sheet
     sheet.getRange(job.rowIndex, userSheetNameCol).setValue(job.userSheetName);
@@ -378,6 +393,20 @@ function _sequentiallyCreateGroupsAndSheets(jobs, sheet, lockManager, totalSumma
     const sheetResult = getOrCreateUserSheet_(job.userSheetName);
     if (sheetResult.wasNewlyCreated) {
       totalSummary.added++;
+      logStructuralChangeRequest_(
+        MANAGED_FOLDERS_SHEET_NAME,
+        bindingKey,
+        'ADD',
+        {
+          changeType: 'STRUCTURAL_USER_SHEET_CREATE',
+          folderId: job.folderId || '',
+          folderName: job.folderName,
+          role: job.role,
+          groupEmail: job.groupEmail,
+          userSheetName: job.userSheetName
+        },
+        'SYSTEM'
+      );
     }
     const userSheet = sheetResult.sheet;
 
@@ -388,6 +417,20 @@ function _sequentiallyCreateGroupsAndSheets(jobs, sheet, lockManager, totalSumma
     const groupResult = getOrCreateGroup_(job.groupEmail, job.userSheetName);
     if (groupResult.wasNewlyCreated) {
       totalSummary.added++;
+      logStructuralChangeRequest_(
+        MANAGED_FOLDERS_SHEET_NAME,
+        bindingKey,
+        'ADD',
+        {
+          changeType: 'STRUCTURAL_GROUP_CREATE',
+          folderId: job.folderId || '',
+          folderName: job.folderName,
+          role: job.role,
+          groupEmail: job.groupEmail,
+          groupName: job.userSheetName
+        },
+        'SYSTEM'
+      );
     }
   });
 }
@@ -400,18 +443,15 @@ function _batchSetPermissions(jobs) {
     if (shouldSkipGroupOps_()) return summary;
 
     const approvalsConfig = getApprovalsConfig_();
-    const approvalsEnabled = approvalsConfig.enabled;
     let changeRequestContext = null;
-    if (approvalsEnabled) {
-      ensureChangeRequestsSheet_();
-      const changeSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
-      if (changeSheet) {
-        changeRequestContext = {
-          changeSheet: changeSheet,
-          columnMap: getChangeRequestsColumnMap_(changeSheet),
-          approvalsConfig: approvalsConfig
-        };
-      }
+    ensureChangeRequestsSheet_();
+    const changeSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
+    if (changeSheet) {
+      changeRequestContext = {
+        changeSheet: changeSheet,
+        columnMap: getChangeRequestsColumnMap_(changeSheet),
+        approvalsConfig: approvalsConfig
+      };
     }
 
     const requests = [];
@@ -440,24 +480,25 @@ function _batchSetPermissions(jobs) {
         }
 
         let changeRequestRowIndex = null;
-        if (approvalsEnabled) {
-          const targetRowKey = buildFolderPermissionRowKey_(job.folderId, job.groupEmail, job.role);
-          const snapshot = {
-            changeType: 'FOLDER_PERMISSION',
-            folderId: job.folderId,
-            folderName: job.folderName,
-            groupEmail: job.groupEmail,
-            desiredRole: driveApiRole,
-            currentRole: existingPermission ? existingPermission.role : null,
-            action: action
-          };
-          const result = ensureChangeRequestForDelta_(MANAGED_FOLDERS_SHEET_NAME, targetRowKey, action, snapshot, 'SYSTEM', changeRequestContext);
-          if (result.rowIndex > 0) {
-            changeRequestRowIndex = result.rowIndex;
-          }
-          if (result.status !== CHANGE_REQUEST_STATUS_APPROVED) {
-            return;
-          }
+        const targetRowKey = buildFolderPermissionRowKey_(job.folderId, job.groupEmail, job.role);
+        const snapshot = {
+          changeType: 'FOLDER_PERMISSION',
+          folderId: job.folderId,
+          folderName: job.folderName,
+          groupEmail: job.groupEmail,
+          desiredRole: driveApiRole,
+          currentRole: existingPermission ? existingPermission.role : null,
+          action: action
+        };
+        const result = ensureChangeRequestForDelta_(MANAGED_FOLDERS_SHEET_NAME, targetRowKey, action, snapshot, 'SYSTEM', Object.assign({}, changeRequestContext || {}, {
+          approvalsNeededOverride: 0,
+          autoApprove: true
+        }));
+        if (result.rowIndex > 0) {
+          changeRequestRowIndex = result.rowIndex;
+        }
+        if (result.status !== CHANGE_REQUEST_STATUS_APPROVED) {
+          return;
         }
 
         requests.push({
@@ -479,14 +520,14 @@ function _batchSetPermissions(jobs) {
         const rowIndex = requests[i].changeRequestRowIndex;
         if (part.success) {
             log_(`Successfully set role "${job.role}" for group "${job.groupEmail}" on folder "${job.folderName}"`, 'INFO');
-            if (approvalsEnabled && changeRequestContext && rowIndex) {
+            if (changeRequestContext && rowIndex) {
               markChangeRequestAppliedByRow_(changeRequestContext.changeSheet, rowIndex, changeRequestContext.columnMap);
             }
         } else {
             // Ignore "permission already exists" errors, treat as success
             if (part.body && part.body.includes('duplicate')) {
                  log_(`Permission for group "${job.groupEmail}" on folder "${job.folderName}" already exists. Skipping.`, 'INFO');
-                 if (approvalsEnabled && changeRequestContext && rowIndex) {
+                 if (changeRequestContext && rowIndex) {
                    markChangeRequestAppliedByRow_(changeRequestContext.changeSheet, rowIndex, changeRequestContext.columnMap);
                  }
             } else {
@@ -848,6 +889,19 @@ function processUserGroupDeletions_(summary) {
       rowsToDelete.push(rowNum);
       summary.userGroupsDeleted++;
 
+      logStructuralChangeRequest_(
+        USER_GROUPS_SHEET_NAME,
+        groupName || ('ROW|' + rowNum),
+        'DELETE',
+        {
+          changeType: 'STRUCTURAL_USERGROUP_DELETE',
+          groupName: groupName || '',
+          groupEmail: groupEmail || '',
+          userSheetName: userSheetName
+        },
+        'SYSTEM'
+      );
+
       log_(`✓ Successfully deleted UserGroup: "${groupName}"`, 'INFO');
 
     } catch (e) {
@@ -968,6 +1022,23 @@ function processManagedFolderDeletions_(summary) {
       // 5. Mark row for deletion
       rowsToDelete.push(rowNum);
       summary.foldersDeleted++;
+
+      logStructuralChangeRequest_(
+        MANAGED_FOLDERS_SHEET_NAME,
+        folderId && groupEmail && role
+          ? buildFolderPermissionRowKey_(folderId, groupEmail, role)
+          : ('ROW|' + rowNum),
+        'DELETE',
+        {
+          changeType: 'STRUCTURAL_MANAGED_FOLDER_DELETE',
+          folderId: folderId || '',
+          folderName: folderName || '',
+          role: role || '',
+          groupEmail: groupEmail || '',
+          userSheetName: userSheetName || ''
+        },
+        'SYSTEM'
+      );
 
       log_(`✓ Successfully deleted folder-role binding: "${folderName}" (${role})`, 'INFO');
 
@@ -1344,7 +1415,8 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
   const returnPlanOnly = options && options.returnPlanOnly !== undefined ? options.returnPlanOnly : false;
   const approvalsConfig = getApprovalsConfig_();
   const approvalsEnabled = approvalsConfig.enabled && !returnPlanOnly;
-  const changeRequestContext = approvalsEnabled ? {} : null;
+  const shouldLogPermissionChanges = !returnPlanOnly;
+  const changeRequestContext = shouldLogPermissionChanges ? {} : null;
   
   const MEMBERSHIP_BATCH_SIZE = config.MembershipBatchSize || 15;
   const INTER_BATCH_DELAY_MS = 1000;
@@ -1399,7 +1471,7 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
       return (removeOnly && emailsToRemove.length > 0) ? { groupEmail, groupName: userSheetName, usersToRemove: emailsToRemove } : null;
     }
 
-    if (approvalsEnabled) {
+    if (shouldLogPermissionChanges) {
       ensureChangeRequestsSheet_();
       const changeSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
       if (changeSheet) {
@@ -1459,6 +1531,44 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
           }
         });
       }
+    } else if (shouldLogPermissionChanges) {
+      if (!removeOnly) {
+        emailsToAdd.forEach(function(email) {
+          const snapshot = {
+            changeType: 'GROUP_MEMBERSHIP',
+            groupEmail: groupEmail,
+            userSheetName: userSheetName,
+            email: email,
+            action: 'ADD'
+          };
+          const result = ensureChangeRequestForDelta_(userSheetName, email, 'ADD', snapshot, 'SYSTEM', Object.assign({}, changeRequestContext, {
+            approvalsNeededOverride: 0,
+            autoApprove: true
+          }));
+          if (result.rowIndex > 0) {
+            addRequestRowsByEmail[email] = result.rowIndex;
+          }
+        });
+      }
+
+      if (!addOnly) {
+        emailsToRemove.forEach(function(email) {
+          const snapshot = {
+            changeType: 'GROUP_MEMBERSHIP',
+            groupEmail: groupEmail,
+            userSheetName: userSheetName,
+            email: email,
+            action: 'REMOVE'
+          };
+          const result = ensureChangeRequestForDelta_(userSheetName, email, 'REMOVE', snapshot, 'SYSTEM', Object.assign({}, changeRequestContext, {
+            approvalsNeededOverride: 0,
+            autoApprove: true
+          }));
+          if (result.rowIndex > 0) {
+            removeRequestRowsByEmail[email] = result.rowIndex;
+          }
+        });
+      }
     }
 
     // Process additions in chunks
@@ -1478,7 +1588,7 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
         const chunkSummary = _executeMembershipChunkWithRetries_(requests, groupEmail, config);
         totalSummary.added += chunkSummary.added;
         totalSummary.failed += chunkSummary.failed;
-        if (approvalsEnabled && changeRequestContext && changeRequestContext.changeSheet) {
+        if (changeRequestContext && changeRequestContext.changeSheet) {
           chunkSummary.appliedEmails.forEach(function(email) {
             const rowIndex = addRequestRowsByEmail[email];
             if (rowIndex) {
@@ -1509,7 +1619,7 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
         const chunkSummary = _executeMembershipChunkWithRetries_(requests, groupEmail, config);
         totalSummary.removed += chunkSummary.removed;
         totalSummary.failed += chunkSummary.failed;
-        if (approvalsEnabled && changeRequestContext && changeRequestContext.changeSheet) {
+        if (changeRequestContext && changeRequestContext.changeSheet) {
           chunkSummary.appliedEmails.forEach(function(email) {
             const rowIndex = removeRequestRowsByEmail[email];
             if (rowIndex) {

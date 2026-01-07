@@ -16,6 +16,8 @@ function syncSheetEditors(options = {}) {
   const approvalsConfig = getApprovalsConfig_();
   const approvalsEnabled = approvalsConfig.enabled;
   let changeRequestContext = null;
+  const groupOpsAvailable = !shouldSkipGroupOps_();
+  const shouldLogPermissionChanges = true;
 
   try {
     log_('DEBUG: syncSheetEditors started.', 'DEBUG');
@@ -56,6 +58,17 @@ function syncSheetEditors(options = {}) {
     log_('DEBUG: Setting status to "Processing..."', 'DEBUG');
     statusCell.setValue('Processing...');
 
+    log_('DEBUG: Reading group email from cell.', 'DEBUG');
+    let groupEmail = groupEmailCell.getValue().toString().trim().toLowerCase();
+    log_('DEBUG: Group email from sheet: ' + groupEmail, 'DEBUG');
+    if (!groupEmail && groupOpsAvailable) {
+      groupEmail = generateGroupEmail_(SHEET_EDITORS_GROUP_NAME);
+      log_('DEBUG: Generated group email: ' + groupEmail, 'DEBUG');
+      log_('DEBUG: Writing generated email back to cell.', 'DEBUG');
+      groupEmailCell.setValue(groupEmail);
+      log_(`Generated and set SheetEditors group email in UserGroups sheet: ${groupEmail}`, 'INFO');
+    }
+
     // --- SPREADSHEET EDITOR SYNC (File-level permissions) ---
     // This part remains unchanged as it deals with the spreadsheet file itself.
     const sheetEditorData = sheetEditorsSheet.getRange(2, 1, sheetEditorsSheet.getLastRow(), 2).getValues(); // Check cols A, B
@@ -82,8 +95,11 @@ function syncSheetEditors(options = {}) {
     let approvedEmailsToRemove = addOnly ? [] : emailsToRemove;
     const addRequestRowsByEmail = {};
     const removeRequestRowsByEmail = {};
+    const combinedRequestRowsByEmail = {};
+    const fileEditorAppliedByEmail = {};
+    const combineSheetEditorOps = groupOpsAvailable;
 
-    if (approvalsEnabled) {
+    if (shouldLogPermissionChanges) {
       ensureChangeRequestsSheet_();
       const changeSheet = spreadsheet.getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
       if (changeSheet) {
@@ -93,13 +109,22 @@ function syncSheetEditors(options = {}) {
           approvalsConfig: approvalsConfig
         };
       }
+    }
+
+    if (approvalsEnabled) {
       approvedEmailsToAdd = [];
       emailsToAdd.forEach(function(email) {
-        const targetRowKey = 'FILE_EDITOR|' + email;
-        const snapshot = { changeType: 'SHEET_EDITOR_FILE', email: email, action: 'ADD' };
+        const targetRowKey = combineSheetEditorOps ? 'SHEET_EDITOR|' + email : 'FILE_EDITOR|' + email;
+        const snapshot = combineSheetEditorOps
+          ? { changeType: 'SHEET_EDITOR_COMBINED', groupEmail: groupEmail || '', email: email, action: 'ADD', operations: ['FILE_EDITOR', 'GROUP_MEMBER'] }
+          : { changeType: 'SHEET_EDITOR_FILE', email: email, action: 'ADD' };
         const result = ensureChangeRequestForDelta_(SHEET_EDITORS_SHEET_NAME, targetRowKey, 'ADD', snapshot, 'SYSTEM', changeRequestContext);
         if (result.rowIndex > 0) {
-          addRequestRowsByEmail[email] = result.rowIndex;
+          if (combineSheetEditorOps) {
+            combinedRequestRowsByEmail[email] = result.rowIndex;
+          } else {
+            addRequestRowsByEmail[email] = result.rowIndex;
+          }
         }
         if (result.status === CHANGE_REQUEST_STATUS_APPROVED) {
           approvedEmailsToAdd.push(email);
@@ -109,14 +134,58 @@ function syncSheetEditors(options = {}) {
       if (!addOnly) {
         approvedEmailsToRemove = [];
         emailsToRemove.forEach(function(email) {
-          const targetRowKey = 'FILE_EDITOR|' + email;
-          const snapshot = { changeType: 'SHEET_EDITOR_FILE', email: email, action: 'REMOVE' };
+          const targetRowKey = combineSheetEditorOps ? 'SHEET_EDITOR|' + email : 'FILE_EDITOR|' + email;
+          const snapshot = combineSheetEditorOps
+            ? { changeType: 'SHEET_EDITOR_COMBINED', groupEmail: groupEmail || '', email: email, action: 'REMOVE', operations: ['FILE_EDITOR', 'GROUP_MEMBER'] }
+            : { changeType: 'SHEET_EDITOR_FILE', email: email, action: 'REMOVE' };
           const result = ensureChangeRequestForDelta_(SHEET_EDITORS_SHEET_NAME, targetRowKey, 'REMOVE', snapshot, 'SYSTEM', changeRequestContext);
           if (result.rowIndex > 0) {
-            removeRequestRowsByEmail[email] = result.rowIndex;
+            if (combineSheetEditorOps) {
+              combinedRequestRowsByEmail[email] = result.rowIndex;
+            } else {
+              removeRequestRowsByEmail[email] = result.rowIndex;
+            }
           }
           if (result.status === CHANGE_REQUEST_STATUS_APPROVED) {
             approvedEmailsToRemove.push(email);
+          }
+        });
+      }
+    } else if (shouldLogPermissionChanges) {
+      emailsToAdd.forEach(function(email) {
+        const targetRowKey = combineSheetEditorOps ? 'SHEET_EDITOR|' + email : 'FILE_EDITOR|' + email;
+        const snapshot = combineSheetEditorOps
+          ? { changeType: 'SHEET_EDITOR_COMBINED', groupEmail: groupEmail || '', email: email, action: 'ADD', operations: ['FILE_EDITOR', 'GROUP_MEMBER'] }
+          : { changeType: 'SHEET_EDITOR_FILE', email: email, action: 'ADD' };
+        const result = ensureChangeRequestForDelta_(SHEET_EDITORS_SHEET_NAME, targetRowKey, 'ADD', snapshot, 'SYSTEM', Object.assign({}, changeRequestContext || {}, {
+          approvalsNeededOverride: 0,
+          autoApprove: true
+        }));
+        if (result.rowIndex > 0) {
+          if (combineSheetEditorOps) {
+            combinedRequestRowsByEmail[email] = result.rowIndex;
+          } else {
+            addRequestRowsByEmail[email] = result.rowIndex;
+          }
+        }
+      });
+
+      if (!addOnly) {
+        emailsToRemove.forEach(function(email) {
+          const targetRowKey = combineSheetEditorOps ? 'SHEET_EDITOR|' + email : 'FILE_EDITOR|' + email;
+          const snapshot = combineSheetEditorOps
+            ? { changeType: 'SHEET_EDITOR_COMBINED', groupEmail: groupEmail || '', email: email, action: 'REMOVE', operations: ['FILE_EDITOR', 'GROUP_MEMBER'] }
+            : { changeType: 'SHEET_EDITOR_FILE', email: email, action: 'REMOVE' };
+          const result = ensureChangeRequestForDelta_(SHEET_EDITORS_SHEET_NAME, targetRowKey, 'REMOVE', snapshot, 'SYSTEM', Object.assign({}, changeRequestContext || {}, {
+            approvalsNeededOverride: 0,
+            autoApprove: true
+          }));
+          if (result.rowIndex > 0) {
+            if (combineSheetEditorOps) {
+              combinedRequestRowsByEmail[email] = result.rowIndex;
+            } else {
+              removeRequestRowsByEmail[email] = result.rowIndex;
+            }
           }
         });
       }
@@ -128,11 +197,13 @@ function syncSheetEditors(options = {}) {
         try {
           spreadsheet.addEditor(email);
           totalSummary.added++;
-          if (approvalsEnabled && changeRequestContext && addRequestRowsByEmail[email]) {
+          fileEditorAppliedByEmail[email] = true;
+          if (changeRequestContext && addRequestRowsByEmail[email]) {
             markChangeRequestAppliedByRow_(changeRequestContext.changeSheet, addRequestRowsByEmail[email], changeRequestContext.columnMap);
           }
         } catch (e) {
           log_('Failed to add spreadsheet editor ' + email + ': ' + e.message, 'ERROR');
+          fileEditorAppliedByEmail[email] = false;
           totalSummary.failed++;
         }
       });
@@ -145,11 +216,13 @@ function syncSheetEditors(options = {}) {
           try {
             spreadsheet.removeEditor(email);
             totalSummary.removed++;
-            if (approvalsEnabled && changeRequestContext && removeRequestRowsByEmail[email]) {
+            fileEditorAppliedByEmail[email] = true;
+            if (changeRequestContext && removeRequestRowsByEmail[email]) {
               markChangeRequestAppliedByRow_(changeRequestContext.changeSheet, removeRequestRowsByEmail[email], changeRequestContext.columnMap);
             }
           } catch (e) {
             log_('Failed to remove spreadsheet editor ' + email + ': ' + e.message, 'ERROR');
+            fileEditorAppliedByEmail[email] = false;
             totalSummary.failed++;
           }
         });
@@ -159,22 +232,11 @@ function syncSheetEditors(options = {}) {
 
 
     // --- GOOGLE GROUP MEMBERSHIP SYNC ---
-    if (shouldSkipGroupOps_()) {
+    if (!groupOpsAvailable) {
       log_('Admin Directory service not available. Skipping Sheet Editors group membership sync.', 'WARN');
       statusCell.setValue('SKIPPED (No Admin SDK)');
       lastSyncedCell.setValue(new Date());
       return totalSummary;
-    }
-
-    log_('DEBUG: Reading group email from cell.', 'DEBUG');
-    let groupEmail = groupEmailCell.getValue().toString().trim().toLowerCase();
-    log_('DEBUG: Group email from sheet: ' + groupEmail, 'DEBUG');
-    if (!groupEmail) {
-      groupEmail = generateGroupEmail_(SHEET_EDITORS_GROUP_NAME);
-      log_('DEBUG: Generated group email: ' + groupEmail, 'DEBUG');
-      log_('DEBUG: Writing generated email back to cell.', 'DEBUG');
-      groupEmailCell.setValue(groupEmail);
-      log_(`Generated and set SheetEditors group email in UserGroups sheet: ${groupEmail}`, 'INFO');
     }
 
     const groupResult = getOrCreateGroup_(groupEmail, 'Permissions Manager Sheet Editors');
@@ -197,42 +259,116 @@ function syncSheetEditors(options = {}) {
     const removeMemberRequestRowsByEmail = {};
 
     if (approvalsEnabled) {
-      approvedMembersToAdd = [];
-      membersToAdd.forEach(function(email) {
-        const targetRowKey = 'GROUP_MEMBER|' + email;
-        const snapshot = {
-          changeType: 'SHEET_EDITOR_GROUP',
-          groupEmail: groupEmail,
-          email: email,
-          action: 'ADD'
-        };
-        const result = ensureChangeRequestForDelta_(SHEET_EDITORS_SHEET_NAME, targetRowKey, 'ADD', snapshot, 'SYSTEM', changeRequestContext);
-        if (result.rowIndex > 0) {
-          addMemberRequestRowsByEmail[email] = result.rowIndex;
-        }
-        if (result.status === CHANGE_REQUEST_STATUS_APPROVED) {
-          approvedMembersToAdd.push(email);
-        }
-      });
-
-      if (!addOnly) {
-        approvedMembersToRemove = [];
-        membersToRemove.forEach(function(email) {
+      if (combineSheetEditorOps) {
+        approvedMembersToAdd = approvedEmailsToAdd.filter(function(email) {
+          return fileEditorAppliedByEmail[email];
+        });
+        approvedMembersToRemove = addOnly ? [] : approvedEmailsToRemove.filter(function(email) {
+          return fileEditorAppliedByEmail[email];
+        });
+        approvedMembersToAdd.forEach(function(email) {
+          if (combinedRequestRowsByEmail[email]) {
+            addMemberRequestRowsByEmail[email] = combinedRequestRowsByEmail[email];
+          }
+        });
+        approvedMembersToRemove.forEach(function(email) {
+          if (combinedRequestRowsByEmail[email]) {
+            removeMemberRequestRowsByEmail[email] = combinedRequestRowsByEmail[email];
+          }
+        });
+      } else {
+        approvedMembersToAdd = [];
+        membersToAdd.forEach(function(email) {
           const targetRowKey = 'GROUP_MEMBER|' + email;
           const snapshot = {
             changeType: 'SHEET_EDITOR_GROUP',
             groupEmail: groupEmail,
             email: email,
-            action: 'REMOVE'
+            action: 'ADD'
           };
-          const result = ensureChangeRequestForDelta_(SHEET_EDITORS_SHEET_NAME, targetRowKey, 'REMOVE', snapshot, 'SYSTEM', changeRequestContext);
+          const result = ensureChangeRequestForDelta_(SHEET_EDITORS_SHEET_NAME, targetRowKey, 'ADD', snapshot, 'SYSTEM', changeRequestContext);
           if (result.rowIndex > 0) {
-            removeMemberRequestRowsByEmail[email] = result.rowIndex;
+            addMemberRequestRowsByEmail[email] = result.rowIndex;
           }
           if (result.status === CHANGE_REQUEST_STATUS_APPROVED) {
-            approvedMembersToRemove.push(email);
+            approvedMembersToAdd.push(email);
           }
         });
+
+        if (!addOnly) {
+          approvedMembersToRemove = [];
+          membersToRemove.forEach(function(email) {
+            const targetRowKey = 'GROUP_MEMBER|' + email;
+            const snapshot = {
+              changeType: 'SHEET_EDITOR_GROUP',
+              groupEmail: groupEmail,
+              email: email,
+              action: 'REMOVE'
+            };
+            const result = ensureChangeRequestForDelta_(SHEET_EDITORS_SHEET_NAME, targetRowKey, 'REMOVE', snapshot, 'SYSTEM', changeRequestContext);
+            if (result.rowIndex > 0) {
+              removeMemberRequestRowsByEmail[email] = result.rowIndex;
+            }
+            if (result.status === CHANGE_REQUEST_STATUS_APPROVED) {
+              approvedMembersToRemove.push(email);
+            }
+          });
+        }
+      }
+    } else if (shouldLogPermissionChanges) {
+      if (combineSheetEditorOps) {
+        approvedMembersToAdd = approvedEmailsToAdd.filter(function(email) {
+          return fileEditorAppliedByEmail[email];
+        });
+        approvedMembersToRemove = addOnly ? [] : approvedEmailsToRemove.filter(function(email) {
+          return fileEditorAppliedByEmail[email];
+        });
+        approvedMembersToAdd.forEach(function(email) {
+          if (combinedRequestRowsByEmail[email]) {
+            addMemberRequestRowsByEmail[email] = combinedRequestRowsByEmail[email];
+          }
+        });
+        approvedMembersToRemove.forEach(function(email) {
+          if (combinedRequestRowsByEmail[email]) {
+            removeMemberRequestRowsByEmail[email] = combinedRequestRowsByEmail[email];
+          }
+        });
+      } else {
+        membersToAdd.forEach(function(email) {
+          const targetRowKey = 'GROUP_MEMBER|' + email;
+          const snapshot = {
+            changeType: 'SHEET_EDITOR_GROUP',
+            groupEmail: groupEmail,
+            email: email,
+            action: 'ADD'
+          };
+          const result = ensureChangeRequestForDelta_(SHEET_EDITORS_SHEET_NAME, targetRowKey, 'ADD', snapshot, 'SYSTEM', Object.assign({}, changeRequestContext || {}, {
+            approvalsNeededOverride: 0,
+            autoApprove: true
+          }));
+          if (result.rowIndex > 0) {
+            addMemberRequestRowsByEmail[email] = result.rowIndex;
+          }
+        });
+
+        if (!addOnly) {
+          membersToRemove.forEach(function(email) {
+            const targetRowKey = 'GROUP_MEMBER|' + email;
+            const snapshot = {
+              changeType: 'SHEET_EDITOR_GROUP',
+              groupEmail: groupEmail,
+              email: email,
+              action: 'REMOVE'
+            };
+            const result = ensureChangeRequestForDelta_(SHEET_EDITORS_SHEET_NAME, targetRowKey, 'REMOVE', snapshot, 'SYSTEM', Object.assign({}, changeRequestContext || {}, {
+              approvalsNeededOverride: 0,
+              autoApprove: true
+            }));
+            if (result.rowIndex > 0) {
+              removeMemberRequestRowsByEmail[email] = result.rowIndex;
+            }
+          });
+        }
       }
     }
     
@@ -258,7 +394,7 @@ function syncSheetEditors(options = {}) {
         const chunkSummary = _executeMembershipChunkWithRetries_(requests, groupEmail, config);
         totalSummary.added += chunkSummary.added;
         totalSummary.failed += chunkSummary.failed;
-        if (approvalsEnabled && changeRequestContext && changeRequestContext.changeSheet) {
+        if (changeRequestContext && changeRequestContext.changeSheet) {
           chunkSummary.appliedEmails.forEach(function(email) {
             const rowIndex = addMemberRequestRowsByEmail[email];
             if (rowIndex) {
@@ -284,7 +420,7 @@ function syncSheetEditors(options = {}) {
         const chunkSummary = _executeMembershipChunkWithRetries_(requests, groupEmail, config);
         totalSummary.removed += chunkSummary.removed;
         totalSummary.failed += chunkSummary.failed;
-        if (approvalsEnabled && changeRequestContext && changeRequestContext.changeSheet) {
+        if (changeRequestContext && changeRequestContext.changeSheet) {
           chunkSummary.appliedEmails.forEach(function(email) {
             const rowIndex = removeMemberRequestRowsByEmail[email];
             if (rowIndex) {
@@ -386,6 +522,11 @@ function syncUserGroups(options = {}) {
         if (!groupName) {
           continue;
         }
+
+        if (groupName === SHEET_EDITORS_SHEET_NAME) {
+          log_('Skipping SheetEditors_G in syncUserGroups (handled by syncSheetEditors).', 'DEBUG');
+          continue;
+        }
         
         log_('Processing user group: ' + groupName);
 
@@ -414,8 +555,36 @@ function syncUserGroups(options = {}) {
           }
 
           const groupSheetName = getUserGroupSheetName_(groupName);
-          getOrCreateUserSheet_(groupSheetName);
+          const groupSheetResult = getOrCreateUserSheet_(groupSheetName);
+          if (groupSheetResult.wasNewlyCreated) {
+            logStructuralChangeRequest_(
+              USER_GROUPS_SHEET_NAME,
+              groupName,
+              'ADD',
+              {
+                changeType: 'STRUCTURAL_USER_SHEET_CREATE',
+                groupName: groupName,
+                groupEmail: groupEmail,
+                userSheetName: groupSheetName
+              },
+              'SYSTEM'
+            );
+          }
+
           const groupResult = getOrCreateGroup_(groupEmail, groupName);
+          if (groupResult.wasNewlyCreated) {
+            logStructuralChangeRequest_(
+              USER_GROUPS_SHEET_NAME,
+              groupName,
+              'ADD',
+              {
+                changeType: 'STRUCTURAL_GROUP_CREATE',
+                groupName: groupName,
+                groupEmail: groupEmail
+              },
+              'SYSTEM'
+            );
+          }
           const adminLink = 'https://admin.google.com/ac/groups/' + groupResult.group.id + '/members';
           groupAdminLinkCell.setValue(adminLink);
 

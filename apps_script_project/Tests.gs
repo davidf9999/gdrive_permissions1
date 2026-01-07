@@ -1188,6 +1188,31 @@ function runApprovalGatingTest() {
         updateConfigSetting_('RequiredApprovals', 2);
         ensureChangeRequestsSheet_();
 
+        const autoApproveEmail = 'auto-approve-test+' + new Date().getTime() + '@example.com';
+        const autoApproveSnapshot = { changeType: 'TEST_AUTO_APPROVE', email: autoApproveEmail, action: 'ADD' };
+        const autoApproveResult = ensureChangeRequestForDelta_(
+            MANAGED_FOLDERS_SHEET_NAME,
+            'AUTO_APPROVE|' + autoApproveEmail,
+            'ADD',
+            autoApproveSnapshot,
+            Session.getEffectiveUser().getEmail(),
+            {
+                changeSheet: changeSheet,
+                columnMap: columnMap,
+                approvalsConfig: getApprovalsConfig_(),
+                approvalsNeededOverride: 0,
+                autoApprove: true
+            }
+        );
+        if (autoApproveResult.status !== CHANGE_REQUEST_STATUS_APPROVED) {
+            throw new Error('Auto-approve ChangeRequest did not start in APPROVED status.');
+        }
+        const autoApproveRow = autoApproveResult.rowIndex;
+        const autoApproveNeeded = changeSheet.getRange(autoApproveRow, columnMap.approvalsNeeded).getValue();
+        if (autoApproveNeeded !== 0) {
+            throw new Error('Auto-approve ChangeRequest did not set ApprovalsNeeded to 0.');
+        }
+
         const sheetEditorsHeaders = getHeaderMap_(sheetEditorsSheet);
         const emailCol = resolveColumn_(sheetEditorsHeaders, 'sheet editor emails', 1);
         const disabledCol = resolveColumn_(sheetEditorsHeaders, 'disabled', 2);
@@ -1269,6 +1294,26 @@ function runApprovalGatingTest() {
             throw new Error('Approvals config change was not blocked while pending requests exist.');
         }
 
+        updateConfigSetting_('ApprovalsEnabled', false);
+        ensureChangeRequestsSheet_();
+        changeSheet = ss.getSheetByName(changeSheetName);
+        const disabledResult = ensureChangeRequestForDelta_(
+            SHEET_EDITORS_SHEET_NAME,
+            'DISABLED|' + testEmail,
+            'ADD',
+            { changeType: 'TEST_DISABLED_APPROVALS', email: testEmail, action: 'ADD' },
+            Session.getEffectiveUser().getEmail()
+        );
+        if (disabledResult.status !== CHANGE_REQUEST_STATUS_APPROVED) {
+            throw new Error('ChangeRequest was not auto-approved when approvals were disabled.');
+        }
+        const disabledRow = disabledResult.rowIndex;
+        const disabledMap = getChangeRequestsColumnMap_(changeSheet);
+        const disabledNeeded = changeSheet.getRange(disabledRow, disabledMap.approvalsNeeded).getValue();
+        if (disabledNeeded !== 0) {
+            throw new Error('Auto-approved ChangeRequest did not set ApprovalsNeeded to 0 when approvals disabled.');
+        }
+
         success = true;
         log_('Approval Gating Test PASSED.', 'INFO');
         return true;
@@ -1285,7 +1330,10 @@ function runApprovalGatingTest() {
                 for (let i = data.length - 1; i >= 0; i--) {
                     const row = data[i];
                     const rowKey = row[columnMap.targetRowKey - 1];
-                    if (row[columnMap.targetSheet - 1] === SHEET_EDITORS_SHEET_NAME && rowKey && rowKey.toString().indexOf(testEmail) === 0) {
+                    const targetSheet = row[columnMap.targetSheet - 1];
+                    if (targetSheet === SHEET_EDITORS_SHEET_NAME && rowKey && rowKey.toString().indexOf(testEmail) !== -1) {
+                        changeSheet.deleteRow(i + 2);
+                    } else if (targetSheet === MANAGED_FOLDERS_SHEET_NAME && rowKey && rowKey.toString().indexOf('AUTO_APPROVE|') === 0) {
                         changeSheet.deleteRow(i + 2);
                     }
                 }
@@ -1316,6 +1364,77 @@ function runApprovalGatingTest() {
         updateConfigSetting_('ApprovalsEnabled', originalApprovalsEnabled);
         updateConfigSetting_('RequiredApprovals', originalRequiredApprovals);
         ensureChangeRequestsSheet_();
+        SCRIPT_EXECUTION_MODE = 'DEFAULT';
+    }
+}
+
+function runStructuralEditRestrictionTest_() {
+    SCRIPT_EXECUTION_MODE = 'TEST';
+    log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
+    log_('║  Structural Edit Restriction Test                            ║', 'INFO');
+    log_('╚══════════════════════════════════════════════════════════════╝', 'INFO');
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    setupControlSheets_();
+    const managedSheet = ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+    const userGroupsSheet = ss.getSheetByName(USER_GROUPS_SHEET_NAME);
+    const configSheet = ss.getSheetByName(CONFIG_SHEET_NAME);
+    if (!managedSheet || !userGroupsSheet || !configSheet) {
+        log_('Structural Edit Restriction Test failed: missing required sheets.', 'ERROR');
+        SCRIPT_EXECUTION_MODE = 'DEFAULT';
+        return false;
+    }
+
+    const settingRow = findRowByValue_(configSheet, 1, 'SuperAdminEmails');
+    const hadSetting = settingRow !== -1;
+    const originalValue = hadSetting ? configSheet.getRange(settingRow, 2).getValue() : null;
+    let success = false;
+
+    try {
+        updateConfigSetting_('SuperAdminEmails', 'restricted+' + new Date().getTime() + '@example.com');
+
+        const managedRow = Math.max(managedSheet.getLastRow() + 1, 2);
+        const managedCell = managedSheet.getRange(managedRow, 1);
+        managedCell.setValue('TEMP_STRUCTURAL_EDIT');
+        onEdit({
+            source: ss,
+            range: managedCell,
+            oldValue: '',
+            user: { getEmail: function() { return Session.getEffectiveUser().getEmail(); } }
+        });
+        if (managedCell.getValue()) {
+            throw new Error('Non-super admin edit to ManagedFolders was not reverted.');
+        }
+
+        const userGroupsRow = Math.max(userGroupsSheet.getLastRow() + 1, 2);
+        const userGroupsCell = userGroupsSheet.getRange(userGroupsRow, 1);
+        userGroupsCell.setValue('TEMP_STRUCTURAL_EDIT');
+        onEdit({
+            source: ss,
+            range: userGroupsCell,
+            oldValue: '',
+            user: { getEmail: function() { return Session.getEffectiveUser().getEmail(); } }
+        });
+        if (userGroupsCell.getValue()) {
+            throw new Error('Non-super admin edit to UserGroups was not reverted.');
+        }
+
+        success = true;
+        log_('Structural Edit Restriction Test PASSED.', 'INFO');
+        return true;
+    } catch (e) {
+        log_('Structural Edit Restriction Test FAILED: ' + e.message, 'ERROR');
+        return false;
+    } finally {
+        if (hadSetting) {
+            updateConfigSetting_('SuperAdminEmails', originalValue);
+        } else {
+            const currentRow = findRowByValue_(configSheet, 1, 'SuperAdminEmails');
+            if (currentRow !== -1) {
+                configSheet.deleteRow(currentRow);
+                CacheService.getScriptCache().remove('config');
+            }
+        }
         SCRIPT_EXECUTION_MODE = 'DEFAULT';
     }
 }
@@ -1352,6 +1471,7 @@ function runAllTests() {
             { name: 'Stress Test', func: runStressTest },
             { name: 'Add/Delete Separation Test', func: runAddDeleteSeparationTest },
             { name: 'Approval Gating Test', func: runApprovalGatingTest },
+            { name: 'Structural Edit Restriction Test', func: runStructuralEditRestrictionTest_ },
             { name: 'AutoSync Error Email Test', func: runAutoSyncErrorEmailTest },
             { name: 'Sheet Locking Test', func: runSheetLockingTest_ },
             { name: 'Circular Dependency Test', func: runCircularDependencyTest_ },

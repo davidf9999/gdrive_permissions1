@@ -139,7 +139,7 @@ sequenceDiagram
 | --- | --- | --- |
 | **Workspace Super Admin** (a.k.a. Google Workspace Super Administrator) | Creates the Workspace tenant, enables Admin SDK + Drive APIs in Google Cloud Console, authorizes the Apps Script project, and grants necessary API access. This is a Google Workspace system role. | Rarely involved after initial setup. May periodically review audit logs, monitor email alerts, and unblock escalations that require domain-wide API privileges. |
 | **Super Admin** (listed in Config > SuperAdminEmails) | Runs sync operations, manages Config settings, runs tests, and troubleshoots errors. Has full menu access in the spreadsheet. This is a script-level permission. | Runs manual sync when needed, monitors SyncHistory and Logs, updates configuration settings, marks items for deletion, and handles escalations. Can also edit sheets. |
-| **Sheet Editor** (spreadsheet collaborator with Edit access) | Edits ManagedFolders, UserGroups, and user membership sheets. Marks items for deletion via Delete checkbox. Cannot run scripts or access menu functions. | Updates user lists, adds/removes folders, checks Status column, marks resources for deletion. Changes are applied when a Super Admin runs the next sync. |
+| **Sheet Editor** (spreadsheet collaborator with Edit access) | Edits user membership sheets (including `SheetEditors_G`). Cannot edit `ManagedFolders` or `UserGroups`. Cannot run scripts or access menu functions. | Updates user lists, checks Status column, and requests structural changes from a Super Admin. Changes are applied when a Super Admin runs the next sync. |
 | **Managed User** (anyone granted access to a folder) | No configuration; they are represented by rows within the relevant group or folder-role tab. | Receives Drive access once the next sync completes, and may use the sheet read-only to confirm which folders they should expect. |
 
 **Note**: A single person can have multiple roles. For example, in small organizations, the same person may be the Workspace Super Admin, a Super Admin in the script, and a Sheet Editor.
@@ -151,7 +151,7 @@ sequenceDiagram
 The Apps Script solution operates on a purpose-built Google Spreadsheet that acts as
 the source of truth for permissions. Important tabs include:
 
-- **ManagedFolders** — defines each folder to manage. Columns specify folder
+- **ManagedFolders** — defines each folder to manage (Super Admin only). Columns specify folder
   names, Drive IDs, target roles (Editor/Viewer/Commenter), default email
   prefixes for Google Groups, and optional settings such as disabled rows.
 - **SheetEditors_G** — list of spreadsheet editors. The script keeps this sheet in sync
@@ -162,7 +162,7 @@ the source of truth for permissions. Important tabs include:
   sheet accepts a list of email addresses and exposes toggles for disabled users
   and optional expiry metadata.
 - **UserGroups** — reusable lists of members that can be referenced from
-  multiple folders. These entries hydrate dynamic tabs during provisioning.
+  multiple folders (Super Admin only). These entries hydrate dynamic tabs during provisioning.
 - **Config** — flags for email notifications, logging verbosity, dry-run mode,
   and experimental automation such as risk-based auto sync.
 - **Log** and **TestLog** — append-only audit trails that capture sync outcomes

@@ -787,6 +787,10 @@ function getSheetAccessPolicy_(sheetName) {
     return { category: 'read-only' };
   }
 
+  if (isStructuralControlSheetName_(sheetName)) {
+    return { category: 'structural' };
+  }
+
   if (isPermissionDataSheetName_(sheetName)) {
     return { category: 'permissions' };
   }
@@ -806,6 +810,10 @@ function isReadOnlySystemSheetName_(sheetName) {
     'Help'
   ];
   return readOnlyNames.indexOf(sheetName) !== -1;
+}
+
+function isStructuralControlSheetName_(sheetName) {
+  return sheetName === MANAGED_FOLDERS_SHEET_NAME || sheetName === USER_GROUPS_SHEET_NAME;
 }
 
 function isPermissionDataSheetName_(sheetName) {

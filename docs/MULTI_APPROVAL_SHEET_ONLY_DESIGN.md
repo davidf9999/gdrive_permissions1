@@ -41,7 +41,7 @@ Columns:
 | `DenyReason` | Free text when denied/cancelled. |
 | `AppliedAt` | Timestamp when applied. |
 
-Note: when `ApprovalsEnabled = FALSE`, the `ChangeRequests` sheet may be hidden. Approver columns expand to match `RequiredApprovals`.
+Note: the `ChangeRequests` sheet remains visible even when `ApprovalsEnabled = FALSE`, serving as an audit log. Approver columns expand to match `RequiredApprovals`.
 
 ### Optional views
 - **ChangeQueue**: filtered view of `PENDING`/`APPROVED` rows.
@@ -77,7 +77,7 @@ Note: when `ApprovalsEnabled = FALSE`, the `ChangeRequests` sheet may be hidden.
 1. **Baseline behavior (feature off)**
    - Set `ApprovalsEnabled = FALSE`.
    - Edit a permission sheet and run sync.
-   - Expect: no ChangeRequests created; changes apply immediately.
+   - Expect: ChangeRequests created as auto-applied audit entries; changes apply immediately.
 
 2. **Auto-created requests**
    - Set `ApprovalsEnabled = TRUE`, `RequiredApprovals = 1`.

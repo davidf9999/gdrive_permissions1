@@ -10,7 +10,7 @@ This system has two primary types of users:
 
 1.  **Super Admins:** Google Workspace Super Admins who are responsible for the initial setup, running the synchronization scripts, and performing advanced maintenance.
 
-2.  **Sheet Editors:** Team members who are responsible for the day-to-day management of permissions. They control who gets access to what by adding and removing users from the various control sheets within this spreadsheet.
+2.  **Sheet Editors:** Team members who are responsible for the day-to-day management of permissions. They control access by adding and removing users in membership sheets; Super Admins manage structural sheets (`ManagedFolders`, `UserGroups`).
 
 A single person can be both a Super Admin and a Sheet Editor.
 
@@ -24,4 +24,4 @@ A single person can be both a Super Admin and a Sheet Editor.
     *Choose this guide if you need to set up the system, run syncs, manage deletions, or configure advanced settings.*
 
 *   ### **[I am a Sheet Editor &raquo;](./SHEET_EDITOR_USER_GUIDE.md)**
-    *Choose this guide if you need to add or remove users, create new permission groups, or understand how to manage access on a day-to-day basis.*
+    *Choose this guide if you need to add or remove users and manage day-to-day access; ask a Super Admin to add or delete folders/groups.*

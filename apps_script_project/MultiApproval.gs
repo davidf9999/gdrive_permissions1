@@ -222,13 +222,20 @@ function isPermissionDeltaSnapshot_(snapshotRaw) {
 
 function ensureChangeRequestForDelta_(targetSheetName, targetRowKey, action, deltaSnapshot, requestedBy, options) {
   const approvalsConfig = options && options.approvalsConfig ? options.approvalsConfig : getApprovalsConfig_();
-  if (!approvalsConfig.enabled) {
-    return { status: CHANGE_REQUEST_STATUS_APPROVED, rowIndex: -1, created: false };
-  }
   if (!targetSheetName || !targetRowKey || !action) {
     log_('Skipped ChangeRequest creation: missing targetSheetName/targetRowKey/action.', 'WARN');
     return { status: CHANGE_REQUEST_STATUS_DENIED, rowIndex: -1, created: false };
   }
+
+  const approvalsNeededOverride = options && options.approvalsNeededOverride !== undefined ? options.approvalsNeededOverride : null;
+  const autoApproveOverride = options && options.autoApprove === true;
+  const approvalsDisabled = approvalsConfig.enabled !== true;
+  const autoApprove = autoApproveOverride || approvalsDisabled;
+  const approvalsNeeded = approvalsNeededOverride !== null ? approvalsNeededOverride : approvalsConfig.requiredApprovals;
+  const effectiveApprovalsNeeded = approvalsNeededOverride !== null ? approvalsNeededOverride : (approvalsDisabled ? 0 : approvalsNeeded);
+  const normalizedApprovalsConfig = approvalsNeededOverride !== null
+    ? Object.assign({}, approvalsConfig, { requiredApprovals: approvalsNeeded })
+    : approvalsConfig;
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let changeSheet = options && options.changeSheet ? options.changeSheet : ss.getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
@@ -254,8 +261,8 @@ function ensureChangeRequestForDelta_(targetSheetName, targetRowKey, action, del
       if (requestedBy) {
         changeSheet.getRange(existingRow, columnMap.requestedBy).setValue(requestedBy);
       }
-      changeSheet.getRange(existingRow, columnMap.status).setValue(CHANGE_REQUEST_STATUS_PENDING);
-      changeSheet.getRange(existingRow, columnMap.approvalsNeeded).setValue(approvalsConfig.requiredApprovals);
+      changeSheet.getRange(existingRow, columnMap.status).setValue(autoApprove ? CHANGE_REQUEST_STATUS_APPROVED : CHANGE_REQUEST_STATUS_PENDING);
+      changeSheet.getRange(existingRow, columnMap.approvalsNeeded).setValue(effectiveApprovalsNeeded);
       if (columnMap.denyReason) {
         changeSheet.getRange(existingRow, columnMap.denyReason).clearContent();
       }
@@ -267,7 +274,12 @@ function ensureChangeRequestForDelta_(targetSheetName, targetRowKey, action, del
           changeSheet.getRange(existingRow, colIndex).clearContent();
         });
       }
-      return { status: CHANGE_REQUEST_STATUS_PENDING, rowIndex: existingRow, created: false };
+      return { status: autoApprove ? CHANGE_REQUEST_STATUS_APPROVED : CHANGE_REQUEST_STATUS_PENDING, rowIndex: existingRow, created: false };
+    }
+    if (autoApprove && existingStatus !== CHANGE_REQUEST_STATUS_APPROVED) {
+      changeSheet.getRange(existingRow, columnMap.status).setValue(CHANGE_REQUEST_STATUS_APPROVED);
+      changeSheet.getRange(existingRow, columnMap.approvalsNeeded).setValue(effectiveApprovalsNeeded);
+      return { status: CHANGE_REQUEST_STATUS_APPROVED, rowIndex: existingRow, created: false };
     }
     return { status: existingStatus, rowIndex: existingRow, created: false };
   }
@@ -280,12 +292,54 @@ function ensureChangeRequestForDelta_(targetSheetName, targetRowKey, action, del
   newRow[columnMap.targetRowKey - 1] = targetRowKey;
   newRow[columnMap.action - 1] = action;
   newRow[columnMap.proposedSnapshot - 1] = snapshotRaw;
-  newRow[columnMap.status - 1] = CHANGE_REQUEST_STATUS_PENDING;
-  newRow[columnMap.approvalsNeeded - 1] = approvalsConfig.requiredApprovals;
+  newRow[columnMap.status - 1] = autoApprove ? CHANGE_REQUEST_STATUS_APPROVED : CHANGE_REQUEST_STATUS_PENDING;
+  newRow[columnMap.approvalsNeeded - 1] = effectiveApprovalsNeeded;
   changeSheet.appendRow(newRow);
   const appendedRowIndex = changeSheet.getLastRow();
-  normalizeChangeRequestRow_(changeSheet, appendedRowIndex, approvalsConfig, null, columnMap);
-  return { status: CHANGE_REQUEST_STATUS_PENDING, rowIndex: appendedRowIndex, created: true };
+  const normalizedConfig = approvalsDisabled
+    ? Object.assign({}, normalizedApprovalsConfig, { requiredApprovals: 0 })
+    : normalizedApprovalsConfig;
+  normalizeChangeRequestRow_(changeSheet, appendedRowIndex, normalizedConfig, null, columnMap);
+  return { status: autoApprove ? CHANGE_REQUEST_STATUS_APPROVED : CHANGE_REQUEST_STATUS_PENDING, rowIndex: appendedRowIndex, created: true };
+}
+
+function logStructuralChangeRequest_(targetSheetName, targetRowKey, action, snapshot, requestedBy, options) {
+  if (!targetSheetName || !targetRowKey || !action) {
+    log_('Skipped structural ChangeRequest logging: missing targetSheetName/targetRowKey/action.', 'WARN');
+    return false;
+  }
+
+  const approvalsConfig = options && options.approvalsConfig ? options.approvalsConfig : getApprovalsConfig_();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let changeSheet = options && options.changeSheet ? options.changeSheet : ss.getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
+  if (!changeSheet) {
+    ensureChangeRequestsSheet_();
+    changeSheet = ss.getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
+  }
+  if (!changeSheet) return false;
+
+  const columnMap = options && options.columnMap ? options.columnMap : getChangeRequestsColumnMap_(changeSheet);
+  const now = new Date();
+  const snapshotPayload = snapshot && typeof snapshot === 'object' ? Object.assign({}, snapshot, { __structuralChange: true }) : { __structuralChange: true };
+  const snapshotRaw = JSON.stringify(snapshotPayload);
+  const newRow = [];
+  newRow[columnMap.id - 1] = '';
+  newRow[columnMap.requestedBy - 1] = requestedBy || '';
+  newRow[columnMap.requestedAt - 1] = now;
+  newRow[columnMap.targetSheet - 1] = targetSheetName;
+  newRow[columnMap.targetRowKey - 1] = targetRowKey;
+  newRow[columnMap.action - 1] = action;
+  newRow[columnMap.proposedSnapshot - 1] = snapshotRaw;
+  newRow[columnMap.status - 1] = CHANGE_REQUEST_STATUS_APPLIED;
+  newRow[columnMap.approvalsNeeded - 1] = 0;
+  changeSheet.appendRow(newRow);
+  const appendedRowIndex = changeSheet.getLastRow();
+  normalizeChangeRequestRow_(changeSheet, appendedRowIndex, Object.assign({}, approvalsConfig, { requiredApprovals: 0 }), null, columnMap);
+  if (columnMap.appliedAt) {
+    changeSheet.getRange(appendedRowIndex, columnMap.appliedAt).setValue(now);
+  }
+  log_('Logged structural change for ' + targetSheetName + ' key=' + targetRowKey, 'INFO');
+  return true;
 }
 
 function markChangeRequestAppliedByRow_(changeSheet, rowIndex, columnMap) {
@@ -560,7 +614,7 @@ function normalizeChangeRequestRow_(sheet, rowIndex, approvalsConfig, eventUser,
     updates.push({ col: resolvedColumnMap.status, value: status });
   }
 
-  const approvalsNeeded = approvalsConfig && approvalsConfig.requiredApprovals ? approvalsConfig.requiredApprovals : 1;
+  const approvalsNeeded = approvalsConfig && approvalsConfig.requiredApprovals !== undefined ? approvalsConfig.requiredApprovals : 1;
   updates.push({ col: resolvedColumnMap.approvalsNeeded, value: approvalsNeeded });
 
   if (updates.length > 0) {

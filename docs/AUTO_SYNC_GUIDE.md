@@ -127,9 +127,9 @@ After assigning this custom role, the script owner's account will have the neces
    - This creates a time-based trigger that runs under your account.
 
 2. **Your team members can now:**
-   - ✅ Edit any permission sheet (add/remove emails, update folder details).
-   - ✅ Add new entries (folders, user groups) to the `ManagedFolders` or `UserGroups` sheets.
+   - ✅ Edit membership sheets (add/remove emails).
    - ✅ Work with regular Gmail accounts or Google Workspace accounts (no special script permissions needed for them).
+   - ❌ Cannot edit `ManagedFolders` or `UserGroups` (structural changes require a Super Admin).
    - ❌ Don't need to run any menu items.
    - ❌ Don't need to authenticate with Google for the script.
 

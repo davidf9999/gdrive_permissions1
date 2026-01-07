@@ -59,6 +59,7 @@ function onOpen() {
 
   setupControlSheets_();
   setupLogSheets_();
+  ensureChangeRequestsSheet_();
 
   if (superAdmin) {
     // updateAutoSyncStatusIndicator_();
@@ -129,8 +130,18 @@ function onEdit(e) {
 
   const accessPolicy = getSheetAccessPolicy_(sheetName);
 
-  // --- Handle ManagedFolders and UserGroups row deletion warning ---
+  // --- Handle ManagedFolders and UserGroups access + deletion warning ---
   if (sheetName === MANAGED_FOLDERS_SHEET_NAME || sheetName === USER_GROUPS_SHEET_NAME) {
+    if (accessPolicy.category === 'structural' && !isSuperAdmin_()) {
+      if (oldValue !== undefined) {
+        range.setValue(oldValue);
+      } else {
+        range.clearContent();
+      }
+      SpreadsheetApp.getActiveSpreadsheet().toast('ManagedFolders and UserGroups are restricted to super admins.', 'Edit Reverted', 10);
+      return;
+    }
+
     if (!range || range.getRow() <= 1) {
       return; // Skip header row
     }
@@ -528,6 +539,7 @@ function createTestingMenu_(ui) {
     .addItem('Run Stress Test', 'runStressTest')
     .addItem('Run Add/Delete Separation Test', 'runAddDeleteSeparationTest')
     .addItem('Run Approval Gating Test', 'runApprovalGatingTest')
+    .addItem('Run Structural Edit Restriction Test', 'runStructuralEditRestrictionTest_')
     .addItem('Run AutoSync Error Email Test', 'runAutoSyncErrorEmailTest')
     .addItem('Run Sheet Locking Test', 'runSheetLockingTest_')
     .addItem('Run Circular Dependency Test', 'runCircularDependencyTest_')
@@ -1404,6 +1416,10 @@ function getSheetAccessPolicy_(sheetName) {
     return { category: 'read-only' };
   }
 
+  if (isStructuralControlSheetName_(sheetName)) {
+    return { category: 'structural' };
+  }
+
   if (isPermissionDataSheetName_(sheetName)) {
     return { category: 'permissions' };
   }
@@ -1423,6 +1439,10 @@ function isReadOnlySystemSheetName_(sheetName) {
     'Help'
   ];
   return readOnlyNames.indexOf(sheetName) !== -1;
+}
+
+function isStructuralControlSheetName_(sheetName) {
+  return sheetName === MANAGED_FOLDERS_SHEET_NAME || sheetName === USER_GROUPS_SHEET_NAME;
 }
 
 function isPermissionDataSheetName_(sheetName) {
@@ -2672,6 +2692,18 @@ function _sequentiallyCreateFolders(jobs, sheet, silentMode, totalSummary, colMa
             job.folderName = result.folder.getName(); // Update name in case it was corrected
             if (result.wasNewlyCreated) {
               totalSummary.added++;
+              logStructuralChangeRequest_(
+                MANAGED_FOLDERS_SHEET_NAME,
+                'FOLDER|' + job.folderId,
+                'ADD',
+                {
+                  changeType: 'STRUCTURAL_FOLDER_CREATE',
+                  folderId: job.folderId,
+                  folderName: job.folderName,
+                  rowIndex: job.rowIndex
+                },
+                'SYSTEM'
+              );
             }
 
             // Write updates to sheet immediately
@@ -2719,6 +2751,9 @@ function _sequentiallyCreateGroupsAndSheets(jobs, sheet, lockManager, totalSumma
       }
     }
     job.groupEmail = groupEmail;
+    const bindingKey = job.folderId
+      ? buildFolderPermissionRowKey_(job.folderId, job.groupEmail, job.role)
+      : 'ROW|' + job.rowIndex;
 
     // Write updates to sheet
     sheet.getRange(job.rowIndex, userSheetNameCol).setValue(job.userSheetName);
@@ -2728,6 +2763,20 @@ function _sequentiallyCreateGroupsAndSheets(jobs, sheet, lockManager, totalSumma
     const sheetResult = getOrCreateUserSheet_(job.userSheetName);
     if (sheetResult.wasNewlyCreated) {
       totalSummary.added++;
+      logStructuralChangeRequest_(
+        MANAGED_FOLDERS_SHEET_NAME,
+        bindingKey,
+        'ADD',
+        {
+          changeType: 'STRUCTURAL_USER_SHEET_CREATE',
+          folderId: job.folderId || '',
+          folderName: job.folderName,
+          role: job.role,
+          groupEmail: job.groupEmail,
+          userSheetName: job.userSheetName
+        },
+        'SYSTEM'
+      );
     }
     const userSheet = sheetResult.sheet;
 
@@ -2738,6 +2787,20 @@ function _sequentiallyCreateGroupsAndSheets(jobs, sheet, lockManager, totalSumma
     const groupResult = getOrCreateGroup_(job.groupEmail, job.userSheetName);
     if (groupResult.wasNewlyCreated) {
       totalSummary.added++;
+      logStructuralChangeRequest_(
+        MANAGED_FOLDERS_SHEET_NAME,
+        bindingKey,
+        'ADD',
+        {
+          changeType: 'STRUCTURAL_GROUP_CREATE',
+          folderId: job.folderId || '',
+          folderName: job.folderName,
+          role: job.role,
+          groupEmail: job.groupEmail,
+          groupName: job.userSheetName
+        },
+        'SYSTEM'
+      );
     }
   });
 }
@@ -2750,18 +2813,15 @@ function _batchSetPermissions(jobs) {
     if (shouldSkipGroupOps_()) return summary;
 
     const approvalsConfig = getApprovalsConfig_();
-    const approvalsEnabled = approvalsConfig.enabled;
     let changeRequestContext = null;
-    if (approvalsEnabled) {
-      ensureChangeRequestsSheet_();
-      const changeSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
-      if (changeSheet) {
-        changeRequestContext = {
-          changeSheet: changeSheet,
-          columnMap: getChangeRequestsColumnMap_(changeSheet),
-          approvalsConfig: approvalsConfig
-        };
-      }
+    ensureChangeRequestsSheet_();
+    const changeSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
+    if (changeSheet) {
+      changeRequestContext = {
+        changeSheet: changeSheet,
+        columnMap: getChangeRequestsColumnMap_(changeSheet),
+        approvalsConfig: approvalsConfig
+      };
     }
 
     const requests = [];
@@ -2790,24 +2850,25 @@ function _batchSetPermissions(jobs) {
         }
 
         let changeRequestRowIndex = null;
-        if (approvalsEnabled) {
-          const targetRowKey = buildFolderPermissionRowKey_(job.folderId, job.groupEmail, job.role);
-          const snapshot = {
-            changeType: 'FOLDER_PERMISSION',
-            folderId: job.folderId,
-            folderName: job.folderName,
-            groupEmail: job.groupEmail,
-            desiredRole: driveApiRole,
-            currentRole: existingPermission ? existingPermission.role : null,
-            action: action
-          };
-          const result = ensureChangeRequestForDelta_(MANAGED_FOLDERS_SHEET_NAME, targetRowKey, action, snapshot, 'SYSTEM', changeRequestContext);
-          if (result.rowIndex > 0) {
-            changeRequestRowIndex = result.rowIndex;
-          }
-          if (result.status !== CHANGE_REQUEST_STATUS_APPROVED) {
-            return;
-          }
+        const targetRowKey = buildFolderPermissionRowKey_(job.folderId, job.groupEmail, job.role);
+        const snapshot = {
+          changeType: 'FOLDER_PERMISSION',
+          folderId: job.folderId,
+          folderName: job.folderName,
+          groupEmail: job.groupEmail,
+          desiredRole: driveApiRole,
+          currentRole: existingPermission ? existingPermission.role : null,
+          action: action
+        };
+        const result = ensureChangeRequestForDelta_(MANAGED_FOLDERS_SHEET_NAME, targetRowKey, action, snapshot, 'SYSTEM', Object.assign({}, changeRequestContext || {}, {
+          approvalsNeededOverride: 0,
+          autoApprove: true
+        }));
+        if (result.rowIndex > 0) {
+          changeRequestRowIndex = result.rowIndex;
+        }
+        if (result.status !== CHANGE_REQUEST_STATUS_APPROVED) {
+          return;
         }
 
         requests.push({
@@ -2829,14 +2890,14 @@ function _batchSetPermissions(jobs) {
         const rowIndex = requests[i].changeRequestRowIndex;
         if (part.success) {
             log_(`Successfully set role "${job.role}" for group "${job.groupEmail}" on folder "${job.folderName}"`, 'INFO');
-            if (approvalsEnabled && changeRequestContext && rowIndex) {
+            if (changeRequestContext && rowIndex) {
               markChangeRequestAppliedByRow_(changeRequestContext.changeSheet, rowIndex, changeRequestContext.columnMap);
             }
         } else {
             // Ignore "permission already exists" errors, treat as success
             if (part.body && part.body.includes('duplicate')) {
                  log_(`Permission for group "${job.groupEmail}" on folder "${job.folderName}" already exists. Skipping.`, 'INFO');
-                 if (approvalsEnabled && changeRequestContext && rowIndex) {
+                 if (changeRequestContext && rowIndex) {
                    markChangeRequestAppliedByRow_(changeRequestContext.changeSheet, rowIndex, changeRequestContext.columnMap);
                  }
             } else {
@@ -3198,6 +3259,19 @@ function processUserGroupDeletions_(summary) {
       rowsToDelete.push(rowNum);
       summary.userGroupsDeleted++;
 
+      logStructuralChangeRequest_(
+        USER_GROUPS_SHEET_NAME,
+        groupName || ('ROW|' + rowNum),
+        'DELETE',
+        {
+          changeType: 'STRUCTURAL_USERGROUP_DELETE',
+          groupName: groupName || '',
+          groupEmail: groupEmail || '',
+          userSheetName: userSheetName
+        },
+        'SYSTEM'
+      );
+
       log_(`✓ Successfully deleted UserGroup: "${groupName}"`, 'INFO');
 
     } catch (e) {
@@ -3318,6 +3392,23 @@ function processManagedFolderDeletions_(summary) {
       // 5. Mark row for deletion
       rowsToDelete.push(rowNum);
       summary.foldersDeleted++;
+
+      logStructuralChangeRequest_(
+        MANAGED_FOLDERS_SHEET_NAME,
+        folderId && groupEmail && role
+          ? buildFolderPermissionRowKey_(folderId, groupEmail, role)
+          : ('ROW|' + rowNum),
+        'DELETE',
+        {
+          changeType: 'STRUCTURAL_MANAGED_FOLDER_DELETE',
+          folderId: folderId || '',
+          folderName: folderName || '',
+          role: role || '',
+          groupEmail: groupEmail || '',
+          userSheetName: userSheetName || ''
+        },
+        'SYSTEM'
+      );
 
       log_(`✓ Successfully deleted folder-role binding: "${folderName}" (${role})`, 'INFO');
 
@@ -3694,7 +3785,8 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
   const returnPlanOnly = options && options.returnPlanOnly !== undefined ? options.returnPlanOnly : false;
   const approvalsConfig = getApprovalsConfig_();
   const approvalsEnabled = approvalsConfig.enabled && !returnPlanOnly;
-  const changeRequestContext = approvalsEnabled ? {} : null;
+  const shouldLogPermissionChanges = !returnPlanOnly;
+  const changeRequestContext = shouldLogPermissionChanges ? {} : null;
   
   const MEMBERSHIP_BATCH_SIZE = config.MembershipBatchSize || 15;
   const INTER_BATCH_DELAY_MS = 1000;
@@ -3749,7 +3841,7 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
       return (removeOnly && emailsToRemove.length > 0) ? { groupEmail, groupName: userSheetName, usersToRemove: emailsToRemove } : null;
     }
 
-    if (approvalsEnabled) {
+    if (shouldLogPermissionChanges) {
       ensureChangeRequestsSheet_();
       const changeSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
       if (changeSheet) {
@@ -3809,6 +3901,44 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
           }
         });
       }
+    } else if (shouldLogPermissionChanges) {
+      if (!removeOnly) {
+        emailsToAdd.forEach(function(email) {
+          const snapshot = {
+            changeType: 'GROUP_MEMBERSHIP',
+            groupEmail: groupEmail,
+            userSheetName: userSheetName,
+            email: email,
+            action: 'ADD'
+          };
+          const result = ensureChangeRequestForDelta_(userSheetName, email, 'ADD', snapshot, 'SYSTEM', Object.assign({}, changeRequestContext, {
+            approvalsNeededOverride: 0,
+            autoApprove: true
+          }));
+          if (result.rowIndex > 0) {
+            addRequestRowsByEmail[email] = result.rowIndex;
+          }
+        });
+      }
+
+      if (!addOnly) {
+        emailsToRemove.forEach(function(email) {
+          const snapshot = {
+            changeType: 'GROUP_MEMBERSHIP',
+            groupEmail: groupEmail,
+            userSheetName: userSheetName,
+            email: email,
+            action: 'REMOVE'
+          };
+          const result = ensureChangeRequestForDelta_(userSheetName, email, 'REMOVE', snapshot, 'SYSTEM', Object.assign({}, changeRequestContext, {
+            approvalsNeededOverride: 0,
+            autoApprove: true
+          }));
+          if (result.rowIndex > 0) {
+            removeRequestRowsByEmail[email] = result.rowIndex;
+          }
+        });
+      }
     }
 
     // Process additions in chunks
@@ -3828,7 +3958,7 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
         const chunkSummary = _executeMembershipChunkWithRetries_(requests, groupEmail, config);
         totalSummary.added += chunkSummary.added;
         totalSummary.failed += chunkSummary.failed;
-        if (approvalsEnabled && changeRequestContext && changeRequestContext.changeSheet) {
+        if (changeRequestContext && changeRequestContext.changeSheet) {
           chunkSummary.appliedEmails.forEach(function(email) {
             const rowIndex = addRequestRowsByEmail[email];
             if (rowIndex) {
@@ -3859,7 +3989,7 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
         const chunkSummary = _executeMembershipChunkWithRetries_(requests, groupEmail, config);
         totalSummary.removed += chunkSummary.removed;
         totalSummary.failed += chunkSummary.failed;
-        if (approvalsEnabled && changeRequestContext && changeRequestContext.changeSheet) {
+        if (changeRequestContext && changeRequestContext.changeSheet) {
           chunkSummary.appliedEmails.forEach(function(email) {
             const rowIndex = removeRequestRowsByEmail[email];
             if (rowIndex) {
@@ -5279,13 +5409,20 @@ function isPermissionDeltaSnapshot_(snapshotRaw) {
 
 function ensureChangeRequestForDelta_(targetSheetName, targetRowKey, action, deltaSnapshot, requestedBy, options) {
   const approvalsConfig = options && options.approvalsConfig ? options.approvalsConfig : getApprovalsConfig_();
-  if (!approvalsConfig.enabled) {
-    return { status: CHANGE_REQUEST_STATUS_APPROVED, rowIndex: -1, created: false };
-  }
   if (!targetSheetName || !targetRowKey || !action) {
     log_('Skipped ChangeRequest creation: missing targetSheetName/targetRowKey/action.', 'WARN');
     return { status: CHANGE_REQUEST_STATUS_DENIED, rowIndex: -1, created: false };
   }
+
+  const approvalsNeededOverride = options && options.approvalsNeededOverride !== undefined ? options.approvalsNeededOverride : null;
+  const autoApproveOverride = options && options.autoApprove === true;
+  const approvalsDisabled = approvalsConfig.enabled !== true;
+  const autoApprove = autoApproveOverride || approvalsDisabled;
+  const approvalsNeeded = approvalsNeededOverride !== null ? approvalsNeededOverride : approvalsConfig.requiredApprovals;
+  const effectiveApprovalsNeeded = approvalsNeededOverride !== null ? approvalsNeededOverride : (approvalsDisabled ? 0 : approvalsNeeded);
+  const normalizedApprovalsConfig = approvalsNeededOverride !== null
+    ? Object.assign({}, approvalsConfig, { requiredApprovals: approvalsNeeded })
+    : approvalsConfig;
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let changeSheet = options && options.changeSheet ? options.changeSheet : ss.getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
@@ -5311,8 +5448,8 @@ function ensureChangeRequestForDelta_(targetSheetName, targetRowKey, action, del
       if (requestedBy) {
         changeSheet.getRange(existingRow, columnMap.requestedBy).setValue(requestedBy);
       }
-      changeSheet.getRange(existingRow, columnMap.status).setValue(CHANGE_REQUEST_STATUS_PENDING);
-      changeSheet.getRange(existingRow, columnMap.approvalsNeeded).setValue(approvalsConfig.requiredApprovals);
+      changeSheet.getRange(existingRow, columnMap.status).setValue(autoApprove ? CHANGE_REQUEST_STATUS_APPROVED : CHANGE_REQUEST_STATUS_PENDING);
+      changeSheet.getRange(existingRow, columnMap.approvalsNeeded).setValue(effectiveApprovalsNeeded);
       if (columnMap.denyReason) {
         changeSheet.getRange(existingRow, columnMap.denyReason).clearContent();
       }
@@ -5324,7 +5461,12 @@ function ensureChangeRequestForDelta_(targetSheetName, targetRowKey, action, del
           changeSheet.getRange(existingRow, colIndex).clearContent();
         });
       }
-      return { status: CHANGE_REQUEST_STATUS_PENDING, rowIndex: existingRow, created: false };
+      return { status: autoApprove ? CHANGE_REQUEST_STATUS_APPROVED : CHANGE_REQUEST_STATUS_PENDING, rowIndex: existingRow, created: false };
+    }
+    if (autoApprove && existingStatus !== CHANGE_REQUEST_STATUS_APPROVED) {
+      changeSheet.getRange(existingRow, columnMap.status).setValue(CHANGE_REQUEST_STATUS_APPROVED);
+      changeSheet.getRange(existingRow, columnMap.approvalsNeeded).setValue(effectiveApprovalsNeeded);
+      return { status: CHANGE_REQUEST_STATUS_APPROVED, rowIndex: existingRow, created: false };
     }
     return { status: existingStatus, rowIndex: existingRow, created: false };
   }
@@ -5337,12 +5479,54 @@ function ensureChangeRequestForDelta_(targetSheetName, targetRowKey, action, del
   newRow[columnMap.targetRowKey - 1] = targetRowKey;
   newRow[columnMap.action - 1] = action;
   newRow[columnMap.proposedSnapshot - 1] = snapshotRaw;
-  newRow[columnMap.status - 1] = CHANGE_REQUEST_STATUS_PENDING;
-  newRow[columnMap.approvalsNeeded - 1] = approvalsConfig.requiredApprovals;
+  newRow[columnMap.status - 1] = autoApprove ? CHANGE_REQUEST_STATUS_APPROVED : CHANGE_REQUEST_STATUS_PENDING;
+  newRow[columnMap.approvalsNeeded - 1] = effectiveApprovalsNeeded;
   changeSheet.appendRow(newRow);
   const appendedRowIndex = changeSheet.getLastRow();
-  normalizeChangeRequestRow_(changeSheet, appendedRowIndex, approvalsConfig, null, columnMap);
-  return { status: CHANGE_REQUEST_STATUS_PENDING, rowIndex: appendedRowIndex, created: true };
+  const normalizedConfig = approvalsDisabled
+    ? Object.assign({}, normalizedApprovalsConfig, { requiredApprovals: 0 })
+    : normalizedApprovalsConfig;
+  normalizeChangeRequestRow_(changeSheet, appendedRowIndex, normalizedConfig, null, columnMap);
+  return { status: autoApprove ? CHANGE_REQUEST_STATUS_APPROVED : CHANGE_REQUEST_STATUS_PENDING, rowIndex: appendedRowIndex, created: true };
+}
+
+function logStructuralChangeRequest_(targetSheetName, targetRowKey, action, snapshot, requestedBy, options) {
+  if (!targetSheetName || !targetRowKey || !action) {
+    log_('Skipped structural ChangeRequest logging: missing targetSheetName/targetRowKey/action.', 'WARN');
+    return false;
+  }
+
+  const approvalsConfig = options && options.approvalsConfig ? options.approvalsConfig : getApprovalsConfig_();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let changeSheet = options && options.changeSheet ? options.changeSheet : ss.getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
+  if (!changeSheet) {
+    ensureChangeRequestsSheet_();
+    changeSheet = ss.getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
+  }
+  if (!changeSheet) return false;
+
+  const columnMap = options && options.columnMap ? options.columnMap : getChangeRequestsColumnMap_(changeSheet);
+  const now = new Date();
+  const snapshotPayload = snapshot && typeof snapshot === 'object' ? Object.assign({}, snapshot, { __structuralChange: true }) : { __structuralChange: true };
+  const snapshotRaw = JSON.stringify(snapshotPayload);
+  const newRow = [];
+  newRow[columnMap.id - 1] = '';
+  newRow[columnMap.requestedBy - 1] = requestedBy || '';
+  newRow[columnMap.requestedAt - 1] = now;
+  newRow[columnMap.targetSheet - 1] = targetSheetName;
+  newRow[columnMap.targetRowKey - 1] = targetRowKey;
+  newRow[columnMap.action - 1] = action;
+  newRow[columnMap.proposedSnapshot - 1] = snapshotRaw;
+  newRow[columnMap.status - 1] = CHANGE_REQUEST_STATUS_APPLIED;
+  newRow[columnMap.approvalsNeeded - 1] = 0;
+  changeSheet.appendRow(newRow);
+  const appendedRowIndex = changeSheet.getLastRow();
+  normalizeChangeRequestRow_(changeSheet, appendedRowIndex, Object.assign({}, approvalsConfig, { requiredApprovals: 0 }), null, columnMap);
+  if (columnMap.appliedAt) {
+    changeSheet.getRange(appendedRowIndex, columnMap.appliedAt).setValue(now);
+  }
+  log_('Logged structural change for ' + targetSheetName + ' key=' + targetRowKey, 'INFO');
+  return true;
 }
 
 function markChangeRequestAppliedByRow_(changeSheet, rowIndex, columnMap) {
@@ -5617,7 +5801,7 @@ function normalizeChangeRequestRow_(sheet, rowIndex, approvalsConfig, eventUser,
     updates.push({ col: resolvedColumnMap.status, value: status });
   }
 
-  const approvalsNeeded = approvalsConfig && approvalsConfig.requiredApprovals ? approvalsConfig.requiredApprovals : 1;
+  const approvalsNeeded = approvalsConfig && approvalsConfig.requiredApprovals !== undefined ? approvalsConfig.requiredApprovals : 1;
   updates.push({ col: resolvedColumnMap.approvalsNeeded, value: approvalsNeeded });
 
   if (updates.length > 0) {
@@ -6974,11 +7158,8 @@ function ensureChangeRequestsSheet_() {
       .setNumberFormat('yyyy-MM-dd HH:mm:ss');
   }
 
-  const approvalsEnabled = getConfigValue_('ApprovalsEnabled', false) === true;
   try {
-    if (!approvalsEnabled && !changeSheet.isSheetHidden()) {
-      changeSheet.hideSheet();
-    } else if (approvalsEnabled && changeSheet.isSheetHidden()) {
+    if (changeSheet.isSheetHidden()) {
       changeSheet.showSheet();
     }
   } catch (e) {
@@ -7028,6 +7209,8 @@ function syncSheetEditors(options = {}) {
   const approvalsConfig = getApprovalsConfig_();
   const approvalsEnabled = approvalsConfig.enabled;
   let changeRequestContext = null;
+  const groupOpsAvailable = !shouldSkipGroupOps_();
+  const shouldLogPermissionChanges = true;
 
   try {
     log_('DEBUG: syncSheetEditors started.', 'DEBUG');
@@ -7068,6 +7251,17 @@ function syncSheetEditors(options = {}) {
     log_('DEBUG: Setting status to "Processing..."', 'DEBUG');
     statusCell.setValue('Processing...');
 
+    log_('DEBUG: Reading group email from cell.', 'DEBUG');
+    let groupEmail = groupEmailCell.getValue().toString().trim().toLowerCase();
+    log_('DEBUG: Group email from sheet: ' + groupEmail, 'DEBUG');
+    if (!groupEmail && groupOpsAvailable) {
+      groupEmail = generateGroupEmail_(SHEET_EDITORS_GROUP_NAME);
+      log_('DEBUG: Generated group email: ' + groupEmail, 'DEBUG');
+      log_('DEBUG: Writing generated email back to cell.', 'DEBUG');
+      groupEmailCell.setValue(groupEmail);
+      log_(`Generated and set SheetEditors group email in UserGroups sheet: ${groupEmail}`, 'INFO');
+    }
+
     // --- SPREADSHEET EDITOR SYNC (File-level permissions) ---
     // This part remains unchanged as it deals with the spreadsheet file itself.
     const sheetEditorData = sheetEditorsSheet.getRange(2, 1, sheetEditorsSheet.getLastRow(), 2).getValues(); // Check cols A, B
@@ -7094,8 +7288,11 @@ function syncSheetEditors(options = {}) {
     let approvedEmailsToRemove = addOnly ? [] : emailsToRemove;
     const addRequestRowsByEmail = {};
     const removeRequestRowsByEmail = {};
+    const combinedRequestRowsByEmail = {};
+    const fileEditorAppliedByEmail = {};
+    const combineSheetEditorOps = groupOpsAvailable;
 
-    if (approvalsEnabled) {
+    if (shouldLogPermissionChanges) {
       ensureChangeRequestsSheet_();
       const changeSheet = spreadsheet.getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
       if (changeSheet) {
@@ -7105,13 +7302,22 @@ function syncSheetEditors(options = {}) {
           approvalsConfig: approvalsConfig
         };
       }
+    }
+
+    if (approvalsEnabled) {
       approvedEmailsToAdd = [];
       emailsToAdd.forEach(function(email) {
-        const targetRowKey = 'FILE_EDITOR|' + email;
-        const snapshot = { changeType: 'SHEET_EDITOR_FILE', email: email, action: 'ADD' };
+        const targetRowKey = combineSheetEditorOps ? 'SHEET_EDITOR|' + email : 'FILE_EDITOR|' + email;
+        const snapshot = combineSheetEditorOps
+          ? { changeType: 'SHEET_EDITOR_COMBINED', groupEmail: groupEmail || '', email: email, action: 'ADD', operations: ['FILE_EDITOR', 'GROUP_MEMBER'] }
+          : { changeType: 'SHEET_EDITOR_FILE', email: email, action: 'ADD' };
         const result = ensureChangeRequestForDelta_(SHEET_EDITORS_SHEET_NAME, targetRowKey, 'ADD', snapshot, 'SYSTEM', changeRequestContext);
         if (result.rowIndex > 0) {
-          addRequestRowsByEmail[email] = result.rowIndex;
+          if (combineSheetEditorOps) {
+            combinedRequestRowsByEmail[email] = result.rowIndex;
+          } else {
+            addRequestRowsByEmail[email] = result.rowIndex;
+          }
         }
         if (result.status === CHANGE_REQUEST_STATUS_APPROVED) {
           approvedEmailsToAdd.push(email);
@@ -7121,14 +7327,58 @@ function syncSheetEditors(options = {}) {
       if (!addOnly) {
         approvedEmailsToRemove = [];
         emailsToRemove.forEach(function(email) {
-          const targetRowKey = 'FILE_EDITOR|' + email;
-          const snapshot = { changeType: 'SHEET_EDITOR_FILE', email: email, action: 'REMOVE' };
+          const targetRowKey = combineSheetEditorOps ? 'SHEET_EDITOR|' + email : 'FILE_EDITOR|' + email;
+          const snapshot = combineSheetEditorOps
+            ? { changeType: 'SHEET_EDITOR_COMBINED', groupEmail: groupEmail || '', email: email, action: 'REMOVE', operations: ['FILE_EDITOR', 'GROUP_MEMBER'] }
+            : { changeType: 'SHEET_EDITOR_FILE', email: email, action: 'REMOVE' };
           const result = ensureChangeRequestForDelta_(SHEET_EDITORS_SHEET_NAME, targetRowKey, 'REMOVE', snapshot, 'SYSTEM', changeRequestContext);
           if (result.rowIndex > 0) {
-            removeRequestRowsByEmail[email] = result.rowIndex;
+            if (combineSheetEditorOps) {
+              combinedRequestRowsByEmail[email] = result.rowIndex;
+            } else {
+              removeRequestRowsByEmail[email] = result.rowIndex;
+            }
           }
           if (result.status === CHANGE_REQUEST_STATUS_APPROVED) {
             approvedEmailsToRemove.push(email);
+          }
+        });
+      }
+    } else if (shouldLogPermissionChanges) {
+      emailsToAdd.forEach(function(email) {
+        const targetRowKey = combineSheetEditorOps ? 'SHEET_EDITOR|' + email : 'FILE_EDITOR|' + email;
+        const snapshot = combineSheetEditorOps
+          ? { changeType: 'SHEET_EDITOR_COMBINED', groupEmail: groupEmail || '', email: email, action: 'ADD', operations: ['FILE_EDITOR', 'GROUP_MEMBER'] }
+          : { changeType: 'SHEET_EDITOR_FILE', email: email, action: 'ADD' };
+        const result = ensureChangeRequestForDelta_(SHEET_EDITORS_SHEET_NAME, targetRowKey, 'ADD', snapshot, 'SYSTEM', Object.assign({}, changeRequestContext || {}, {
+          approvalsNeededOverride: 0,
+          autoApprove: true
+        }));
+        if (result.rowIndex > 0) {
+          if (combineSheetEditorOps) {
+            combinedRequestRowsByEmail[email] = result.rowIndex;
+          } else {
+            addRequestRowsByEmail[email] = result.rowIndex;
+          }
+        }
+      });
+
+      if (!addOnly) {
+        emailsToRemove.forEach(function(email) {
+          const targetRowKey = combineSheetEditorOps ? 'SHEET_EDITOR|' + email : 'FILE_EDITOR|' + email;
+          const snapshot = combineSheetEditorOps
+            ? { changeType: 'SHEET_EDITOR_COMBINED', groupEmail: groupEmail || '', email: email, action: 'REMOVE', operations: ['FILE_EDITOR', 'GROUP_MEMBER'] }
+            : { changeType: 'SHEET_EDITOR_FILE', email: email, action: 'REMOVE' };
+          const result = ensureChangeRequestForDelta_(SHEET_EDITORS_SHEET_NAME, targetRowKey, 'REMOVE', snapshot, 'SYSTEM', Object.assign({}, changeRequestContext || {}, {
+            approvalsNeededOverride: 0,
+            autoApprove: true
+          }));
+          if (result.rowIndex > 0) {
+            if (combineSheetEditorOps) {
+              combinedRequestRowsByEmail[email] = result.rowIndex;
+            } else {
+              removeRequestRowsByEmail[email] = result.rowIndex;
+            }
           }
         });
       }
@@ -7140,11 +7390,13 @@ function syncSheetEditors(options = {}) {
         try {
           spreadsheet.addEditor(email);
           totalSummary.added++;
-          if (approvalsEnabled && changeRequestContext && addRequestRowsByEmail[email]) {
+          fileEditorAppliedByEmail[email] = true;
+          if (changeRequestContext && addRequestRowsByEmail[email]) {
             markChangeRequestAppliedByRow_(changeRequestContext.changeSheet, addRequestRowsByEmail[email], changeRequestContext.columnMap);
           }
         } catch (e) {
           log_('Failed to add spreadsheet editor ' + email + ': ' + e.message, 'ERROR');
+          fileEditorAppliedByEmail[email] = false;
           totalSummary.failed++;
         }
       });
@@ -7157,11 +7409,13 @@ function syncSheetEditors(options = {}) {
           try {
             spreadsheet.removeEditor(email);
             totalSummary.removed++;
-            if (approvalsEnabled && changeRequestContext && removeRequestRowsByEmail[email]) {
+            fileEditorAppliedByEmail[email] = true;
+            if (changeRequestContext && removeRequestRowsByEmail[email]) {
               markChangeRequestAppliedByRow_(changeRequestContext.changeSheet, removeRequestRowsByEmail[email], changeRequestContext.columnMap);
             }
           } catch (e) {
             log_('Failed to remove spreadsheet editor ' + email + ': ' + e.message, 'ERROR');
+            fileEditorAppliedByEmail[email] = false;
             totalSummary.failed++;
           }
         });
@@ -7171,22 +7425,11 @@ function syncSheetEditors(options = {}) {
 
 
     // --- GOOGLE GROUP MEMBERSHIP SYNC ---
-    if (shouldSkipGroupOps_()) {
+    if (!groupOpsAvailable) {
       log_('Admin Directory service not available. Skipping Sheet Editors group membership sync.', 'WARN');
       statusCell.setValue('SKIPPED (No Admin SDK)');
       lastSyncedCell.setValue(new Date());
       return totalSummary;
-    }
-
-    log_('DEBUG: Reading group email from cell.', 'DEBUG');
-    let groupEmail = groupEmailCell.getValue().toString().trim().toLowerCase();
-    log_('DEBUG: Group email from sheet: ' + groupEmail, 'DEBUG');
-    if (!groupEmail) {
-      groupEmail = generateGroupEmail_(SHEET_EDITORS_GROUP_NAME);
-      log_('DEBUG: Generated group email: ' + groupEmail, 'DEBUG');
-      log_('DEBUG: Writing generated email back to cell.', 'DEBUG');
-      groupEmailCell.setValue(groupEmail);
-      log_(`Generated and set SheetEditors group email in UserGroups sheet: ${groupEmail}`, 'INFO');
     }
 
     const groupResult = getOrCreateGroup_(groupEmail, 'Permissions Manager Sheet Editors');
@@ -7209,42 +7452,116 @@ function syncSheetEditors(options = {}) {
     const removeMemberRequestRowsByEmail = {};
 
     if (approvalsEnabled) {
-      approvedMembersToAdd = [];
-      membersToAdd.forEach(function(email) {
-        const targetRowKey = 'GROUP_MEMBER|' + email;
-        const snapshot = {
-          changeType: 'SHEET_EDITOR_GROUP',
-          groupEmail: groupEmail,
-          email: email,
-          action: 'ADD'
-        };
-        const result = ensureChangeRequestForDelta_(SHEET_EDITORS_SHEET_NAME, targetRowKey, 'ADD', snapshot, 'SYSTEM', changeRequestContext);
-        if (result.rowIndex > 0) {
-          addMemberRequestRowsByEmail[email] = result.rowIndex;
-        }
-        if (result.status === CHANGE_REQUEST_STATUS_APPROVED) {
-          approvedMembersToAdd.push(email);
-        }
-      });
-
-      if (!addOnly) {
-        approvedMembersToRemove = [];
-        membersToRemove.forEach(function(email) {
+      if (combineSheetEditorOps) {
+        approvedMembersToAdd = approvedEmailsToAdd.filter(function(email) {
+          return fileEditorAppliedByEmail[email];
+        });
+        approvedMembersToRemove = addOnly ? [] : approvedEmailsToRemove.filter(function(email) {
+          return fileEditorAppliedByEmail[email];
+        });
+        approvedMembersToAdd.forEach(function(email) {
+          if (combinedRequestRowsByEmail[email]) {
+            addMemberRequestRowsByEmail[email] = combinedRequestRowsByEmail[email];
+          }
+        });
+        approvedMembersToRemove.forEach(function(email) {
+          if (combinedRequestRowsByEmail[email]) {
+            removeMemberRequestRowsByEmail[email] = combinedRequestRowsByEmail[email];
+          }
+        });
+      } else {
+        approvedMembersToAdd = [];
+        membersToAdd.forEach(function(email) {
           const targetRowKey = 'GROUP_MEMBER|' + email;
           const snapshot = {
             changeType: 'SHEET_EDITOR_GROUP',
             groupEmail: groupEmail,
             email: email,
-            action: 'REMOVE'
+            action: 'ADD'
           };
-          const result = ensureChangeRequestForDelta_(SHEET_EDITORS_SHEET_NAME, targetRowKey, 'REMOVE', snapshot, 'SYSTEM', changeRequestContext);
+          const result = ensureChangeRequestForDelta_(SHEET_EDITORS_SHEET_NAME, targetRowKey, 'ADD', snapshot, 'SYSTEM', changeRequestContext);
           if (result.rowIndex > 0) {
-            removeMemberRequestRowsByEmail[email] = result.rowIndex;
+            addMemberRequestRowsByEmail[email] = result.rowIndex;
           }
           if (result.status === CHANGE_REQUEST_STATUS_APPROVED) {
-            approvedMembersToRemove.push(email);
+            approvedMembersToAdd.push(email);
           }
         });
+
+        if (!addOnly) {
+          approvedMembersToRemove = [];
+          membersToRemove.forEach(function(email) {
+            const targetRowKey = 'GROUP_MEMBER|' + email;
+            const snapshot = {
+              changeType: 'SHEET_EDITOR_GROUP',
+              groupEmail: groupEmail,
+              email: email,
+              action: 'REMOVE'
+            };
+            const result = ensureChangeRequestForDelta_(SHEET_EDITORS_SHEET_NAME, targetRowKey, 'REMOVE', snapshot, 'SYSTEM', changeRequestContext);
+            if (result.rowIndex > 0) {
+              removeMemberRequestRowsByEmail[email] = result.rowIndex;
+            }
+            if (result.status === CHANGE_REQUEST_STATUS_APPROVED) {
+              approvedMembersToRemove.push(email);
+            }
+          });
+        }
+      }
+    } else if (shouldLogPermissionChanges) {
+      if (combineSheetEditorOps) {
+        approvedMembersToAdd = approvedEmailsToAdd.filter(function(email) {
+          return fileEditorAppliedByEmail[email];
+        });
+        approvedMembersToRemove = addOnly ? [] : approvedEmailsToRemove.filter(function(email) {
+          return fileEditorAppliedByEmail[email];
+        });
+        approvedMembersToAdd.forEach(function(email) {
+          if (combinedRequestRowsByEmail[email]) {
+            addMemberRequestRowsByEmail[email] = combinedRequestRowsByEmail[email];
+          }
+        });
+        approvedMembersToRemove.forEach(function(email) {
+          if (combinedRequestRowsByEmail[email]) {
+            removeMemberRequestRowsByEmail[email] = combinedRequestRowsByEmail[email];
+          }
+        });
+      } else {
+        membersToAdd.forEach(function(email) {
+          const targetRowKey = 'GROUP_MEMBER|' + email;
+          const snapshot = {
+            changeType: 'SHEET_EDITOR_GROUP',
+            groupEmail: groupEmail,
+            email: email,
+            action: 'ADD'
+          };
+          const result = ensureChangeRequestForDelta_(SHEET_EDITORS_SHEET_NAME, targetRowKey, 'ADD', snapshot, 'SYSTEM', Object.assign({}, changeRequestContext || {}, {
+            approvalsNeededOverride: 0,
+            autoApprove: true
+          }));
+          if (result.rowIndex > 0) {
+            addMemberRequestRowsByEmail[email] = result.rowIndex;
+          }
+        });
+
+        if (!addOnly) {
+          membersToRemove.forEach(function(email) {
+            const targetRowKey = 'GROUP_MEMBER|' + email;
+            const snapshot = {
+              changeType: 'SHEET_EDITOR_GROUP',
+              groupEmail: groupEmail,
+              email: email,
+              action: 'REMOVE'
+            };
+            const result = ensureChangeRequestForDelta_(SHEET_EDITORS_SHEET_NAME, targetRowKey, 'REMOVE', snapshot, 'SYSTEM', Object.assign({}, changeRequestContext || {}, {
+              approvalsNeededOverride: 0,
+              autoApprove: true
+            }));
+            if (result.rowIndex > 0) {
+              removeMemberRequestRowsByEmail[email] = result.rowIndex;
+            }
+          });
+        }
       }
     }
     
@@ -7270,7 +7587,7 @@ function syncSheetEditors(options = {}) {
         const chunkSummary = _executeMembershipChunkWithRetries_(requests, groupEmail, config);
         totalSummary.added += chunkSummary.added;
         totalSummary.failed += chunkSummary.failed;
-        if (approvalsEnabled && changeRequestContext && changeRequestContext.changeSheet) {
+        if (changeRequestContext && changeRequestContext.changeSheet) {
           chunkSummary.appliedEmails.forEach(function(email) {
             const rowIndex = addMemberRequestRowsByEmail[email];
             if (rowIndex) {
@@ -7296,7 +7613,7 @@ function syncSheetEditors(options = {}) {
         const chunkSummary = _executeMembershipChunkWithRetries_(requests, groupEmail, config);
         totalSummary.removed += chunkSummary.removed;
         totalSummary.failed += chunkSummary.failed;
-        if (approvalsEnabled && changeRequestContext && changeRequestContext.changeSheet) {
+        if (changeRequestContext && changeRequestContext.changeSheet) {
           chunkSummary.appliedEmails.forEach(function(email) {
             const rowIndex = removeMemberRequestRowsByEmail[email];
             if (rowIndex) {
@@ -7398,6 +7715,11 @@ function syncUserGroups(options = {}) {
         if (!groupName) {
           continue;
         }
+
+        if (groupName === SHEET_EDITORS_SHEET_NAME) {
+          log_('Skipping SheetEditors_G in syncUserGroups (handled by syncSheetEditors).', 'DEBUG');
+          continue;
+        }
         
         log_('Processing user group: ' + groupName);
 
@@ -7426,8 +7748,36 @@ function syncUserGroups(options = {}) {
           }
 
           const groupSheetName = getUserGroupSheetName_(groupName);
-          getOrCreateUserSheet_(groupSheetName);
+          const groupSheetResult = getOrCreateUserSheet_(groupSheetName);
+          if (groupSheetResult.wasNewlyCreated) {
+            logStructuralChangeRequest_(
+              USER_GROUPS_SHEET_NAME,
+              groupName,
+              'ADD',
+              {
+                changeType: 'STRUCTURAL_USER_SHEET_CREATE',
+                groupName: groupName,
+                groupEmail: groupEmail,
+                userSheetName: groupSheetName
+              },
+              'SYSTEM'
+            );
+          }
+
           const groupResult = getOrCreateGroup_(groupEmail, groupName);
+          if (groupResult.wasNewlyCreated) {
+            logStructuralChangeRequest_(
+              USER_GROUPS_SHEET_NAME,
+              groupName,
+              'ADD',
+              {
+                changeType: 'STRUCTURAL_GROUP_CREATE',
+                groupName: groupName,
+                groupEmail: groupEmail
+              },
+              'SYSTEM'
+            );
+          }
           const adminLink = 'https://admin.google.com/ac/groups/' + groupResult.group.id + '/members';
           groupAdminLinkCell.setValue(adminLink);
 
@@ -9354,6 +9704,31 @@ function runApprovalGatingTest() {
         updateConfigSetting_('RequiredApprovals', 2);
         ensureChangeRequestsSheet_();
 
+        const autoApproveEmail = 'auto-approve-test+' + new Date().getTime() + '@example.com';
+        const autoApproveSnapshot = { changeType: 'TEST_AUTO_APPROVE', email: autoApproveEmail, action: 'ADD' };
+        const autoApproveResult = ensureChangeRequestForDelta_(
+            MANAGED_FOLDERS_SHEET_NAME,
+            'AUTO_APPROVE|' + autoApproveEmail,
+            'ADD',
+            autoApproveSnapshot,
+            Session.getEffectiveUser().getEmail(),
+            {
+                changeSheet: changeSheet,
+                columnMap: columnMap,
+                approvalsConfig: getApprovalsConfig_(),
+                approvalsNeededOverride: 0,
+                autoApprove: true
+            }
+        );
+        if (autoApproveResult.status !== CHANGE_REQUEST_STATUS_APPROVED) {
+            throw new Error('Auto-approve ChangeRequest did not start in APPROVED status.');
+        }
+        const autoApproveRow = autoApproveResult.rowIndex;
+        const autoApproveNeeded = changeSheet.getRange(autoApproveRow, columnMap.approvalsNeeded).getValue();
+        if (autoApproveNeeded !== 0) {
+            throw new Error('Auto-approve ChangeRequest did not set ApprovalsNeeded to 0.');
+        }
+
         const sheetEditorsHeaders = getHeaderMap_(sheetEditorsSheet);
         const emailCol = resolveColumn_(sheetEditorsHeaders, 'sheet editor emails', 1);
         const disabledCol = resolveColumn_(sheetEditorsHeaders, 'disabled', 2);
@@ -9435,6 +9810,26 @@ function runApprovalGatingTest() {
             throw new Error('Approvals config change was not blocked while pending requests exist.');
         }
 
+        updateConfigSetting_('ApprovalsEnabled', false);
+        ensureChangeRequestsSheet_();
+        changeSheet = ss.getSheetByName(changeSheetName);
+        const disabledResult = ensureChangeRequestForDelta_(
+            SHEET_EDITORS_SHEET_NAME,
+            'DISABLED|' + testEmail,
+            'ADD',
+            { changeType: 'TEST_DISABLED_APPROVALS', email: testEmail, action: 'ADD' },
+            Session.getEffectiveUser().getEmail()
+        );
+        if (disabledResult.status !== CHANGE_REQUEST_STATUS_APPROVED) {
+            throw new Error('ChangeRequest was not auto-approved when approvals were disabled.');
+        }
+        const disabledRow = disabledResult.rowIndex;
+        const disabledMap = getChangeRequestsColumnMap_(changeSheet);
+        const disabledNeeded = changeSheet.getRange(disabledRow, disabledMap.approvalsNeeded).getValue();
+        if (disabledNeeded !== 0) {
+            throw new Error('Auto-approved ChangeRequest did not set ApprovalsNeeded to 0 when approvals disabled.');
+        }
+
         success = true;
         log_('Approval Gating Test PASSED.', 'INFO');
         return true;
@@ -9451,7 +9846,10 @@ function runApprovalGatingTest() {
                 for (let i = data.length - 1; i >= 0; i--) {
                     const row = data[i];
                     const rowKey = row[columnMap.targetRowKey - 1];
-                    if (row[columnMap.targetSheet - 1] === SHEET_EDITORS_SHEET_NAME && rowKey && rowKey.toString().indexOf(testEmail) === 0) {
+                    const targetSheet = row[columnMap.targetSheet - 1];
+                    if (targetSheet === SHEET_EDITORS_SHEET_NAME && rowKey && rowKey.toString().indexOf(testEmail) !== -1) {
+                        changeSheet.deleteRow(i + 2);
+                    } else if (targetSheet === MANAGED_FOLDERS_SHEET_NAME && rowKey && rowKey.toString().indexOf('AUTO_APPROVE|') === 0) {
                         changeSheet.deleteRow(i + 2);
                     }
                 }
@@ -9482,6 +9880,77 @@ function runApprovalGatingTest() {
         updateConfigSetting_('ApprovalsEnabled', originalApprovalsEnabled);
         updateConfigSetting_('RequiredApprovals', originalRequiredApprovals);
         ensureChangeRequestsSheet_();
+        SCRIPT_EXECUTION_MODE = 'DEFAULT';
+    }
+}
+
+function runStructuralEditRestrictionTest_() {
+    SCRIPT_EXECUTION_MODE = 'TEST';
+    log_('╔══════════════════════════════════════════════════════════════╗', 'INFO');
+    log_('║  Structural Edit Restriction Test                            ║', 'INFO');
+    log_('╚══════════════════════════════════════════════════════════════╝', 'INFO');
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    setupControlSheets_();
+    const managedSheet = ss.getSheetByName(MANAGED_FOLDERS_SHEET_NAME);
+    const userGroupsSheet = ss.getSheetByName(USER_GROUPS_SHEET_NAME);
+    const configSheet = ss.getSheetByName(CONFIG_SHEET_NAME);
+    if (!managedSheet || !userGroupsSheet || !configSheet) {
+        log_('Structural Edit Restriction Test failed: missing required sheets.', 'ERROR');
+        SCRIPT_EXECUTION_MODE = 'DEFAULT';
+        return false;
+    }
+
+    const settingRow = findRowByValue_(configSheet, 1, 'SuperAdminEmails');
+    const hadSetting = settingRow !== -1;
+    const originalValue = hadSetting ? configSheet.getRange(settingRow, 2).getValue() : null;
+    let success = false;
+
+    try {
+        updateConfigSetting_('SuperAdminEmails', 'restricted+' + new Date().getTime() + '@example.com');
+
+        const managedRow = Math.max(managedSheet.getLastRow() + 1, 2);
+        const managedCell = managedSheet.getRange(managedRow, 1);
+        managedCell.setValue('TEMP_STRUCTURAL_EDIT');
+        onEdit({
+            source: ss,
+            range: managedCell,
+            oldValue: '',
+            user: { getEmail: function() { return Session.getEffectiveUser().getEmail(); } }
+        });
+        if (managedCell.getValue()) {
+            throw new Error('Non-super admin edit to ManagedFolders was not reverted.');
+        }
+
+        const userGroupsRow = Math.max(userGroupsSheet.getLastRow() + 1, 2);
+        const userGroupsCell = userGroupsSheet.getRange(userGroupsRow, 1);
+        userGroupsCell.setValue('TEMP_STRUCTURAL_EDIT');
+        onEdit({
+            source: ss,
+            range: userGroupsCell,
+            oldValue: '',
+            user: { getEmail: function() { return Session.getEffectiveUser().getEmail(); } }
+        });
+        if (userGroupsCell.getValue()) {
+            throw new Error('Non-super admin edit to UserGroups was not reverted.');
+        }
+
+        success = true;
+        log_('Structural Edit Restriction Test PASSED.', 'INFO');
+        return true;
+    } catch (e) {
+        log_('Structural Edit Restriction Test FAILED: ' + e.message, 'ERROR');
+        return false;
+    } finally {
+        if (hadSetting) {
+            updateConfigSetting_('SuperAdminEmails', originalValue);
+        } else {
+            const currentRow = findRowByValue_(configSheet, 1, 'SuperAdminEmails');
+            if (currentRow !== -1) {
+                configSheet.deleteRow(currentRow);
+                CacheService.getScriptCache().remove('config');
+            }
+        }
         SCRIPT_EXECUTION_MODE = 'DEFAULT';
     }
 }
@@ -9518,6 +9987,7 @@ function runAllTests() {
             { name: 'Stress Test', func: runStressTest },
             { name: 'Add/Delete Separation Test', func: runAddDeleteSeparationTest },
             { name: 'Approval Gating Test', func: runApprovalGatingTest },
+            { name: 'Structural Edit Restriction Test', func: runStructuralEditRestrictionTest_ },
             { name: 'AutoSync Error Email Test', func: runAutoSyncErrorEmailTest },
             { name: 'Sheet Locking Test', func: runSheetLockingTest_ },
             { name: 'Circular Dependency Test', func: runCircularDependencyTest_ },

@@ -134,7 +134,7 @@ Add a **"Delete" checkbox column** to `ManagedFolders` and `UserGroups` sheets. 
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ 1. Sheet Editor marks resource for deletion                 │
+│ 1. Super Admin marks resource for deletion                  │
 │    → Checks "Delete ☑" checkbox in ManagedFolders/UserGroups│
 └─────────────────────────────────────────────────────────────┘
                             ↓
@@ -205,7 +205,7 @@ I: Delete ☐          ← NEW
 **Column Specifications:**
 - **Type**: Checkbox (data validation)
 - **Default**: Unchecked (false)
-- **Editable**: Yes (by Sheet Editors)
+- **Editable**: Yes (by Super Admins)
 - **Script-managed**: No (user sets, script reads)
 
 ### 5.2 UserGroups Sheet
@@ -232,7 +232,7 @@ F: Delete ☐          ← NEW
 **Column Specifications:**
 - **Type**: Checkbox (data validation)
 - **Default**: Unchecked (false)
-- **Editable**: Yes (by Sheet Editors)
+- **Editable**: Yes (by Super Admins)
 - **Script-managed**: No (user sets, script reads)
 
 ### 5.3 Migration Strategy
@@ -754,7 +754,7 @@ User marks "Engineering" for deletion.
 **Scenario**: Non-super-admin user opens spreadsheet.
 
 **Expected Behavior**:
-- User can check Delete boxes (they're sheet editors)
+- Super Admins can check Delete boxes
 - Status shows "PENDING DELETION"
 - User cannot run sync (menu not visible)
 - Super admin runs sync later
@@ -1056,7 +1056,7 @@ The deletion feature must be enabled in `Config`:
 
 AutoSync can automatically process deletion requests if enabled:
 
-1. Sheet Editors mark items for deletion (check Delete box)
+1. Super Admins mark items for deletion (check Delete box)
 2. AutoSync runs on schedule
 3. Deletion requests are processed automatically
 4. Email notification sent (if enabled)

@@ -55,13 +55,13 @@ function validateEnvironment_() {
 |----------------|---------------------|------------------|
 | **Workspace Super Admin** | Creates Workspace, enables Admin SDK + Drive APIs, authorizes script | Rarely involved after setup |
 | **Super Admin** (Config > SuperAdminEmails) | Runs sync, manages Config, tests | Executes sync operations, monitors logs |
-| **Sheet Editor** (spreadsheet collaborator) | Edits ManagedFolders, UserGroups, marks deletions | Updates user lists, cannot run scripts |
+| **Sheet Editor** (spreadsheet collaborator) | Edits membership sheets only | Updates user lists, cannot run scripts |
 | **Managed User** | None (represented in sheets) | Receives folder access after sync |
 
 **Key Points**:
 - These are distinct roles (not the same person necessarily)
 - One person can have multiple roles (common in small orgs)
-- Sheet Editors can edit and mark for deletion, but cannot run scripts
+- Sheet Editors can edit membership sheets, but structural changes and deletions are Super Admin only
 - Super Admins control when changes are applied
 
 **Changes Required**:

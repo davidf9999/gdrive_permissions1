@@ -77,7 +77,7 @@ When this setting is `FALSE`, any rows marked for deletion will show a status wa
 
 ### How to Delete
 
-1.  A Sheet Editor (or you) marks the item for deletion by checking the **Delete** checkbox in the `ManagedFolders` (Column I) or `UserGroups` (Column F) sheet.
+1.  A Super Admin marks the item for deletion by checking the **Delete** checkbox in the `ManagedFolders` (Column I) or `UserGroups` (Column F) sheet.
 2.  You, the Super Admin, run **Permissions Manager > ManualSync > Full Sync**.
 
 **What happens:**

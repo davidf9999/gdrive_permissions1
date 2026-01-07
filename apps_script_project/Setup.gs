@@ -852,11 +852,8 @@ function ensureChangeRequestsSheet_() {
       .setNumberFormat('yyyy-MM-dd HH:mm:ss');
   }
 
-  const approvalsEnabled = getConfigValue_('ApprovalsEnabled', false) === true;
   try {
-    if (!approvalsEnabled && !changeSheet.isSheetHidden()) {
-      changeSheet.hideSheet();
-    } else if (approvalsEnabled && changeSheet.isSheetHidden()) {
+    if (changeSheet.isSheetHidden()) {
       changeSheet.showSheet();
     }
   } catch (e) {

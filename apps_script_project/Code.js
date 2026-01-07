@@ -49,6 +49,7 @@ function onOpen() {
 
   setupControlSheets_();
   setupLogSheets_();
+  ensureChangeRequestsSheet_();
 
   if (superAdmin) {
     // updateAutoSyncStatusIndicator_();
@@ -119,8 +120,18 @@ function onEdit(e) {
 
   const accessPolicy = getSheetAccessPolicy_(sheetName);
 
-  // --- Handle ManagedFolders and UserGroups row deletion warning ---
+  // --- Handle ManagedFolders and UserGroups access + deletion warning ---
   if (sheetName === MANAGED_FOLDERS_SHEET_NAME || sheetName === USER_GROUPS_SHEET_NAME) {
+    if (accessPolicy.category === 'structural' && !isSuperAdmin_()) {
+      if (oldValue !== undefined) {
+        range.setValue(oldValue);
+      } else {
+        range.clearContent();
+      }
+      SpreadsheetApp.getActiveSpreadsheet().toast('ManagedFolders and UserGroups are restricted to super admins.', 'Edit Reverted', 10);
+      return;
+    }
+
     if (!range || range.getRow() <= 1) {
       return; // Skip header row
     }
@@ -518,6 +529,7 @@ function createTestingMenu_(ui) {
     .addItem('Run Stress Test', 'runStressTest')
     .addItem('Run Add/Delete Separation Test', 'runAddDeleteSeparationTest')
     .addItem('Run Approval Gating Test', 'runApprovalGatingTest')
+    .addItem('Run Structural Edit Restriction Test', 'runStructuralEditRestrictionTest_')
     .addItem('Run AutoSync Error Email Test', 'runAutoSyncErrorEmailTest')
     .addItem('Run Sheet Locking Test', 'runSheetLockingTest_')
     .addItem('Run Circular Dependency Test', 'runCircularDependencyTest_')

@@ -24,11 +24,11 @@ Several sheets (tabs) are used to control permissions. Here is a breakdown of wh
 
 ### 1. `ManagedFolders` (Primary Control Tab)
 
-This is the most important tab. Each row represents a folder you want the script to manage.
+This tab defines which folders are managed. **Only Super Admins can edit this sheet.** Sheet Editors can view it but must ask a Super Admin to add, rename, or delete entries.
 
 *   **`FolderName` (Column A):** The name of the Google Drive folder.
 *   **`Role` (Column C):** The permission level to grant (`Editor`, `Viewer`, `Commenter`).
-*   **`Delete` (Column I):** Check this checkbox to request that a Super Admin delete this folder-role binding.
+*   **`Delete` (Column I):** Super Admins can check this box to delete a folder-role binding.
 *   Other columns (`FolderID`, `UserSheetName`, `GroupEmail`, etc.) are managed by the script and are useful for reference.
 
 ### 2. User Sheets (e.g., `MyProject_Editor`)
@@ -45,10 +45,10 @@ For every row in `ManagedFolders`, a corresponding **user sheet** (tab) is creat
 
 ### 3. `UserGroups`
 
-This sheet allows you to create your own reusable groups of people (e.g., "Marketing Team").
+This sheet defines reusable groups of people (e.g., "Marketing Team"). **Only Super Admins can edit this sheet.** Sheet Editors can view it but must ask a Super Admin to add or delete groups.
 
 *   **`GroupName` (Column A):** A friendly name for your group.
-*   **`Delete` (Column F):** Check this to request deletion of the group.
+*   **`Delete` (Column F):** Super Admins can check this to delete a group.
 *   For each `GroupName` you define, a sheet named `GroupName_G` is created. You list the members of that group in that sheet.
 *   You can then use the `GroupEmail` (from Column B) in any of your other user sheets to grant access to everyone in that group at once.
 
@@ -66,12 +66,11 @@ This sheet controls who is a **Sheet Editor** for this spreadsheet. Add the emai
 
 ### How to Grant a Team Access to a New Folder
 
-1.  **Go to the `UserGroups` sheet.** Create your team by adding a `GroupName` (e.g., "Sales Team").
-2.  **Go to the `ManagedFolders` sheet.** Add a `FolderName` (e.g., "Q4 Sales Reports") and select a `Role`.
-3.  Wait for the Super Admin to run a sync. The script will create the necessary sheets (`Sales Team_G` and `Q4 Sales Reports_Editor`).
-4.  **Go to the `Sales Team_G` sheet.** Add the email addresses of your team members.
-5.  **Go to the `Q4 Sales Reports_Editor` sheet.** Add the group's email address (e.g., `sales-team@your-domain.com`, which you can copy from the `UserGroups` sheet).
-6.  Wait for the next sync. The Sales Team will now have access to the folder.
+1.  **Ask a Super Admin** to add the `GroupName` in `UserGroups` and the `FolderName` + `Role` in `ManagedFolders`.
+2.  Wait for the Super Admin to run a sync. The script will create the necessary sheets (`Sales Team_G` and `Q4 Sales Reports_Editor`).
+3.  **Go to the `Sales Team_G` sheet.** Add the email addresses of your team members.
+4.  **Go to the `Q4 Sales Reports_Editor` sheet.** Add the group's email address (e.g., `sales-team@your-domain.com`, which you can copy from the `UserGroups` sheet).
+5.  Wait for the next sync. The Sales Team will now have access to the folder.
 
 ### How to Add a User
 
@@ -98,7 +97,7 @@ The `Log`, `TestLog`, and `FoldersAuditLog` sheets contain detailed, timestamped
 Some behavior depends on settings in the `Config` sheet. Sheet Editors should be aware of these because they directly affect when changes take effect.
 
 *   **AutoSync deletions (`AllowAutosyncDeletion`):** If enabled, removing a user from a sheet will revoke their access on the next AutoSync. If you need a “review before revoke” flow, ask a Super Admin to disable this setting.
-*   **Delete checkboxes (`AllowGroupFolderDeletion`):** The Delete columns in `ManagedFolders` and `UserGroups` only work when this setting is enabled by a Super Admin. When disabled, delete checkboxes are ignored.
+*   **Delete checkboxes (`AllowGroupFolderDeletion`):** Only Super Admins can mark deletions in `ManagedFolders` and `UserGroups`. When disabled, delete checkboxes are ignored.
 *   **Manual sync required:** Your edits do not take effect until a Super Admin runs a sync (or AutoSync is enabled).
 
 ---
@@ -107,7 +106,7 @@ Some behavior depends on settings in the `Config` sheet. Sheet Editors should be
 
 The system fully supports non-ASCII characters (e.g., Hebrew, Chinese) in folder and group names. However, **Google Group email addresses must use only ASCII characters** (a-z, 0-9, hyphens).
 
-When you create a group or folder with a non-ASCII name, you **must manually specify an ASCII group email** in the `GroupEmail` column.
+When a Super Admin creates a group or folder with a non-ASCII name, they **must manually specify an ASCII group email** in the `GroupEmail` column.
 
 *   In `UserGroups`, specify the email in **Column B**.
 *   In `ManagedFolders`, specify the email in **Column E**.
