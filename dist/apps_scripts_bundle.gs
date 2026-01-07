@@ -2829,14 +2829,18 @@ function _batchSetPermissions(jobs) {
 
     const approvalsConfig = getApprovalsConfig_();
     let changeRequestContext = null;
-    ensureChangeRequestsSheet_();
-    const changeSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
-    if (changeSheet) {
-      changeRequestContext = {
-        changeSheet: changeSheet,
-        columnMap: getChangeRequestsColumnMap_(changeSheet),
-        approvalsConfig: approvalsConfig
-      };
+    if (typeof ensureChangeRequestsSheet_ === 'function') {
+      ensureChangeRequestsSheet_();
+      const changeSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
+      if (changeSheet) {
+        changeRequestContext = {
+          changeSheet: changeSheet,
+          columnMap: getChangeRequestsColumnMap_(changeSheet),
+          approvalsConfig: approvalsConfig
+        };
+      }
+    } else {
+      log_('ChangeRequests sheet helper unavailable; skipping permission change logging.', 'WARN');
     }
 
     const requests = [];
@@ -3886,7 +3890,7 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
       return (removeOnly && emailsToRemove.length > 0) ? { groupEmail, groupName: userSheetName, usersToRemove: emailsToRemove } : null;
     }
 
-    if (shouldLogPermissionChanges) {
+    if (shouldLogPermissionChanges && typeof ensureChangeRequestsSheet_ === 'function') {
       ensureChangeRequestsSheet_();
       const changeSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
       if (changeSheet) {
@@ -3894,6 +3898,8 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
         changeRequestContext.columnMap = getChangeRequestsColumnMap_(changeSheet);
         changeRequestContext.approvalsConfig = approvalsConfig;
       }
+    } else if (shouldLogPermissionChanges) {
+      log_('ChangeRequests sheet helper unavailable; skipping change request logging.', 'WARN');
     }
 
     if (emailsToAdd.length === 0 && emailsToRemove.length === 0) {
@@ -5491,8 +5497,13 @@ function ensureChangeRequestForDelta_(targetSheetName, targetRowKey, action, del
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let changeSheet = options && options.changeSheet ? options.changeSheet : ss.getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
   if (!changeSheet) {
-    ensureChangeRequestsSheet_();
-    changeSheet = ss.getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
+    if (typeof ensureChangeRequestsSheet_ === 'function') {
+      ensureChangeRequestsSheet_();
+      changeSheet = ss.getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
+    } else {
+      log_('ChangeRequests sheet helper unavailable; skipping change request logging.', 'WARN');
+      return { status: CHANGE_REQUEST_STATUS_DENIED, rowIndex: -1, created: false };
+    }
   }
   if (!changeSheet) {
     return { status: CHANGE_REQUEST_STATUS_DENIED, rowIndex: -1, created: false };
@@ -7095,11 +7106,22 @@ function setupHelpSheet_() {
     ['', ''],
     ['For detailed documentation, visit:', ''],
     ['User Guide:', repoUrl + '/blob/main/docs/USER_GUIDE.md'],
+    ['Setup & Install Guide:', repoUrl + '/blob/main/docs/SETUP_GUIDE.md'],
+    ['Change Approvals Guide:', repoUrl + '/blob/main/docs/CHANGE_REQUESTS_GUIDE.md'],
     ['Testing Guide:', repoUrl + '/blob/main/docs/TESTING.md'],
     ['AutoSync Guide:', repoUrl + '/blob/main/docs/AUTO_SYNC_GUIDE.md'],
     ['Edit Mode Guide:', repoUrl + '/blob/main/docs/EDIT_MODE_GUIDE.md'],
+    ['Assistant & Chat Guide:', repoUrl + '/blob/main/docs/AI_ASSISTANT_GUIDE.md'],
     ['Main README:', repoUrl + '/blob/main/README.md'],
     ['All Documentation:', repoUrl + '/blob/main/docs/'],
+    ['', ''],
+    ['✅ KEY CAPABILITIES', ''],
+    ['', ''],
+    ['• Sync Drive permissions from membership sheets (Editor/Viewer/Commenter).', ''],
+    ['• AutoSync scheduled runs plus on-demand Full Sync and Preview.', ''],
+    ['• Change approvals: optional multi-approver gating via ChangeRequests.', ''],
+    ['• Chat assistants for install + usage (OpenAI/Gemini) and setup checklists.', ''],
+    ['• Audit trails in Log/SyncHistory, plus testing tools for validation.', ''],
     ['', ''],
     ['📧 NEED HELP?', ''],
     ['', ''],
@@ -7107,8 +7129,8 @@ function setupHelpSheet_() {
     ['', ''],
     ['ℹ️ ABOUT ACCESS LEVELS', ''],
     ['', ''],
-    ['Super Admins: Full access to all sync operations, testing, and settings.', ''],
-    ['Non-Admins: View-only access to configuration sheets. Super admins manage operations.', ''],
+    ['Super Admins: run setup, syncs, approvals, and advanced maintenance.', ''],
+    ['Sheet Editors: manage membership sheets and request changes; edits may require approval.', ''],
     ['', ''],
     ['Note: This Help sheet is automatically created when the spreadsheet is opened.', '']
   ];
@@ -7118,11 +7140,12 @@ function setupHelpSheet_() {
 
   // Format the sheet
   helpSheet.getRange('A1:B1').setFontWeight('bold').setFontSize(14).setBackground('#4285f4').setFontColor('#ffffff');
-  helpSheet.getRange('A13:B13').setFontWeight('bold').setFontSize(12).setBackground('#fbbc04').setFontColor('#000000');
-  helpSheet.getRange('A17:B17').setFontWeight('bold').setFontSize(12).setBackground('#34a853').setFontColor('#ffffff');
+  helpSheet.getRange('A16:B16').setFontWeight('bold').setFontSize(12).setBackground('#fbbc04').setFontColor('#000000');
+  helpSheet.getRange('A24:B24').setFontWeight('bold').setFontSize(12).setBackground('#34a853').setFontColor('#ffffff');
+  helpSheet.getRange('A28:B28').setFontWeight('bold').setFontSize(12).setBackground('#34a853').setFontColor('#ffffff');
 
   // Make URL cells clickable
-  for (let i = 6; i <= 10; i++) {
+  for (let i = 6; i <= 14; i++) {
     const cell = helpSheet.getRange(i, 2);
     const url = cell.getValue();
     if (url && url.startsWith('http')) {
@@ -7481,7 +7504,7 @@ function syncSheetEditors(options = {}) {
     const fileEditorAppliedByEmail = {};
     const combineSheetEditorOps = groupOpsAvailable;
 
-    if (shouldLogPermissionChanges) {
+    if (shouldLogPermissionChanges && typeof ensureChangeRequestsSheet_ === 'function') {
       ensureChangeRequestsSheet_();
       const changeSheet = spreadsheet.getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
       if (changeSheet) {
@@ -7491,6 +7514,8 @@ function syncSheetEditors(options = {}) {
           approvalsConfig: approvalsConfig
         };
       }
+    } else if (shouldLogPermissionChanges) {
+      log_('ChangeRequests sheet helper unavailable; skipping change request logging.', 'WARN');
     }
 
     if (approvalsEnabled) {

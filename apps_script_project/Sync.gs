@@ -104,7 +104,7 @@ function syncSheetEditors(options = {}) {
     const fileEditorAppliedByEmail = {};
     const combineSheetEditorOps = groupOpsAvailable;
 
-    if (shouldLogPermissionChanges) {
+    if (shouldLogPermissionChanges && typeof ensureChangeRequestsSheet_ === 'function') {
       ensureChangeRequestsSheet_();
       const changeSheet = spreadsheet.getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
       if (changeSheet) {
@@ -114,6 +114,8 @@ function syncSheetEditors(options = {}) {
           approvalsConfig: approvalsConfig
         };
       }
+    } else if (shouldLogPermissionChanges) {
+      log_('ChangeRequests sheet helper unavailable; skipping change request logging.', 'WARN');
     }
 
     if (approvalsEnabled) {
