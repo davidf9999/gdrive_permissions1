@@ -271,7 +271,7 @@ function setupControlSheets_() {
     },
     '--- Change Approvals ---': {
       'ApprovalsEnabled': { value: false, description: 'Check to require multi-approver gating for control sheet edits captured in the ChangeRequests sheet.' },
-      'RequiredApprovals': { value: 1, description: 'Number of unique sheet editors needed to approve a change request before it is applied. Default of 1 means one approver is required. Max: 3 (and cannot exceed active Sheet Editors).' },
+      'RequiredApprovals': { value: 1, description: 'Number of unique sheet editors needed to approve a change request before it is applied. Default of 1 means one approver is required. Cannot exceed active Sheet Editors.' },
       'ApprovalExpiryHours': { value: 0, description: 'Optional: expire pending change requests after this many hours. Leave 0 to disable expiry.' }
     },
     '--- Email Notifications ---': {
@@ -854,7 +854,7 @@ function ensureChangeRequestsSheet_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let changeSheet = ss.getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
   const approvalsRequiredRaw = getConfigValueFresh_('RequiredApprovals', 1);
-  const approvalsRequired = Math.min(3, Math.max(1, parseInt(approvalsRequiredRaw, 10) || 1));
+  const approvalsRequired = Math.max(1, parseInt(approvalsRequiredRaw, 10) || 1);
 
   if (!changeSheet) {
     changeSheet = ss.insertSheet(CHANGE_REQUESTS_SHEET_NAME);
@@ -863,7 +863,7 @@ function ensureChangeRequestsSheet_() {
     changeSheet.setFrozenRows(1);
     log_('Created "ChangeRequests" sheet.');
   } else {
-    pruneExtraApproverColumns_(changeSheet, 3);
+    pruneExtraApproverColumns_(changeSheet, approvalsRequired);
     ensureChangeRequestApproverColumns_(changeSheet, approvalsRequired);
     const existingHeaders = changeSheet.getRange(1, 1, 1, changeSheet.getLastColumn()).getValues()[0];
     const approverCount = Math.max(approvalsRequired, findChangeRequestApproverColumns_(existingHeaders).length);
@@ -921,7 +921,7 @@ function buildChangeRequestsHeaders_(approverCount) {
     'ApprovalsNeeded'
   ];
 
-  const count = Math.min(3, Math.max(1, parseInt(approverCount, 10) || 1));
+  const count = Math.max(1, parseInt(approverCount, 10) || 1);
   for (let i = 1; i <= count; i++) {
     headers.push('Approver_' + i);
   }

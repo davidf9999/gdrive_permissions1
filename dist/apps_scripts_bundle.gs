@@ -267,7 +267,7 @@ function onEdit(e) {
       }
       if (settingName === 'RequiredApprovals') {
         const requestedValue = range.getValue();
-        const approvalsRequested = Math.min(3, Math.max(1, parseInt(requestedValue, 10) || 1));
+        const approvalsRequested = Math.max(1, parseInt(requestedValue, 10) || 1);
         if (approvalsConfig.availableEditors > 0 && approvalsRequested > approvalsConfig.availableEditors) {
           range.setValue(oldValue);
           SpreadsheetApp.getActiveSpreadsheet().toast('RequiredApprovals cannot exceed active Sheet Editors.', 'Edit Reverted', 12);
@@ -275,7 +275,7 @@ function onEdit(e) {
         }
         if (requestedValue !== approvalsRequested) {
           range.setValue(approvalsRequested);
-          SpreadsheetApp.getActiveSpreadsheet().toast('RequiredApprovals capped at 3.', 'Adjusted', 10);
+          SpreadsheetApp.getActiveSpreadsheet().toast('RequiredApprovals must be a whole number of at least 1.', 'Adjusted', 10);
         }
       }
       ensureChangeRequestsSheet_();
@@ -5419,7 +5419,7 @@ function findChangeRequestApproverColumns_(headers) {
 
 function ensureChangeRequestApproverColumns_(sheet, requiredApprovals) {
   if (!sheet) return;
-  var requiredCount = Math.min(3, Math.max(1, parseInt(requiredApprovals, 10) || 1));
+  var requiredCount = Math.max(1, parseInt(requiredApprovals, 10) || 1);
   var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   var approverCols = findChangeRequestApproverColumns_(headers);
   if (approverCols.length >= requiredCount) {
@@ -6088,7 +6088,7 @@ function collectInvalidApproversFromRow_(rowValues, columnMap, approvalsConfig) 
 function getApprovalsConfig_() {
   const enabled = getConfigValueFresh_('ApprovalsEnabled', false) === true;
   const requiredApprovalsRaw = getConfigValueFresh_('RequiredApprovals', 1);
-  const requiredApprovals = Math.min(3, Math.max(1, parseInt(requiredApprovalsRaw, 10) || 1));
+  const requiredApprovals = Math.max(1, parseInt(requiredApprovalsRaw, 10) || 1);
   const expiryHoursRaw = getConfigValueFresh_('ApprovalExpiryHours', 0);
   const expiryHours = Math.max(0, parseInt(expiryHoursRaw, 10) || 0);
   const activeEditors = getActiveSheetEditorEmails_();
@@ -6784,7 +6784,7 @@ function setupControlSheets_() {
     },
     '--- Change Approvals ---': {
       'ApprovalsEnabled': { value: false, description: 'Check to require multi-approver gating for control sheet edits captured in the ChangeRequests sheet.' },
-      'RequiredApprovals': { value: 1, description: 'Number of unique sheet editors needed to approve a change request before it is applied. Default of 1 means one approver is required. Max: 3 (and cannot exceed active Sheet Editors).' },
+      'RequiredApprovals': { value: 1, description: 'Number of unique sheet editors needed to approve a change request before it is applied. Default of 1 means one approver is required. Cannot exceed active Sheet Editors.' },
       'ApprovalExpiryHours': { value: 0, description: 'Optional: expire pending change requests after this many hours. Leave 0 to disable expiry.' }
     },
     '--- Email Notifications ---': {
@@ -7367,7 +7367,7 @@ function ensureChangeRequestsSheet_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let changeSheet = ss.getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
   const approvalsRequiredRaw = getConfigValueFresh_('RequiredApprovals', 1);
-  const approvalsRequired = Math.min(3, Math.max(1, parseInt(approvalsRequiredRaw, 10) || 1));
+  const approvalsRequired = Math.max(1, parseInt(approvalsRequiredRaw, 10) || 1);
 
   if (!changeSheet) {
     changeSheet = ss.insertSheet(CHANGE_REQUESTS_SHEET_NAME);
@@ -7376,7 +7376,7 @@ function ensureChangeRequestsSheet_() {
     changeSheet.setFrozenRows(1);
     log_('Created "ChangeRequests" sheet.');
   } else {
-    pruneExtraApproverColumns_(changeSheet, 3);
+    pruneExtraApproverColumns_(changeSheet, approvalsRequired);
     ensureChangeRequestApproverColumns_(changeSheet, approvalsRequired);
     const existingHeaders = changeSheet.getRange(1, 1, 1, changeSheet.getLastColumn()).getValues()[0];
     const approverCount = Math.max(approvalsRequired, findChangeRequestApproverColumns_(existingHeaders).length);
@@ -7434,7 +7434,7 @@ function buildChangeRequestsHeaders_(approverCount) {
     'ApprovalsNeeded'
   ];
 
-  const count = Math.min(3, Math.max(1, parseInt(approverCount, 10) || 1));
+  const count = Math.max(1, parseInt(approverCount, 10) || 1);
   for (let i = 1; i <= count; i++) {
     headers.push('Approver_' + i);
   }

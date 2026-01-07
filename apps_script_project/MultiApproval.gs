@@ -78,7 +78,7 @@ function findChangeRequestApproverColumns_(headers) {
 
 function ensureChangeRequestApproverColumns_(sheet, requiredApprovals) {
   if (!sheet) return;
-  var requiredCount = Math.min(3, Math.max(1, parseInt(requiredApprovals, 10) || 1));
+  var requiredCount = Math.max(1, parseInt(requiredApprovals, 10) || 1);
   var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   var approverCols = findChangeRequestApproverColumns_(headers);
   if (approverCols.length >= requiredCount) {
@@ -747,7 +747,7 @@ function collectInvalidApproversFromRow_(rowValues, columnMap, approvalsConfig) 
 function getApprovalsConfig_() {
   const enabled = getConfigValueFresh_('ApprovalsEnabled', false) === true;
   const requiredApprovalsRaw = getConfigValueFresh_('RequiredApprovals', 1);
-  const requiredApprovals = Math.min(3, Math.max(1, parseInt(requiredApprovalsRaw, 10) || 1));
+  const requiredApprovals = Math.max(1, parseInt(requiredApprovalsRaw, 10) || 1);
   const expiryHoursRaw = getConfigValueFresh_('ApprovalExpiryHours', 0);
   const expiryHours = Math.max(0, parseInt(expiryHoursRaw, 10) || 0);
   const activeEditors = getActiveSheetEditorEmails_();
