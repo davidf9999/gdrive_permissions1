@@ -255,33 +255,37 @@ function _buildSyncJobs(sheet, lastRow, options, headers) {
 function _batchFindFolders(jobs, sheet, folderIdCol) {
   const folderNamesToFind = jobs
     .filter(j => j.folderName && !j.folderId)
-    .map(j => escapeDriveQueryValue_(j.folderName));
+    .map(j => j.folderName);
   if (folderNamesToFind.length === 0) {
     log_('No folder names to find, all are specified by ID or none exist.');
     return;
   }
 
-  const query = `mimeType = 'application/vnd.google-apps.folder' and trashed = false and (${folderNamesToFind.map(name => `name = '${name}'`).join(' or ')})`;
+  const uniqueFolderNames = Array.from(new Set(folderNamesToFind));
   const existingFolders = new Map(); // name -> [folder]
-  
+
   try {
-    let pageToken = null;
-    do {
-      const response = Drive.Files.list({
-        q: query,
-        fields: 'nextPageToken, files(id, name)',
-        pageToken: pageToken,
-        supportsAllDrives: true,
-        includeItemsFromAllDrives: true
-      });
-      response.files.forEach(file => {
-        if (!existingFolders.has(file.name)) {
-          existingFolders.set(file.name, []);
-        }
-        existingFolders.get(file.name).push(file);
-      });
-      pageToken = response.nextPageToken;
-    } while (pageToken);
+    uniqueFolderNames.forEach(folderName => {
+      const escapedFolderName = escapeDriveQueryValue_(folderName);
+      const query = `mimeType = 'application/vnd.google-apps.folder' and trashed = false and name = '${escapedFolderName}'`;
+      let pageToken = null;
+      do {
+        const response = Drive.Files.list({
+          q: query,
+          fields: 'nextPageToken, files(id, name)',
+          pageToken: pageToken,
+          supportsAllDrives: true,
+          includeItemsFromAllDrives: true
+        });
+        response.files.forEach(file => {
+          if (!existingFolders.has(file.name)) {
+            existingFolders.set(file.name, []);
+          }
+          existingFolders.get(file.name).push(file);
+        });
+        pageToken = response.nextPageToken;
+      } while (pageToken);
+    });
 
     jobs.forEach(job => {
       if (job.folderName && existingFolders.has(job.folderName)) {
