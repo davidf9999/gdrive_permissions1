@@ -1133,7 +1133,8 @@ const LOG_LEVELS = {
 function log_(message, severity = 'INFO') {
   // Filter out spreadsheet errors to prevent #ERROR! from appearing in logs
   const messageStr = String(message);
-  if (messageStr.startsWith('#') && (messageStr.includes('ERROR') || messageStr.includes('N/A') || messageStr.includes('VALUE') || messageStr.includes('REF') || messageStr.includes('DIV'))) {
+  const normalizedMessage = messageStr.replace(/[\n\r\t]/g, '');
+  if (normalizedMessage.startsWith('#') && (normalizedMessage.includes('ERROR') || normalizedMessage.includes('N/A') || normalizedMessage.includes('VALUE') || normalizedMessage.includes('REF') || normalizedMessage.includes('DIV'))) {
     // Skip logging spreadsheet errors - they're not useful log messages
     return;
   }
@@ -1171,9 +1172,9 @@ function log_(message, severity = 'INFO') {
 
     // Prevent Google Sheets from interpreting messages starting with = as formulas
     // by prefixing them with a single quote
-    let safeMessage = messageStr;
-    if (messageStr.startsWith('=') || messageStr.startsWith('+') || messageStr.startsWith('-') || messageStr.startsWith('@')) {
-      safeMessage = "'" + messageStr;
+    let safeMessage = normalizedMessage;
+    if (normalizedMessage.startsWith('=') || normalizedMessage.startsWith('+') || normalizedMessage.startsWith('-') || normalizedMessage.startsWith('@')) {
+      safeMessage = "'" + normalizedMessage;
     }
 
     logSheet.getRange(nextRow, 1, 1, 3).setValues([[timestamp, severity.toUpperCase(), safeMessage]]);
