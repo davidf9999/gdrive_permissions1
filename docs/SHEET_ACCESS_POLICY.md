@@ -58,12 +58,4 @@ Included sheets:
 - `DeepFolderAuditLog`
 - `Help`
 
-## ChangeRequests behavior
-- When approvals are required, ChangeRequests are created automatically during sync from permission deltas.
-- When approvals are disabled, ChangeRequests are still created as auto-applied audit entries (`ApprovalsNeeded = 0`).
-- `Approver_*` columns are allowed for approvals.
-- The ChangeRequests sheet is always visible and used as an audit log even when approvals are disabled.
-- Manual and AutoSync runs apply approved deltas and skip pending ones.
-Note: for external (non-organization) editors, Apps Script may not expose the editor email in edit events, so approver identity is based on the email entered in the sheet.
-
-For more detail on approvals workflow, see `docs/MULTI_APPROVAL_SHEET_ONLY_DESIGN.md`.
+For details on approvals, permission-change gating, and ChangeRequests audit logging, see `docs/CHANGE_REQUESTS_GUIDE.md`.
