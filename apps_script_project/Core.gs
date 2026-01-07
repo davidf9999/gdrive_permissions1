@@ -441,6 +441,9 @@ function _batchSetPermissions(jobs) {
           approvalsConfig: approvalsConfig
         };
       }
+
+    } else {
+      log_('ChangeRequests sheet helper unavailable; skipping permission change logging.', 'WARN');
     }
 
     const requests = [];
@@ -1498,6 +1501,8 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
         changeRequestContext.columnMap = getChangeRequestsColumnMap_(changeSheet);
         changeRequestContext.approvalsConfig = approvalsConfig;
       }
+    } else if (shouldLogPermissionChanges) {
+      log_('ChangeRequests sheet helper unavailable; skipping change request logging.', 'WARN');
     }
 
     if (emailsToAdd.length === 0 && emailsToRemove.length === 0) {

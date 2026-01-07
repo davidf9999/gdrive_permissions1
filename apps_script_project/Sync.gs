@@ -114,6 +114,8 @@ function syncSheetEditors(options = {}) {
           approvalsConfig: approvalsConfig
         };
       }
+    } else if (shouldLogPermissionChanges) {
+      log_('ChangeRequests sheet helper unavailable; skipping change request logging.', 'WARN');
     }
 
     if (approvalsEnabled) {
