@@ -431,14 +431,18 @@ function _batchSetPermissions(jobs) {
 
     const approvalsConfig = getApprovalsConfig_();
     let changeRequestContext = null;
-    ensureChangeRequestsSheet_();
-    const changeSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
-    if (changeSheet) {
-      changeRequestContext = {
-        changeSheet: changeSheet,
-        columnMap: getChangeRequestsColumnMap_(changeSheet),
-        approvalsConfig: approvalsConfig
-      };
+    if (typeof ensureChangeRequestsSheet_ === 'function') {
+      ensureChangeRequestsSheet_();
+      const changeSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
+      if (changeSheet) {
+        changeRequestContext = {
+          changeSheet: changeSheet,
+          columnMap: getChangeRequestsColumnMap_(changeSheet),
+          approvalsConfig: approvalsConfig
+        };
+      }
+    } else {
+      log_('ChangeRequests sheet helper unavailable; skipping permission change logging.', 'WARN');
     }
 
     const requests = [];
@@ -1488,7 +1492,7 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
       return (removeOnly && emailsToRemove.length > 0) ? { groupEmail, groupName: userSheetName, usersToRemove: emailsToRemove } : null;
     }
 
-    if (shouldLogPermissionChanges) {
+    if (shouldLogPermissionChanges && typeof ensureChangeRequestsSheet_ === 'function') {
       ensureChangeRequestsSheet_();
       const changeSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
       if (changeSheet) {
@@ -1496,6 +1500,8 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
         changeRequestContext.columnMap = getChangeRequestsColumnMap_(changeSheet);
         changeRequestContext.approvalsConfig = approvalsConfig;
       }
+    } else if (shouldLogPermissionChanges) {
+      log_('ChangeRequests sheet helper unavailable; skipping change request logging.', 'WARN');
     }
 
     if (emailsToAdd.length === 0 && emailsToRemove.length === 0) {

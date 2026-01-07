@@ -259,8 +259,13 @@ function ensureChangeRequestForDelta_(targetSheetName, targetRowKey, action, del
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let changeSheet = options && options.changeSheet ? options.changeSheet : ss.getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
   if (!changeSheet) {
-    ensureChangeRequestsSheet_();
-    changeSheet = ss.getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
+    if (typeof ensureChangeRequestsSheet_ === 'function') {
+      ensureChangeRequestsSheet_();
+      changeSheet = ss.getSheetByName(CHANGE_REQUESTS_SHEET_NAME);
+    } else {
+      log_('ChangeRequests sheet helper unavailable; skipping change request logging.', 'WARN');
+      return { status: CHANGE_REQUEST_STATUS_DENIED, rowIndex: -1, created: false };
+    }
   }
   if (!changeSheet) {
     return { status: CHANGE_REQUEST_STATUS_DENIED, rowIndex: -1, created: false };
