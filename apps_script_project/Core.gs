@@ -441,6 +441,7 @@ function _batchSetPermissions(jobs) {
           approvalsConfig: approvalsConfig
         };
       }
+
     } else {
       log_('ChangeRequests sheet helper unavailable; skipping permission change logging.', 'WARN');
     }
@@ -1436,7 +1437,7 @@ function syncGroupMembership_(groupEmail, userSheetName, options = {}) {
   const returnPlanOnly = options && options.returnPlanOnly !== undefined ? options.returnPlanOnly : false;
   const approvalsConfig = getApprovalsConfig_();
   const approvalsEnabled = approvalsConfig.enabled && !returnPlanOnly;
-  const shouldLogPermissionChanges = !returnPlanOnly;
+  const shouldLogPermissionChanges = !returnPlanOnly && typeof ensureChangeRequestsSheet_ === 'function';
   const changeRequestContext = shouldLogPermissionChanges ? {} : null;
   
   const MEMBERSHIP_BATCH_SIZE = config.MembershipBatchSize || 15;

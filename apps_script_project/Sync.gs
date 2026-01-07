@@ -17,7 +17,7 @@ function syncSheetEditors(options = {}) {
   const approvalsEnabled = approvalsConfig.enabled;
   let changeRequestContext = null;
   const groupOpsAvailable = !shouldSkipGroupOps_();
-  const shouldLogPermissionChanges = true;
+  const shouldLogPermissionChanges = typeof ensureChangeRequestsSheet_ === 'function';
 
   try {
     log_('DEBUG: syncSheetEditors started.', 'DEBUG');
