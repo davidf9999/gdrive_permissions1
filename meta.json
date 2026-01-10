@@ -1,12 +1,12 @@
 {
   "service": "gdrive-permissions-backend",
   "version_tag": "v1.0.14",
-  "git_sha": "15d5c4ce1fb7bb664116d40fff1a15ad1f47edd3",
-  "build_time_utc": "2026-01-07T13:38:46.618Z",
+  "git_sha": "f85b42ef3a455681cd5df0e14fa879f7d904e2fd",
+  "build_time_utc": "2026-01-10T16:50:19.409Z",
   "artifacts": {
     "knowledge_sha256": "fe5617c0181be3e6fe563855d7582cfd065f654b7fcb85c7bfbaba1412ef35cf",
     "steps_sha256": "a0096b52d559168e47b028fd7038359ccd45fb03ce88929f28ee1b996982eccc",
-    "bundle_sha256": "0b663e67fb54a0d0fa70e9895838e78ddc6e609caaa6e6a4be4367870f672cc8",
+    "bundle_sha256": "a484894c10e69821d7ac466e90c10affb29d82c74c1d8588c8e18ac15c3e2d93",
     "user_guide_sha256": "c979350ff870a790a7b4b179e1c44b351a5ee79b7989871e367a11f961f977d0",
     "super_admin_guide_sha256": "474d4ac96ecce93695777187a2ae1e385f8f8eb6df7456b56a34585026163be0",
     "sheet_editor_guide_sha256": "32ed9c0aaa38e26f7c2aadc83f5d710a7a6d51fb0445acb1e7d9f6d6bfa82f56"
