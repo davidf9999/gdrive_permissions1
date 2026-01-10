@@ -6,4 +6,4 @@
 6. [Enable APIs and grant consent](#6-enable-apis-and-grant-consent)
 7. [Deploy the Apps Script project](#7-deploy-the-apps-script-project)
 8. [Run the first sync](#8-run-the-first-sync)
-9. [Post-Setup Verification](#9-post-setup-verification)
+9. [Post-Setup Verification](#9-send-email-verification)

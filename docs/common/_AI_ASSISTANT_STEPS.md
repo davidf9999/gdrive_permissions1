@@ -78,7 +78,7 @@ Follow the instructions in the Setup Guide above.
 **Once you've completed the manual steps, type 'done' to continue.**
 ### Step 9: Post-Setup Verification
 *** Current state: 9 "Post-Setup Verification" out of 9 steps. ***
-We recommend following this step at [Setup Guide](docs/SETUP_GUIDE.md#9-post-setup-verification).
+We recommend following this step at [Setup Guide](docs/SETUP_GUIDE.md#9-send-email-verification).
 This step includes automated commands with some manual follow-up in your browser.
 
 **Automated Action (with your approval):**
