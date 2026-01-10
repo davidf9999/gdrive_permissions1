@@ -1,28 +1,28 @@
 1. `START`
 2. 
 *`WORKSPACE_TENANT_CREATED`
-`Create or reuse a Google Workspace tenant`
+`Workspace tenant setup`
 3. 
 *`SUPER_ADMIN_PREPARED`
-`Prepare the Super Admin account`
+`Super Admin account prep`
 4. 
 *`GCP_PROJECT_CREATED`
-`Create or select a Google Cloud Project`
+`GCP project setup`
 5. 
 *`CONTROL_SPREADSHEET_CREATED`
-`Create the control spreadsheet`
+`Control spreadsheet setup`
 6. 
 *`GCLOUD_CLI_CONFIGURED`
-`Configure the Google Cloud CLI (gcloud)`
+`Set up gcloud CLI`
 7. 
 *`APIS_ENABLED_AND_CONSENT_GRANTED`
-`Enable APIs and grant consent`
+`Enable APIs and consent`
 8. 
 *`SCRIPT_DEPLOYED`
-`Deploy the Apps Script project`
+`Deploy Apps Script`
 9. 
 *`FIRST_SYNC_COMPLETE`
-`Run the first sync`
+`Run first sync`
 10. 
 *`VERIFICATION_COMPLETE`
-`Post-Setup Verification`
+`Verify email notifications`

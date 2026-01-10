@@ -40,15 +40,15 @@ If you are using the Gemini CLI Assistant, you need to authenticate the `gemini`
 
 ## Setup Steps Overview
 
-1. [Create or reuse a Google Workspace tenant](#1-create-or-reuse-a-google-workspace-tenant)
-2. [Prepare the Super Admin account](#2-prepare-the-super-admin-account)
-3. [Create or select a Google Cloud Project](#3-create-or-select-a-google-cloud-project)
-4. [Create the control spreadsheet](#4-create-the-control-spreadsheet)
-5. [Configure the Google Cloud CLI (gcloud)](#5-configure-the-google-cloud-cli-gcloud)
-6. [Enable APIs and grant consent](#6-enable-apis-and-grant-consent)
-7. [Deploy the Apps Script project](#7-deploy-the-apps-script-project)
-8. [Run the first sync](#8-run-the-first-sync)
-9. [Post-Setup Verification](#9-send-email-verification)
+1. [Workspace tenant setup](#1-create-or-reuse-a-google-workspace-tenant)
+2. [Super Admin account prep](#2-prepare-the-super-admin-account)
+3. [GCP project setup](#3-create-or-select-a-google-cloud-project)
+4. [Control spreadsheet setup](#4-create-the-control-spreadsheet)
+5. [Set up gcloud CLI](#5-configure-the-google-cloud-cli-gcloud)
+6. [Enable APIs and consent](#6-enable-apis-and-grant-consent)
+7. [Deploy Apps Script](#7-deploy-the-apps-script-project)
+8. [Run first sync](#8-run-the-first-sync)
+9. [Verify email notifications](#9-send-email-verification)
 
 ---
 
@@ -61,7 +61,9 @@ The instructions and screenshots in this guide assume the Google Admin and Googl
 
 This setup requires acting as an **Installer** using a **Google Workspace Super Admin** account. For a full breakdown, see [Roles and Responsibilities](ROLES_AND_RESPONSIBILITIES.md).
 
-## 1. Create or reuse a Google Workspace tenant
+## 1. Workspace tenant setup
+
+This step ensures you have an active Google Workspace tenant to host groups and Drive permissions.
 
 1. Go to [workspace.google.com/business](https://workspace.google.com/business/) and select a plan, then click the related **Get started** button to begin signup.
 2. When prompted, provide a domain you own or purchase one through Google Domains (the default option during setup).
@@ -84,7 +86,9 @@ This setup requires acting as an **Installer** using a **Google Workspace Super 
 > **Tip:** If your organisation already has Workspace, sign into the [Admin console](https://admin.google.com/) with an existing Super Admin account.
 
 
-## 2. Prepare the Super Admin account
+## 2. Super Admin account prep
+
+This step ensures your Super Admin account has the required roles and services enabled.
 
 1. Sign in to [admin.google.com](https://admin.google.com/) using the Super Admin account.
 2. Confirm the account has the **Super Admin** role by visiting **Directory → Users → [your user] → Admin roles and privileges**.
@@ -95,7 +99,7 @@ This setup requires acting as an **Installer** using a **Google Workspace Super 
 > **Why Super Admin?** The script needs Super Admin privileges to create and manage Google Groups via the Admin SDK.
 
 
-## 3. Create or select a Google Cloud Project
+## 3. GCP project setup
 
 The script requires a Google Cloud Platform (GCP) project to manage APIs.
 
@@ -108,7 +112,9 @@ The script requires a Google Cloud Platform (GCP) project to manage APIs.
     - To find the **Project Number**, you can also run `gcloud projects describe YOUR_PROJECT_ID --format='value(projectNumber)'`.
 
 
-## 4. Create the control spreadsheet
+## 4. Control spreadsheet setup
+
+This step creates the control spreadsheet and its bound Apps Script project.
 
 This step must be performed while signed in as the **Google Workspace Super Admin**.
 
@@ -125,7 +131,7 @@ This step must be performed while signed in as the **Google Workspace Super Admi
 </details>
 
 
-## 5. Configure the Google Cloud CLI (gcloud)
+## 5. Set up gcloud CLI
 
 > **GPT note:** This step is not required if you are following the setup with the OpenAI GPT Assistant and do not plan to use a terminal.
 >
@@ -138,7 +144,9 @@ This step gives `gcloud` permission to manage resources in your Google Cloud pro
 3.  **Set your GCP Project.** Run `gcloud config set project YOUR_PROJECT_ID`, replacing `YOUR_PROJECT_ID` with the ID you saved from Step 3.
 
 
-## 6. Enable APIs and grant consent
+## 6. Enable APIs and consent
+
+This step enables required Google APIs and configures OAuth consent for the script.
 
 1.  **Enable Project-Level APIs.**
     **GPT:** In the Cloud Console, go to **APIs & Services → Library**, then search for and enable:
@@ -159,7 +167,9 @@ This step gives `gcloud` permission to manage resources in your Google Cloud pro
     *   Save and continue.
 
 
-## 7. Deploy the Apps Script project
+## 7. Deploy Apps Script
+
+This step deploys the bundled script into your spreadsheet-bound Apps Script project.
 
 1.  **Copy the bundled code.** Open [apps_scripts_bundle.gs](https://raw.githubusercontent.com/davidf9999/gdrive_permissions1/refs/heads/main/dist/apps_scripts_bundle.gs), select all text, and copy it.
     *Optional (local build):* run `npm install` then `npm run build` to regenerate the bundle from source.
@@ -176,7 +186,9 @@ This step gives `gcloud` permission to manage resources in your Google Cloud pro
 5.  Return to your spreadsheet and **refresh the page**. The **Permissions Manager** menu should appear.
 
 
-## 8. Run the first sync
+## 8. Run first sync
+
+This step runs the initial sync to create required sheets and apply permissions from the control sheet.
 
 1. Refresh the spreadsheet so the **Permissions Manager** menu appears.
 2. In the spreadsheet, open **Permissions Manager → ManualSync → Full Sync**.
@@ -197,8 +209,9 @@ This step gives `gcloud` permission to manage resources in your Google Cloud pro
 See the [User Guide](USER_GUIDE.md) for next steps.
 
 
-## 9. Sending emails
-It is important that the apps script can send notification emails successfully, for example, about errors.
+## 9. Verify email notifications
+
+This step verifies the Apps Script can send notification emails for errors and alerts.
 Run **Email Capacity Test** at: 'Permissions Manager, Testing, Standalon Tests, Run Email Capacity Test'
 to verify that the apps script can send emails to the email of the NotificationEmail setting in Config sheet.
 If it fails, and if the configured email address is external to the organization domain, as a (temporary) workaround, you may try

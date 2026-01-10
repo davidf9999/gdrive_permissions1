@@ -1,10 +1,10 @@
-1. Create or reuse a Google Workspace tenant
-2. Prepare the Super Admin account
-3. Create or select a Google Cloud Project
-4. Create the control spreadsheet
-5. Configure the Google Cloud CLI (gcloud)
-6. Enable APIs and grant consent
-7. Deploy the Apps Script project
-8. Run the first sync
-9. Post-Setup Verification
+1. Workspace tenant setup
+2. Super Admin account prep
+3. GCP project setup
+4. Control spreadsheet setup
+5. Set up gcloud CLI
+6. Enable APIs and consent
+7. Deploy Apps Script
+8. Run first sync
+9. Verify email notifications
 s. I'm not sure, please scan my system for me.
