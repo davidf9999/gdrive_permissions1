@@ -26,6 +26,7 @@ This document is the comprehensive, step-by-step guide for setting up the Google
 *   **Administrative Skills:** Even with assistance (Gemini CLI or OpenAI GPT), this setup requires a basic understanding of administrative concepts like domain management and user permissions.
 *   **GitHub Account (Gemini CLI only):** Required to run the Gemini CLI Assistant in Codespaces or manage Codespaces settings.
 *   **Google Account (Gemini CLI only):** Required to authenticate the `gemini` CLI tool. This account does **not** need to be your GitHub or Google Workspace admin account.
+*   **New to these terms?** See the [Glossary](GLOSSARY.md) for short definitions of common setup terminology.
 
 ### Authenticating the Gemini CLI (Gemini CLI Assistant only)
 

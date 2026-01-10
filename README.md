@@ -255,6 +255,7 @@ reduce API calls during large syncs).
 | Auto-sync options & safety levers | [`docs/AUTO_SYNC_GUIDE.md`](docs/AUTO_SYNC_GUIDE.md) & [`docs/RISK_BASED_AUTO_SYNC.md`](docs/RISK_BASED_AUTO_SYNC.md) |
 | Stopping or pausing scripts | [`docs/STOP_SCRIPTS.md`](docs/STOP_SCRIPTS.md) |
 | Full setup walkthrough (Workspace, Cloud, Script) | [`docs/SETUP_GUIDE.md`](docs/SETUP_GUIDE.md) |
+| Glossary of common terms | [`docs/GLOSSARY.md`](docs/GLOSSARY.md) |
 | Spreadsheet and script onboarding checklist | [`docs/ONBOARDING.md`](docs/ONBOARDING.md) |
 | SharePoint conceptual comparison | [`docs/SHAREPOINT_COMPARISON.md`](docs/SHAREPOINT_COMPARISON.md) |
 | Frequently asked questions | [`FAQ.md`](FAQ.md) |
